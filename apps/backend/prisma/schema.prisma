@@ -11,9 +11,9 @@ datasource db {
 }
 
 enum UserRole {
-  WAREHOUSE_STAFF
-  RESCUE_TEAM
-  MANAGER
+  WAREHOUSE
+  RESCUE
+  ADMIN
 }
 
 enum ItemStatus {
@@ -82,7 +82,7 @@ model User {
   email          String       @unique
   passwordHash   String
   fullName       String
-  role           UserRole     @default(WAREHOUSE_STAFF)
+  role           UserRole     @default(WAREHOUSE)
   createdAt      DateTime     @default(now())
   transactions   InventoryTransaction[]
 }
@@ -311,4 +311,75 @@ model SimulationRun {
   createdAt   DateTime           @default(now())
 
   @@index([warehouseId, status])
+}
+
+// ===== Phase C: Readiness Score =====
+
+// Cấp độ đối tượng được chấm điểm (4 cấp: PRD 3.2)
+enum ReadinessTargetType {
+  ITEM_BATCH
+  SHELF
+  ZONE
+  WAREHOUSE
+}
+
+// Điểm sẵn sàng đã tính (cache) cho 1 đối tượng ở 1 thời điểm.
+// Recalc (C1) ghi đè bản mới nhất theo (targetType, targetId).
+model ReadinessScore {
+  id          String              @id @default(cuid())
+  warehouseId String
+  targetType  ReadinessTargetType
+  targetId    String
+  score       Int // 0-100 tổng
+  computedAt  DateTime            @default(now())
+  components  ReadinessComponent[]
+  recommendations ReadinessRecommendation[]
+
+  @@unique([targetType, targetId])
+  @@index([warehouseId, targetType])
+}
+
+// Breakdown: điểm từng thành phần (6 thành phần) + lý do trừ điểm.
+model ReadinessComponent {
+  id       String         @id @default(cuid())
+  scoreId  String
+  score    ReadinessScore @relation(fields: [scoreId], references: [id], onDelete: Cascade)
+  key      String // quantityAvailability | itemCondition | expiry | accessibility | environment | dataReliability
+  value    Int // 0-100 thành phần
+  weight   Float // trọng số áp dụng lúc tính
+  reasons  String[] // lý do bị trừ điểm
+
+  @@index([scoreId])
+}
+
+// Cấu hình trọng số + ngưỡng công thức, chỉnh được theo từng kho (configurable).
+// Rỗng → dùng READINESS_CONFIG mặc định (có disclaimer "tham khảo nghiên cứu").
+model ReadinessRule {
+  id          String   @id @default(cuid())
+  warehouseId String   @unique
+  weights     Json // { quantityAvailability, itemCondition, ... } tổng = 1
+  thresholds  Json // { expiry, environment, dataReliability... }
+  updatedAt   DateTime @updatedAt
+}
+
+// Ngưỡng hành động 4 vùng (C3) — chỉnh được mỗi kho.
+model ReadinessThreshold {
+  id          String   @id @default(cuid())
+  warehouseId String   @unique
+  ready       Int      @default(80) // >= ready: 🟢
+  attention   Int      @default(70) // >= attention: 🟡
+  degraded    Int      @default(50) // >= degraded: 🟠; dưới: 🔴
+  updatedAt   DateTime @updatedAt
+}
+
+// Đề xuất cải thiện sinh từ nguyên nhân trừ điểm (C2).
+model ReadinessRecommendation {
+  id        String         @id @default(cuid())
+  scoreId   String
+  score     ReadinessScore @relation(fields: [scoreId], references: [id], onDelete: Cascade)
+  component String // thành phần liên quan
+  message   String // vd "Kiểm tra 3 bộ sơ cứu sắp hết hạn ở kệ B1"
+  createdAt DateTime       @default(now())
+
+  @@index([scoreId])
 }

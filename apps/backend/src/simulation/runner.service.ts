@@ -13,6 +13,16 @@ interface ActiveRun {
   speed: number;
 }
 
+/** Payload sự kiện runner phát ra WebSocket gateway. */
+export interface RunnerEventPayload {
+  runId: string;
+  deviceCode: string;
+  eventType: string;
+  value: number;
+  offsetMs: number;
+  saved: boolean;
+}
+
 // Runner timeline-scrubber: con trỏ chạy qua list event có offsetMs.
 // Deterministic theo (scenario, seed). Tua = nhân tốc độ vào khoảng chờ.
 @Injectable()
@@ -20,7 +30,7 @@ export class RunnerService {
   private readonly log = new Logger(RunnerService.name);
   private active = new Map<string, ActiveRun>();
   // Callback bắn event ra ngoài (WebSocket gateway đăng ký ở B2)
-  onEvent?: (warehouseId: string, payload: any) => void;
+  onEvent?: (warehouseId: string, payload: RunnerEventPayload) => void;
 
   constructor(
     private prisma: PrismaService,

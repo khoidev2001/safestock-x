@@ -49,11 +49,75 @@ export enum CirculationStatus {
   RETURNED = "RETURNED",
 }
 
-/** Vai trò người dùng */
+/**
+ * Vai trò người dùng — 3 role (xã thường 1 người phụ trách kho → gộp staff+manager).
+ * WAREHOUSE: phụ trách kho, toàn quyền vận hành + thao tác nhạy cảm (tự chịu, hậu kiểm).
+ * RESCUE: đội cứu hộ — xem phương án, mượn-hoàn, yêu cầu vật tư.
+ * ADMIN: quản trị/giám sát — quản lý user, xem toàn bộ nhật ký, hậu kiểm.
+ */
 export enum UserRole {
-  WAREHOUSE_STAFF = "WAREHOUSE_STAFF",
-  RESCUE_TEAM = "RESCUE_TEAM",
-  MANAGER = "MANAGER",
+  WAREHOUSE = "WAREHOUSE",
+  RESCUE = "RESCUE",
+  ADMIN = "ADMIN",
+}
+
+/**
+ * Quyền hạt mịn. Guard kiểm PERMISSION, không kiểm role trực tiếp (dễ mở rộng).
+ * Định dạng "resource:action".
+ */
+export enum Permission {
+  INVENTORY_READ = "inventory:read",
+  INVENTORY_EXPORT = "inventory:export",
+  INVENTORY_IMPORT = "inventory:import",
+  INVENTORY_BULK_EXPORT = "inventory:bulk_export",
+  INVENTORY_ADJUST = "inventory:adjust",
+  INVENTORY_RECONCILE = "inventory:reconcile",
+  MISSION_VIEW = "mission:view",
+  MISSION_CREATE = "mission:create",
+  MISSION_REQUEST = "mission:request",
+  MISSION_APPROVE = "mission:approve",
+  READINESS_VIEW = "readiness:view",
+  LOAN_MANAGE = "loan:manage",
+  WAREHOUSE_MANAGE = "warehouse:manage",
+  AUDIT_VIEW = "audit:view",
+  ADMIN_USERS = "admin:users",
+}
+
+/**
+ * Map role → quyền. HẰNG SỐ CODE (không bảng DB — đủ cho MVP; DB động = lộ trình).
+ * Nguồn sự thật duy nhất cho phân quyền, dùng chung backend + frontend.
+ */
+export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
+  [UserRole.WAREHOUSE]: [
+    Permission.INVENTORY_READ,
+    Permission.INVENTORY_EXPORT,
+    Permission.INVENTORY_IMPORT,
+    Permission.INVENTORY_BULK_EXPORT,
+    Permission.INVENTORY_ADJUST,
+    Permission.INVENTORY_RECONCILE,
+    Permission.MISSION_VIEW,
+    Permission.MISSION_CREATE,
+    Permission.MISSION_APPROVE,
+    Permission.READINESS_VIEW,
+    Permission.LOAN_MANAGE,
+    Permission.WAREHOUSE_MANAGE,
+  ],
+  [UserRole.RESCUE]: [
+    Permission.INVENTORY_READ,
+    Permission.MISSION_VIEW,
+    Permission.MISSION_REQUEST,
+    Permission.READINESS_VIEW,
+    Permission.LOAN_MANAGE,
+  ],
+  [UserRole.ADMIN]: [
+    // ADMIN có mọi quyền.
+    ...Object.values(Permission),
+  ],
+};
+
+/** Kiểm 1 role có quyền cụ thể không. */
+export function roleHasPermission(role: UserRole, permission: Permission): boolean {
+  return ROLE_PERMISSIONS[role]?.includes(permission) ?? false;
 }
 
 /** Loại tình huống khẩn cấp — Mission-to-Kit */

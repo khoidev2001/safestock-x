@@ -5,8 +5,10 @@ import { join } from "path";
 import { PrismaModule } from "./prisma/prisma.module";
 import { HealthModule } from "./health/health.module";
 import { AuthModule } from "./auth/auth.module";
+import { RbacModule } from "./rbac/rbac.module";
 import { InventoryModule } from "./inventory/inventory.module";
 import { SimulationModule } from "./simulation/simulation.module";
+import { ReadinessModule } from "./readiness/readiness.module";
 
 @Module({
   imports: [
@@ -14,9 +16,11 @@ import { SimulationModule } from "./simulation/simulation.module";
     // Serve UI tối thiểu B3 tại /sim.html — public ở apps/backend/public (dist/src → ../../public)
     ServeStaticModule.forRoot({ rootPath: join(__dirname, "..", "..", "public") }),
     PrismaModule,
+    RbacModule,
     HealthModule,
     AuthModule,
     InventoryModule,
+    ReadinessModule,
     SimulationModule,
   ],
 })
