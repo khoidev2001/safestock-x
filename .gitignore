@@ -1,0 +1,22 @@
+node_modules/
+dist/
+build/
+.next/
+.expo/
+*.log
+.env
+.env.local
+.env.*.local
+**/.env
+!.env.example
+coverage/
+.turbo/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store
+prisma/*.db
+
+# Ghi chú làm việc nội bộ (AI memory) — không đẩy lên repo chung
+memory/

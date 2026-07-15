@@ -1,0 +1,244 @@
+// SafeStock X — schema cốt lõi (Nền móng #0).
+// Bảng Readiness / Mission / Simulator / Incident thêm ở lát tương ứng.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  WAREHOUSE_STAFF
+  RESCUE_TEAM
+  MANAGER
+}
+
+enum ItemStatus {
+  AVAILABLE
+  IN_USE
+  MAINTENANCE
+  DAMAGED
+  EXPIRING_SOON
+  INSPECTION_OVERDUE
+  MISPLACED
+  UNKNOWN
+  INACCESSIBLE
+}
+
+enum TransactionType {
+  IMPORT
+  EXPORT
+  TRANSFER
+  RETURN
+}
+
+model Organization {
+  id         String      @id @default(cuid())
+  name       String
+  createdAt  DateTime    @default(now())
+  users      User[]
+  warehouses Warehouse[]
+}
+
+model User {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  email          String       @unique
+  passwordHash   String
+  fullName       String
+  role           UserRole     @default(WAREHOUSE_STAFF)
+  createdAt      DateTime     @default(now())
+  transactions   InventoryTransaction[]
+}
+
+model Warehouse {
+  id             String          @id @default(cuid())
+  organizationId String
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  name           String
+  location       String?
+  createdAt      DateTime        @default(now())
+  zones          WarehouseZone[]
+}
+
+model WarehouseZone {
+  id          String    @id @default(cuid())
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  code        String // ví dụ "A", "B"
+  name        String
+  shelves     Shelf[]
+
+  @@unique([warehouseId, code])
+}
+
+model Shelf {
+  id        String        @id @default(cuid())
+  zoneId    String
+  zone      WarehouseZone @relation(fields: [zoneId], references: [id])
+  code      String // ví dụ "A1", "A2"
+  isBlocked Boolean       @default(false) // lối đi bị chặn — Readiness "khả năng tiếp cận"
+  isLocked  Boolean       @default(false) // bị khóa / thiếu quyền
+  batches   ItemBatch[]
+  devices   VirtualDevice[]
+
+  @@unique([zoneId, code])
+}
+
+model ItemCategory {
+  id    String @id @default(cuid())
+  name  String @unique
+  unit  String // đơn vị: chiếc, bộ, lít...
+  items Item[]
+}
+
+model Item {
+  id         String       @id @default(cuid())
+  categoryId String
+  category   ItemCategory @relation(fields: [categoryId], references: [id])
+  name       String
+  sku        String       @unique
+  createdAt  DateTime     @default(now())
+  batches    ItemBatch[]
+}
+
+model ItemBatch {
+  id           String      @id @default(cuid())
+  itemId       String
+  item         Item        @relation(fields: [itemId], references: [id])
+  shelfId      String?
+  shelf        Shelf?      @relation(fields: [shelfId], references: [id])
+  batchCode    String
+  quantity     Int         @default(0)
+  status       ItemStatus  @default(AVAILABLE)
+  expiryDate   DateTime?
+  inspectedAt  DateTime?
+  createdAt    DateTime    @default(now())
+  transactions InventoryTransaction[]
+  counts       InventoryCount[]
+
+  @@unique([itemId, batchCode])
+}
+
+// Kiểm kê thực tế — so với quantity hệ thống cho Readiness (khả dụng SL + độ tin cậy)
+model InventoryCount {
+  id         String    @id @default(cuid())
+  batchId    String
+  batch      ItemBatch @relation(fields: [batchId], references: [id])
+  countedQty Int
+  userId     String?
+  note       String?
+  countedAt  DateTime  @default(now())
+
+  @@index([batchId, countedAt])
+}
+
+model InventoryTransaction {
+  id        String          @id @default(cuid())
+  batchId   String
+  batch     ItemBatch       @relation(fields: [batchId], references: [id])
+  userId    String
+  user      User            @relation(fields: [userId], references: [id])
+  type      TransactionType
+  quantity  Int
+  note      String?
+  createdAt DateTime        @default(now())
+}
+
+// Audit log — mọi thao tác quan trọng ghi lại bất biến (PRD NFR-03)
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+}
+
+// ===== Phase B: Sensor Simulator (mô phỏng lớp cảm biến) =====
+
+enum VirtualDeviceType {
+  LOADCELL
+  TEMPERATURE
+  HUMIDITY
+  SMOKE
+  DOOR
+  RFID_GATEWAY
+  CAMERA_AI
+  POWER
+  GATEWAY
+}
+
+enum SimRunStatus {
+  IDLE
+  PLAYING
+  PAUSED
+  DONE
+}
+
+model VirtualDevice {
+  id          String            @id @default(cuid())
+  warehouseId String
+  zoneId      String?
+  shelfId     String?
+  shelf       Shelf?            @relation(fields: [shelfId], references: [id])
+  type        VirtualDeviceType
+  code        String // vd "scale_shelf_A1"
+  unit        String // kg, °C, %, bool...
+  // Trạng thái current — Readiness đọc cái này, không query MAX(timestamp)
+  currentValue Float?
+  online       Boolean          @default(true)
+  updatedAt    DateTime         @updatedAt
+  events       SensorEvent[]
+
+  @@unique([warehouseId, code])
+  @@index([warehouseId, type])
+}
+
+model SensorEvent {
+  id          String        @id @default(cuid())
+  deviceId    String
+  device      VirtualDevice @relation(fields: [deviceId], references: [id])
+  warehouseId String
+  zoneId      String?
+  eventType   String // WEIGHT_CHANGED, DOOR_OPEN, VISION_DETECTION...
+  value       Float
+  unit        String
+  quality     Float         @default(1.0) // 0..1
+  scenarioId  String?
+  runId       String?
+  createdAt   DateTime      @default(now())
+
+  @@index([warehouseId, createdAt])
+  @@index([runId])
+}
+
+model SimulationScenario {
+  id          String          @id @default(cuid())
+  key         String          @unique // "flood_01", "suspected_loss"...
+  name        String
+  description String?
+  // Định nghĩa event list (offsetMs, deviceCode, value...) — nguồn sự thật ở packages/scenario-definitions
+  definition  Json
+  runs        SimulationRun[]
+}
+
+model SimulationRun {
+  id          String             @id @default(cuid())
+  scenarioId  String
+  scenario    SimulationScenario @relation(fields: [scenarioId], references: [id])
+  warehouseId String
+  seed        Int                @default(42)
+  speed       Int                @default(1) // 1 | 10
+  status      SimRunStatus       @default(IDLE)
+  cursorMs    Int                @default(0) // con trỏ timeline-scrubber
+  startedAt   DateTime?
+  createdAt   DateTime           @default(now())
+
+  @@index([warehouseId, status])
+}

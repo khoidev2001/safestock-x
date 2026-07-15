@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SafeStock X — Sim tối thiểu (B3)</title>
+  <script src="https://cdn.socket.io/4.8.0/socket.io.min.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 820px; margin: 24px auto; padding: 0 16px; }
+    h1 { font-size: 18px; }
+    .row { display: flex; gap: 12px; align-items: center; margin: 10px 0; flex-wrap: wrap; }
+    button { padding: 6px 12px; cursor: pointer; }
+    #log { background: #111; color: #0f0; font: 12px monospace; padding: 10px; height: 260px; overflow: auto; border-radius: 6px; }
+    .val { font-weight: bold; min-width: 48px; display: inline-block; }
+    input[type=range] { width: 240px; }
+    select, input[type=text] { padding: 4px; }
+  </style>
+</head>
+<body>
+  <h1>SafeStock X — Mô phỏng cảm biến (bản tối thiểu B3)</h1>
+  <div class="row">
+    <label>Token: <input type="text" id="tok" size="24" placeholder="dán accessToken" /></label>
+    <button onclick="doLogin()">Login admin</button>
+    <span id="wid">wid: —</span>
+  </div>
+
+  <div class="row">
+    <label>Độ ẩm khu B: <span class="val" id="hv">85</span>%</label>
+    <input type="range" min="40" max="100" value="85" id="humid" oninput="hv.textContent=this.value" onchange="emit('humid_B','HUMID_READING',+this.value)" />
+  </div>
+  <div class="row">
+    <label>Nhiệt độ khu B: <span class="val" id="tv">30</span>°C</label>
+    <input type="range" min="15" max="45" value="30" id="temp" oninput="tv.textContent=this.value" onchange="emit('temp_B','TEMP_READING',+this.value)" />
+  </div>
+
+  <div class="row">
+    <label>Kịch bản:
+      <select id="scn"></select>
+    </label>
+    <label>Tốc độ:
+      <select id="spd"><option value="1">x1</option><option value="10" selected>x10</option></select>
+    </label>
+    <button onclick="runScenario()">▶ Chạy</button>
+    <button onclick="resetRun()">⟲ Reset</button>
+  </div>
+
+  <div id="log"></div>
+
+<script>
+const API = location.origin;
+let token = "", wid = "", runId = "", socket = null;
+
+function log(msg, color) {
+  const el = document.getElementById("log");
+  el.innerHTML += `<div${color?` style="color:${color}"`:""}>${msg}</div>`;
+  el.scrollTop = el.scrollHeight;
+}
+
+async function doLogin() {
+  const r = await fetch(`${API}/api/auth/login`, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:"admin",password:"admin123@"})});
+  const d = await r.json();
+  token = d.accessToken;
+  document.getElementById("tok").value = token.slice(0,20)+"...";
+  await init();
+}
+
+async function init() {
+  // lấy warehouse đầu tiên qua scenarios (chỉ cần token hợp lệ) + devices để lấy wid
+  const scns = await (await fetch(`${API}/api/simulator/scenarios`,{headers:auth()})).json();
+  const sel = document.getElementById("scn");
+  sel.innerHTML = scns.map(s=>`<option value="${s.key}">${s.name}</option>`).join("");
+  // wid: gọi endpoint devices cần wid... lấy từ /api/inventory? Dùng meta: đọc từ 1 endpoint mới đơn giản
+  const me = await (await fetch(`${API}/api/auth/me`,{headers:auth()})).json();
+  // wid không có ở me → hardcode qua endpoint warehouses. Tạm: hỏi backend devices của mọi kho? => gọi /warehouses/first
+  const w = await (await fetch(`${API}/api/simulator/first-warehouse`,{headers:auth()})).json();
+  wid = w.id;
+  document.getElementById("wid").textContent = "wid: "+wid;
+  connectWs();
+  log("Sẵn sàng. wid="+wid, "#9cf");
+}
+
+function auth(){ return {Authorization:`Bearer ${token}`}; }
+
+function connectWs() {
+  socket = io(API, {transports:["websocket"]});
+  socket.on("connect", ()=> socket.emit("join",{warehouseId:wid}, ()=>log("WS joined room","#9cf")));
+  socket.on("sensor_event", (e)=> log(`[WS] ${e.deviceCode} ${e.eventType}=${e.value} saved=${e.saved}`, e.saved?"#0f0":"#888"));
+}
+
+async function emit(code, type, value) {
+  if(!wid) return log("chưa login","#f66");
+  const r = await fetch(`${API}/api/simulator/events`,{method:"POST",headers:{"Content-Type":"application/json",...auth()},body:JSON.stringify({warehouseId:wid,deviceCode:code,eventType:type,value})});
+  const d = await r.json();
+  log(`[thủ công] ${code}=${value} → ${d?"lưu":"lọc (delta nhỏ)"}`, "#ff0");
+}
+
+async function runScenario() {
+  const scenarioKey = document.getElementById("scn").value;
+  const speed = +document.getElementById("spd").value;
+  const run = await (await fetch(`${API}/api/simulator/runs`,{method:"POST",headers:{"Content-Type":"application/json",...auth()},body:JSON.stringify({scenarioKey,warehouseId:wid,seed:42,speed})})).json();
+  runId = run.id;
+  await fetch(`${API}/api/simulator/runs/${runId}/play`,{method:"POST",headers:auth()});
+  log(`▶ chạy scenario "${scenarioKey}" x${speed} (run ${runId.slice(0,8)})`, "#9cf");
+}
+
+async function resetRun() {
+  if(!runId) return;
+  await fetch(`${API}/api/simulator/runs/${runId}/reset`,{method:"POST",headers:auth()});
+  log("⟲ reset run", "#9cf");
+}
+</script>
+</body>
+</html>

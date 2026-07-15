@@ -1,0 +1,27 @@
+{
+  "name": "safestock-x",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=10"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma"
+    ]
+  },
+  "scripts": {
+    "infra:up": "docker compose --env-file .env -f infrastructure/docker-compose.yml up -d",
+    "infra:down": "docker compose --env-file .env -f infrastructure/docker-compose.yml down",
+    "infra:logs": "docker compose --env-file .env -f infrastructure/docker-compose.yml logs -f",
+    "api:dev": "pnpm --filter @safestock/api start:dev",
+    "api:db": "pnpm --filter @safestock/api prisma:push && pnpm --filter @safestock/api seed"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.3"
+  }
+}
