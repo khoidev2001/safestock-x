@@ -20,6 +20,33 @@ export enum TransactionType {
   EXPORT = "EXPORT",
   TRANSFER = "TRANSFER",
   RETURN = "RETURN",
+  ADJUST = "ADJUST",
+  LOAN_OUT_INTERXA = "LOAN_OUT_INTERXA",
+  LOAN_IN = "LOAN_IN",
+}
+
+/** Nguồn giao dịch — độ lệch feed vào độ tin cậy Readiness */
+export enum TransactionSource {
+  SCAN = "SCAN",
+  BULK = "BULK",
+  LOADCELL = "LOADCELL",
+  RFID = "RFID",
+  MANUAL = "MANUAL",
+}
+
+/** Trạng thái vật tư 2 chiều — tình trạng vật lý */
+export enum ItemCondition {
+  NEW = "NEW",
+  USED = "USED",
+  NEEDS_CHECK = "NEEDS_CHECK",
+  DAMAGED = "DAMAGED",
+}
+
+/** Trạng thái vật tư 2 chiều — lưu hành */
+export enum CirculationStatus {
+  IN_STOCK = "IN_STOCK",
+  ON_LOAN = "ON_LOAN",
+  RETURNED = "RETURNED",
 }
 
 /** Vai trò người dùng */

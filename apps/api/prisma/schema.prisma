@@ -33,6 +33,38 @@ enum TransactionType {
   EXPORT
   TRANSFER
   RETURN
+  ADJUST
+  LOAN_OUT_INTERXA // cho xã khác mượn
+  LOAN_IN          // mượn từ xã khác
+}
+
+// Nguồn giao dịch — độ lệch giữa nguồn feed vào "độ tin cậy" Readiness
+enum TransactionSource {
+  SCAN
+  BULK
+  LOADCELL
+  RFID
+  MANUAL
+}
+
+// Trạng thái vật tư 2 CHIỀU độc lập (C-minus)
+enum ItemCondition {
+  NEW         // mới
+  USED        // cũ, đã dùng
+  NEEDS_CHECK // cần kiểm tra
+  DAMAGED     // hư hỏng
+}
+
+enum CirculationStatus {
+  IN_STOCK  // trong kho
+  ON_LOAN   // đang mượn — vẫn thuộc kho, KHÔNG tính mất
+  RETURNED  // vừa hoàn, chờ kiểm tra
+}
+
+enum LoanStatus {
+  ON_LOAN
+  PARTIALLY_RETURNED
+  CLOSED
 }
 
 model Organization {
@@ -61,8 +93,22 @@ model Warehouse {
   organization   Organization    @relation(fields: [organizationId], references: [id])
   name           String
   location       String?
+  distanceKm     Float           @default(0) // khoảng cách tới trung tâm/điểm sự cố — Mission ưu tiên gần
   createdAt      DateTime        @default(now())
   zones          WarehouseZone[]
+}
+
+// Kho lân cận (xã khác) — NHẬP TAY, AI đọc để gợi ý mượn liên xã. KHÔNG sync DB thật (#30)
+model NeighborWarehouse {
+  id          String   @id @default(cuid())
+  warehouseId String // kho của mình (tham chiếu)
+  name        String // tên xã lân cận
+  distanceKm  Float
+  contactInfo String? // sđt/bộ đàm liên hệ
+  summary     Json // tồn kho tóm tắt nhập tay: [{sku, name, quantity}]
+  updatedAt   DateTime @updatedAt
+
+  @@index([warehouseId])
 }
 
 model WarehouseZone {
@@ -97,31 +143,54 @@ model ItemCategory {
 }
 
 model Item {
-  id         String       @id @default(cuid())
-  categoryId String
-  category   ItemCategory @relation(fields: [categoryId], references: [id])
-  name       String
-  sku        String       @unique
-  createdAt  DateTime     @default(now())
-  batches    ItemBatch[]
+  id           String       @id @default(cuid())
+  categoryId   String
+  category     ItemCategory @relation(fields: [categoryId], references: [id])
+  name         String
+  sku          String       @unique
+  consumable   Boolean      @default(false) // true=tiêu hao (nước/pin, xuất=mất); false=tái sử dụng (áo phao, xuất=mượn)
+  unitWeightKg Float?       // khối lượng đơn vị — loadcell suy số lượng (Bp1)
+  createdAt    DateTime     @default(now())
+  batches      ItemBatch[]
 }
 
 model ItemBatch {
-  id           String      @id @default(cuid())
+  id           String            @id @default(cuid())
   itemId       String
-  item         Item        @relation(fields: [itemId], references: [id])
+  item         Item              @relation(fields: [itemId], references: [id])
   shelfId      String?
-  shelf        Shelf?      @relation(fields: [shelfId], references: [id])
+  shelf        Shelf?            @relation(fields: [shelfId], references: [id])
   batchCode    String
-  quantity     Int         @default(0)
-  status       ItemStatus  @default(AVAILABLE)
+  quantity     Int               @default(0)
+  status       ItemStatus        @default(AVAILABLE) // giữ tương thích; sẽ dùng condition+circulation
+  condition    ItemCondition     @default(NEW)     // chiều 1: tình trạng vật lý
+  circulation  CirculationStatus @default(IN_STOCK) // chiều 2: lưu hành
   expiryDate   DateTime?
   inspectedAt  DateTime?
-  createdAt    DateTime    @default(now())
+  createdAt    DateTime          @default(now())
   transactions InventoryTransaction[]
   counts       InventoryCount[]
+  loans        LoanRecord[]
 
   @@unique([itemId, batchCode])
+}
+
+// Phiếu mượn (#17) — vật tư consumable=false. Giữ ItemBatch nguyên, phân mảnh nằm ở phiếu.
+model LoanRecord {
+  id              String     @id @default(cuid())
+  batchId         String
+  batch           ItemBatch  @relation(fields: [batchId], references: [id])
+  quantity        Int // số mượn
+  borrowedByUserId String?
+  missionId       String?
+  status          LoanStatus @default(ON_LOAN)
+  returnedOk      Int        @default(0) // hoàn tốt → USED về kho
+  returnedDamaged Int        @default(0) // hoàn hỏng → DAMAGED
+  lost            Int        @default(0) // mất → trừ tổng kho
+  borrowedAt      DateTime   @default(now())
+  closedAt        DateTime?
+
+  @@index([batchId, status])
 }
 
 // Kiểm kê thực tế — so với quantity hệ thống cho Readiness (khả dụng SL + độ tin cậy)
@@ -138,15 +207,16 @@ model InventoryCount {
 }
 
 model InventoryTransaction {
-  id        String          @id @default(cuid())
+  id        String            @id @default(cuid())
   batchId   String
-  batch     ItemBatch       @relation(fields: [batchId], references: [id])
+  batch     ItemBatch         @relation(fields: [batchId], references: [id])
   userId    String
-  user      User            @relation(fields: [userId], references: [id])
+  user      User              @relation(fields: [userId], references: [id])
   type      TransactionType
+  source    TransactionSource @default(SCAN) // nguồn — feed dataReliability
   quantity  Int
   note      String?
-  createdAt DateTime        @default(now())
+  createdAt DateTime          @default(now())
 }
 
 // Audit log — mọi thao tác quan trọng ghi lại bất biến (PRD NFR-03)
