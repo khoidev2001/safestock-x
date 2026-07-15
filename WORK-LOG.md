@@ -17,7 +17,7 @@ Thứ tự: C-minus (schema) → C0 (công thức) → C1 (tính điểm + recal
 
 | Lát | Việc | Ai | Trạng thái | Branch/PR |
 |---|---|---|---|---|
-| C-minus | Schema: condition×circulation 2 chiều, consumable, distanceKm, NeighborWarehouse, LoanRecord | | ⬜ | |
+| C-minus | Schema: condition×circulation 2 chiều, consumable, distanceKm, NeighborWarehouse, LoanRecord | Claude | 🟡 chờ review | [PR #1](https://github.com/khoidev2001/safestock-x/pull/1) |
 | C0 | 6 công thức con + schema điểm (trọng số/ngưỡng configurable) | | ⬜ | |
 | C1 | Tính điểm 4 cấp + breakdown + recalc 3 tầng (event-driven) | | ⬜ | |
 | C2 | Nguyên nhân trừ điểm + recommendation | | ⬜ | |
