@@ -1,0 +1,9 @@
+{
+  "name": "@safestock/frontend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Web admin + Digital Twin Simulator UI (Next.js) — scaffold đầy đủ ở Phase G",
+  "scripts": {
+    "dev": "echo 'Chưa scaffold — dựng Next.js ở Phase G0' && exit 0"
+  }
+}

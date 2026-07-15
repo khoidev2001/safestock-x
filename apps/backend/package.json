@@ -1,5 +1,5 @@
 {
-  "name": "@safestock/api",
+  "name": "@safestock/backend",
   "version": "0.1.0",
   "private": true,
   "scripts": {

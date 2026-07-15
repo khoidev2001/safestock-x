@@ -1,0 +1,32 @@
+# skills/
+
+Quy tắc code + skill hỗ trợ cho đội SafeStock X.
+
+## Nội dung
+
+| File | Mô tả |
+|---|---|
+| [CODING-STANDARDS.md](CODING-STANDARDS.md) | **Bộ quy tắc code chuẩn** — BẮT BUỘC đọc & tuân thủ trước khi commit |
+
+## Skill Claude Code (cài vào máy mỗi người)
+
+Các skill dưới đây cài vào **Claude Code của từng thành viên** (không phải file trong repo). Chạy lệnh sau khi clone:
+
+```bash
+# Tìm skill trên GitHub phục vụ làm project
+npx skills add vercel-labs/agent
+
+# Skill hỗ trợ design/thống nhất system design (taste)
+npx skills add taste
+
+# Skill hỗ trợ debug chuẩn chỉnh
+npx skills add addyosmani/agent-skills
+```
+
+> Lưu ý: skill gắn vào công cụ AI cá nhân, không commit vào repo. Mỗi người tự cài để trải nghiệm nhất quán.
+
+## Áp dụng
+
+1. Đọc [CODING-STANDARDS.md](CODING-STANDARDS.md) trước khi viết dòng code đầu tiên.
+2. Trước khi tạo PR: chạy checklist mục 27 của CODING-STANDARDS.
+3. Reviewer bám mục 21 (Code Review) để duyệt.

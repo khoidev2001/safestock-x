@@ -17,7 +17,7 @@ Thứ tự: C-minus (schema) → C0 (công thức) → C1 (tính điểm + recal
 
 | Lát | Việc | Ai | Trạng thái | Branch/PR |
 |---|---|---|---|---|
-| C-minus | Schema: condition×circulation 2 chiều, consumable, distanceKm, NeighborWarehouse, LoanRecord | | ⬜ | |
+| C-minus | Schema: condition×circulation 2 chiều, consumable, distanceKm, NeighborWarehouse, LoanRecord | Claude | 🟡 chờ review | [PR #1](https://github.com/khoidev2001/safestock-x/pull/1) |
 | C0 | 6 công thức con + schema điểm (trọng số/ngưỡng configurable) | | ⬜ | |
 | C1 | Tính điểm 4 cấp + breakdown + recalc 3 tầng (event-driven) | | ⬜ | |
 | C2 | Nguyên nhân trừ điểm + recommendation | | ⬜ | |
@@ -34,4 +34,4 @@ Thứ tự: C-minus (schema) → C0 (công thức) → C1 (tính điểm + recal
 
 ## Ghi chú điều phối
 - Backend (C, D) và Frontend (F, G) tách được → 2 người song song sau khi C1 có API readiness.
-- File dễ đụng: `apps/api/prisma/schema.prisma`, `apps/api/src/app.module.ts`, `apps/api/prisma/seed.ts` — báo nhau trước khi sửa.
+- File dễ đụng: `apps/backend/prisma/schema.prisma`, `apps/backend/src/app.module.ts`, `apps/backend/prisma/seed.ts` — báo nhau trước khi sửa.

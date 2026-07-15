@@ -1,0 +1,9 @@
+{
+  "name": "@safestock/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "App vận hành hiện trường (React Native + Expo) — scaffold đầy đủ ở Phase F",
+  "scripts": {
+    "start": "echo 'Chưa scaffold — dựng Expo ở Phase F0' && exit 0"
+  }
+}

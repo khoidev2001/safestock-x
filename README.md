@@ -6,11 +6,30 @@ Dự thi Cuộc thi Sáng tạo AI tỉnh Đắk Lắk. Sinh ra từ bối cản
 
 > Phần mềm thường quản lý hàng tồn kho. SafeStock X quản lý **năng lực phản ứng thực tế** của kho khi sự cố xảy ra — kể cả khi con người quá bận để nhập liệu.
 
-## Trả lời 4 câu hỏi
-1. Vật tư nào đang thực sự sẵn sàng sử dụng?
-2. Kho đáp ứng được tình huống khẩn cấp nào?
-3. Với một tình huống cụ thể, cần chuẩn bị gì?
-4. Điểm nghẽn nào khiến cứu hộ bị chậm?
+---
+
+## ⛔ ĐỌC TRƯỚC KHI VIẾT DÒNG CODE ĐẦU TIÊN
+
+**Bắt buộc mọi thành viên đọc đủ 5 mục dưới. Không đọc = không code.**
+
+### 1️⃣ Quy tắc code — [skills/CODING-STANDARDS.md](skills/CODING-STANDARDS.md)
+Bộ quy tắc chuẩn (đặt tên, cấu trúc, xử lý lỗi, bảo mật, API, DB, AI, test, Git). **MUST tuân thủ.** Mọi PR bị review theo bộ này.
+
+### 2️⃣ Skill hỗ trợ — [skills/README.md](skills/README.md)
+Cài skill Claude Code vào máy (agent search, taste design, debug). Chạy lệnh `npx skills add ...` sau khi clone.
+
+### 3️⃣ Sản phẩm cần làm gì — [docs/PRD.md](docs/PRD.md)
+CÁI GÌ + TẠI SAO. 5 module, yêu cầu chức năng, kiến trúc, phân vai AI.
+
+### 4️⃣ Kế hoạch & phase — [docs/BUILD-PLAN.md](docs/BUILD-PLAN.md)
+LÀM THẾ NÀO. Chia phase A→I, mỗi lát có verify riêng, thứ tự ưu tiên. **Code bám theo phase, không nhảy lung tung.**
+
+### 5️⃣ Quy trình làm việc — [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) + [docs/WORK-LOG.md](docs/WORK-LOG.md)
+Flow branch → PR → review → merge (KHÔNG push thẳng `main`). Checklist ngày, nhận việc, tránh giẫm chân.
+
+> **Trước mỗi PR:** chạy checklist mục 27 của [CODING-STANDARDS](skills/CODING-STANDARDS.md) + `lint`, `typecheck`, `test`, `build`.
+
+---
 
 ## 5 module cốt lõi
 1. **Quản lý kho** — 4 tầng nhập/xuất, mượn-trả, kiểm kê, hậu kiểm
@@ -22,22 +41,20 @@ Dự thi Cuộc thi Sáng tạo AI tỉnh Đắk Lắk. Sinh ra từ bối cản
 ## Tech stack
 Monorepo pnpm · **Backend** NestJS + Prisma + PostgreSQL + Redis · **AI** FastAPI + LLM pluggable (Gemini/Ollama/Claude) · **Web** Next.js · **Mobile** React Native + Expo
 
-## Tài liệu
-- [PRD.md](PRD.md) — yêu cầu sản phẩm (CÁI GÌ + TẠI SAO)
-- [BUILD-PLAN.md](BUILD-PLAN.md) — kế hoạch build từng phase (LÀM THẾ NÀO), resume-able
-
-## Cấu trúc
+## Cấu trúc (monorepo pnpm)
 ```
 apps/
-  api/                 # NestJS backend (auth, inventory, simulation...)
-  admin-web/           # Next.js (chưa dựng)
-  mobile/              # Expo (chưa dựng)
-  ai-service/          # FastAPI (chưa dựng)
+  backend/             # BE — NestJS ✅
+  frontend/            # FE — Next.js admin + simulator (Phase G, placeholder)
+  mobile/              # Mobile — Expo (Phase F, placeholder)
+  ai-service/          # AI — FastAPI, không thuộc pnpm workspace (Phase D, placeholder)
 packages/
-  shared-types/        # Enum + type dùng chung
-  scenario-definitions/ # Kịch bản mô phỏng cảm biến
+  shared-types/        # enum/type dùng chung BE↔FE↔mobile
+  scenario-definitions/ # kịch bản mô phỏng cảm biến
 infrastructure/
   docker-compose.yml   # Postgres + Redis
+docs/                  # PRD, BUILD-PLAN, CONTRIBUTING, WORK-LOG, thư quan tâm
+skills/                # CODING-STANDARDS + skill hỗ trợ
 ```
 
 ## Chạy dev
@@ -45,9 +62,9 @@ infrastructure/
 pnpm install
 cp .env.example .env          # điền secret nếu cần
 pnpm infra:up                 # Postgres + Redis (Docker)
-pnpm --filter @safestock/api prisma:push
-pnpm --filter @safestock/api seed
-pnpm --filter @safestock/api start:dev   # http://localhost:3100/api/health
+pnpm --filter @safestock/backend prisma:push
+pnpm --filter @safestock/backend seed
+pnpm be:dev                   # http://localhost:3100/api/health
 ```
 
 Simulator UI tối thiểu: `http://localhost:3100/sim.html`
