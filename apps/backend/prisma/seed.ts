@@ -15,10 +15,9 @@ async function main() {
   const hash = (pw: string) => bcrypt.hashSync(pw, 10);
   await prisma.user.createMany({
     data: [
-      { organizationId: org.id, email: "admin", passwordHash: hash("admin123@"), fullName: "Quản trị hệ thống", role: "MANAGER" },
-      { organizationId: org.id, email: "manager@safestock.vn", passwordHash: hash("manager123"), fullName: "Quản lý kho", role: "MANAGER" },
-      { organizationId: org.id, email: "staff@safestock.vn", passwordHash: hash("staff123"), fullName: "Nhân viên kho", role: "WAREHOUSE_STAFF" },
-      { organizationId: org.id, email: "rescue@safestock.vn", passwordHash: hash("rescue123"), fullName: "Đội cứu hộ", role: "RESCUE_TEAM" },
+      { organizationId: org.id, email: "admin", passwordHash: hash("admin123@"), fullName: "Quản trị hệ thống", role: "ADMIN" },
+      { organizationId: org.id, email: "warehouse@safestock.vn", passwordHash: hash("warehouse123"), fullName: "Phụ trách kho", role: "WAREHOUSE" },
+      { organizationId: org.id, email: "rescue@safestock.vn", passwordHash: hash("rescue123"), fullName: "Đội cứu hộ", role: "RESCUE" },
     ],
   });
 

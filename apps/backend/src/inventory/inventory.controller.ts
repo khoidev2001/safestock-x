@@ -1,10 +1,14 @@
 import { Body, Controller, Get, Param, Post, Query, Request, UseGuards } from "@nestjs/common";
-import { UserRole } from "@safestock/shared-types";
-import { JwtAuthGuard, Roles, RolesGuard } from "../auth/guards";
+import { Permission } from "@safestock/shared-types";
+import { AuthenticatedRequest } from "../auth/authenticated-request";
+import { JwtAuthGuard } from "../auth/guards";
+import { PermissionGuard } from "../rbac/permission.guard";
+import { RequirePermission } from "../rbac/permissions.decorator";
 import { TransactionDto, TransferDto } from "./dto";
 import { InventoryService } from "./inventory.service";
 
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermissionGuard)
+@RequirePermission(Permission.INVENTORY_READ)
 @Controller("inventory")
 export class InventoryController {
   constructor(private inv: InventoryService) {}
@@ -24,21 +28,21 @@ export class InventoryController {
     return this.inv.scanBySku(sku);
   }
 
-  @Roles(UserRole.WAREHOUSE_STAFF, UserRole.MANAGER)
+  @RequirePermission(Permission.INVENTORY_IMPORT)
   @Post("import")
-  import(@Request() req: any, @Body() dto: TransactionDto) {
+  import(@Request() req: AuthenticatedRequest, @Body() dto: TransactionDto) {
     return this.inv.import(req.user.userId, dto.batchId, dto.quantity, dto.note);
   }
 
-  @Roles(UserRole.WAREHOUSE_STAFF, UserRole.MANAGER)
+  @RequirePermission(Permission.INVENTORY_EXPORT)
   @Post("export")
-  export(@Request() req: any, @Body() dto: TransactionDto) {
+  export(@Request() req: AuthenticatedRequest, @Body() dto: TransactionDto) {
     return this.inv.export(req.user.userId, dto.batchId, dto.quantity, dto.note);
   }
 
-  @Roles(UserRole.WAREHOUSE_STAFF, UserRole.MANAGER)
+  @RequirePermission(Permission.INVENTORY_EXPORT)
   @Post("transfer")
-  transfer(@Request() req: any, @Body() dto: TransferDto) {
+  transfer(@Request() req: AuthenticatedRequest, @Body() dto: TransferDto) {
     return this.inv.transfer(req.user.userId, dto.batchId, dto.toShelfId, dto.quantity, dto.note);
   }
 }

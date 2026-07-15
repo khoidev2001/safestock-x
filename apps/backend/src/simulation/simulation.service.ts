@@ -1,6 +1,7 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { VirtualDeviceType } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { ReadinessService } from "../readiness/readiness.service";
 
 // Ngưỡng lọc: chỉ lưu event khi giá trị đổi đủ lớn so với current (tránh phình bảng).
 const SIGNIFICANT_DELTA: Partial<Record<VirtualDeviceType, number>> = {
@@ -9,6 +10,15 @@ const SIGNIFICANT_DELTA: Partial<Record<VirtualDeviceType, number>> = {
   LOADCELL: 0.1, // kg
   SMOKE: 5,
 };
+
+// Cảm biến ảnh hưởng điểm môi trường → đổi thì tính lại Readiness.
+const ENV_DEVICE_TYPES: VirtualDeviceType[] = [
+  VirtualDeviceType.TEMPERATURE,
+  VirtualDeviceType.HUMIDITY,
+];
+
+// Gộp nhiều event môi trường liên tiếp thành 1 lần recalc (tránh dồn dập lúc chạy scenario).
+const RECALC_DEBOUNCE_MS = 300;
 
 export interface EmitInput {
   warehouseId: string;
@@ -22,7 +32,13 @@ export interface EmitInput {
 
 @Injectable()
 export class SimulationService {
-  constructor(private prisma: PrismaService) {}
+  private readonly log = new Logger(SimulationService.name);
+  private recalcTimers = new Map<string, NodeJS.Timeout>();
+
+  constructor(
+    private prisma: PrismaService,
+    private readiness: ReadinessService,
+  ) {}
 
   firstWarehouse() {
     return this.prisma.warehouse.findFirst({ select: { id: true, name: true } });
@@ -62,6 +78,11 @@ export class SimulationService {
       data: { currentValue: input.value },
     });
 
+    // Recalc Readiness khi cảm biến môi trường đổi (điểm rớt <2s — khoảnh khắc vàng).
+    if (ENV_DEVICE_TYPES.includes(device.type)) {
+      this.scheduleRecalc(input.warehouseId);
+    }
+
     if (!significant) return null;
 
     return this.prisma.sensorEvent.create({
@@ -86,5 +107,21 @@ export class SimulationService {
       orderBy: { createdAt: "desc" },
       take: limit,
     });
+  }
+
+  /**
+   * Lên lịch tính lại Readiness cho 1 kho, gộp các event môi trường liên tiếp
+   * trong RECALC_DEBOUNCE_MS thành 1 lần (tránh recalc dồn dập khi chạy scenario).
+   */
+  private scheduleRecalc(warehouseId: string): void {
+    const existing = this.recalcTimers.get(warehouseId);
+    if (existing) clearTimeout(existing);
+    const timer = setTimeout(() => {
+      this.recalcTimers.delete(warehouseId);
+      this.readiness.recalculateWarehouse(warehouseId).catch((error) => {
+        this.log.warn(`Recalc readiness lỗi cho kho ${warehouseId}: ${error.message}`);
+      });
+    }, RECALC_DEBOUNCE_MS);
+    this.recalcTimers.set(warehouseId, timer);
   }
 }

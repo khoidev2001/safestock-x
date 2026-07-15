@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import * as bcrypt from "bcryptjs";
+import { UserRole } from "@safestock/shared-types";
 import { PrismaService } from "../prisma/prisma.service";
 import { JwtPayload } from "./jwt.strategy";
 
@@ -18,7 +19,7 @@ export class AuthService {
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       throw new UnauthorizedException("Email hoặc mật khẩu sai");
     }
-    return this.issueTokens(user.id, user.email, user.role);
+    return this.issueTokens(user.id, user.email, user.role as UserRole);
   }
 
   async refresh(refreshToken: string) {
@@ -32,10 +33,10 @@ export class AuthService {
     }
     const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
     if (!user) throw new UnauthorizedException("User không tồn tại");
-    return this.issueTokens(user.id, user.email, user.role);
+    return this.issueTokens(user.id, user.email, user.role as UserRole);
   }
 
-  private async issueTokens(sub: string, email: string, role: string) {
+  private async issueTokens(sub: string, email: string, role: UserRole) {
     const payload: JwtPayload = { sub, email, role };
     const [accessToken, refreshToken] = await Promise.all([
       this.jwt.signAsync(payload, {
