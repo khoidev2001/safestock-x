@@ -13,15 +13,17 @@ Quy tắc code + skill hỗ trợ cho đội SafeStock X.
 Các skill dưới đây cài vào **Claude Code của từng thành viên** (không phải file trong repo). Chạy lệnh sau khi clone:
 
 ```bash
-# Tìm skill trên GitHub phục vụ làm project
-npx skills add vercel-labs/agent
+# Công cụ tìm skill trên GitHub
+npx skills add vercel-labs/skills
 
-# Skill hỗ trợ design/thống nhất system design (taste)
-npx skills add taste
+# Design taste — chống UI "AI slop", thống nhất design (tasteskill.dev)
+npx skills add Leonxlnx/taste-skill
 
-# Skill hỗ trợ debug chuẩn chỉnh
+# Bộ skill engineering: debug, test, security, performance, git-workflow...
 npx skills add addyosmani/agent-skills
 ```
+
+> Skill cài vào `.agents/skills/` + symlink `.claude/skills/` (đã .gitignore, không commit). Cần `GITHUB_TOKEN` — chạy `export GITHUB_TOKEN=$(gh auth token)` trước nếu bị prompt auth. Dùng `-y` để bỏ prompt (KHÔNG dùng `-g`, PromptScript không hỗ trợ global).
 
 > Lưu ý: skill gắn vào công cụ AI cá nhân, không commit vào repo. Mỗi người tự cài để trải nghiệm nhất quán.
 
