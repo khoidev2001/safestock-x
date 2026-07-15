@@ -21,8 +21,11 @@ Cài skill Claude Code vào máy (agent search, taste design, debug). Chạy l�
 ### 3️⃣ Sản phẩm cần làm gì — [docs/PRD.md](docs/PRD.md)
 CÁI GÌ + TẠI SAO. 5 module, yêu cầu chức năng, kiến trúc, phân vai AI.
 
-### 4️⃣ Kế hoạch & phase — [docs/BUILD-PLAN.md](docs/BUILD-PLAN.md)
-LÀM THẾ NÀO. Chia phase A→I, mỗi lát có verify riêng, thứ tự ưu tiên. **Code bám theo phase, không nhảy lung tung.**
+### 4️⃣ Kế hoạch & phase — [docs/BUILD-PLAN.md](docs/BUILD-PLAN.md) + ROADMAP mỗi app
+LÀM THẾ NÀO. BUILD-PLAN là kế hoạch tổng (phase A→I). Mỗi app có **ROADMAP riêng với checklist bắt buộc tick khi code**:
+- [apps/backend/ROADMAP.md](apps/backend/ROADMAP.md) · [apps/frontend/ROADMAP.md](apps/frontend/ROADMAP.md) · [apps/mobile/ROADMAP.md](apps/mobile/ROADMAP.md) · [apps/ai-service/ROADMAP.md](apps/ai-service/ROADMAP.md)
+
+> **Code phase nào → tick từng dòng checklist trong ROADMAP app đó.** Xong hết + verify → đổi phase sang ✅. Không tick = không kiểm soát được đã làm gì.
 
 ### 5️⃣ Quy trình làm việc — [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) + [docs/WORK-LOG.md](docs/WORK-LOG.md)
 Flow branch → PR → review → merge (KHÔNG push thẳng `main`). Checklist ngày, nhận việc, tránh giẫm chân.

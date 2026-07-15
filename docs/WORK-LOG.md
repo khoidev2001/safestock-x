@@ -1,37 +1,50 @@
 # WORK LOG — SafeStock X
 
-> Checklist ngày, bám [BUILD-PLAN.md](BUILD-PLAN.md). Ai nhận việc gì ghi tên vào, xong tick. Tránh giẫm chân. Mỗi lát = 1 branch/PR (xem [CONTRIBUTING.md](CONTRIBUTING.md)).
+> Điều phối ai làm gì. Chi tiết checklist từng phase nằm ở **ROADMAP của mỗi app** (bắt buộc tick khi code):
+> - Backend → [../apps/backend/ROADMAP.md](../apps/backend/ROADMAP.md)
+> - Frontend → [../apps/frontend/ROADMAP.md](../apps/frontend/ROADMAP.md)
+> - Mobile → [../apps/mobile/ROADMAP.md](../apps/mobile/ROADMAP.md)
+> - AI Service → [../apps/ai-service/ROADMAP.md](../apps/ai-service/ROADMAP.md)
 >
-> Ký hiệu: ⬜ chưa · 🟡 đang làm (ghi tên) · ✅ xong+merge
+> Nguồn yêu cầu gốc: [BUILD-PLAN.md](BUILD-PLAN.md). Quy trình PR: [CONTRIBUTING.md](CONTRIBUTING.md).
+>
+> **BẮT BUỘC:** khi code 1 phase → tick từng dòng checklist trong ROADMAP của app đó. Không tick = không kiểm soát được đã làm gì.
 
-## Đã xong (trước khi có repo)
-- ✅ Phase A0 — nền móng monorepo
-- ✅ Phase A1 — auth + inventory
-- ✅ Phase B0-B3 — sensor simulator (timeline-scrubber, WS, 6 scenario, sim.html)
-
----
-
-## Đang làm — Phase C (Readiness Score, differentiator)
-
-Thứ tự: C-minus (schema) → C0 (công thức) → C1 (tính điểm + recalc) → C2 (đề xuất) → C3 (ngưỡng hành động).
-
-| Lát | Việc | Ai | Trạng thái | Branch/PR |
-|---|---|---|---|---|
-| C-minus | Schema: condition×circulation 2 chiều, consumable, distanceKm, NeighborWarehouse, LoanRecord | Claude | 🟡 chờ review | [PR #1](https://github.com/khoidev2001/safestock-x/pull/1) |
-| C0 | 6 công thức con + schema điểm (trọng số/ngưỡng configurable) | | ⬜ | |
-| C1 | Tính điểm 4 cấp + breakdown + recalc 3 tầng (event-driven) | | ⬜ | |
-| C2 | Nguyên nhân trừ điểm + recommendation | | ⬜ | |
-| C3 | Ngưỡng hành động (4 vùng, tự động hành động) | | ⬜ | |
-| Verify C | kéo slider độ ẩm → điểm zone rớt <2s | | ⬜ | |
+## Ký hiệu
+⬜ chưa · 🟡 đang làm (ghi tên) · ✅ xong+verify. Ưu tiên: 🔴 CORE · 🟠 nên-có · ⚪ polish.
 
 ---
 
-## Backlog gần (sau C)
-- G0+G1 — admin web scaffold + dashboard Readiness (song song frontend được sau C1)
-- A2-core — RBAC permission + audit 5W
-- Bp0/Bp2/Bp3/Bp4 — xuất lô, sửa tay/reconcile, seed 2 kho, mượn-trả
-- D — Mission-to-Kit
+## Tiến độ tổng (theo app)
+
+| App | Phase xong | Đang/kế tiếp |
+|---|---|---|
+| **Backend** | A0, A1, B0-B3, C-minus ✅ | C0-C3 (Readiness), A2-core (RBAC) |
+| **Frontend** | — (placeholder) | G0 scaffold → G1 dashboard (cùng BE-C) |
+| **Mobile** | — (placeholder) | F0 scaffold (cần API) |
+| **AI Service** | — (placeholder) | D0 scaffold (cần GEMINI_API_KEY) |
+
+---
+
+## Đang làm
+
+| App-Phase | Việc | Ai | Trạng thái |
+|---|---|---|---|
+| BE-Cminus | Schema nền Readiness | Claude | 🟡 branch feat/c-minus-schema (chưa merge) |
+| BE-C0 | 6 công thức con + schema điểm | | ⬜ kế tiếp |
+
+---
+
+## Ai nhận việc gì (điền tên tránh giẫm chân)
+
+| App | Người phụ trách |
+|---|---|
+| Backend (C, D, A2, Bp, E) | |
+| Frontend (G) | |
+| Mobile (F) | |
+| AI Service (D0, D1) | |
 
 ## Ghi chú điều phối
-- Backend (C, D) và Frontend (F, G) tách được → 2 người song song sau khi C1 có API readiness.
-- File dễ đụng: `apps/backend/prisma/schema.prisma`, `apps/backend/src/app.module.ts`, `apps/backend/prisma/seed.ts` — báo nhau trước khi sửa.
+- **Song song được:** Backend (BE-C readiness) và Frontend (FE-G0 scaffold) tách; FE-G1 cần BE-C1 xong API. Mobile cần API inventory/readiness. AI-service độc lập (cần key Gemini).
+- **File dễ đụng (báo nhau trước):** `apps/backend/prisma/schema.prisma`, `apps/backend/src/app.module.ts`, `apps/backend/prisma/seed.ts`, `packages/shared-types/src/index.ts`.
+- Mỗi lát = 1 branch → PR → review → merge.
