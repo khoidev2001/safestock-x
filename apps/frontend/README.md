@@ -13,4 +13,4 @@ Web quản trị + Digital Twin Simulator UI.
 
 Hiện tại: **placeholder**. Bản simulator tối thiểu tạm ở `apps/backend/public/sim.html`.
 
-Xem [BUILD-PLAN.md](../../BUILD-PLAN.md) Phase G.
+Xem [BUILD-PLAN.md](../../docs/BUILD-PLAN.md) Phase G.

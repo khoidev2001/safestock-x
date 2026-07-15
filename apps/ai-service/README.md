@@ -15,7 +15,7 @@ AI service — parse tình huống + giải thích phương án. Provider plugga
 - POST /parse — mô tả tình huống (text) → JSON có cấu trúc (validation Pydantic + retry)
 - POST /explain — giải thích phương án (tiếng Việt)
 
-Hiện tại: **placeholder**. Xem [BUILD-PLAN.md](../../BUILD-PLAN.md) Phase D0.
+Hiện tại: **placeholder**. Xem [BUILD-PLAN.md](../../docs/BUILD-PLAN.md) Phase D0.
 
 ## Chạy (khi đã scaffold)
 ```bash

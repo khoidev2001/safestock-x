@@ -13,6 +13,6 @@ App vận hành hiện trường cho nhân viên kho + đội cứu hộ.
 - Mượn–hoàn (RESCUE)
 - Offline-đọc (cache kho khi mất mạng)
 
-Hiện tại: **placeholder**. Xem [BUILD-PLAN.md](../../BUILD-PLAN.md) Phase F.
+Hiện tại: **placeholder**. Xem [BUILD-PLAN.md](../../docs/BUILD-PLAN.md) Phase F.
 
 **Lưu ý toolchain:** cần Android SDK/emulator hoặc điện thoại USB debug. Emulator gọi host qua `10.0.2.2:3100`, máy thật qua IP LAN.

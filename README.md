@@ -23,8 +23,10 @@ Dự thi Cuộc thi Sáng tạo AI tỉnh Đắk Lắk. Sinh ra từ bối cản
 Monorepo pnpm · **Backend** NestJS + Prisma + PostgreSQL + Redis · **AI** FastAPI + LLM pluggable (Gemini/Ollama/Claude) · **Web** Next.js · **Mobile** React Native + Expo
 
 ## Tài liệu
-- [PRD.md](PRD.md) — yêu cầu sản phẩm (CÁI GÌ + TẠI SAO)
-- [BUILD-PLAN.md](BUILD-PLAN.md) — kế hoạch build từng phase (LÀM THẾ NÀO), resume-able
+- [docs/PRD.md](docs/PRD.md) — yêu cầu sản phẩm (CÁI GÌ + TẠI SAO)
+- [docs/BUILD-PLAN.md](docs/BUILD-PLAN.md) — kế hoạch build từng phase (LÀM THẾ NÀO), resume-able
+- [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) — quy ước làm việc (flow PR)
+- [docs/WORK-LOG.md](docs/WORK-LOG.md) — checklist ngày
 
 ## Cấu trúc (monorepo pnpm)
 ```

@@ -4,7 +4,7 @@
 >
 > **Cách dùng:** mỗi lát có `Trạng thái`, `Đầu ra`, `File tạo`, `Verify`. Đánh dấu `[x]` khi xong. Cột trạng thái: ⬜ chưa làm · 🟡 đang làm · ✅ xong+verify.
 >
-> Tài liệu liên quan: [PRD.md](PRD.md) (yêu cầu chi tiết) · [docs/thu-quan-tam-CTD-DongXuan.md](docs/thu-quan-tam-CTD-DongXuan.md) (thư quan tâm).
+> Tài liệu liên quan: [PRD.md](PRD.md) (yêu cầu chi tiết) · [thu-quan-tam-CTD-DongXuan.md](thu-quan-tam-CTD-DongXuan.md) (thư quan tâm).
 
 ---
 
