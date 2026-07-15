@@ -46,16 +46,16 @@
 | Redis | **56380** | 6379 |
 | API | **3100** | — |
 
-Cấu hình ở `.env` root. Docker compose phải chạy `--env-file .env` (scripts root đã set). `apps/api/.env` riêng chỉ chứa `DATABASE_URL` cho Prisma CLI.
+Cấu hình ở `.env` root. Docker compose phải chạy `--env-file .env` (scripts root đã set). `apps/backend/.env` riêng chỉ chứa `DATABASE_URL` cho Prisma CLI.
 
 ### Lệnh hay dùng
 ```bash
 pnpm infra:up                              # bật Postgres + Redis
 pnpm infra:down                            # tắt
-pnpm --filter @safestock/api start:dev     # API watch mode (port 3100)
-pnpm --filter @safestock/api build         # build API
-pnpm --filter @safestock/api seed          # seed dữ liệu mẫu
-# reset DB: cd apps/api && npx prisma db push --force-reset --skip-generate
+pnpm --filter @safestock/backend start:dev     # API watch mode (port 3100)
+pnpm --filter @safestock/backend build         # build API
+pnpm --filter @safestock/backend seed          # seed dữ liệu mẫu
+# reset DB: cd apps/backend && npx prisma db push --force-reset --skip-generate
 # health: curl http://localhost:3100/api/health
 ```
 
@@ -75,11 +75,11 @@ pnpm --filter @safestock/api seed          # seed dữ liệu mẫu
 - [x] pnpm workspace, root package.json, .gitignore, .env.example
 - [x] docker-compose Postgres + Redis (healthcheck)
 - [x] packages/shared-types (enums: ItemStatus, TransactionType, UserRole, IncidentType, Priority, VirtualDeviceType; READINESS_WEIGHTS; SensorEvent)
-- [x] apps/api NestJS scaffold + PrismaModule + HealthController
+- [x] apps/backend NestJS scaffold + PrismaModule + HealthController
 - [x] Prisma schema core: Organization, User, Warehouse, WarehouseZone, Shelf, ItemCategory, Item, ItemBatch, InventoryTransaction, AuditLog
 - [x] seed: org CTĐ Đồng Xuân, 2 zone, 4 shelf, 8 category/item/batch
 - **Verify:** ✅ `GET /api/health` → `{status:ok, database:up, redis:up}`; seed 4 users / 8 batches
-- **File:** `pnpm-workspace.yaml`, `package.json`, `infrastructure/docker-compose.yml`, `packages/shared-types/`, `apps/api/{prisma,src/{prisma,health}}`
+- **File:** `pnpm-workspace.yaml`, `package.json`, `infrastructure/docker-compose.yml`, `packages/shared-types/`, `apps/backend/{prisma,src/{prisma,health}}`
 
 ### A1. Auth + Inventory ✅
 - [x] Auth: bcryptjs, JWT access(15m)/refresh(7d), login, refresh, /me
@@ -89,7 +89,7 @@ pnpm --filter @safestock/api seed          # seed dữ liệu mẫu
 - [x] Inventory write: import/export/transfer atomic ($transaction) + audit log; chặn xuất quá tồn
 - [x] ValidationPipe global (whitelist, transform)
 - **Verify:** ✅ login→token→/me; no-token→401; scan; export 96→86; over-export bị chặn; audit ghi before/after
-- **File:** `apps/api/src/{auth,inventory}/`
+- **File:** `apps/backend/src/{auth,inventory}/`
 
 ### A2. RBAC chỉnh chu — phân quyền mang thi (CHIA 2 ĐỢT) ⬜
 > Phân quyền là chỗ giám khảo quản lý nhà nước hỏi sâu (chống gian lận, an toàn dữ liệu công). ĐÚNG LIỀU — không nhồi enterprise vô ích.
@@ -124,7 +124,7 @@ pnpm --filter @safestock/api seed          # seed dữ liệu mẫu
 - [ ] Guard 2 tầng: (1) có quyền? (2) trên KHO NÀY? ADMIN = mọi kho
 - **Verify:** WAREHOUSE kho Đồng Xuân gọi adjust kho xã khác → 403
 - **Lộ trình (báo cáo):** duyệt 2 bước/approval workflow (cho kho TỈNH nhiều tầng), SSO/LDAP, permission-map động DB, chữ ký số
-- **File:** `apps/api/src/auth/`, `apps/api/src/rbac/`
+- **File:** `apps/backend/src/auth/`, `apps/backend/src/rbac/`
 
 ---
 
@@ -153,14 +153,14 @@ pnpm --filter @safestock/api seed          # seed dữ liệu mẫu
 - [ ] Socket.IO gateway (NestJS): room theo warehouseId; emit event khi runner phát
 - [ ] Endpoint: POST runs/:id/{play,pause,reset}, POST events (thủ công cho slider ở G2)
 - **Verify:** client ws nhận event < 2s sau khi runner phát (NFR-02)
-- **File:** `apps/api/src/simulation/`, `packages/scenario-definitions/`
+- **File:** `apps/backend/src/simulation/`, `packages/scenario-definitions/`
 
 ### B3. ⭐ Simulator UI tối thiểu (kéo G2-core lên đây, làm NGAY) ✅
 > Khoảnh khắc vàng phải xong SỚM + chắc, KHÔNG đợi hết Phase G. Chỉ cần đủ để kéo slider bắn event — trang đẹp để sau.
-- [x] 1 trang web thô: slider độ ẩm/nhiệt + nút chạy scenario + nút reset (`apps/api/public/sim.html`)
+- [x] 1 trang web thô: slider độ ẩm/nhiệt + nút chạy scenario + nút reset (`apps/backend/public/sim.html`)
 - [x] Kéo slider → POST events → WS bắn → (sau khi có C) điểm rớt
 - **Verify:** ✅ kéo slider → event realtime; 6 scenario chạy; bad_storage đẩy humid→90
-- **File:** `apps/api/public/sim.html` (serve qua ServeStaticModule)
+- **File:** `apps/backend/public/sim.html` (serve qua ServeStaticModule)
 
 ---
 
@@ -178,7 +178,7 @@ pnpm --filter @safestock/api seed          # seed dữ liệu mẫu
 - [ ] **#11 Quyền `inventory:bulk_export`** (WAREHOUSE/ADMIN) + scope kho + lý do bắt buộc + audit 5W (hậu kiểm, KHÔNG duyệt trước — khẩn cấp cần nhanh)
 - [ ] (Sau khi có D) "xuất cả cơ số theo nhiệm vụ" — trừ hết batch trong phương án 1 xác nhận, gắn missionId
 - **Verify:** bulk-export 1 kệ → mọi batch giảm đúng + audit 5W; bắn 2 export song song 1 lô → không âm kho; không quyền → 403
-- **File:** `apps/api/src/inventory/`
+- **File:** `apps/backend/src/inventory/`
 
 ### Bp1. Loadcell/RFID → tự sinh giao dịch (nối B ↔ Inventory) ⬜
 - [ ] Handler nhận `WEIGHT_CHANGED`: delta khối lượng ÷ khối lượng đơn vị → suy số lượng ra → tự tạo InventoryTransaction (EXPORT, source LOADCELL)
@@ -187,7 +187,7 @@ pnpm --filter @safestock/api seed          # seed dữ liệu mẫu
 - [ ] Cấu hình: 1 kệ/1 loại + khối lượng đơn vị mỗi item (loadcell suy đúng); map tag cho RFID
 - **Verify:** chạy scenario suspected_loss (loadcell giảm ~4kg) → tự sinh transaction xuất ~ đúng SL; DB cập nhật
 - **⚠️ ĐỊNH VỊ LẠI loadcell = TÍN HIỆU TRIGGER, KHÔNG phải nguồn đếm.** Cách kể: "cân phát hiện biến động → kích hoạt đối chiếu 3 nguồn còn lại", KHÔNG nói "cân tự đếm chính xác". Lý do: áo phao ướt nặng gấp đôi, người/thùng đặt tạm lên kệ, sai số ±2% → không đáng chốt số. Con số chốt vẫn do quét/kiểm kê. 4 tầng đối chiếu bắt lỗi loadcell.
-- **File:** `apps/api/src/inventory/`, nối `apps/api/src/simulation/`
+- **File:** `apps/backend/src/inventory/`, nối `apps/backend/src/simulation/`
 
 ### Bp2. Điều chỉnh thủ công + đối chiếu kiểm kê (lưới an toàn) ⬜
 - [ ] POST /inventory/adjust: sửa tay số lượng batch (lý do BẮT BUỘC) + AuditLog 5W. **Quyền `inventory:adjust`** (WAREHOUSE/ADMIN) + scope kho + double-confirm nếu lệch lớn (hậu kiểm, không duyệt trước)
@@ -196,7 +196,7 @@ pnpm --filter @safestock/api seed          # seed dữ liệu mẫu
 - [ ] Độ lệch nguồn tự động (loadcell/RFID) vs kiểm kê → feed "độ tin cậy dữ liệu" của Readiness
 - [ ] UI sửa tay + reconcile ở dashboard → Phase G1
 - **Verify:** adjust 1 batch có audit 5W; reconcile lệch → ghi đè + lệch vào dataReliability; không quyền → 403; adjust không lý do → reject
-- **File:** `apps/api/src/inventory/`, UI ở `apps/admin-web/` (G1)
+- **File:** `apps/backend/src/inventory/`, UI ở `apps/admin-web/` (G1)
 
 ### Bp3. Kho lân cận + dữ liệu "bẩn" (#3, #12, #19, #30) ⬜
 > **#30 KIẾN TRÚC ĐA XÃ TỰ TRỊ (quan trọng):** mỗi xã = 1 máy chủ AI ĐỘC LẬP, KHÔNG nối DB xã khác. AI chỉ **GỢI Ý** liên hệ mượn ("thiếu áo phao, liên hệ xã B gần còn hàng") → con người tự gọi điện/bộ đàm → bên cho mượn (WAREHOUSE xã B) xuất đánh dấu `source=LOAN_OUT_INTERXA`, bên mượn nhập `source=LOAN_IN`. KHÔNG có sync DB tự động — xóa sạch bài toán đồng bộ đa kho. Đúng thực tế cứu hộ (liên xã vốn gọi bộ đàm).
@@ -204,13 +204,13 @@ pnpm --filter @safestock/api seed          # seed dữ liệu mẫu
 - [ ] **#3+#19** Seed dữ liệu kho lân cận **LỆCH loại** (xã B nhiều áo phao ít nước, xã mình ngược lại) → Mission gợi ý mượn có kịch bản
 - [ ] **#12** Seed batch "bẩn": không `expiryDate`, MISPLACED, DAMAGED, kệ `isBlocked`, chưa kiểm kê → chứng minh xử lý thực tế lộn xộn + tôn Readiness
 - **Verify:** Readiness phản ánh dữ liệu bẩn (điểm thấp có lý do); Mission thiếu → gợi ý liên hệ kho lân cận gần nhất còn hàng
-- **File:** `apps/api/prisma/seed.ts`
+- **File:** `apps/backend/prisma/seed.ts`
 
 ### Bp5. Backup đám mây (#29) ⬜
 - [ ] Cron **17:00 hằng ngày**: nếu có internet → dump Postgres local → đẩy Supabase, **giữ tối đa 3 bản** (xóa cũ hơn). Mất net → skip, thử hôm sau (không chặn vận hành)
 - [ ] Trả lời "mất máy chủ/lũ cuốn thì sao": backup cloud hằng ngày 3 phiên bản → khôi phục tới hôm trước
 - **Verify:** chạy job thủ công → thấy dump trên Supabase; bản thứ 4 → xóa bản cũ nhất
-- **File:** `apps/api/src/backup/` (BullMQ scheduled job — Redis đã có)
+- **File:** `apps/backend/src/backup/` (BullMQ scheduled job — Redis đã có)
 
 ### Bp4. Mượn-trả vật tư — LoanRecord (#16, #17) ⬜
 > Kho cứu hộ: vật tư tái sử dụng (áo phao/xuồng/đèn) MƯỢN chứ không mất. Bảng phiếu mượn riêng, giữ ItemBatch nguyên vẹn (phân mảnh nằm ở phiếu, không lan vào tồn kho). Làm ĐẦY ĐỦ logic trả từng phần.
@@ -222,7 +222,7 @@ pnpm --filter @safestock/api seed          # seed dữ liệu mẫu
 - [ ] Endpoint: POST /loans (mượn), POST /loans/:id/return (trả từng phần); quyền `loan:manage`
 - [ ] UI: màn "phiếu mượn đang mở" + nút hoàn (rescue app F4)
 - **Verify:** mượn 20 áo phao → ON_LOAN, tổng kho không đổi, khả dụng-ngay −20; trả 15 ok+3 mất+2 hỏng → tổng kho −3, 15 về USED, 2 DAMAGED, phiếu CLOSED
-- **File:** `apps/api/src/inventory/` hoặc `apps/api/src/loan/`
+- **File:** `apps/backend/src/inventory/` hoặc `apps/backend/src/loan/`
 
 ---
 
@@ -289,7 +289,7 @@ pnpm --filter @safestock/api seed          # seed dữ liệu mẫu
 - [ ] Bảng `ReadinessThreshold` (configurable) + hook: điểm đổi vùng → trigger notification/chặn
 - [ ] Mission (Phase D) đọc ngưỡng: kho <50 → cảnh báo "cân nhắc kho khác" khi lập phương án
 - **Verify:** đẩy độ ẩm (sim) → điểm rớt qua ngưỡng 70 → có cảnh báo; rớt <50 → chặn/cảnh báo khi tạo mission
-- **File:** `apps/api/src/readiness/`
+- **File:** `apps/backend/src/readiness/`
 
 ---
 
@@ -338,7 +338,7 @@ pnpm --filter @safestock/api seed          # seed dữ liệu mẫu
 - [ ] **#26 Mission done ≠ Loan done**: mission `complete` (đội về) KHÔNG tự đóng LoanRecord. Complete → NHẮC "còn N món chưa hoàn từ nhiệm vụ này". Màn "phiếu mượn quá hạn" cảnh báo giữ đồ lâu. 2 vòng đời tách, liên kết lỏng
 - [ ] **#30 Gợi ý mượn liên xã**: kho gần thiếu → đọc NeighborWarehouse → gợi ý "liên hệ xã B (gần, còn hàng)". AI CHỈ gợi ý, con người tự liên hệ + xuất đánh dấu
 - **Verify:** tạo phương án < 10s (NFR-01); không vượt tồn (NFR-05); mission complete còn loan mở → có nhắc
-- **File:** `apps/ai-service/`, `apps/api/src/mission/`
+- **File:** `apps/ai-service/`, `apps/backend/src/mission/`
 
 ---
 
@@ -355,7 +355,7 @@ pnpm --filter @safestock/api seed          # seed dữ liệu mẫu
 - [ ] acknowledge/assign/resolve
 - [ ] Thông báo tới mobile: **MVP dùng in-app alert qua WebSocket** (đang mở app thì hiện). Expo push notification (device token) → POLISH, đừng ôm sớm
 - **Verify:** chạy scenario suspected-loss → tạo incident có timeline + evidence + điểm (NFR-06 mọi kết luận có bằng chứng)
-- **File:** `apps/api/src/incident/`
+- **File:** `apps/backend/src/incident/`
 
 ---
 
@@ -469,7 +469,7 @@ pnpm --filter @safestock/api seed          # seed dữ liệu mẫu
 - [ ] Ví dụ: "còn bao nhiêu áo phao trẻ em còn hạn?", "khu nào readiness thấp nhất?"
 - **Lộ trình:** MVP = context injection; khi kho phình to thật (JSON vượt context) → nâng lên RAG vector. Kể được thành tầm nhìn scale
 - **Verify:** hỏi số liệu → bot trả đúng khớp DB; hỏi ngoài phạm vi → bot nói không biết (không bịa)
-- **File:** `apps/api/src/assistant/`, `apps/admin-web/`
+- **File:** `apps/backend/src/assistant/`, `apps/admin-web/`
 - **⚠️ Ưu tiên: làm sau core. Cắt nếu Readiness+Mission chưa xong.**
 
 ---

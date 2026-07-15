@@ -34,4 +34,4 @@ Thứ tự: C-minus (schema) → C0 (công thức) → C1 (tính điểm + recal
 
 ## Ghi chú điều phối
 - Backend (C, D) và Frontend (F, G) tách được → 2 người song song sau khi C1 có API readiness.
-- File dễ đụng: `apps/api/prisma/schema.prisma`, `apps/api/src/app.module.ts`, `apps/api/prisma/seed.ts` — báo nhau trước khi sửa.
+- File dễ đụng: `apps/backend/prisma/schema.prisma`, `apps/backend/src/app.module.ts`, `apps/backend/prisma/seed.ts` — báo nhau trước khi sửa.

@@ -11,7 +11,7 @@ import { SimulationModule } from "./simulation/simulation.module";
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ["../../.env", ".env"] }),
-    // Serve UI tối thiểu B3 tại /sim.html — public ở apps/api/public (dist/src → ../../public)
+    // Serve UI tối thiểu B3 tại /sim.html — public ở apps/backend/public (dist/src → ../../public)
     ServeStaticModule.forRoot({ rootPath: join(__dirname, "..", "..", "public") }),
     PrismaModule,
     HealthModule,

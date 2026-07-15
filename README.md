@@ -26,15 +26,15 @@ Monorepo pnpm · **Backend** NestJS + Prisma + PostgreSQL + Redis · **AI** Fast
 - [PRD.md](PRD.md) — yêu cầu sản phẩm (CÁI GÌ + TẠI SAO)
 - [BUILD-PLAN.md](BUILD-PLAN.md) — kế hoạch build từng phase (LÀM THẾ NÀO), resume-able
 
-## Cấu trúc
+## Cấu trúc (monorepo pnpm)
 ```
 apps/
-  api/                 # NestJS backend (auth, inventory, simulation...)
-  admin-web/           # Next.js (chưa dựng)
-  mobile/              # Expo (chưa dựng)
-  ai-service/          # FastAPI (chưa dựng)
+  backend/             # BE — NestJS (auth, inventory, simulation...) ✅
+  frontend/            # FE — Next.js admin + simulator (Phase G, placeholder)
+  mobile/              # Mobile — Expo (Phase F, placeholder)
+  ai-service/          # AI — FastAPI, không thuộc pnpm workspace (Phase D, placeholder)
 packages/
-  shared-types/        # Enum + type dùng chung
+  shared-types/        # Enum + type dùng chung BE/FE/mobile
   scenario-definitions/ # Kịch bản mô phỏng cảm biến
 infrastructure/
   docker-compose.yml   # Postgres + Redis
@@ -45,9 +45,9 @@ infrastructure/
 pnpm install
 cp .env.example .env          # điền secret nếu cần
 pnpm infra:up                 # Postgres + Redis (Docker)
-pnpm --filter @safestock/api prisma:push
-pnpm --filter @safestock/api seed
-pnpm --filter @safestock/api start:dev   # http://localhost:3100/api/health
+pnpm --filter @safestock/backend prisma:push
+pnpm --filter @safestock/backend seed
+pnpm --filter @safestock/backend start:dev   # http://localhost:3100/api/health
 ```
 
 Simulator UI tối thiểu: `http://localhost:3100/sim.html`

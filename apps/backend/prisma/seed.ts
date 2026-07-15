@@ -1,5 +1,5 @@
 import { config } from "dotenv";
-config(); // đọc apps/api/.env — khớp DATABASE_URL với root
+config(); // đọc apps/backend/.env — khớp DATABASE_URL với root
 import { PrismaClient, ItemStatus } from "@prisma/client";
 import * as bcrypt from "bcryptjs";
 

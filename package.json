@@ -18,8 +18,10 @@
     "infra:up": "docker compose --env-file .env -f infrastructure/docker-compose.yml up -d",
     "infra:down": "docker compose --env-file .env -f infrastructure/docker-compose.yml down",
     "infra:logs": "docker compose --env-file .env -f infrastructure/docker-compose.yml logs -f",
-    "api:dev": "pnpm --filter @safestock/api start:dev",
-    "api:db": "pnpm --filter @safestock/api prisma:push && pnpm --filter @safestock/api seed"
+    "be:dev": "pnpm --filter @safestock/backend start:dev",
+    "be:db": "pnpm --filter @safestock/backend prisma:push && pnpm --filter @safestock/backend seed",
+    "fe:dev": "pnpm --filter @safestock/frontend dev",
+    "mobile:dev": "pnpm --filter @safestock/mobile start"
   },
   "devDependencies": {
     "socket.io-client": "^4.8.3"
