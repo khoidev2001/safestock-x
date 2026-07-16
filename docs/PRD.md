@@ -5,9 +5,9 @@ Nền tảng AI đánh giá năng lực sẵn sàng và điều phối vật tư
 
 | | |
 |---|---|
-| Phiên bản | 2.0 (sau 3 vòng review thực tế) |
-| Ngày | 2026-07-15 |
-| Trạng thái | Chốt để khởi tạo repo |
+| Phiên bản | 2.1 (bổ sung cụm kho + Action Plan + workflow liên vai trò) |
+| Ngày | 2026-07-16 |
+| Trạng thái | Đang code — xem [13. Trạng thái hiện tại](#13-trạng-thái-hiện-tại) |
 | Dự thi | Cuộc thi Sáng tạo AI tỉnh Đắk Lắk (ai.daklak.gov.vn) |
 | Đội | 2 người |
 | Bối cảnh | Bão lũ Phú Yên (cũ) 2025 — nay thuộc Đắk Lắk |
@@ -170,6 +170,45 @@ Chức năng: xem Readiness + cảnh báo + nhiệm vụ; quét QR xuất/nhập
 - Mất LAN (ra hiện trường) → offline-đọc (cache xem kho) + trao đổi ngoài (bộ đàm/SMS) + nhập bù tay khi mạng về. **Không** sync tự động (tránh âm kho)
 - Mất điện toàn kho → offline-đọc trên điện thoại + phiếu giấy in sẵn + UPS máy chủ
 
+### 3.7. Cụm kho xã + GeoService (đã bổ sung sau v2.0)
+
+**Mô hình cụm kho:** 1 xã = 1 hệ thống, 1 DB. Trong xã có **1 kho tổng** (`CENTRAL`, trung tâm hành chính, dự trữ lớn) + **nhiều kho thôn** (`HAMLET`, mỗi thôn 1 kho nhỏ), cùng `communeId` → AI query trực tiếp cả cụm (KHÔNG "móc DB kho khác"). Tọa độ kho **ghim tay** (`lat`/`lng`), không geocode.
+
+**GeoService — khoảng cách/ETA kho→điểm nạn:**
+- **Haversine** (thuần, offline, luôn chạy) làm nền — 2 lat/lng → km, ETA = km÷tốc độ giả định (`GEO_ASSUMED_SPEED_KMH`)
+- **Google Routes** (Compute Route Matrix) làm chính khi có mạng + key — đường bộ thật. Lỗi/timeout/hết quota → tự lùi về Haversine, không ném lỗi lên workflow
+- **2 lớp chặn quota** để không bao giờ bị trừ tiền: app tự đếm, tới `GEO_MONTHLY_CAP` (mặc định 8.500/tháng) thì ngừng gọi Google; ngoài ra đặt **quota cap 9.000** trên Google Cloud Console (Google enforce cứng, dưới free-tier 10.000)
+
+Mission (3.3) dùng GeoService để chọn kho thôn **gần điểm nạn nhất còn hàng**, tràn sang kho tổng/thôn khác cùng xã khi thiếu, rồi mới gợi ý mượn xã lân cận (`NeighborWarehouse`, nhập tay, không sync DB — giữ nguyên §5.2).
+
+### 3.8. AI Incident Action Plan — kế hoạch hành động cứu hộ (đã bổ sung sau v2.0)
+
+Nâng Mission-to-Kit từ "danh sách vật tư + đáp ứng %" thành **kế hoạch hành động 8 mục** (khớp/hơn tài liệu phân tích tình huống cứu hộ tham khảo):
+1. Đánh giá tình huống + mức khẩn cấp (1–5)
+2. Mục tiêu cứu hộ 6 giờ đầu
+3. Phương án cấp phát vật tư
+4. Điều phối kho — kèm khoảng cách + ETA (từ GeoService, §3.7)
+5. Phương án theo 3 giai đoạn: 0–2h / 2–6h / 6–24h
+6. Cảnh báo nguy cơ
+7. Dự báo theo tỷ lệ % (định tính, có ghi rõ là ước lượng)
+8. Câu hỏi bổ sung để tăng độ chính xác
+
+**Nguyên tắc bất biến:** mục 1 (severity) và mục 7 (dự báo %) tính bằng **rule backend kiểm chứng được**, LLM CHỈ viết phần diễn giải (mục tiêu/giai đoạn/cảnh báo/câu hỏi) dựa trên số đã tính — không tự bịa số. ETA đưa vào context từ GeoService, LLM dùng đúng số này khi viết "điều phối".
+
+**Fallback không mạng/LLM lỗi:** dựng plan bằng template từ số backend — vẫn ra đủ 8 mục, không phụ thuộc LLM khi demo.
+
+### 3.9. Workflow liên vai trò + Notification (đã bổ sung sau v2.0)
+
+Mission đi qua trạng thái: `DRAFT → PENDING_RESCUE → RESCUE_CONFIRMED → PENDING_WAREHOUSE → READY → COMPLETED` (giữ `REJECTED`):
+```
+ADMIN nhập tình huống → AI sinh Action Plan (chọn kho theo §3.7)
+  → notify RESCUE → RESCUE xác nhận lấy
+  → notify WAREHOUSE → WAREHOUSE chuẩn bị + xuất (bulk-export)
+  → notify ADMIN + RESCUE (READY)
+  → thiếu → notify kho lân cận
+```
+Thông báo qua model `Notification` (DB, theo role) + Socket.IO room theo role (realtime in-app). Phân quyền bổ sung: `mission:confirm` (RESCUE), `mission:fulfill` (WAREHOUSE), `mission:create` chuyển hẳn về ADMIN.
+
 ---
 
 ## 4. Yêu cầu phi chức năng
@@ -201,7 +240,7 @@ Simulator UI ──┘                                  ├─ Redis + BullMQ
 ```
 
 ### 5.2. Đa xã tự trị (quyết định kiến trúc quan trọng)
-**Mỗi xã = 1 máy chủ độc lập, KHÔNG sync DB xã khác.** Khi kho gần thiếu, AI **gợi ý** liên hệ kho lân cận (đọc bảng "kho lân cận" nhập tay) → con người tự gọi bộ đàm/điện thoại → bên cho mượn xuất đánh dấu `LOAN_OUT`, bên mượn nhập `LOAN_IN`. Xóa bỏ bài toán đồng bộ đa kho, đúng thực tế liên xã.
+**Mỗi xã = 1 máy chủ độc lập, KHÔNG sync DB xã khác.** Trong 1 xã, cụm kho (1 `CENTRAL` + n `HAMLET` cùng `communeId`, §3.7) **dùng chung 1 DB** → AI query trực tiếp cả cụm, không phải "kho lân cận". Chỉ khi vét hết cụm kho cùng xã vẫn thiếu, AI mới **gợi ý** liên hệ kho **xã khác** (đọc bảng `NeighborWarehouse` nhập tay) → con người tự gọi bộ đàm/điện thoại → bên cho mượn xuất đánh dấu `LOAN_OUT`, bên mượn nhập `LOAN_IN`. Xóa bỏ bài toán đồng bộ đa kho liên xã, đúng thực tế liên xã.
 
 ### 5.3. Phân vai AI vs nghiệp vụ
 | Bên | Trách nhiệm |
@@ -239,7 +278,7 @@ Simulator UI ──┘                                  ├─ Redis + BullMQ
 
 ## 7. Mô hình dữ liệu (nhóm chính)
 
-**Tổ chức & phân quyền:** organizations, users, roles (WAREHOUSE/RESCUE/ADMIN), permissions (hằng số code), user_warehouses (scope), warehouses (+distanceKm), warehouse_zones, shelves (+isBlocked/isLocked)
+**Tổ chức & phân quyền:** organizations, users, roles (WAREHOUSE/RESCUE/ADMIN), permissions (hằng số code), user_warehouses (scope), warehouses (+distanceKm, **+kind CENTRAL/HAMLET, +communeId, +lat/lng**, §3.7), warehouse_zones, shelves (+isBlocked/isLocked)
 
 **Vật tư:** item_categories, items (+consumable), item_batches (+condition, +circulation, expiryDate), inventory_transactions (+source), inventory_counts, loan_records, neighbor_warehouses
 
@@ -247,9 +286,9 @@ Simulator UI ──┘                                  ├─ Redis + BullMQ
 
 **Cảm biến & sự cố:** virtual_devices (+currentValue, +updatedAt), sensor_events, simulation_scenarios, simulation_runs, incidents, incident_evidence
 
-**Nhiệm vụ:** missions, mission_requirements, mission_allocations
+**Nhiệm vụ:** missions (+actionPlan Json, +incidentLat/lng, +status mở rộng §3.9), mission_requirements, mission_allocations
 
-**Hệ thống:** audit_logs (5W), attachments, refresh_tokens
+**Hệ thống:** audit_logs (5W), attachments, refresh_tokens, **notifications** (recipientRole/userId, kind, read, §3.9), **api_usage** (đếm quota GeoService/tháng, §3.7)
 
 ---
 
@@ -259,9 +298,10 @@ Simulator UI ──┘                                  ├─ Redis + BullMQ
 **Inventory:** POST /inventory/{export,import,transfer,bulk-export,adjust,reconcile,scan} · GET /inventory/discrepancies
 **Loan:** POST /loans · POST /loans/:id/return
 **Readiness:** GET /warehouses/:id/readiness · GET /zones/:id/readiness · POST /readiness/recalculate · GET /readiness/recommendations
-**Mission:** POST /missions/{parse,generate-plan,:id/approve,:id/start,:id/complete}
+**Mission:** POST /missions/{parse,generate-plan} · GET /missions/:id · POST /missions/:id/{action-plan,explain,approve,dispatch,confirm,prepare}
 **Simulator:** GET /simulator/scenarios · POST /simulator/{events,runs,runs/:id/play,runs/:id/pause,runs/:id/reset} · GET /simulator/warehouses/:id/{devices,timeline}
 **Incident:** GET /incidents · GET /incidents/:id/timeline · POST /incidents/:id/{acknowledge,assign,resolve}
+**Notification:** GET /notifications · POST /notifications/:id/read · POST /notifications/read-all
 
 ---
 
@@ -312,6 +352,14 @@ Simulator UI ──┘                                  ├─ Redis + BullMQ
 
 ---
 
-## 13. Trạng thái hiện tại (2026-07-15)
+## 13. Trạng thái hiện tại (2026-07-16)
 
-Đã xong: Phase A (nền + auth + inventory) · Phase B (sensor simulator, verify pass). Đang tới: Phase C (Readiness Score). Chi tiết tiến độ + verify từng lát: [BUILD-PLAN.md](BUILD-PLAN.md).
+**Backend + AI service (mạnh nhất, vượt phạm vi PRD gốc):** Phase A (nền/auth/inventory) · B (sensor simulator) · C (Readiness Score) · D-E (Mission-to-Kit + Incident) · **J (GeoService)** · **K (cụm kho xã + AI Action Plan 8 mục, §3.7-3.8)** đã xong, có test + verify pass. **L (workflow liên vai trò + Notification, §3.9)** đã có code + test (`mission.workflow.spec.ts`) nhưng checklist ROADMAP.md chưa soát lại đầy đủ.
+
+**Còn thiếu:** Phase M (Normal Mode — dự báo thiếu hụt/đề xuất nhập/cân bằng liên kho/xu hướng/thời tiết, chưa code) · loadcell/RFID tự động (Bp1) · backup tự động (Bp5) · chatbot hỏi-đáp (G4).
+
+**Frontend web:** dashboard 8 view (Sự cố, Kiểm kê, Mượn-trả, Hậu kiểm, ...) đã dựng, nối API thật. Bản đồ điều phối trực quan + voice input mô tả tình huống chưa làm.
+
+**Mobile:** chưa code (placeholder).
+
+Chi tiết tiến độ + verify từng lát: [BUILD-PLAN.md](BUILD-PLAN.md) · checklist đầy đủ: `apps/backend/ROADMAP.md`, `apps/frontend/ROADMAP.md`.
