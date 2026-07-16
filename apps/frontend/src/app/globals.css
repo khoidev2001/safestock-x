@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+/*
+ * Ứng phó nhanh design system: trust-first B2B admin dashboard.
+ * Color lock: one emerald accent. Readiness colors are semantic status colors.
+ * Shape lock: 8px radius for cards, buttons and inputs.
+ */
+@theme {
+  --font-sans: var(--font-sans-loaded), ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-mono-loaded), ui-monospace, "SF Mono", "Cascadia Code", monospace;
+
+  --radius: 0.5rem;
+
+  --color-accent: oklch(0.62 0.15 155);
+  --color-accent-fg: oklch(0.99 0 0);
+
+  --color-ready: oklch(0.62 0.15 155);
+  --color-attention: oklch(0.78 0.15 85);
+  --color-degraded: oklch(0.68 0.17 55);
+  --color-critical: oklch(0.60 0.20 25);
+}
+
+:root {
+  --bg: oklch(0.99 0.003 250);
+  --surface: oklch(1 0 0);
+  --surface-2: oklch(0.97 0.005 250);
+  --border: oklch(0.92 0.006 250);
+  --text: oklch(0.22 0.01 250);
+  --text-muted: oklch(0.52 0.01 250);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: oklch(0.17 0.008 250);
+    --surface: oklch(0.21 0.009 250);
+    --surface-2: oklch(0.25 0.01 250);
+    --border: oklch(0.30 0.01 250);
+    --text: oklch(0.96 0.004 250);
+    --text-muted: oklch(0.68 0.008 250);
+  }
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Material Symbols icon font */
+.material-symbols-outlined {
+  font-family: "Material Symbols Outlined";
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  display: inline-block;
+  white-space: nowrap;
+  direction: ltr;
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+}
+.material-symbols-outlined.fill { font-variation-settings: "FILL" 1; }
