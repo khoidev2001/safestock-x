@@ -76,6 +76,9 @@ export enum Permission {
   MISSION_CREATE = "mission:create",
   MISSION_REQUEST = "mission:request",
   MISSION_APPROVE = "mission:approve",
+  MISSION_CONFIRM = "mission:confirm", // RESCUE xác nhận lấy vật tư
+  MISSION_FULFILL = "mission:fulfill", // WAREHOUSE chuẩn bị + xuất
+  NOTIFICATION_VIEW = "notification:view",
   READINESS_VIEW = "readiness:view",
   LOAN_MANAGE = "loan:manage",
   WAREHOUSE_MANAGE = "warehouse:manage",
@@ -89,6 +92,7 @@ export enum Permission {
  */
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   [UserRole.WAREHOUSE]: [
+    // Kho: quản kho + CHUẨN BỊ/xuất theo phương án (không lập kế hoạch).
     Permission.INVENTORY_READ,
     Permission.INVENTORY_EXPORT,
     Permission.INVENTORY_IMPORT,
@@ -96,18 +100,21 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.INVENTORY_ADJUST,
     Permission.INVENTORY_RECONCILE,
     Permission.MISSION_VIEW,
-    Permission.MISSION_CREATE,
-    Permission.MISSION_APPROVE,
+    Permission.MISSION_FULFILL, // chuẩn bị + xuất kho theo phương án
     Permission.READINESS_VIEW,
     Permission.LOAN_MANAGE,
     Permission.WAREHOUSE_MANAGE,
+    Permission.NOTIFICATION_VIEW,
   ],
   [UserRole.RESCUE]: [
+    // Cứu hộ: xem + XÁC NHẬN lấy vật tư.
     Permission.INVENTORY_READ,
     Permission.MISSION_VIEW,
     Permission.MISSION_REQUEST,
+    Permission.MISSION_CONFIRM, // xác nhận lấy
     Permission.READINESS_VIEW,
     Permission.LOAN_MANAGE,
+    Permission.NOTIFICATION_VIEW,
   ],
   [UserRole.ADMIN]: [
     // ADMIN có mọi quyền.

@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import { buildTimeline, getScenario, ScenarioEvent } from "@safestock/scenario-definitions";
 import { PrismaService } from "../prisma/prisma.service";
 import { SimulationService } from "./simulation.service";
@@ -42,10 +43,12 @@ export class RunnerService {
     const def = getScenario(scenarioKey);
     if (!def) throw new NotFoundException(`Scenario không tồn tại: ${scenarioKey}`);
 
+    // Scenario definition lưu dạng JSON — ép qua unknown vì Scenario là object thuần.
+    const definition = def as unknown as Prisma.InputJsonValue;
     const scenario = await this.prisma.simulationScenario.upsert({
       where: { key: def.key },
-      create: { key: def.key, name: def.name, description: def.description, definition: def as any },
-      update: { definition: def as any },
+      create: { key: def.key, name: def.name, description: def.description, definition },
+      update: { definition },
     });
     const run = await this.prisma.simulationRun.create({
       data: { scenarioId: scenario.id, warehouseId, seed, speed, status: "IDLE" },

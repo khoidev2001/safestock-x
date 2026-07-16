@@ -5,7 +5,7 @@
 ---
 
 ### H: Sản phẩm này khác gì phần mềm quản lý kho thông thường?
-**Đ:** Phần mềm kho thường trả lời "kho có bao nhiêu?". Chúng em trả lời "kho **sẵn sàng tới đâu?**". Ví dụ: kho thường báo "100 áo phao"; SafeStock báo "84/100 sẵn sàng — 96 có mặt, 92 đúng vị trí, 88 đủ điều kiện, 84 lấy được ngay", kèm nguyên nhân trừ điểm và đề xuất khắc phục. Đây là quản lý **năng lực phản ứng thực tế**, không phải con số tồn kho.
+**Đ:** Phần mềm kho thường trả lời "kho có bao nhiêu?". Chúng em trả lời "kho **sẵn sàng tới đâu?**". Ví dụ: kho thường báo "100 áo phao"; Ứng phó nhanh báo "84/100 sẵn sàng — 96 có mặt, 92 đúng vị trí, 88 đủ điều kiện, 84 lấy được ngay", kèm nguyên nhân trừ điểm và đề xuất khắc phục. Đây là quản lý **năng lực phản ứng thực tế**, không phải con số tồn kho.
 
 ### H: "AI" trong sản phẩm nằm ở đâu? Có phải chỉ là if-else phức tạp?
 **Đ:** Chúng em dùng AI **đúng chỗ, không nhồi để làm màu**:

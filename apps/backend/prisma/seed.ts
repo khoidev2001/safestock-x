@@ -21,8 +21,19 @@ async function main() {
     ],
   });
 
+  // Cụm kho 1 xã (K1): 1 kho tổng ở trung tâm + 2 kho thôn. Cùng communeId, cùng DB.
+  // Toạ độ thật quanh xã Đồng Xuân (Phú Yên) — ghim tay, không geocode.
+  const COMMUNE = "dong-xuan";
   const warehouse = await prisma.warehouse.create({
-    data: { organizationId: org.id, name: "Kho cứu trợ trung tâm Đồng Xuân", location: "Xã Đồng Xuân" },
+    data: {
+      organizationId: org.id,
+      name: "Kho cứu trợ trung tâm Đồng Xuân",
+      location: "Trung tâm hành chính xã Đồng Xuân",
+      kind: "CENTRAL",
+      communeId: COMMUNE,
+      lat: 13.3667,
+      lng: 109.0333,
+    },
   });
 
   const zoneA = await prisma.warehouseZone.create({
@@ -35,24 +46,25 @@ async function main() {
   const shelfA1 = await prisma.shelf.create({ data: { zoneId: zoneA.id, code: "A1" } });
   const shelfA2 = await prisma.shelf.create({ data: { zoneId: zoneA.id, code: "A2" } });
   const shelfB1 = await prisma.shelf.create({ data: { zoneId: zoneB.id, code: "B1" } });
-  const shelfB3 = await prisma.shelf.create({ data: { zoneId: zoneB.id, code: "B3" } });
+  // Bp3 dữ liệu bẩn: kệ B3 lối đi bị chặn → vật tư trên đó khó tiếp cận (hạ Readiness).
+  const shelfB3 = await prisma.shelf.create({ data: { zoneId: zoneB.id, code: "B3", isBlocked: true } });
 
-  // Category + item + batch
+  // Category + item + batch. consumable: true=tiêu hao (xuất=mất), false=tái sử dụng (mượn-trả).
   const catalog = [
-    { cat: "Áo phao người lớn", unit: "chiếc", sku: "LIFE-ADULT", shelf: shelfA1, qty: 96, status: ItemStatus.AVAILABLE, expiryMonths: 24 },
-    { cat: "Áo phao trẻ em", unit: "chiếc", sku: "LIFE-CHILD", shelf: shelfA1, qty: 25, status: ItemStatus.AVAILABLE, expiryMonths: 24 },
-    { cat: "Xuồng cứu hộ", unit: "chiếc", sku: "BOAT-01", shelf: shelfA2, qty: 3, status: ItemStatus.AVAILABLE, expiryMonths: null },
-    { cat: "Bộ sơ cứu", unit: "bộ", sku: "FIRSTAID-01", shelf: shelfB1, qty: 8, status: ItemStatus.EXPIRING_SOON, expiryMonths: 2 },
-    { cat: "Đèn pin", unit: "chiếc", sku: "TORCH-01", shelf: shelfB3, qty: 12, status: ItemStatus.AVAILABLE, expiryMonths: null },
-    { cat: "Bộ pin", unit: "bộ", sku: "BATT-01", shelf: shelfB3, qty: 30, status: ItemStatus.AVAILABLE, expiryMonths: 12 },
-    { cat: "Thiết bị liên lạc", unit: "chiếc", sku: "RADIO-01", shelf: shelfB1, qty: 4, status: ItemStatus.MAINTENANCE, expiryMonths: null },
-    { cat: "Nước uống đóng chai", unit: "lít", sku: "WATER-01", shelf: shelfA2, qty: 500, status: ItemStatus.AVAILABLE, expiryMonths: 6 },
+    { cat: "Áo phao người lớn", unit: "chiếc", sku: "LIFE-ADULT", shelf: shelfA1, qty: 96, status: ItemStatus.AVAILABLE, expiryMonths: 24, consumable: false, weight: 0.8 },
+    { cat: "Áo phao trẻ em", unit: "chiếc", sku: "LIFE-CHILD", shelf: shelfA1, qty: 25, status: ItemStatus.AVAILABLE, expiryMonths: 24, consumable: false, weight: 0.5 },
+    { cat: "Xuồng cứu hộ", unit: "chiếc", sku: "BOAT-01", shelf: shelfA2, qty: 3, status: ItemStatus.AVAILABLE, expiryMonths: null, consumable: false, weight: 25 },
+    { cat: "Bộ sơ cứu", unit: "bộ", sku: "FIRSTAID-01", shelf: shelfB1, qty: 8, status: ItemStatus.EXPIRING_SOON, expiryMonths: 2, consumable: true, weight: 1.2 },
+    { cat: "Đèn pin", unit: "chiếc", sku: "TORCH-01", shelf: shelfB3, qty: 12, status: ItemStatus.AVAILABLE, expiryMonths: null, consumable: false, weight: 0.3 },
+    { cat: "Bộ pin", unit: "bộ", sku: "BATT-01", shelf: shelfB3, qty: 30, status: ItemStatus.AVAILABLE, expiryMonths: 12, consumable: true, weight: 0.1 },
+    { cat: "Thiết bị liên lạc", unit: "chiếc", sku: "RADIO-01", shelf: shelfB1, qty: 4, status: ItemStatus.MAINTENANCE, expiryMonths: null, consumable: false, weight: 0.4 },
+    { cat: "Nước uống đóng chai", unit: "lít", sku: "WATER-01", shelf: shelfA2, qty: 500, status: ItemStatus.AVAILABLE, expiryMonths: 6, consumable: true, weight: 1 },
   ];
 
   for (const c of catalog) {
     const category = await prisma.itemCategory.create({ data: { name: c.cat, unit: c.unit } });
     const item = await prisma.item.create({
-      data: { categoryId: category.id, name: c.cat, sku: c.sku },
+      data: { categoryId: category.id, name: c.cat, sku: c.sku, consumable: c.consumable, unitWeightKg: c.weight },
     });
     await prisma.itemBatch.create({
       data: {
@@ -67,6 +79,60 @@ async function main() {
         inspectedAt: new Date(),
       },
     });
+  }
+
+  // ===== Kho thôn (HAMLET) — cùng communeId, gần điểm nạn hơn, tồn ít =====
+  // Demo K1: kho thôn gần lấy trước, thiếu thì tràn sang kho tổng.
+  const hamlets = [
+    { name: "Kho thôn Phú Xuân", lat: 13.3800, lng: 109.0450, water: 80, lifeAdult: 20 },
+    { name: "Kho thôn Long Hà", lat: 13.3500, lng: 109.0200, water: 40, lifeAdult: 10 },
+  ];
+  const waterItem = await prisma.item.findUnique({ where: { sku: "WATER-01" } });
+  const lifeItem = await prisma.item.findUnique({ where: { sku: "LIFE-ADULT" } });
+
+  for (const h of hamlets) {
+    const hw = await prisma.warehouse.create({
+      data: {
+        organizationId: org.id,
+        name: h.name,
+        location: h.name,
+        kind: "HAMLET",
+        communeId: COMMUNE,
+        lat: h.lat,
+        lng: h.lng,
+      },
+    });
+    const zone = await prisma.warehouseZone.create({
+      data: { warehouseId: hw.id, code: "A", name: "Kho thôn" },
+    });
+    const shelf = await prisma.shelf.create({ data: { zoneId: zone.id, code: "A1" } });
+    // Kho thôn chỉ trữ nước + áo phao (vật tư lũ lụt thiết yếu), số ít.
+    if (waterItem) {
+      await prisma.itemBatch.create({
+        data: {
+          itemId: waterItem.id,
+          shelfId: shelf.id,
+          batchCode: `WATER-01-${h.name.slice(-2)}`,
+          quantity: h.water,
+          status: ItemStatus.AVAILABLE,
+          expiryDate: new Date(Date.now() + 6 * 30 * 24 * 3600 * 1000),
+          inspectedAt: new Date(),
+        },
+      });
+    }
+    if (lifeItem) {
+      await prisma.itemBatch.create({
+        data: {
+          itemId: lifeItem.id,
+          shelfId: shelf.id,
+          batchCode: `LIFE-ADULT-${h.name.slice(-2)}`,
+          quantity: h.lifeAdult,
+          status: ItemStatus.AVAILABLE,
+          expiryDate: new Date(Date.now() + 24 * 30 * 24 * 3600 * 1000),
+          inspectedAt: new Date(),
+        },
+      });
+    }
   }
 
   // ===== Thiết bị ảo (Phase B) =====
@@ -100,6 +166,51 @@ async function main() {
     data: { warehouseId: wid, type: "GATEWAY", code: "gateway_01", unit: "bool", currentValue: 1, online: true },
   });
 
+  // ===== Bp3: dữ liệu "bẩn" thực tế (chứng minh xử lý lộn xộn + tôn Readiness) =====
+  const canvasCat = await prisma.itemCategory.create({ data: { name: "Bạt che", unit: "tấm" } });
+  const canvasItem = await prisma.item.create({
+    data: { categoryId: canvasCat.id, name: "Bạt che", sku: "CANVAS-01", consumable: false, unitWeightKg: 2 },
+  });
+  await prisma.itemBatch.createMany({
+    data: [
+      // Không có hạn dùng + chưa kiểm kê bao giờ (dataReliability thấp).
+      { itemId: canvasItem.id, shelfId: shelfA2.id, batchCode: "CANVAS-01-B001", quantity: 40, status: "AVAILABLE", condition: "NEW", expiryDate: null, inspectedAt: null },
+      // Lô hư hỏng (condition DAMAGED → điểm tình trạng = 0).
+      { itemId: canvasItem.id, shelfId: shelfA2.id, batchCode: "CANVAS-01-B002", quantity: 5, status: "DAMAGED", condition: "DAMAGED", expiryDate: null, inspectedAt: new Date() },
+      // Lô sai vị trí (status MISPLACED).
+      { itemId: canvasItem.id, shelfId: shelfB3.id, batchCode: "CANVAS-01-B003", quantity: 8, status: "MISPLACED", condition: "USED", expiryDate: null, inspectedAt: new Date() },
+    ],
+  });
+
+  // ===== Bp3: kho lân cận (nhập tay) — lệch loại để Mission gợi ý mượn liên xã (#30) =====
+  // Kho chính Đồng Xuân: nhiều áo phao, ÍT nước. Kho lân cận ngược lại.
+  await prisma.neighborWarehouse.createMany({
+    data: [
+      {
+        warehouseId: warehouse.id,
+        name: "Kho cứu trợ xã Xuân Sơn",
+        distanceKm: 8,
+        contactInfo: "Bộ đàm kênh 3 / 0905xxxxxx",
+        summary: [
+          { sku: "WATER-01", name: "Nước uống đóng chai", quantity: 2000 },
+          { sku: "FIRSTAID-01", name: "Bộ sơ cứu", quantity: 30 },
+          { sku: "LIFE-ADULT", name: "Áo phao người lớn", quantity: 10 },
+        ],
+      },
+      {
+        warehouseId: warehouse.id,
+        name: "Kho huyện (xa)",
+        distanceKm: 35,
+        contactInfo: "Điện thoại 0262xxxxxxx",
+        summary: [
+          { sku: "LIFE-ADULT", name: "Áo phao người lớn", quantity: 200 },
+          { sku: "BOAT-01", name: "Xuồng cứu hộ", quantity: 12 },
+          { sku: "WATER-01", name: "Nước uống đóng chai", quantity: 500 },
+        ],
+      },
+    ],
+  });
+
   await prisma.auditLog.create({
     data: { action: "SEED", entity: "Organization", entityId: org.id, metadata: { note: "Khởi tạo dữ liệu mẫu" } },
   });
@@ -109,6 +220,7 @@ async function main() {
     users: await prisma.user.count(),
     batches: await prisma.itemBatch.count(),
     devices: await prisma.virtualDevice.count(),
+    neighbors: await prisma.neighborWarehouse.count(),
   };
   // eslint-disable-next-line no-console
   console.log("Seed xong:", counts);

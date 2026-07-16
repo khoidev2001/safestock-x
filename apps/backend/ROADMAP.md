@@ -8,6 +8,17 @@
 >
 > Trạng thái: ⬜ chưa · 🟡 đang làm · ✅ xong+verify. Ưu tiên: 🔴 CORE · 🟠 nên-có · ⚪ polish.
 
+## ▶ DEMO TERMINAL (thay frontend tạm)
+Chạy toàn bộ luồng backend end-to-end, in màu ra terminal (6 bước: Readiness → Mission → khoảnh khắc vàng → mượn-trả → duyệt → audit).
+```bash
+pnpm infra:up                              # Postgres + Redis
+pnpm --filter @safestock/backend build && pnpm --filter @safestock/backend seed
+node apps/backend/dist/src/main.js &        # backend :3100
+pnpm ai:dev &                               # ai-service :8000 (cần GEMINI_API_KEY)
+pnpm demo                                    # chạy demo
+```
+File: `apps/backend/demo/demo.mjs`. **✅ verify: 6 bước chạy thật, phân quyền 403, điểm rớt <2s, đáp ứng 14%=min, mượn-trả, audit 5W.**
+
 ---
 
 ## BE-A0 — Nền móng ✅ 🔴
@@ -116,52 +127,86 @@
 - **File:** `src/readiness/action-zone.ts`, `__tests__/action-zone.spec.ts`
 - **Ghi chú:** hook thông báo + mission-block là điểm TÍCH HỢP, để lát tương ứng (không nhồi vào C3).
 
-## BE-Bp0 — Xuất lô 1 chạm + atomic ⬜ 🔴
-- [ ] POST /inventory/bulk-export (nhiều batch 1 transaction + audit từng dòng)
-- [ ] Atomic conditional update (quantity >= x) chống race — áp cả export thường
-- [ ] Quyền inventory:bulk_export + hậu kiểm (không duyệt trước)
-- **Verify:** bulk-export kệ giảm đúng; 2 export song song không âm kho; không quyền 403
+## BE-Bp0 — Xuất lô 1 chạm + atomic ✅ 🔴
+- [x] POST /inventory/bulk-export (nhiều batch 1 transaction, thất bại 1 → rollback tất cả)
+- [x] Atomic conditional update (updateMany WHERE quantity>=x) chống race — áp cả export thường + source
+- [x] Quyền inventory:bulk_export + audit 5W hậu kiểm (không duyệt trước)
+- **Verify:** ✅ bulk-export 2 batch OK; fail 1 → rollback (áo phao vẫn 86); **20 export song song 40>tồn30 → tồn cuối 0, KHÔNG âm**
 
-## BE-Bp2 — Sửa tay + reconcile ⬜ 🔴
-- [ ] POST /inventory/adjust (lý do bắt buộc + audit 5W, quyền inventory:adjust)
-- [ ] POST /inventory/reconcile (kiểm kê, chỉ đếm IN_STOCK trừ ON_LOAN — #22)
-- [ ] Độ lệch nguồn tự động vs kiểm kê → feed dataReliability
-- **Verify:** adjust có audit; reconcile lệch → ghi đè; không mất số ON_LOAN
+## BE-Bp2 — Sửa tay + reconcile ✅ 🔴
+- [x] POST /inventory/adjust (lý do BẮT BUỘC MinLength(3) + audit 5W, quyền inventory:adjust)
+- [x] POST /inventory/reconcile (kiểm kê, **#22 chỉ đếm IN_STOCK trừ ON_LOAN**, ghi InventoryCount)
+- [x] Ghi đè tùy chọn (applyOverride) → cập nhật tồn = counted + onLoan
+- **Verify:** ✅ adjust không lý do 400, có lý do 86→80; reconcile 75 lệch -5 ghi đè→75; **batch mượn 10: đếm 15 kỳ vọng 15 lệch 0 KHÔNG mất số mượn**
 
-## BE-Bp3 — Seed 2 kho + dữ liệu bẩn ⬜ 🔴
-- [ ] NeighborWarehouse seed lệch loại (xã B nhiều áo phao ít nước)
-- [ ] Seed batch bẩn (không hạn, MISPLACED, DAMAGED, kệ blocked, chưa kiểm kê)
-- **Verify:** Readiness phản ánh dữ liệu bẩn; Mission gợi ý kho lân cận
+## BE-Bp3 — Seed 2 kho + dữ liệu bẩn ✅ 🔴
+- [x] NeighborWarehouse seed lệch loại (kho chính nhiều áo phao ít nước; lân cận gần 8km nhiều nước, xa 35km nhiều áo phao)
+- [x] Seed batch bẩn: bạt không hạn+chưa kiểm kê, lô DAMAGED, lô MISPLACED, kệ B3 isBlocked
+- [x] consumable + unitWeightKg seed cho catalog (áo phao/xuồng/đèn/bộ đàm tái sử dụng; nước/pin/sơ cứu tiêu hao)
+- **Verify:** ✅ recalc kho có dữ liệu bẩn → itemCondition 99 (DAMAGED kéo xuống), quantity/dataReliability thấp (chưa kiểm kê); 2 neighbor (8km/35km lệch loại) query được; 11 batch / 2 neighbor
+- **File:** `prisma/seed.ts`
+- **Ghi chú:** Mission (D) đọc NeighborWarehouse để gợi ý mượn liên xã.
 
-## BE-Bp4 — Mượn-trả LoanRecord ⬜ 🔴
-- [ ] POST /loans (mượn, chỉ consumable=false → ON_LOAN)
-- [ ] POST /loans/:id/return (trả từng phần ok/hỏng/mất)
-- [ ] ok→USED+IN_STOCK, damaged→DAMAGED, lost→trừ tổng kho
-- [ ] Khả dụng-ngay = quantity − Σ đang mượn
-- [ ] Quyền loan:manage
-- **Verify:** mượn 20 áo phao ON_LOAN tổng không đổi; trả 15+3+2 → tổng −3, phiếu CLOSED
+## BE-Bp4 — Mượn-trả LoanRecord ✅ 🔴
+- [x] POST /loans (mượn, chỉ consumable=false → ON_LOAN; consumable=true chặn)
+- [x] POST /loans/:id/return (trả từng phần ok/hỏng/mất, chặn hoàn quá nợ)
+- [x] ok→USED+IN_STOCK, damaged→NEEDS_CHECK, lost→trừ tổng kho; phiếu CLOSED khi hoàn hết
+- [x] Khả dụng-ngay = quantity − Σ đang mượn (borrow kiểm)
+- [x] GET /loans/warehouses/:id/open; quyền loan:manage
+- **Verify:** ✅ mượn nước chặn; mượn 20 áo phao tổng vẫn 96 circulation ON_LOAN; trả 15+3+2 → tổng 94 (−2 mất) condition NEEDS_CHECK phiếu CLOSED
+- **File:** `src/loan/{loan.service.ts,loan.controller.ts,dto.ts,loan.module.ts}`
 
-## BE-D-proxy — Mission backend (proxy AI + greedy + duyệt) ⬜ 🔴
-- [ ] POST /missions/parse → gọi ai-service
-- [ ] Bảng định mức configurable + dẫn nguồn Sphere
-- [ ] Phân bổ GREEDY + FEFO, ưu tiên kho gần (distanceKm)
-- [ ] Đáp ứng % = MIN qua các loại
-- [ ] Prisma: Mission, MissionRequirement, MissionAllocation
-- [ ] generate-plan/approve/start/complete; mission done ≠ loan done (#26)
-- [ ] Gợi ý mượn liên xã (đọc NeighborWarehouse)
-- **Verify:** phương án <10s; không vượt tồn; complete còn loan → nhắc
+## BE-D-proxy — Mission backend (proxy AI + greedy + duyệt) ✅ 🔴
+- [x] POST /missions/parse → gọi ai-service (AiClientService, có CACHE parse #D1b)
+- [x] Bảng định mức mission.config.ts + dẫn nguồn Sphere (nước 15L/người/ngày...)
+- [x] Phân bổ GREEDY + FEFO (mission.compute.ts thuần), lô gần hết hạn trước, không vượt tồn
+- [x] Đáp ứng % = MIN qua các loại (mắt xích yếu nhất)
+- [x] Prisma: Mission + MissionRequirement (allocations + neighborSuggestion JSON)
+- [x] generate-plan (text→AI parse HOẶC incident nhập tay) / approve (DRAFT→APPROVED, chặn duyệt lại) / explain (AI diễn đạt)
+- [x] Gợi ý mượn liên xã ưu tiên GẦN (đọc NeighborWarehouse, sort distanceKm)
+- [x] Chỉ lấy lô IN_STOCK không DAMAGED, trừ phần ON_LOAN
+- **Verify:** ✅ lũ 120 người → định mức đúng (áo phao 120, nước 3600L), greedy cấp 96/500, **đáp ứng 14% = min (nước yếu nhất)**, gợi ý Xuân Sơn 8km trước huyện 35km; full flow text→parse→greedy→explain→approve chạy; 19 test compute
+- **File:** `src/mission/{mission.config.ts,mission.compute.ts,mission.service.ts,ai-client.service.ts,mission.controller.ts,dto.ts}`
+- **Ghi chú:** start/complete + mission-done≠loan-done (#26) dời sang lát tích hợp mobile (F4). AI-D1b cache đã có ở AiClientService. Gemini free tier 503 tạm thời → đã thêm retry ở provider.
+
+## BE-J — GeoService: khoảng cách + ETA có chặn quota ✅ 🔴
+- [x] Schema: Warehouse +kind(CENTRAL/HAMLET)+communeId+lat/lng; Mission +incidentLat/lng+actionPlan; model ApiUsage(provider,yearMonth,count)
+- [x] haversine.ts THUẦN: 2 lat/lng → km (đường chim bay) + ETA = km×1.3 ÷ tốc độ giả định
+- [x] GeoService: Google Routes (Compute Route Matrix) làm chính, fallback Haversine khi mất mạng/không key/chạm quota — không ném lỗi lên workflow
+- [x] usage-counter (bảng ApiUsage): đếm element/tháng, tới GEO_MONTHLY_CAP=8500 thì ngừng gọi Google
+- [x] Không có GOOGLE_MAPS_API_KEY → luôn Haversine (dev/demo/thi chạy không cần key)
+- **Verify:** ✅ 10 test (haversine đúng sai số nhỏ, đối xứng, 1 độ≈111km; counter≥8500→source=haversine không gọi Google; không key→không đụng DB); ETA Haversine ra số hợp lý (kho 0/1.9/4.3km)
+- **File:** `src/geo/{haversine.ts,geo.service.ts,geo.module.ts,__tests__/}`
+- **Ghi chú ngoài code (khi cần đường bộ thật):** tạo Google Cloud project → bật Routes API → key → **đặt quota cap 9.000/tháng** trên Console (chống trừ tiền) → `.env` GOOGLE_MAPS_API_KEY. Chưa cần cho MVP.
+
+## BE-K — Cụm kho xã + AI Action Plan ✅ 🔴 (⭐ khác biệt thi)
+- [x] Chọn kho cùng communeId, tính khoảng cách kho→điểm nạn (GeoService), greedy kho thôn GẦN trước → tràn kho tổng (byNearestThenFefo: gần trước, cùng kho thì FEFO)
+- [x] Seed cụm kho: 1 kho tổng (CENTRAL) + 2 kho thôn (HAMLET) cùng communeId, lat/lng thật Phú Yên, tồn lệch nhau
+- [x] ai-service POST /action-plan: schema ActionPlanNarrative (objectives/phases 0-2h,2-6h,6-24h/warnings/followUpQuestions), validate Pydantic + retry 4 lần, maxOutputTokens 4096
+- [x] Backend chấm severityLevel(1-5) + forecasts(%) bằng RULE (scoreSeverity/computeForecasts thuần) — chống LLM bịa số, LLM chỉ viết văn
+- [x] ETA từ GeoService vào context Action Plan (LLM dùng đúng số, không bịa ETA)
+- [x] ai-client.actionPlanNarrative có cache; Mission.actionPlan lưu JSON; endpoint POST /missions/:id/action-plan
+- [x] Template fallback (buildTemplateNarrative) khi LLM lỗi/mất mạng → 8 mục đầy đủ từ số backend
+- **Verify:** ✅ 23 test (K1 kho gần trước + FEFO; action-plan rule severity/forecast/template). E2E thật: generate-plan lũ 100 người điểm nạn gần Phú Xuân → áo phao lấy Phú Xuân(0km) trước tràn kho tổng, nước vét cả 3 kho; **AI Gemini ra Action Plan 8 mục dùng ĐÚNG số backend (110 áo phao, 620/880 nước, ETA kho, dự báo 56/69%) — bằng/hơn docx**; rút AI service → template fallback vẫn ra 8 mục
+- **File:** `src/mission/{action-plan.ts,mission.compute.ts,mission.service.ts,mission.controller.ts,dto.ts}`, `apps/ai-service/{main.py,schemas.py}`
+- **Ghi chú:** Fix Gemini JSON cắt cụt (2048→4096 token cho Action Plan tiếng Việt). Workflow liên role + Notification tách sang BE-L.
 
 ## BE-Bp1 — Loadcell/RFID tự sinh giao dịch ⬜ 🟠
 - [ ] Handler WEIGHT_CHANGED → suy số lượng (unitWeightKg) → tạo transaction source LOADCELL
 - [ ] Handler RFID_DETECTED → map tag→item → transaction source RFID
 - **Verify:** scenario suspected_loss → tự sinh transaction ~ đúng SL
 
-## BE-E — Incident Intelligence ⬜ 🟠
-- [ ] Prisma: Incident, IncidentEvidence, IncidentAction
-- [ ] Rule engine hợp nhất event ngưỡng cụ thể (phân biệt nhiễu)
-- [ ] Chấm điểm nghiêm trọng + LLM giải thích (proxy ai-service)
-- [ ] Timeline; acknowledge/assign/resolve; in-app alert WS
-- **Verify:** scenario suspected-loss → incident có timeline + evidence + điểm
+## BE-E — Incident Intelligence ✅ 🟠
+- [x] Prisma: Incident, IncidentEvidence, IncidentAction
+- [x] Rule engine (incident.rules.ts THUẦN) ngưỡng cụ thể: loadcell giảm >3kg + cửa + RFID trong ±5ph → thất thoát; giảm mà không nguồn khác → lỗi cảm biến; ẩm>85/nhiệt>35 → bảo quản xấu
+- [x] Phân biệt NHIỄU (giảm <3kg → bỏ) vs sự cố; ngoài cửa sổ thời gian → không hợp nhất (chống vòng tròn tự chứng minh)
+- [x] Chấm điểm nghiêm trọng theo trọng số bằng chứng (2 nguồn=HIGH, 3=CRITICAL) + confidence
+- [x] LLM giải thích (proxy AiClientService, không tự kết luận số)
+- [x] Timeline bằng chứng theo thời gian; acknowledge/assign/resolve workflow
+- [x] AiClientService tách ra AiModule global (dùng chung Mission + Incident)
+- **Verify:** ✅ scenario suspected_loss → SUSPECTED_LOSS HIGH conf 0.7, 2 bằng chứng, timeline theo giờ; workflow OPEN→ACKNOWLEDGED→RESOLVED; 10 test rule engine (thất thoát/lỗi cảm biến/nhiễu/bảo quản/cửa sổ thời gian)
+- **File:** `src/incident/{incident.rules.ts,incident.service.ts,incident.controller.ts,incident.module.ts}`, `src/ai/`
+- **Ghi chú:** explain phụ thuộc Gemini quota (429 khi test nhiều) → retry + cache. Logic incident không đụng AI.
 
 ## BE-Bp5 — Backup Supabase ⬜ 🟠
 - [ ] BullMQ cron 17:00: dump → Supabase, giữ 3 bản, skip nếu mất net
@@ -170,6 +215,28 @@
 ## BE-G4api — Chatbot hỏi-đáp kho (context injection) ⬜ ⚪
 - [ ] POST /assistant/ask: snapshot JSON kho → LLM → trả lời, ràng chỉ từ JSON
 - **Verify:** hỏi số liệu đúng; ngoài phạm vi → "không biết"
+
+## BE-L — Workflow liên role + Notification ⬜ 🔴 (CORE)
+- [ ] MissionStatus mở rộng: DRAFT→PENDING_RESCUE→RESCUE_CONFIRMED→PENDING_WAREHOUSE→READY→COMPLETED (giữ REJECTED)
+- [ ] Model Notification + NotificationService (create/list/markRead) + NotificationGateway (Socket.IO, room theo role)
+- [ ] Transitions + notify: ADMIN generate→notify RESCUE; RESCUE confirm→notify WAREHOUSE; WAREHOUSE prepare(bulk-export)→READY→notify ADMIN+RESCUE; thiếu→notify kho lân cận
+- [ ] Phân quyền lại (shared-types): +mission:confirm(RESCUE), +mission:fulfill(WAREHOUSE), mission:create→ADMIN
+- **Verify:** state machine test transition sai→lỗi; notify đúng recipient mỗi bước; E2E ADMIN→RESCUE→WAREHOUSE chạy hết
+
+## BE-M — Normal Mode: AI quản trị kho ngày thường ⬜ 🔴 (CORE, ⭐ "AI khi không thiên tai")
+> Đã có 3/10: #3 anomaly (incident), #7 env (readiness), #8 readiness score — KHÔNG code lại.
+- [ ] insights/forecast.ts (thuần+test): tốc độ xuất TB → dự báo thiếu hụt (#1) + đề xuất nhập (#2)
+- [ ] insights/expiry-alert: batch sắp hết hạn → cảnh báo + đề xuất điều chuyển (#4)
+- [ ] insights/rebalance.ts (thuần+test): chênh tồn cùng SKU giữa kho cùng communeId → điều chuyển (#5)
+- [ ] insights/trends.ts (thuần+test): % tăng/giảm xuất (#6) + báo cáo tháng (#10)
+- [ ] weather/: Open-Meteo (free, no key) theo lat/lng → cảnh báo mưa lớn 72h (#9)
+- [ ] insights.controller: GET /insights/warehouses/:id + /monthly-report; LLM diễn giải số
+- **Verify:** seed lịch sử xuất → insights số thật; monthly-report đủ mục; weather cảnh báo khi mưa vượt ngưỡng
+
+## BE-N — Demo mở rộng + đồng bộ docs ⬜ 🟠
+- [ ] demo.mjs: workflow Emergency (ADMIN→RESCUE→WAREHOUSE) + Normal Mode insights, in terminal
+- [ ] Cập nhật PRD (2 chế độ), BUILD-PLAN (J-N), docs/qa (Q&A giám khảo)
+- **Verify:** demo chạy hết 2 chế độ; docs khớp code
 
 ## BE-I — Server-time + config env ⬜ 🔴
 - [ ] Server đặt mọi timestamp (client không gửi) — #31

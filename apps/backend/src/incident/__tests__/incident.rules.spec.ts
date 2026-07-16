@@ -1,0 +1,101 @@
+import { detectIncidents, SensorSignal } from "../incident.rules";
+
+const T0 = new Date("2026-07-15T21:00:00+07:00");
+const at = (secondsAfter: number) => new Date(T0.getTime() + secondsAfter * 1000);
+
+const sig = (over: Partial<SensorSignal>): SensorSignal => ({
+  deviceCode: "scale_A1",
+  deviceType: "LOADCELL",
+  eventType: "WEIGHT_CHANGED",
+  value: 44, // giảm 6kg từ 50
+  occurredAt: T0,
+  ...over,
+});
+
+describe("detectIncidents — suspected loss", () => {
+  it("should flag suspected loss when loadcell drop + door + rfid coincide", () => {
+    const signals: SensorSignal[] = [
+      sig({ value: 44 }),
+      sig({ deviceCode: "door_main", deviceType: "DOOR", eventType: "DOOR_OPEN", value: 1, occurredAt: at(2) }),
+      sig({ deviceCode: "gateway_01", deviceType: "RFID_GATEWAY", eventType: "RFID_DETECTED", value: 19, occurredAt: at(3) }),
+    ];
+    const incidents = detectIncidents(signals);
+    const loss = incidents.find((i) => i.kind === "SUSPECTED_LOSS");
+    expect(loss).toBeDefined();
+    expect(loss?.severity).toBe("CRITICAL"); // 3 nguồn
+    expect(loss?.evidence.length).toBe(3);
+    expect(loss?.confidence).toBeGreaterThan(0.9);
+  });
+
+  it("should be HIGH (not CRITICAL) with only 2 sources", () => {
+    const signals: SensorSignal[] = [
+      sig({ value: 44 }),
+      sig({ deviceCode: "door_main", deviceType: "DOOR", eventType: "DOOR_OPEN", value: 1, occurredAt: at(2) }),
+    ];
+    const loss = detectIncidents(signals).find((i) => i.kind === "SUSPECTED_LOSS");
+    expect(loss?.severity).toBe("HIGH");
+  });
+
+  it("should NOT flag loss when drop alone (could be sensor fault)", () => {
+    const incidents = detectIncidents([sig({ value: 44 })]);
+    expect(incidents.find((i) => i.kind === "SUSPECTED_LOSS")).toBeUndefined();
+  });
+
+  it("should NOT flag loss when drop is below threshold (noise)", () => {
+    // giảm chỉ 1kg (48) < ngưỡng 3kg → không phải sự cố
+    const incidents = detectIncidents([sig({ value: 49 })]);
+    expect(incidents).toHaveLength(0);
+  });
+
+  it("should NOT correlate events outside the time window", () => {
+    const signals: SensorSignal[] = [
+      sig({ value: 44 }),
+      // cửa mở 10 phút sau → ngoài cửa sổ ±5ph
+      sig({ deviceCode: "door_main", deviceType: "DOOR", eventType: "DOOR_OPEN", value: 1, occurredAt: at(600) }),
+    ];
+    expect(detectIncidents(signals).find((i) => i.kind === "SUSPECTED_LOSS")).toBeUndefined();
+  });
+});
+
+describe("detectIncidents — sensor fault", () => {
+  it("should flag sensor fault when drop with NO door/rfid", () => {
+    const fault = detectIncidents([sig({ value: 44 })]).find((i) => i.kind === "SENSOR_FAULT");
+    expect(fault).toBeDefined();
+    expect(fault?.severity).toBe("MEDIUM");
+  });
+
+  it("should NOT flag sensor fault when door present (it's a loss instead)", () => {
+    const signals: SensorSignal[] = [
+      sig({ value: 44 }),
+      sig({ deviceCode: "door_main", deviceType: "DOOR", eventType: "DOOR_OPEN", value: 1, occurredAt: at(2) }),
+    ];
+    expect(detectIncidents(signals).find((i) => i.kind === "SENSOR_FAULT")).toBeUndefined();
+  });
+});
+
+describe("detectIncidents — bad storage", () => {
+  it("should flag bad storage when humidity exceeds threshold", () => {
+    const signals: SensorSignal[] = [
+      sig({ deviceCode: "humid_B", deviceType: "HUMIDITY", eventType: "HUMID_READING", value: 95 }),
+    ];
+    const storage = detectIncidents(signals).find((i) => i.kind === "BAD_STORAGE");
+    expect(storage).toBeDefined();
+    expect(storage?.severity).toBe("MEDIUM");
+  });
+
+  it("should be HIGH when both humidity and temperature exceed", () => {
+    const signals: SensorSignal[] = [
+      sig({ deviceCode: "humid_B", deviceType: "HUMIDITY", value: 95 }),
+      sig({ deviceCode: "temp_B", deviceType: "TEMPERATURE", value: 40 }),
+    ];
+    const storage = detectIncidents(signals).find((i) => i.kind === "BAD_STORAGE");
+    expect(storage?.severity).toBe("HIGH");
+  });
+
+  it("should NOT flag when humidity is normal", () => {
+    const signals: SensorSignal[] = [
+      sig({ deviceCode: "humid_B", deviceType: "HUMIDITY", value: 60 }),
+    ];
+    expect(detectIncidents(signals)).toHaveLength(0);
+  });
+});

@@ -1,4 +1,4 @@
-# SafeStock X — Kế hoạch build end-to-end (resume-able)
+# Ứng phó nhanh — Kế hoạch build end-to-end (resume-able)
 
 > Mục đích: chia dự án thành các **lát cắt dọc** (vertical slice). Mỗi lát chạy được + verify được rồi mới sang lát sau. Nếu bỏ dở giữa chừng, đọc file này biết đang ở đâu, làm tiếp không mất mạch.
 >
@@ -22,6 +22,7 @@
 | Ảnh/file storage | Cloudflare R2 | Lát Attachment/ảnh — chưa tới |
 | Deploy web | Vercel + domain random | Backend KHÔNG chạy Vercel → Railway/Render |
 | Admin login | `admin` / `admin123@` (role ADMIN) | Đã seed |
+| Auth | **JWT custom** (bcrypt + access/refresh, JwtGuard) — đã đồng bộ web + mobile (cùng backend/endpoint/token, web lưu cookie, mobile SecureStore) | Giữ nguyên. Better Auth đã cân nhắc + BỎ: chỉ thêm tính năng thừa cho MVP (social login, session revocation) — kho xã không cần; đổi = rework A1+A2 đã verify |
 | Roles | **WAREHOUSE** (phụ trách kho, gộp staff+manager) · **RESCUE** (đội cứu hộ) · **ADMIN** (quản trị/hậu kiểm) | Xã 1 người lo kho → 3 role |
 | Kiểm soát | **Hậu kiểm** (quyền chặt + audit 5W + double-confirm), KHÔNG duyệt 2 bước | Xã ít người, khẩn cấp cần nhanh |
 | Kiến trúc đa xã | Mỗi xã 1 máy chủ ĐỘC LẬP. AI gợi ý mượn liên xã, con người tự liên hệ + xuất đánh dấu (#30) | Không sync DB — xóa bài toán đồng bộ |

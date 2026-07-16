@@ -1,4 +1,4 @@
-# PRD – SafeStock X
+# PRD – Ứng phó nhanh
 
 **Product Requirements Document (bản hoàn chỉnh v2.0)**
 Nền tảng AI đánh giá năng lực sẵn sàng và điều phối vật tư cứu hộ trong tình huống khẩn cấp
@@ -23,14 +23,14 @@ Nền tảng AI đánh giá năng lực sẵn sàng và điều phối vật tư
 Phần mềm quản lý kho thường trả lời *"kho có bao nhiêu?"*. Trong cứu hộ khẩn cấp, câu đó không đủ — số trên sổ không phản ánh **năng lực phản ứng thực tế**: vật tư có thể đã hỏng, hết hạn, sai vị trí, bị che chắn, hoặc đang được mượn. Khi bão lũ ập tới (như Phú Yên 2025), đội cứu hộ cần biết ngay *cái gì thực sự dùng được, chuẩn bị mất bao lâu, thiếu gì*.
 
 ### 1.2. Giải pháp
-SafeStock X quản lý **năng lực phản ứng thực tế của kho**, trả lời 4 câu hỏi:
+Ứng phó nhanh quản lý **năng lực phản ứng thực tế của kho**, trả lời 4 câu hỏi:
 1. Vật tư nào đang thực sự sẵn sàng sử dụng?
 2. Kho đáp ứng được tình huống khẩn cấp nào?
 3. Với một tình huống cụ thể, cần chuẩn bị gì?
 4. Điểm nghẽn nào khiến cứu hộ bị chậm?
 
 ### 1.3. Tuyên bố giá trị
-> Phần mềm thường quản lý hàng tồn kho. SafeStock X quản lý **năng lực phản ứng thực tế** của kho khi sự cố xảy ra — kể cả khi con người quá bận để nhập liệu.
+> Phần mềm thường quản lý hàng tồn kho. Ứng phó nhanh quản lý **năng lực phản ứng thực tế** của kho khi sự cố xảy ra — kể cả khi con người quá bận để nhập liệu.
 
 ### 1.4. Phạm vi MVP
 **5 module cốt lõi:** Quản lý kho · Readiness Score · Mission-to-Kit Compiler · Sensor Simulator (Digital Twin) · Mobile App.
@@ -273,7 +273,7 @@ Simulator UI ──┘                                  ├─ Redis + BullMQ
 3. AI lập phương án: phân tích → bộ vật tư → đối chiếu tồn → báo thiếu → gợi ý mượn kho lân cận
 4. Kéo slider độ ẩm kho y tế (Simulator) → Readiness rớt 91→78 realtime → cảnh báo bắn mobile
 5. Nhân viên xuất kho theo phương án (mobile, quét QR / xuất lô)
-6. Kết: "SafeStock X cho biết kho đáp ứng tình huống nào, chuẩn bị bao lâu, điểm nghẽn ở đâu"
+6. Kết: "Ứng phó nhanh cho biết kho đáp ứng tình huống nào, chuẩn bị bao lâu, điểm nghẽn ở đâu"
 
 **KHÔNG diễn — chỉ trả lời khi hỏi (slide phụ lục):** RBAC/hậu kiểm, mượn-trả, offline 3 lớp, phiếu giấy, backup, đa xã, loadcell 4 tầng, kiểm kê. Chiều sâu để chứng minh nghĩ kỹ.
 

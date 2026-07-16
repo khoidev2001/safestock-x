@@ -1,4 +1,4 @@
-# WORK LOG — SafeStock X
+# WORK LOG — Ứng phó nhanh
 
 > Điều phối ai làm gì. Chi tiết checklist từng phase nằm ở **ROADMAP của mỗi app** (bắt buộc tick khi code):
 > - Backend → [../apps/backend/ROADMAP.md](../apps/backend/ROADMAP.md)

@@ -18,7 +18,7 @@ Số: ......../TQT-CTĐ
 ## THƯ QUAN TÂM
 
 **V/v:** Quan tâm và sẵn sàng phối hợp thử nghiệm giải pháp
-**"SafeStock X – Nền tảng AI quản lý năng lực sẵn sàng của kho vật tư cứu hộ"**
+**"Ứng phó nhanh – Nền tảng AI quản lý năng lực sẵn sàng của kho vật tư cứu hộ"**
 
 Kính gửi: **Ban Tổ chức Cuộc thi Sáng tạo Trí tuệ nhân tạo tỉnh Đắk Lắk**
 
@@ -30,9 +30,9 @@ Qua thực tế công tác, đặc biệt trong các đợt ứng phó bão lũ 
 2. Đã xảy ra tình trạng vật tư bị hư hỏng, ẩm mốc, quá hạn sử dụng nhưng không được phát hiện kịp thời, ảnh hưởng đến khả năng cấp phát khi cần thiết.
 3. Khi có tình huống khẩn cấp, việc xác định nhanh "kho hiện có thể đáp ứng được đến đâu, còn thiếu những gì" rất khó khăn, làm chậm công tác cứu hộ, cứu trợ.
 
-Sau khi được giới thiệu về giải pháp **SafeStock X**, chúng tôi nhận thấy đây là hướng đi thiết thực, đúng với nhu cầu thực tế của công tác cứu trợ tại địa phương: số hóa quy trình quản lý kho, đánh giá được mức độ sẵn sàng của vật tư và hỗ trợ ra quyết định điều phối nhanh trong tình huống khẩn cấp.
+Sau khi được giới thiệu về giải pháp **Ứng phó nhanh**, chúng tôi nhận thấy đây là hướng đi thiết thực, đúng với nhu cầu thực tế của công tác cứu trợ tại địa phương: số hóa quy trình quản lý kho, đánh giá được mức độ sẵn sàng của vật tư và hỗ trợ ra quyết định điều phối nhanh trong tình huống khẩn cấp.
 
-Vì vậy, Hội Chữ thập đỏ xã Đồng Xuân **bày tỏ sự quan tâm** đối với giải pháp SafeStock X và **sẵn sàng phối hợp thử nghiệm** giải pháp tại kho vật tư của Hội sau khi giải pháp được hoàn thiện, nhằm đánh giá hiệu quả ứng dụng trong thực tế.
+Vì vậy, Hội Chữ thập đỏ xã Đồng Xuân **bày tỏ sự quan tâm** đối với giải pháp Ứng phó nhanh và **sẵn sàng phối hợp thử nghiệm** giải pháp tại kho vật tư của Hội sau khi giải pháp được hoàn thiện, nhằm đánh giá hiệu quả ứng dụng trong thực tế.
 
 Kính đề nghị Ban Tổ chức quan tâm, tạo điều kiện cho nhóm tác giả phát triển và hoàn thiện giải pháp.
 
