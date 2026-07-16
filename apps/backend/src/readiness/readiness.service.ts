@@ -52,6 +52,14 @@ export class ReadinessService {
     };
   }
 
+  /** Đọc điểm đã lưu của 1 target bất kỳ (ZONE/SHELF/ITEM_BATCH) — không tính lại. */
+  async getScore(targetType: "ZONE" | "SHELF" | "ITEM_BATCH", targetId: string) {
+    return this.prisma.readinessScore.findUnique({
+      where: { targetType_targetId: { targetType, targetId } },
+      include: { components: true },
+    });
+  }
+
   /** Đọc điểm đã lưu của 1 kho kèm vùng hành động + đề xuất (không tính lại). */
   async getWarehouseScore(warehouseId: string) {
     const score = await this.prisma.readinessScore.findUnique({

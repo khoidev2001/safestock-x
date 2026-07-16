@@ -6,11 +6,13 @@ import {
 } from "@safestock/shared-types";
 
 describe("RBAC role permissions", () => {
-  it("should give WAREHOUSE full inventory operations", () => {
+  it("should give WAREHOUSE full inventory operations + fulfill (chuẩn bị kho)", () => {
     expect(roleHasPermission(UserRole.WAREHOUSE, Permission.INVENTORY_EXPORT)).toBe(true);
     expect(roleHasPermission(UserRole.WAREHOUSE, Permission.INVENTORY_ADJUST)).toBe(true);
     expect(roleHasPermission(UserRole.WAREHOUSE, Permission.INVENTORY_RECONCILE)).toBe(true);
-    expect(roleHasPermission(UserRole.WAREHOUSE, Permission.MISSION_APPROVE)).toBe(true);
+    // Workflow mới: WAREHOUSE chuẩn bị/xuất (fulfill), KHÔNG lập/duyệt kế hoạch.
+    expect(roleHasPermission(UserRole.WAREHOUSE, Permission.MISSION_FULFILL)).toBe(true);
+    expect(roleHasPermission(UserRole.WAREHOUSE, Permission.MISSION_CREATE)).toBe(false);
   });
 
   it("should NOT let WAREHOUSE view audit or manage users (admin-only)", () => {
@@ -18,16 +20,17 @@ describe("RBAC role permissions", () => {
     expect(roleHasPermission(UserRole.WAREHOUSE, Permission.ADMIN_USERS)).toBe(false);
   });
 
-  it("should limit RESCUE to view + request + loan", () => {
+  it("should limit RESCUE to view + request + confirm + loan", () => {
     expect(roleHasPermission(UserRole.RESCUE, Permission.INVENTORY_READ)).toBe(true);
     expect(roleHasPermission(UserRole.RESCUE, Permission.MISSION_REQUEST)).toBe(true);
+    expect(roleHasPermission(UserRole.RESCUE, Permission.MISSION_CONFIRM)).toBe(true);
     expect(roleHasPermission(UserRole.RESCUE, Permission.LOAN_MANAGE)).toBe(true);
   });
 
   it("should NOT let RESCUE touch warehouse operations", () => {
     expect(roleHasPermission(UserRole.RESCUE, Permission.INVENTORY_EXPORT)).toBe(false);
     expect(roleHasPermission(UserRole.RESCUE, Permission.INVENTORY_ADJUST)).toBe(false);
-    expect(roleHasPermission(UserRole.RESCUE, Permission.MISSION_APPROVE)).toBe(false);
+    expect(roleHasPermission(UserRole.RESCUE, Permission.MISSION_FULFILL)).toBe(false);
   });
 
   it("should give ADMIN every permission", () => {
