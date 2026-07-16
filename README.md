@@ -1,10 +1,10 @@
-# SafeStock X
+# Ứng phó nhanh
 
 **Nền tảng AI đánh giá năng lực sẵn sàng và điều phối vật tư cứu hộ trong tình huống khẩn cấp.**
 
 Dự thi Cuộc thi Sáng tạo AI tỉnh Đắk Lắk. Sinh ra từ bối cảnh bão lũ Phú Yên (cũ) 2025.
 
-> Phần mềm thường quản lý hàng tồn kho. SafeStock X quản lý **năng lực phản ứng thực tế** của kho khi sự cố xảy ra — kể cả khi con người quá bận để nhập liệu.
+> Phần mềm thường quản lý hàng tồn kho. Ứng phó nhanh quản lý **năng lực phản ứng thực tế** của kho khi sự cố xảy ra — kể cả khi con người quá bận để nhập liệu.
 
 ---
 

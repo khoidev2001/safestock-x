@@ -11,7 +11,9 @@
       "@nestjs/core",
       "@prisma/client",
       "@prisma/engines",
-      "prisma"
+      "prisma",
+      "@tailwindcss/oxide",
+      "sharp"
     ]
   },
   "scripts": {
@@ -21,7 +23,9 @@
     "be:dev": "pnpm --filter @safestock/backend start:dev",
     "be:db": "pnpm --filter @safestock/backend prisma:push && pnpm --filter @safestock/backend seed",
     "fe:dev": "pnpm --filter @safestock/frontend dev",
-    "mobile:dev": "pnpm --filter @safestock/mobile start"
+    "mobile:dev": "pnpm --filter @safestock/mobile start",
+    "ai:dev": "cd apps/ai-service && .venv/Scripts/python -m uvicorn main:app --port 8000",
+    "demo": "node apps/backend/demo/demo.mjs"
   },
   "devDependencies": {
     "socket.io-client": "^4.8.3"

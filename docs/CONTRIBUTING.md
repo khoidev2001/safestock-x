@@ -1,4 +1,4 @@
-# Quy ước làm việc — SafeStock X (2 người)
+# Quy ước làm việc — Ứng phó nhanh (2 người)
 
 > **Đọc [../skills/CODING-STANDARDS.md](../skills/CODING-STANDARDS.md) trước.** File này chỉ bổ sung quy trình Git; mọi quy tắc code (đặt tên, cấu trúc, xử lý lỗi, PR checklist) nằm ở CODING-STANDARDS.
 >

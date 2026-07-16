@@ -7,8 +7,11 @@
 ## Danh mục theo phase
 - [phase-a-nen-tang.md](phase-a-nen-tang.md) — nền + auth + inventory
 - [phase-b-simulator.md](phase-b-simulator.md) — mô phỏng cảm biến (Digital Twin)
+- [phase-bp-nhap-xuat-da-nguon.md](phase-bp-nhap-xuat-da-nguon.md) — 4 tầng nhập/xuất + mượn-trả
 - [phase-a2-rbac.md](phase-a2-rbac.md) — phân quyền + kiểm soát
-- [phase-c-readiness.md](phase-c-readiness.md) — Readiness Score (differentiator)
+- [phase-c-readiness.md](phase-c-readiness.md) — Readiness Score (differentiator #1)
+- [phase-d-mission.md](phase-d-mission.md) — Mission-to-Kit Compiler (differentiator #2)
+- [phase-e-incident.md](phase-e-incident.md) — Incident Intelligence (điều tra sự cố)
 
 ## Câu hỏi xuyên suốt (mọi phase)
 Xem [tong-quan.md](tong-quan.md) — AI ở đâu, phần cứng đâu, khác gì phần mềm kho thường, tại sao khả thi ở xã.
