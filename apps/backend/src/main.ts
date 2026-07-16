@@ -10,6 +10,6 @@ async function bootstrap() {
   const port = process.env.API_PORT ?? 3000;
   await app.listen(port);
   // eslint-disable-next-line no-console
-  console.log(`SafeStock X API chạy tại http://localhost:${port}/api`);
+  console.log(`Ứng phó nhanh API chạy tại http://localhost:${port}/api`);
 }
 bootstrap();
