@@ -1,4 +1,4 @@
-// SafeStock X — schema cốt lõi (Nền móng #0).
+// Ứng phó nhanh — schema cốt lõi (Nền móng #0).
 // Bảng Readiness / Mission / Simulator / Incident thêm ở lát tương ứng.
 
 generator client {
@@ -35,7 +35,7 @@ enum TransactionType {
   RETURN
   ADJUST
   LOAN_OUT_INTERXA // cho xã khác mượn
-  LOAN_IN          // mượn từ xã khác
+  LOAN_IN // mượn từ xã khác
 }
 
 // Nguồn giao dịch — độ lệch giữa nguồn feed vào "độ tin cậy" Readiness
@@ -49,16 +49,16 @@ enum TransactionSource {
 
 // Trạng thái vật tư 2 CHIỀU độc lập (C-minus)
 enum ItemCondition {
-  NEW         // mới
-  USED        // cũ, đã dùng
+  NEW // mới
+  USED // cũ, đã dùng
   NEEDS_CHECK // cần kiểm tra
-  DAMAGED     // hư hỏng
+  DAMAGED // hư hỏng
 }
 
 enum CirculationStatus {
-  IN_STOCK  // trong kho
-  ON_LOAN   // đang mượn — vẫn thuộc kho, KHÔNG tính mất
-  RETURNED  // vừa hoàn, chờ kiểm tra
+  IN_STOCK // trong kho
+  ON_LOAN // đang mượn — vẫn thuộc kho, KHÔNG tính mất
+  RETURNED // vừa hoàn, chờ kiểm tra
 }
 
 enum LoanStatus {
@@ -76,15 +76,20 @@ model Organization {
 }
 
 model User {
-  id             String       @id @default(cuid())
+  id             String                 @id @default(cuid())
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  email          String       @unique
+  organization   Organization           @relation(fields: [organizationId], references: [id])
+  email          String                 @unique
   passwordHash   String
   fullName       String
-  role           UserRole     @default(WAREHOUSE)
-  createdAt      DateTime     @default(now())
+  role           UserRole               @default(WAREHOUSE)
+  createdAt      DateTime               @default(now())
   transactions   InventoryTransaction[]
+}
+
+enum WarehouseKind {
+  CENTRAL // kho tổng — trung tâm hành chính xã
+  HAMLET // kho thôn — mỗi thôn 1 kho nhỏ
 }
 
 model Warehouse {
@@ -93,7 +98,11 @@ model Warehouse {
   organization   Organization    @relation(fields: [organizationId], references: [id])
   name           String
   location       String?
-  distanceKm     Float           @default(0) // khoảng cách tới trung tâm/điểm sự cố — Mission ưu tiên gần
+  kind           WarehouseKind   @default(HAMLET) // kho tổng hay kho thôn
+  communeId      String          @default("default-commune") // nhóm kho cùng xã — AI query cả cụm
+  lat            Float? // toạ độ ghim tay (không geocode)
+  lng            Float?
+  distanceKm     Float           @default(0) // fallback thủ công khi chưa có lat/lng
   createdAt      DateTime        @default(now())
   zones          WarehouseZone[]
 }
@@ -123,12 +132,12 @@ model WarehouseZone {
 }
 
 model Shelf {
-  id        String        @id @default(cuid())
+  id        String          @id @default(cuid())
   zoneId    String
-  zone      WarehouseZone @relation(fields: [zoneId], references: [id])
+  zone      WarehouseZone   @relation(fields: [zoneId], references: [id])
   code      String // ví dụ "A1", "A2"
-  isBlocked Boolean       @default(false) // lối đi bị chặn — Readiness "khả năng tiếp cận"
-  isLocked  Boolean       @default(false) // bị khóa / thiếu quyền
+  isBlocked Boolean         @default(false) // lối đi bị chặn — Readiness "khả năng tiếp cận"
+  isLocked  Boolean         @default(false) // bị khóa / thiếu quyền
   batches   ItemBatch[]
   devices   VirtualDevice[]
 
@@ -149,25 +158,25 @@ model Item {
   name         String
   sku          String       @unique
   consumable   Boolean      @default(false) // true=tiêu hao (nước/pin, xuất=mất); false=tái sử dụng (áo phao, xuất=mượn)
-  unitWeightKg Float?       // khối lượng đơn vị — loadcell suy số lượng (Bp1)
+  unitWeightKg Float? // khối lượng đơn vị — loadcell suy số lượng (Bp1)
   createdAt    DateTime     @default(now())
   batches      ItemBatch[]
 }
 
 model ItemBatch {
-  id           String            @id @default(cuid())
+  id           String                 @id @default(cuid())
   itemId       String
-  item         Item              @relation(fields: [itemId], references: [id])
+  item         Item                   @relation(fields: [itemId], references: [id])
   shelfId      String?
-  shelf        Shelf?            @relation(fields: [shelfId], references: [id])
+  shelf        Shelf?                 @relation(fields: [shelfId], references: [id])
   batchCode    String
-  quantity     Int               @default(0)
-  status       ItemStatus        @default(AVAILABLE) // giữ tương thích; sẽ dùng condition+circulation
-  condition    ItemCondition     @default(NEW)     // chiều 1: tình trạng vật lý
-  circulation  CirculationStatus @default(IN_STOCK) // chiều 2: lưu hành
+  quantity     Int                    @default(0)
+  status       ItemStatus             @default(AVAILABLE) // giữ tương thích; sẽ dùng condition+circulation
+  condition    ItemCondition          @default(NEW) // chiều 1: tình trạng vật lý
+  circulation  CirculationStatus      @default(IN_STOCK) // chiều 2: lưu hành
   expiryDate   DateTime?
   inspectedAt  DateTime?
-  createdAt    DateTime          @default(now())
+  createdAt    DateTime               @default(now())
   transactions InventoryTransaction[]
   counts       InventoryCount[]
   loans        LoanRecord[]
@@ -177,18 +186,18 @@ model ItemBatch {
 
 // Phiếu mượn (#17) — vật tư consumable=false. Giữ ItemBatch nguyên, phân mảnh nằm ở phiếu.
 model LoanRecord {
-  id              String     @id @default(cuid())
-  batchId         String
-  batch           ItemBatch  @relation(fields: [batchId], references: [id])
-  quantity        Int // số mượn
+  id               String     @id @default(cuid())
+  batchId          String
+  batch            ItemBatch  @relation(fields: [batchId], references: [id])
+  quantity         Int // số mượn
   borrowedByUserId String?
-  missionId       String?
-  status          LoanStatus @default(ON_LOAN)
-  returnedOk      Int        @default(0) // hoàn tốt → USED về kho
-  returnedDamaged Int        @default(0) // hoàn hỏng → DAMAGED
-  lost            Int        @default(0) // mất → trừ tổng kho
-  borrowedAt      DateTime   @default(now())
-  closedAt        DateTime?
+  missionId        String?
+  status           LoanStatus @default(ON_LOAN)
+  returnedOk       Int        @default(0) // hoàn tốt → USED về kho
+  returnedDamaged  Int        @default(0) // hoàn hỏng → DAMAGED
+  lost             Int        @default(0) // mất → trừ tổng kho
+  borrowedAt       DateTime   @default(now())
+  closedAt         DateTime?
 
   @@index([batchId, status])
 }
@@ -252,18 +261,18 @@ enum SimRunStatus {
 }
 
 model VirtualDevice {
-  id          String            @id @default(cuid())
-  warehouseId String
-  zoneId      String?
-  shelfId     String?
-  shelf       Shelf?            @relation(fields: [shelfId], references: [id])
-  type        VirtualDeviceType
-  code        String // vd "scale_shelf_A1"
-  unit        String // kg, °C, %, bool...
+  id           String            @id @default(cuid())
+  warehouseId  String
+  zoneId       String?
+  shelfId      String?
+  shelf        Shelf?            @relation(fields: [shelfId], references: [id])
+  type         VirtualDeviceType
+  code         String // vd "scale_shelf_A1"
+  unit         String // kg, °C, %, bool...
   // Trạng thái current — Readiness đọc cái này, không query MAX(timestamp)
   currentValue Float?
-  online       Boolean          @default(true)
-  updatedAt    DateTime         @updatedAt
+  online       Boolean           @default(true)
+  updatedAt    DateTime          @updatedAt
   events       SensorEvent[]
 
   @@unique([warehouseId, code])
@@ -326,13 +335,13 @@ enum ReadinessTargetType {
 // Điểm sẵn sàng đã tính (cache) cho 1 đối tượng ở 1 thời điểm.
 // Recalc (C1) ghi đè bản mới nhất theo (targetType, targetId).
 model ReadinessScore {
-  id          String              @id @default(cuid())
-  warehouseId String
-  targetType  ReadinessTargetType
-  targetId    String
-  score       Int // 0-100 tổng
-  computedAt  DateTime            @default(now())
-  components  ReadinessComponent[]
+  id              String                    @id @default(cuid())
+  warehouseId     String
+  targetType      ReadinessTargetType
+  targetId        String
+  score           Int // 0-100 tổng
+  computedAt      DateTime                  @default(now())
+  components      ReadinessComponent[]
   recommendations ReadinessRecommendation[]
 
   @@unique([targetType, targetId])
@@ -341,13 +350,13 @@ model ReadinessScore {
 
 // Breakdown: điểm từng thành phần (6 thành phần) + lý do trừ điểm.
 model ReadinessComponent {
-  id       String         @id @default(cuid())
-  scoreId  String
-  score    ReadinessScore @relation(fields: [scoreId], references: [id], onDelete: Cascade)
-  key      String // quantityAvailability | itemCondition | expiry | accessibility | environment | dataReliability
-  value    Int // 0-100 thành phần
-  weight   Float // trọng số áp dụng lúc tính
-  reasons  String[] // lý do bị trừ điểm
+  id      String         @id @default(cuid())
+  scoreId String
+  score   ReadinessScore @relation(fields: [scoreId], references: [id], onDelete: Cascade)
+  key     String // quantityAvailability | itemCondition | expiry | accessibility | environment | dataReliability
+  value   Int // 0-100 thành phần
+  weight  Float // trọng số áp dụng lúc tính
+  reasons String[] // lý do bị trừ điểm
 
   @@index([scoreId])
 }
@@ -382,4 +391,155 @@ model ReadinessRecommendation {
   createdAt DateTime       @default(now())
 
   @@index([scoreId])
+}
+
+// ===== Phase D: Mission-to-Kit =====
+
+enum MissionStatus {
+  DRAFT // vừa lập phương án (ADMIN), chờ đẩy workflow
+  PENDING_RESCUE // đã gửi, chờ cứu hộ xác nhận lấy
+  RESCUE_CONFIRMED // cứu hộ đã xác nhận
+  PENDING_WAREHOUSE // chờ kho chuẩn bị + xuất
+  READY // kho đã chuẩn bị xong, sẵn sàng giao
+  APPROVED // (cũ, giữ tương thích)
+  IN_PROGRESS // đang thực hiện
+  COMPLETED // hoàn thành
+  REJECTED // từ chối
+}
+
+// Nhiệm vụ cứu hộ — sinh từ tình huống, gồm nhu cầu + phương án phân bổ.
+model Mission {
+  id               String               @id @default(cuid())
+  warehouseId      String
+  incidentType     String
+  location         String?
+  affectedPeople   Int
+  durationHours    Int
+  priority         String
+  parsedInput      Json // JSON tình huống đã parse (từ AI hoặc nhập tay)
+  status           MissionStatus        @default(DRAFT)
+  fulfillment      Float                @default(0) // mức đáp ứng % (min qua các loại)
+  explanation      String? // giải thích AI (tiếng Việt)
+  actionPlan       Json? // Incident Action Plan (8 mục, ActionPlanResponse từ AI)
+  incidentLat      Float? // toạ độ điểm nạn (ghim tay) — tính khoảng cách kho gần nhất
+  incidentLng      Float?
+  createdByUserId  String?
+  approvedByUserId String?
+  createdAt        DateTime             @default(now())
+  approvedAt       DateTime?
+  requirements     MissionRequirement[]
+}
+
+// Nhu cầu vật tư của nhiệm vụ (sinh từ định mức).
+model MissionRequirement {
+  id                 String  @id @default(cuid())
+  missionId          String
+  mission            Mission @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  sku                String
+  itemName           String
+  required           Int // số cần theo định mức
+  allocated          Int // số cấp được từ kho (greedy)
+  shortage           Int // thiếu = required - allocated
+  unit               String
+  allocations        Json // chi tiết phân bổ theo lô [{batchId, qty, expiryDate}]
+  neighborSuggestion Json? // gợi ý mượn kho lân cận nếu thiếu [{name, distanceKm, available}]
+
+  @@index([missionId])
+}
+
+// ===== Phase E: Incident Intelligence =====
+
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentState {
+  OPEN // mới phát hiện
+  ACKNOWLEDGED // đã tiếp nhận
+  ASSIGNED // đã phân công
+  RESOLVED // đã xử lý
+}
+
+// Sự cố do rule engine phát hiện từ hợp nhất sự kiện cảm biến.
+model Incident {
+  id          String             @id @default(cuid())
+  warehouseId String
+  zoneId      String?
+  kind        String // SUSPECTED_LOSS | SENSOR_FAULT | BAD_STORAGE | MISPLACED...
+  severity    IncidentSeverity
+  confidence  Float // 0..1 độ tin cậy kết luận
+  title       String
+  explanation String? // LLM diễn đạt (tiếng Việt) — không tự kết luận số
+  state       IncidentState      @default(OPEN)
+  runId       String? // scenario run sinh ra (nếu từ simulator)
+  detectedAt  DateTime           @default(now())
+  resolvedAt  DateTime?
+  evidence    IncidentEvidence[]
+  actions     IncidentAction[]
+
+  @@index([warehouseId, state])
+}
+
+// Bằng chứng: từng sự kiện cảm biến góp phần vào kết luận (timeline).
+model IncidentEvidence {
+  id         String   @id @default(cuid())
+  incidentId String
+  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  deviceCode String
+  eventType  String
+  value      Float
+  weight     Float // trọng số đóng góp vào điểm nghiêm trọng
+  occurredAt DateTime
+  note       String?
+
+  @@index([incidentId, occurredAt])
+}
+
+// Hành động xử lý sự cố (acknowledge/assign/resolve).
+model IncidentAction {
+  id         String   @id @default(cuid())
+  incidentId String
+  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  action     String
+  actorId    String?
+  note       String?
+  createdAt  DateTime @default(now())
+
+  @@index([incidentId])
+}
+
+// Đếm số call API ngoài (Google Maps) theo tháng — chặn quota, không bị trừ tiền.
+model ApiUsage {
+  id        String   @id @default(cuid())
+  provider  String // vd "google-routes"
+  yearMonth String // "2026-07"
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, yearMonth])
+}
+
+// Thông báo liên role (workflow cứu hộ) — đẩy realtime qua WebSocket theo role.
+enum NotificationKind {
+  MISSION_ASSIGNED // ADMIN sinh plan → báo cứu hộ
+  RESCUE_CONFIRMED // cứu hộ xác nhận → báo kho
+  WAREHOUSE_READY // kho chuẩn bị xong → báo admin + cứu hộ
+  INTER_WAREHOUSE_REQUEST // thiếu → báo kho lân cận
+}
+
+model Notification {
+  id            String           @id @default(cuid())
+  recipientRole UserRole // gửi theo role (WAREHOUSE/RESCUE/ADMIN)
+  missionId     String?
+  warehouseId   String?
+  kind          NotificationKind
+  title         String
+  body          String
+  read          Boolean          @default(false)
+  createdAt     DateTime         @default(now())
+
+  @@index([recipientRole, read])
 }
