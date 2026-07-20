@@ -1,8 +1,8 @@
 """Schema Pydantic — validate output AI (không tin AI, §14)."""
 from enum import Enum
-from typing import List, Optional
+from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class IncidentType(str, Enum):
@@ -53,13 +53,37 @@ class ActionPlanRequest(BaseModel):
 
 
 class PhasePlan(BaseModel):
-    window: str  # "0-2h" | "2-6h" | "6-24h"
-    actions: List[str] = Field(min_length=1)
+    model_config = ConfigDict(extra="forbid")
+
+    window: Literal["0-2h", "2-6h", "6-24h"]
+    actions: List[str] = Field(min_length=2, max_length=4)
 
 
 class ActionPlanNarrative(BaseModel):
     """Phần LLM VIẾT — chỉ định tính, không số liệu tồn kho."""
-    objectives: List[str] = Field(min_length=1)  # mục tiêu 6h đầu
-    phases: List[PhasePlan] = Field(min_length=1)  # phương án theo giai đoạn
-    warnings: List[str] = Field(default_factory=list)  # cảnh báo nguy cơ
-    followUpQuestions: List[str] = Field(default_factory=list)  # câu hỏi bổ sung
+    model_config = ConfigDict(extra="forbid")
+
+    objectives: List[str] = Field(min_length=3, max_length=5)  # mục tiêu 6h đầu
+    phases: List[PhasePlan] = Field(min_length=3, max_length=3)
+    warnings: List[str] = Field(min_length=1)
+    followUpQuestions: List[str] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_phase_order(self) -> "ActionPlanNarrative":
+        expected = ["0-2h", "2-6h", "6-24h"]
+        if [phase.window for phase in self.phases] != expected:
+            raise ValueError(f"phases phải có đúng thứ tự: {expected}")
+        return self
+
+
+# ===== Chatbot hỏi-đáp kho (context injection) =====
+# Backend chụp snapshot JSON kho (tồn/readiness/sự cố) → LLM CHỈ trả lời dựa trên
+# snapshot đó, ngoài phạm vi thì nói "không biết". Không tự bịa, không tra ngoài.
+
+class AssistantRequest(BaseModel):
+    question: str = Field(min_length=2, max_length=500)
+    snapshot: str = Field(min_length=2, max_length=16000)  # JSON kho serialized
+
+
+class AssistantAnswer(BaseModel):
+    answer: str
