@@ -105,8 +105,8 @@ File: `apps/backend/demo/demo.mjs`. **✅ verify: 6 bước chạy thật, phân
 - [x] Cache: lưu ReadinessScore + Component, ghi đè bản mới nhất theo target (upsert)
 - [x] Breakdown: mỗi điểm truy về 6 thành phần + gom lý do trừ điểm
 - [x] Endpoint GET /readiness/warehouses/:id + POST .../recalculate (quyền READINESS_VIEW)
-- [ ] Recalc on-write khi giao dịch inventory → làm cùng Bp (nối inventory→readiness)
-- **Verify:** ✅ recalc kho seed → 78 điểm, breakdown đúng (quantity 50 chưa kiểm kê, expiry 77...); **đẩy độ ẩm khu B 60→95 → điểm zone rớt 81→77 trong <2s (khoảnh khắc vàng)**; 41 test pass
+- [x] Recalc on-write khi giao dịch inventory (import/export/bulkExport/adjust/reconcile → recalc kho tương ứng, fire-and-forget sau transaction)
+- **Verify:** ✅ recalc kho seed → 78 điểm, breakdown đúng (quantity 50 chưa kiểm kê, expiry 77...); **đẩy độ ẩm khu B 60→95 → điểm zone rớt 81→77 trong <2s (khoảnh khắc vàng)**; export/adjust/reconcile → readiness đổi ngay không cần gọi /recalculate tay; 128 test pass
 - **File:** `src/readiness/{compute.ts,readiness.service.ts,readiness.gather.ts,readiness.controller.ts,readiness.module.ts,__tests__/compute.spec.ts}`
 - **Ghi chú:** on-write recalc (khi export/adjust) dời sang Bp. Component.weight tạm 0 (điền khi tích hợp ReadinessRule config).
 
@@ -121,11 +121,10 @@ File: `apps/backend/demo/demo.mjs`. **✅ verify: 6 bước chạy thật, phân
 - [x] 4 vùng READY≥80/ATTENTION≥70/DEGRADED≥50/CRITICAL<50 (configurable qua ReadinessThreshold)
 - [x] resolveActionZone + shouldNotifyManager + shouldBlockNewMission (thuần)
 - [x] GET/recalc trả kèm zone; ngưỡng đọc từ DB (rỗng → mặc định)
-- [ ] Hook trigger thông báo thực tế → làm ở lát Incident/notification (in-app alert)
-- [ ] Mission đọc ngưỡng chặn khi <50 → làm ở Phase D (mission)
-- **Verify:** ✅ score 78 → zone ATTENTION; môi trường xấu → 71 vẫn ATTENTION (môi trường 10% không phóng đại); 7 test
-- **File:** `src/readiness/action-zone.ts`, `__tests__/action-zone.spec.ts`
-- **Ghi chú:** hook thông báo + mission-block là điểm TÍCH HỢP, để lát tương ứng (không nhồi vào C3).
+- [x] Hook trigger thông báo thực tế: readiness đổi zone (so oldZone/newZone) + rớt DEGRADED/CRITICAL → NotificationKind.READINESS_DEGRADED cho WAREHOUSE (dedupe theo đổi zone thực sự, không spam dao động quanh ngưỡng)
+- [x] Mission đọc ngưỡng chặn khi CRITICAL: `generatePlan()` kiểm `shouldBlockNewMission` trước khi tạo → 400 kèm điểm hiện tại; FE hiển thị lỗi đỏ dưới nút thay vì im lặng
+- **Verify:** ✅ score 78 → zone ATTENTION; môi trường xấu → 71 vẫn ATTENTION (môi trường 10% không phóng đại); readiness rớt CRITICAL → generatePlan trả 400 rõ ràng; readiness rớt DEGRADED/CRITICAL → GET /notifications có READINESS_DEGRADED mới; 7 test action-zone
+- **File:** `src/readiness/{action-zone.ts,readiness.service.ts}`, `src/mission/mission.service.ts`, `apps/frontend/src/components/mission/mission-view.tsx`, `__tests__/action-zone.spec.ts`
 
 ## BE-Bp0 — Xuất lô 1 chạm + atomic ✅ 🔴
 - [x] POST /inventory/bulk-export (nhiều batch 1 transaction, thất bại 1 → rollback tất cả)
@@ -192,9 +191,10 @@ File: `apps/backend/demo/demo.mjs`. **✅ verify: 6 bước chạy thật, phân
 - **Ghi chú:** Fix Gemini JSON cắt cụt (2048→4096 token cho Action Plan tiếng Việt). Workflow liên role + Notification tách sang BE-L.
 
 ## BE-Bp1 — Loadcell/RFID tự sinh giao dịch ⬜ 🟠
-- [ ] Handler WEIGHT_CHANGED → suy số lượng (unitWeightKg) → tạo transaction source LOADCELL
-- [ ] Handler RFID_DETECTED → map tag→item → transaction source RFID
-- **Verify:** scenario suspected_loss → tự sinh transaction ~ đúng SL
+- [x] Handler WEIGHT_CHANGED → suy số lượng (unitWeightKg) → tạo transaction source LOADCELL (chọn batch đầu tiên tạo trên kệ, ponytail: đủ demo 1 SKU/kệ)
+- [ ] Handler RFID_DETECTED → map tag→item → transaction source RFID (chưa làm đợt này)
+- **Verify:** ✅ scenario `suspected_loss` (loadcell 48→44kg) → batch tương ứng giảm đúng 4kg/unitWeightKg đơn vị, InventoryTransaction.source=LOADCELL; recalc readiness tự trigger qua đường C1 (không cần thêm LOADCELL vào ENV_DEVICE_TYPES)
+- **File:** `src/simulation/simulation.service.ts`
 
 ## BE-E — Incident Intelligence ✅ 🟠
 - [x] Prisma: Incident, IncidentEvidence, IncidentAction
@@ -208,37 +208,69 @@ File: `apps/backend/demo/demo.mjs`. **✅ verify: 6 bước chạy thật, phân
 - **File:** `src/incident/{incident.rules.ts,incident.service.ts,incident.controller.ts,incident.module.ts}`, `src/ai/`
 - **Ghi chú:** explain phụ thuộc Gemini quota (429 khi test nhiều) → retry + cache. Logic incident không đụng AI.
 
-## BE-Bp5 — Backup Supabase ⬜ 🟠
-- [ ] BullMQ cron 17:00: dump → Supabase, giữ 3 bản, skip nếu mất net
-- **Verify:** chạy job → dump trên Supabase; bản thứ 4 xóa cũ nhất
+## BE-E2 — Anomaly Detection + Cảnh báo sớm dự đoán ✅ 🟠
+- [x] anomaly.rules.ts (THUẦN): detectStatisticalAnomaly (z-score, baseline ≥10 mẫu, |z|≥3)
+- [x] detectPredictiveWarning (hồi quy tuyến tính, ngoại suy chạm ngưỡng trong 2h)
+- [x] Test: KHÔNG báo giả với nhiễu bình thường (đúng tham số scenario normal) — chống "vòng tròn tự chứng minh"
+- [x] scanWarehouse() nối 2 detector mới, dùng chung persist/notify có sẵn
+- [x] Scenario heat_drift: nhiệt tăng dần CHƯA vượt ngưỡng → predictive báo trước rule ngưỡng cũ
+- [x] Frontend: label STAT_ANOMALY/PREDICTIVE_WARNING
+- [x] Chống spam trùng lặp: scan lại khi sự cố cùng kind+thiết bị đang mở (chưa RESOLVED) → bỏ qua, không tạo incident/notification mới
+- **Verify:** ✅ `anomaly.rules.spec.ts` 7 test pass (kể cả case chống báo giả nhiễu `normal` seed 42); `incident.rules.spec.ts` 16 test cũ không đổi hành vi; build sạch. **Thủ công qua API thật:** chạy scenario `heat_drift` (nhiệt 28→34°C, chưa chạm 35) → scan → `PREDICTIVE_WARNING` CRITICAL nổ ra đúng lúc còn dưới ngưỡng; scan lại lần 2 (chưa resolve) → `detected: 0` (chặn trùng đúng); resolve xong → scan lại → tạo mới lại bình thường (`detected: 1`). Full suite 114 test pass, không regression.
+- **File:** `src/incident/{anomaly.rules.ts,incident.rules.ts,incident.service.ts,__tests__/anomaly.rules.spec.ts}`, `packages/scenario-definitions/src/index.ts`, `apps/frontend/src/components/dashboard/incident-view.tsx`
+- **Ghi chú:** khác với anomaly cũ ở ghi chú BE-M (chỉ là ngưỡng tuyệt đối cố định) — đây là thống kê thật (z-score so baseline lịch sử) + dự đoán (ngoại suy trend, báo TRƯỚC khi vượt ngưỡng). Dedupe áp dụng chung cho cả 5 rule cũ lẫn 2 detector mới (key `kind+deviceCode`), không riêng anomaly.
 
-## BE-G4api — Chatbot hỏi-đáp kho (context injection) ⬜ ⚪
-- [ ] POST /assistant/ask: snapshot JSON kho → LLM → trả lời, ràng chỉ từ JSON
-- **Verify:** hỏi số liệu đúng; ngoài phạm vi → "không biết"
+## BE-Bp5 — Backup Supabase ✅ 🟠
+- [x] BullMQ cron 17:00 (repeatable, dedupe theo repeat key) → dump DB → Supabase Storage, giữ 3 bản (prune bản cũ)
+- [x] pg_dump chạy TRONG container Postgres (host khỏi cài client); -O -x cho portable
+- [x] Thiếu SUPABASE_URL/SUPABASE_SERVICE_KEY → skip êm lúc khởi động (không chặn app); POST /backup/run thủ công trả `{enqueued:false, reason}` thay vì lỗi
+- [x] Upload Storage bằng fetch native (KHÔNG dùng supabase-js — SDK cần WebSocket/Node22+, thừa cho backup); gỡ dep supabase-js
+- **Verify:** ✅ CHẠY THẬT với Supabase project thật: `POST /api/backup/run` → dump 59KB lên bucket db-backups (log "Backup xong"); chạy 4 lần → Storage giữ đúng 3 bản mới nhất, log "Đã xóa 1 bản backup cũ" (retention đúng); thiếu config → skip êm không crash; BullMQ connect Redis OK; build sạch, 137 test không regression
+- **File:** `src/backup/{backup.service.ts,backup.processor.ts,backup.controller.ts,backup.module.ts}`
+- **Ghi chú:** cần Supabase project (URL + service key + bucket) — hướng dẫn lấy key ở `.env.example`. Dùng BullMQ (theo ROADMAP) — retry/persistence sẵn khi sau này thêm job. Fix: supabase-js ném "native WebSocket not found" trên Node 20 → chuyển sang Storage REST qua fetch (gọn hơn, đúng ladder).
 
-## BE-L — Workflow liên role + Notification ⬜ 🔴 (CORE)
-- [ ] MissionStatus mở rộng: DRAFT→PENDING_RESCUE→RESCUE_CONFIRMED→PENDING_WAREHOUSE→READY→COMPLETED (giữ REJECTED)
-- [ ] Model Notification + NotificationService (create/list/markRead) + NotificationGateway (Socket.IO, room theo role)
-- [ ] Transitions + notify: ADMIN generate→notify RESCUE; RESCUE confirm→notify WAREHOUSE; WAREHOUSE prepare(bulk-export)→READY→notify ADMIN+RESCUE; thiếu→notify kho lân cận
-- [ ] Phân quyền lại (shared-types): +mission:confirm(RESCUE), +mission:fulfill(WAREHOUSE), mission:create→ADMIN
-- **Verify:** state machine test transition sai→lỗi; notify đúng recipient mỗi bước; E2E ADMIN→RESCUE→WAREHOUSE chạy hết
+## BE-G4api — Chatbot hỏi-đáp kho (context injection) ✅ ⚪
+- [x] ai-service POST /assistant: system prompt ràng CHỈ trả lời từ snapshot JSON, ngoài phạm vi → "không biết"/"chỉ hỗ trợ hỏi-đáp kho"; schema AssistantRequest/Answer + _redact_identity
+- [x] Backend POST /assistant/warehouses/:id/ask: chụp snapshot (tồn theo SKU trừ mượn + readiness + sự cố mở) → AiClientService.assistantAsk → trả lời; AI lỗi → 400 rõ ràng
+- [x] Frontend: view "Trợ lý" (AssistantView) — chat bong bóng, 4 câu gợi ý, trạng thái đang tra cứu
+- [x] Đường trả lời nhanh từ snapshot cho tồn kho/hạn dùng/sự cố/readiness/thời tiết; câu hỏi mở mới gọi Ollama Qwen local
+- **Verify:** ✅ 10/10 ca tích hợp đạt; chat dữ liệu 8–990ms, câu mở ~3,64s, Action Plan ~22s; 6 test fast-answer pass; backend build sạch. Báo cáo: `docs/qa/ollama-qwen-evaluation.md`
+- **File:** `apps/ai-service/{main.py,schemas.py}`, `src/assistant/{assistant.service.ts,assistant.controller.ts,assistant.module.ts}`, `src/ai/ai-client.service.ts`, `apps/frontend/src/{lib/assistant-api.ts,components/dashboard/assistant-view.tsx,dashboard-shell.tsx,app/page.tsx}`
+- **Ghi chú:** quyền READINESS_VIEW tái dùng; snapshot backend chụp (LLM không tự tra DB → chống bịa số). FE chat làm luôn theo yêu cầu.
 
-## BE-M — Normal Mode: AI quản trị kho ngày thường ⬜ 🔴 (CORE, ⭐ "AI khi không thiên tai")
-> Đã có 3/10: #3 anomaly (incident), #7 env (readiness), #8 readiness score — KHÔNG code lại.
-- [ ] insights/forecast.ts (thuần+test): tốc độ xuất TB → dự báo thiếu hụt (#1) + đề xuất nhập (#2)
-- [ ] insights/expiry-alert: batch sắp hết hạn → cảnh báo + đề xuất điều chuyển (#4)
-- [ ] insights/rebalance.ts (thuần+test): chênh tồn cùng SKU giữa kho cùng communeId → điều chuyển (#5)
-- [ ] insights/trends.ts (thuần+test): % tăng/giảm xuất (#6) + báo cáo tháng (#10)
-- [ ] weather/: Open-Meteo (free, no key) theo lat/lng → cảnh báo mưa lớn 72h (#9)
-- [ ] insights.controller: GET /insights/warehouses/:id + /monthly-report; LLM diễn giải số
-- **Verify:** seed lịch sử xuất → insights số thật; monthly-report đủ mục; weather cảnh báo khi mưa vượt ngưỡng
+## BE-L — Workflow liên role + Notification ✅ 🔴 (CORE)
+- [x] MissionStatus mở rộng: DRAFT→PENDING_RESCUE→RESCUE_CONFIRMED→PENDING_WAREHOUSE→READY→COMPLETED (giữ REJECTED)
+- [x] Model Notification + NotificationService (create/list/markRead/markAllRead) + NotificationGateway (Socket.IO, room `role:<role>`)
+- [x] Transitions + notify: ADMIN generate→notify RESCUE; RESCUE confirm→notify WAREHOUSE; WAREHOUSE prepare→READY→notify ADMIN+RESCUE
+- [x] Phân quyền lại (shared-types): +mission:confirm(RESCUE), +mission:fulfill(WAREHOUSE), mission:create→ADMIN
+- **Verify:** ✅ `mission.workflow.spec.ts` — chuỗi hợp lệ ADMIN→RESCUE→WAREHOUSE→hoàn thành pass, nhảy cóc/sai thứ tự bị chặn, assertTransition ném lỗi rõ ràng, trạng thái cuối COMPLETED không đi tiếp
 
-## BE-N — Demo mở rộng + đồng bộ docs ⬜ 🟠
-- [ ] demo.mjs: workflow Emergency (ADMIN→RESCUE→WAREHOUSE) + Normal Mode insights, in terminal
-- [ ] Cập nhật PRD (2 chế độ), BUILD-PLAN (J-N), docs/qa (Q&A giám khảo)
-- **Verify:** demo chạy hết 2 chế độ; docs khớp code
+## BE-M — Normal Mode: AI quản trị kho ngày thường ✅ 🔴 (CORE, ⭐ "AI khi không thiên tai")
+> Đã có 3/10: #3 anomaly thống kê thật (BE-E2, z-score — không chỉ ngưỡng), #7 env (readiness), #8 readiness score — KHÔNG code lại.
+- [x] insights/forecast.ts (thuần+test): tốc độ xuất TB/ngày (30 ngày) → dự báo ngày cạn kho (#1) + lowStock khi <7 ngày (#2)
+- [x] insights/expiry-alert.ts (thuần+test): batch sắp hết hạn trong 30 ngày → cảnh báo, sắp gần nhất trước (#4)
+- [x] insights/rebalance.ts (thuần+test): chênh tồn cùng SKU giữa kho cùng communeId (lệch ≥2x trung bình) → đề xuất chuyển kho thừa→thiếu (#5)
+- [x] insights/trends.ts (thuần+test): % tăng/giảm xuất kỳ này/kỳ trước theo SKU (#6) + dùng cho báo cáo tháng (#10)
+- [x] insights/weather.ts: Open-Meteo (free, no key) theo lat/lng → cảnh báo mưa 72h ≥100mm (#9), null khi lỗi mạng/chưa ghim toạ độ (không chặn insights tổng hợp)
+- [x] insights.controller: GET /insights/warehouses/:id (forecast+expiry+rebalance+weather) + GET .../monthly-report (trends + LLM diễn giải, fallback template khi ai-service lỗi); quyền READINESS_VIEW tái dùng
+- [x] Tồn khả dụng TRỪ ON_LOAN (forecast + rebalance) — nhất quán mission/readiness, không lạc quan sai
+- [x] Forecast bắt SKU cạn hẳn: có lịch sử xuất nhưng tồn 0 (hết batch) → vẫn báo daysLeft=0/lowStock (thứ cần báo gấp nhất)
+- [x] Rebalance phân bổ phần dư theo nhu cầu từng kho thiếu (thiếu nhiều nhận trước), không dồn 1 kho vượt nhu cầu
+- [x] Frontend: view "Ngày thường" (InsightsView) — dự báo/hết hạn/điều chuyển/thời tiết + nút sinh báo cáo tháng; đủ trạng thái loading/empty/error, dùng token màu + lucide theo convention dashboard
+- **Verify:** ✅ 16 test thuần (forecast/expiry-alert/rebalance/trends, gồm case SKU cạn hẳn + rebalance đa kho) pass; BE build sạch, 16 suite / 130 test không regression; FE build sạch (Next.js)
+- **File:** `src/insights/{forecast.ts,expiry-alert.ts,rebalance.ts,trends.ts,weather.ts,insights.service.ts,insights.controller.ts,insights.module.ts,__tests__/}`, `apps/frontend/src/{lib/insights-api.ts,components/dashboard/insights-view.tsx,components/dashboard/dashboard-shell.tsx,app/page.tsx}`
+- **Ghi chú:** monthly-report gọi `AiClientService.explain()` có sẵn (không sửa ai-service), try/catch → template fallback đếm mặt hàng tăng/giảm/mới khi LLM lỗi/mất mạng — giống pattern Action Plan.
 
-## BE-I — Server-time + config env ⬜ 🔴
-- [ ] Server đặt mọi timestamp (client không gửi) — #31
-- [ ] Env schema validate lúc khởi động (thiếu biến bắt buộc → dừng)
-- **Verify:** client gửi timestamp bị bỏ qua; thiếu JWT_SECRET → app không start
+## BE-N — Demo mở rộng + đồng bộ docs ✅ 🟠
+- [x] demo.mjs: thêm Bước 7 (Normal Mode: dự báo cạn kho/hết hạn/điều chuyển/thời tiết/báo cáo tháng) + Bước 8 (chatbot 3 câu: 2 in-scope + 1 chặn ngoài phạm vi)
+- [x] Cập nhật PRD (2 chế độ + Normal Mode + chatbot + backup), docs/qa (phase-m, phase-g-bp5)
+- **Verify:** ✅ demo chạy thật đủ 8 bước với seed mới: Bước 7 in "Gạo cứu trợ ĐÃ CẠN", trends "Bộ pin +200%", điều chuyển cụm xã; Bước 8 chatbot trả đúng số + chặn "Thủ đô Pháp"; 137 test pass
+- **File:** `apps/backend/demo/demo.mjs`, `docs/PRD.md`
+- **Ghi chú:** Bước 3 (khoảnh khắc vàng) + 3b (điều tra sự cố) đôi khi cần chạy scenario/tuning timing — không ảnh hưởng 2 chế độ mới. Demo cần BE+ai-service+seed.
+
+## BE-I — Server-time + config env ✅ 🔴
+- [x] Server đặt mọi timestamp (client không gửi) — #31: soát toàn bộ DTO KHÔNG khai field thời gian; `ValidationPipe({ whitelist: true })` strip field lạ → client gửi createdAt/timestamp bị bỏ; mọi mốc do Prisma `@default(now())` / `new Date()` server đặt (occurredAt lấy từ SensorEvent.createdAt, không từ body)
+- [x] Env validate lúc khởi động (env.validation.ts THUẦN, cắm ConfigModule.forRoot({ validate })): thiếu DATABASE_URL/JWT_ACCESS_SECRET/JWT_REFRESH_SECRET → ném lỗi rõ, app KHÔNG start; +chặn secret <16 ký tự, +chặn 2 JWT secret trùng nhau; gom nhiều lỗi 1 lần
+- **Verify:** ✅ 7 test env.validation (thiếu/rỗng/ngắn/trùng/gom lỗi); chạy thật `JWT_ACCESS_SECRET=""` → validateEnv ném "Cấu hình môi trường không hợp lệ" chặn boot; biến có default (AI/GEO/REDIS) không bắt buộc → không chặn nhầm dev; build sạch, 17 suite/137 test không regression
+- **File:** `src/config/{env.validation.ts,__tests__/env.validation.spec.ts}`, `src/app.module.ts`, `src/main.ts`
+- **Ghi chú:** KHÔNG bật `forbidNonWhitelisted` (sẽ 400 khi FE lỡ gửi field dư, vỡ luồng) — `whitelist` strip im lặng đã đủ cho #31 "client gửi bị bỏ qua". Không thêm dependency (joi/zod) — hàm thuần đủ.

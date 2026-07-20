@@ -40,13 +40,14 @@
 - [ ] Timeline event realtime bằng Socket.IO client
 - **Verify:** kéo slider độ ẩm → event bắn → readiness rớt trên dashboard + alert mobile.
 
-## FE-K - Action Plan + Emergency Workflow ⬜ CORE (⭐ khác biệt thi, chờ BE-K/L)
-- [ ] Màn Mission: nhập tình huống + ghim điểm nạn trên map → nút "✨ Sinh phương án cứu hộ"
-- [ ] Action Plan view: 8 mục giống docx (đánh giá/severity/mục tiêu/cấp phát/điều phối kho+ETA/3 giai đoạn/cảnh báo/dự báo %/câu hỏi)
-- [ ] Map ghim điểm kho (tổng/thôn) + điểm nạn (Google Maps JS hoặc Leaflet)
-- [ ] Workflow liên role: ADMIN sinh→RESCUE xác nhận→WAREHOUSE chuẩn bị; nút theo role
-- [ ] Notification UI: chuông + realtime WebSocket theo role
-- **Verify:** ADMIN sinh Action Plan 8 mục → RESCUE nhận thông báo xác nhận → WAREHOUSE nhận chuẩn bị; map hiện kho gần điểm nạn.
+## FE-K - Action Plan + Emergency Workflow ✅ CORE (⭐ khác biệt thi)
+- [x] Màn Mission: nhập tình huống + ghim điểm nạn trên map → nút "✨ Sinh phương án cứu hộ"
+- [x] Action Plan view: 8 mục giống docx (đánh giá/severity/mục tiêu/cấp phát/điều phối kho+ETA/3 giai đoạn/cảnh báo/dự báo %/câu hỏi)
+- [x] Map ghim điểm kho (tổng/thôn) + điểm nạn (React-Leaflet + OSM/CartoDB, click/kéo ghim, nhập toạ độ tay, tự fit-bounds, tile đổi theo dark mode)
+- [x] Workflow liên role: ADMIN sinh→RESCUE xác nhận→WAREHOUSE chuẩn bị; nút theo role
+- [x] Notification UI: chuông + realtime WebSocket theo role
+- **Verify:** ✅ ADMIN sinh Action Plan 8 mục → RESCUE nhận thông báo xác nhận → WAREHOUSE nhận chuẩn bị; map hiện kho tổng/thôn cùng xã + điểm nạn, khoảng cách ước tính (Haversine client) trước khi lập phương án, đổi sang ETA chính thức backend sau khi có Action Plan.
+- **File:** `apps/frontend/src/components/mission/{incident-map.tsx,mission-view.tsx,action-plan-view.tsx}`, `apps/frontend/src/lib/{geo.ts,mission-api.ts}`, `apps/backend/src/mission/{mission.controller.ts,mission.service.ts,action-plan.ts}`
 
 ## FE-M - AI Insight panel (Normal Mode) ⬜ CORE (chờ BE-M)
 - [ ] Panel "AI Insight" trên dashboard: dự báo thiếu hụt, đề xuất nhập, hạn dùng, cân bằng kho, xu hướng, cảnh báo thời tiết
@@ -66,6 +67,8 @@
 - [x] Bản đồ thiên tai đã bỏ khỏi scope
 - **Verify:** in PDF ra đúng nội dung.
 
-## FE-G4 - Chatbot hỏi-đáp kho ⬜ polish
-- [ ] UI chat gọi `POST /assistant/ask`
-- **Verify:** hỏi số liệu → trả đúng; ngoài phạm vi → nói không biết.
+## FE-G4 - Chatbot hỏi-đáp kho ✅
+- [x] UI chat gọi `POST /assistant/ask`
+- [x] Bong bóng trợ lý cố định ở góc phải dưới, dùng được trên mọi màn dashboard
+- [x] Gợi ý câu hỏi, trạng thái chờ, lỗi thân thiện và hỗ trợ bàn phím
+- **Verify:** TypeScript pass; dashboard compile và trả HTTP 200.

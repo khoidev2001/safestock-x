@@ -36,3 +36,6 @@ Lúc khẩn cấp dùng tầng 2 (xuất cả lô), sai sót được tầng 4 (
 
 ### H: Mỗi giao dịch có ghi nguồn không? Để làm gì?
 **Đ:** Có — mỗi giao dịch đánh dấu nguồn (quét tay, xuất lô, cảm biến loadcell, RFID, sửa tay). Khi các nguồn khác nhau cho số liệu lệch nhau, độ lệch đó **hạ điểm "độ tin cậy dữ liệu"** trong Readiness Score — hệ thống tự biết dữ liệu chỗ nào đáng ngờ. Đây là cách biến "nhiều nguồn không hoàn hảo" thành tín hiệu chất lượng.
+
+### H: Loadcell (cảm biến cân nặng) tự ghi giao dịch kho thế nào? Sao biết cân nặng đổi là bớt hay thêm bao nhiêu món?
+**Đ:** Loadcell chỉ đo **cân nặng**, nên hệ thống suy ngược ra số lượng qua **khối lượng đơn vị của từng mặt hàng** (đã khai báo sẵn, vd 1 chai nước 0.5kg). Cân giảm 4kg → suy ra mất ~8 chai, tự tạo giao dịch xuất kho nguồn LOADCELL. Chỉ kích hoạt khi cân nặng đổi **đủ lớn** (≥0.1kg) để tránh nhiễu rung lắc cảm biến sinh giao dịch rác. Giới hạn hiện tại: mỗi kệ giả định 1 mặt hàng chính (nếu nhiều lô cùng kệ, lấy lô tạo trước) — đủ cho demo, nâng cấp khi cần cảm biến/nhãn riêng từng lô. Lỗi tự sinh giao dịch (vd chưa khai khối lượng đơn vị) chỉ ghi log cảnh báo, không chặn cảm biến cập nhật giá trị hiện tại.

@@ -13,12 +13,12 @@
 ## AI-D0 — Scaffold + provider pluggable ✅ 🔴
 - [x] FastAPI + Pydantic + venv + requirements.txt (httpx thay SDK nặng)
 - [x] Interface `LLMProvider` (generate_json, generate_text) + factory theo env `AI_PROVIDER`
-- [x] GeminiProvider (default, httpx REST, model gemini-flash-latest, timeout 60s)
-- [x] OllamaProvider (local HTTP localhost:11434, Qwen 2.5)
+- [x] GeminiProvider (tùy chọn cloud, httpx REST, model gemini-flash-latest, timeout 60s)
+- [x] OllamaProvider (mặc định, local HTTP localhost:11434, Qwen 3.5 4B, tắt thinking cho API nhanh, giữ model trong RAM 30 phút)
 - [ ] ClaudeProvider — NotImplementedError (chưa cần MVP, factory có sẵn nhánh)
 - [x] Env: AI_PROVIDER, GEMINI_API_KEY, GEMINI_MODEL, OLLAMA_*
 - [x] GET /health báo provider đang dùng
-- **Verify:** ✅ /health → {provider: "gemini"}; đổi env đổi provider không sửa code
+- **Verify:** ✅ /health → {provider: "ollama"}; model `qwen3.5:4b` chạy local; đổi env đổi provider không sửa code
 - **File:** `apps/ai-service/{main.py,schemas.py,providers/}`
 
 ## AI-D1 — Parse tình huống (structured JSON) ✅ 🔴

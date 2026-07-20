@@ -24,3 +24,9 @@
 
 ### H: Kiểm thử thế nào, hay chỉ chạy tay?
 **Đ:** Có **kiểm thử tự động** (Jest) cho logic nghiệp vụ quan trọng + kiểm thử đầu-cuối qua API thật. Ví dụ đã verify: login → lấy token → gọi API có bảo vệ → xuất kho → số lượng giảm đúng → audit ghi đúng. Không phải "chạy được là xong".
+
+### H: Thời gian ghi trên mỗi giao dịch lấy từ đâu? Client tự gửi có giả mạo được không?
+**Đ:** Không — **mọi mốc thời gian do server đặt**, client không gửi được. Các form nhập (DTO) không hề khai trường thời gian, và tầng validate tự **loại bỏ mọi trường lạ** ngoài khai báo — nên dù client cố gửi kèm "thời điểm tạo", hệ thống bỏ qua và dùng giờ server (database `now()`). Điều này quan trọng cho điều tra sự cố: dòng thời gian bằng chứng phải là giờ thật của hệ thống, không để thao túng.
+
+### H: Nếu triển khai mà quên cấu hình biến môi trường quan trọng thì sao?
+**Đ:** App **không khởi động** — kiểm tra ngay lúc bật: thiếu `DATABASE_URL`, `JWT_ACCESS_SECRET` hoặc `JWT_REFRESH_SECRET` → dừng với thông báo rõ ràng liệt kê cái thiếu, thay vì chạy rồi sập giữa chừng lúc có người dùng. Còn chặn thêm: secret quá ngắn (dễ đoán) và hai secret trùng nhau. Biến có giá trị mặc định (dịch vụ AI, bản đồ, Redis) không bắt buộc — không chặn nhầm khi chạy dev/demo. Đây là kiểm tra thuần, không thêm thư viện ngoài.

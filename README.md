@@ -36,10 +36,20 @@ Flow branch → PR → review → merge (KHÔNG push thẳng `main`). Checklist 
 
 ## 5 module cốt lõi
 1. **Quản lý kho** — 4 tầng nhập/xuất, mượn-trả, kiểm kê, hậu kiểm
-2. **Readiness Score** — chỉ số sẵn sàng 6 thành phần, 4 cấp, ngưỡng hành động
+2. **Mức sẵn sàng vận hành kho** — điều kiện chặn, trạng thái từng mặt, khả năng đáp ứng tình huống; điểm tổng chỉ để tham khảo xu hướng
 3. **Mission-to-Kit Compiler** — tình huống (ngôn ngữ tự nhiên) → phương án vật tư
 4. **Sensor Simulator** — mô phỏng lớp cảm biến IoT (deterministic, realtime)
 5. **Mobile App** — vận hành hiện trường (Expo)
+
+## Readiness được hiểu thế nào
+
+Readiness không nhằm tạo một con số đẹp để “chấm điểm kho”. Hệ thống phải giúp cán bộ trả lời theo đúng thứ tự:
+
+1. **Có điều kiện nào chặn vận hành không?** Ví dụ vật tư bắt buộc đã hỏng/hết hạn, vị trí không tiếp cận được hoặc kho có sự cố nghiêm trọng.
+2. **Kho đang vướng vấn đề gì?** Hiển thị riêng số lượng, chất lượng, hạn dùng, tiếp cận, môi trường và độ tin cậy dữ liệu.
+3. **Với tình huống cụ thể, kho đáp ứng được bao nhiêu?** Đối chiếu nhu cầu theo số người/thời gian với vật tư thực sự khả dụng; loại thiếu nhất quyết định mức đáp ứng.
+
+Trạng thái chính là **Sẵn sàng · Cần xử lý · Không thể điều phối**, luôn kèm lý do và hành động đề xuất. Điểm `0-100` vẫn có thể dùng để xem xu hướng hoặc so sánh nội bộ, nhưng không được tự mình ghi đè điều kiện chặn hay quyết định điều phối.
 
 ## Tech stack
 Monorepo pnpm · **Backend** NestJS + Prisma + PostgreSQL + Redis · **AI** FastAPI + LLM pluggable (Gemini/Ollama/Claude) · **Web** Next.js · **Mobile** React Native + Expo
@@ -57,6 +67,7 @@ packages/
 infrastructure/
   docker-compose.yml   # Postgres + Redis
 docs/                  # PRD, BUILD-PLAN, CONTRIBUTING, WORK-LOG, thư quan tâm
+  codebase-summary.md  # tóm tắt trạng thái thật đã đối chiếu code + roadmap
 skills/                # CODING-STANDARDS + skill hỗ trợ
 ```
 
@@ -73,9 +84,12 @@ pnpm be:dev                   # http://localhost:3100/api/health
 Simulator UI tối thiểu: `http://localhost:3100/sim.html`
 
 ## Trạng thái
-- ✅ Phase A — nền + auth + inventory
-- ✅ Phase B — sensor simulator (verify pass)
-- 🔜 Phase C — Readiness Score
+- ✅ Backend lõi đã vượt Phase A/B: auth/RBAC, inventory, readiness dạng điểm hiện hành, simulator, mission, incident, geo, notification, insights, assistant, backup, report/admin.
+- 🔁 Readiness v2.2 (blocker + trạng thái + khả năng đáp ứng; điểm chỉ hiển thị phụ) đã chốt trong PRD/BUILD-PLAN, chưa triển khai code.
+- ✅ AI service đã có FastAPI + Gemini/Ollama provider, parse tình huống, explain, action-plan, assistant.
+- 🟡 Frontend web admin đã có dashboard nhiều view, mission/action-plan/map/notification/assistant/insights; `next build` cần kiểm tra lại vì lần rà gần nhất bị treo.
+- ⬜ Mobile Expo chưa triển khai source app, mới có roadmap/package.
+- Chi tiết đối chiếu mới nhất: [docs/codebase-summary.md](docs/codebase-summary.md).
 
 ## Tài khoản demo
 | Login | Password | Role |
