@@ -5,9 +5,15 @@ import { AlertTriangle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { DashboardShell, type DashboardView } from "@/components/dashboard/dashboard-shell";
+import { FloatingAssistant } from "@/components/assistant/floating-assistant";
 import { InventoryTable } from "@/components/dashboard/inventory-table";
 import { AuditView } from "@/components/dashboard/audit-view";
 import { IncidentView } from "@/components/dashboard/incident-view";
+import { InsightsView } from "@/components/dashboard/insights-view";
+import { AssistantView } from "@/components/dashboard/assistant-view";
+import { ReportView } from "@/components/dashboard/report-view";
+import { AdminUsersView } from "@/components/dashboard/admin-users-view";
+import { MapView } from "@/components/dashboard/map-view";
 import { LoanView } from "@/components/dashboard/loan-view";
 import { StocktakeView } from "@/components/dashboard/stocktake-view";
 import { MissionView } from "@/components/mission/mission-view";
@@ -31,6 +37,26 @@ const viewCopy: Record<DashboardView, { title: string; subtitle: string }> = {
   readiness: {
     title: "Readiness và vận hành kho",
     subtitle: "Điểm sẵn sàng, điểm nghẽn và trạng thái tổng quan.",
+  },
+  insights: {
+    title: "AI quản trị kho ngày thường",
+    subtitle: "Dự báo cạn kho, cảnh báo hết hạn, điều chuyển cân bằng, thời tiết và báo cáo tháng.",
+  },
+  assistant: {
+    title: "Trợ lý hỏi-đáp kho",
+    subtitle: "Hỏi nhanh về tồn kho, hạn dùng, sự cố — AI trả lời từ dữ liệu kho hiện tại.",
+  },
+  map: {
+    title: "Bản đồ kho trong xã",
+    subtitle: "Vị trí kho tổng + kho thôn trên nền bản đồ, ranh giới xã. Quản trị ghim toạ độ.",
+  },
+  report: {
+    title: "Báo cáo kiểm kê tháng",
+    subtitle: "Trưởng thôn gửi báo cáo Excel cuối tháng; cơ quan xã duyệt để cập nhật tồn kho.",
+  },
+  users: {
+    title: "Quản lý người dùng",
+    subtitle: "Cấp tài khoản trưởng thôn (gán kho), đội cứu hộ, quản trị xã.",
   },
   mission: {
     title: "Điều phối cứu hộ",
@@ -142,11 +168,13 @@ export default function HomePage() {
           <WarehouseError />
         ) : (
           <>
-            <OperationsSummary
-              batches={batchesQuery.data}
-              incidents={incidentsQuery.data}
-              readiness={readinessQuery.data}
-            />
+            {activeView !== "map" && (
+              <OperationsSummary
+                batches={batchesQuery.data}
+                incidents={incidentsQuery.data}
+                readiness={readinessQuery.data}
+              />
+            )}
             {activeView === "readiness" ? (
               <ReadinessView
                 isRefreshing={recalculateMutation.isPending || readinessQuery.isFetching}
@@ -160,6 +188,12 @@ export default function HomePage() {
                 tree={treeQuery.data}
                 isTreeLoading={treeQuery.isLoading}
               />
+            ) : null}
+            {activeView === "insights" && warehouseId ? (
+              <InsightsView warehouseId={warehouseId} />
+            ) : null}
+            {activeView === "assistant" && warehouseId ? (
+              <AssistantView warehouseId={warehouseId} />
             ) : null}
             {activeView === "mission" && warehouseId ? (
               <MissionView warehouseId={warehouseId} />
@@ -190,9 +224,22 @@ export default function HomePage() {
             {activeView === "loan" && warehouseId ? (
               <LoanView warehouseId={warehouseId} />
             ) : null}
+            {activeView === "map" && warehouseId ? (
+              <MapView warehouseId={warehouseId} />
+            ) : null}
+            {activeView === "report" && warehouseId ? (
+              <ReportView warehouseId={warehouseId} />
+            ) : null}
+            {activeView === "users" && warehouseId ? (
+              <AdminUsersView warehouseId={warehouseId} />
+            ) : null}
             {activeView === "audit" ? <AuditView /> : null}
           </>
         )}
+
+        {warehouseId ? (
+          <FloatingAssistant isHidden={activeView === "assistant"} warehouseId={warehouseId} />
+        ) : null}
       </div>
     </DashboardShell>
   );

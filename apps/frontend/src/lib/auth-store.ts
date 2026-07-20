@@ -6,6 +6,7 @@ interface AuthUser {
   id: string;
   email: string;
   role: UserRole;
+  warehouseId?: string | null; // trưởng thôn: scope 1 kho; null = toàn xã
 }
 
 interface AuthState {

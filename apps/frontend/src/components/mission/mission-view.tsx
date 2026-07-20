@@ -2,13 +2,17 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Send, Sparkles } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-store";
+import type { LatLng } from "@/lib/geo";
+import { ApiError } from "@/lib/api";
 import {
   confirmMission,
   dispatchMission,
   generateActionPlan,
   generatePlan,
+  getClusterWarehouses,
   getMission,
   prepareMission,
   type GenerateInput,
@@ -16,6 +20,11 @@ import {
 } from "@/lib/mission-api";
 import { ActionPlanView } from "./action-plan-view";
 import { WorkflowStepper } from "./workflow-stepper";
+
+const IncidentMap = dynamic(() => import("./incident-map").then((m) => m.IncidentMap), {
+  ssr: false,
+  loading: () => <div className="h-[320px] animate-pulse rounded-md border bg-[var(--surface)]" />,
+});
 
 /** Tình huống mẫu — bấm nhanh, phòng khi cán bộ chưa quen nhập tay. */
 const SAMPLES: { label: string; input: GenerateInput["incident"] }[] = [
@@ -38,6 +47,13 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
   const queryClient = useQueryClient();
   const [missionId, setMissionId] = useState<string | null>(null);
   const [form, setForm] = useState({ incidentType: "FLOOD", affectedPeople: 100, durationHours: 24, children: 0, elderly: 0, medicalSupportCases: 0 });
+  const [incidentPoint, setIncidentPoint] = useState<LatLng | null>(null);
+  const [planError, setPlanError] = useState<string | null>(null);
+
+  const warehousesQuery = useQuery({
+    queryKey: ["cluster-warehouses", warehouseId],
+    queryFn: () => getClusterWarehouses(warehouseId),
+  });
 
   const missionQuery = useQuery({
     queryKey: ["mission", missionId],
@@ -48,8 +64,17 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
 
   const genPlan = useMutation({
     mutationFn: () =>
-      generatePlan({ warehouseId, incident: form, incidentLat: 13.38, incidentLng: 109.045 }),
-    onSuccess: (m: Mission) => setMissionId(m.id),
+      generatePlan({
+        warehouseId,
+        incident: form,
+        incidentLat: incidentPoint?.lat,
+        incidentLng: incidentPoint?.lng,
+      }),
+    onSuccess: (m: Mission) => {
+      setMissionId(m.id);
+      setPlanError(null);
+    },
+    onError: (err) => setPlanError(err instanceof ApiError ? err.message : "Lỗi lập phương án"),
   });
 
   const genActionPlan = useMutation({
@@ -64,6 +89,13 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
 
   const mission = missionQuery.data;
   const isAdmin = role === "ADMIN";
+  const officialDistances = mission?.actionPlan
+    ? new Map(mission.actionPlan.warehouses.map((w) => [w.name, { distanceKm: w.distanceKm, etaMinutes: w.etaMinutes }]))
+    : undefined;
+  const effectiveIncidentPoint =
+    mission?.incidentLat != null && mission?.incidentLng != null
+      ? { lat: mission.incidentLat, lng: mission.incidentLng }
+      : incidentPoint;
 
   return (
     <div className="grid gap-4 xl:grid-cols-[380px_1fr]">
@@ -113,12 +145,35 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
             <button
               type="button"
               onClick={() => genPlan.mutate()}
-              disabled={genPlan.isPending}
+              disabled={genPlan.isPending || !incidentPoint}
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-md bg-[var(--color-accent)] px-4 py-2.5 font-semibold text-[var(--color-accent-fg)] transition hover:brightness-95 active:translate-y-px disabled:opacity-60"
             >
               <Sparkles size={17} strokeWidth={2} />
               {genPlan.isPending ? "Đang lập phương án…" : "Lập phương án phân bổ"}
             </button>
+            {!incidentPoint && (
+              <p className="mt-2 text-xs text-[var(--text-muted)]">Ghim điểm nạn trên bản đồ trước khi lập phương án.</p>
+            )}
+            {planError && (
+              <p className="mt-2 text-xs text-[var(--color-critical)]">{planError}</p>
+            )}
+          </section>
+        )}
+
+        {isAdmin && (
+          <section className="rounded-md border bg-[var(--surface)] p-5">
+            <h3 className="text-sm font-semibold">Điểm nạn & kho trong xã</h3>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">
+              {mission ? "Vị trí đã ghim khi lập phương án." : "Click hoặc kéo ghim lên bản đồ để đặt điểm nạn."}
+            </p>
+            <div className="mt-3">
+              <IncidentMap
+                warehouses={warehousesQuery.data ?? []}
+                incidentPoint={effectiveIncidentPoint}
+                onPickPoint={mission ? undefined : setIncidentPoint}
+                officialDistances={officialDistances}
+              />
+            </div>
           </section>
         )}
 
@@ -158,7 +213,7 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
             </section>
 
             {mission.actionPlan ? (
-              <ActionPlanView plan={mission.actionPlan} />
+              <ActionPlanView plan={mission.actionPlan} incidentPoint={effectiveIncidentPoint} />
             ) : (
               <div className="rounded-md border border-dashed bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-muted)]">
                 Bấm <b>Sinh phương án cứu hộ</b> để AI lập kế hoạch hành động chi tiết.
