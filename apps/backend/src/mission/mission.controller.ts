@@ -45,6 +45,13 @@ export class MissionController {
     return this.missions.getMission(id);
   }
 
+  /** Kho tổng + thôn trong cụm xã (có toạ độ) — cho map ghim điểm nạn trước khi lập phương án. */
+  @RequirePermission(Permission.MISSION_VIEW)
+  @Get(":warehouseId/warehouses")
+  clusterWarehouses(@Param("warehouseId") warehouseId: string) {
+    return this.missions.listClusterWarehouses(warehouseId);
+  }
+
   /**
    * Sinh Incident Action Plan (8 mục): backend chấm severity/forecasts bằng rule,
    * LLM viết diễn giải, fallback template khi mất mạng. Lưu vào mission.actionPlan.

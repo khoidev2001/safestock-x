@@ -35,13 +35,13 @@ export class InventoryController {
   @RequirePermission(Permission.INVENTORY_IMPORT)
   @Post("import")
   import(@Request() req: AuthenticatedRequest, @Body() dto: TransactionDto) {
-    return this.inv.import(req.user.userId, dto.batchId, dto.quantity, dto.note);
+    return this.inv.import(req.user.userId, dto.batchId, dto.quantity, dto.note, undefined, req.user.warehouseId);
   }
 
   @RequirePermission(Permission.INVENTORY_EXPORT)
   @Post("export")
   export(@Request() req: AuthenticatedRequest, @Body() dto: TransactionDto) {
-    return this.inv.export(req.user.userId, dto.batchId, dto.quantity, dto.note);
+    return this.inv.export(req.user.userId, dto.batchId, dto.quantity, dto.note, undefined, req.user.warehouseId);
   }
 
   @RequirePermission(Permission.INVENTORY_EXPORT)
@@ -54,14 +54,14 @@ export class InventoryController {
   @RequirePermission(Permission.INVENTORY_BULK_EXPORT)
   @Post("bulk-export")
   bulkExport(@Request() req: AuthenticatedRequest, @Body() dto: BulkExportDto) {
-    return this.inv.bulkExport(req.user.userId, dto.items, dto.note);
+    return this.inv.bulkExport(req.user.userId, dto.items, dto.note, req.user.warehouseId);
   }
 
   // Sửa tay số lượng (Bp2). Lý do bắt buộc, hậu kiểm.
   @RequirePermission(Permission.INVENTORY_ADJUST)
   @Post("adjust")
   adjust(@Request() req: AuthenticatedRequest, @Body() dto: AdjustDto) {
-    return this.adjustment.adjust(req.user.userId, dto.batchId, dto.newQuantity, dto.reason);
+    return this.adjustment.adjust(req.user.userId, dto.batchId, dto.newQuantity, dto.reason, req.user.warehouseId);
   }
 
   // Đối chiếu kiểm kê (Bp2). Chỉ đếm IN_STOCK, trừ ON_LOAN.
@@ -74,6 +74,7 @@ export class InventoryController {
       dto.countedQty,
       dto.applyOverride ?? false,
       dto.note,
+      req.user.warehouseId,
     );
   }
 }

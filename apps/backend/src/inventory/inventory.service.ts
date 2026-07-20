@@ -1,15 +1,36 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
 import { Prisma, TransactionSource } from "@prisma/client";
 import { TransactionType } from "@safestock/shared-types";
 import { PrismaService } from "../prisma/prisma.service";
+import { ReadinessService } from "../readiness/readiness.service";
+import { assertBatchInScope } from "./warehouse-scope";
 
 @Injectable()
 export class InventoryService {
-  constructor(private prisma: PrismaService) {}
+  private readonly log = new Logger(InventoryService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private readiness: ReadinessService,
+  ) {}
+
+  /** Tính lại Readiness của kho chứa batch sau giao dịch đổi số lượng (C1). Không chặn response nếu lỗi. */
+  private async recalcAfterTxn(batchId: string): Promise<void> {
+    const batch = await this.prisma.itemBatch.findUnique({
+      where: { id: batchId },
+      select: { shelf: { select: { zone: { select: { warehouseId: true } } } } },
+    });
+    const warehouseId = batch?.shelf?.zone.warehouseId;
+    if (!warehouseId) return;
+    await this.readiness.recalculateWarehouse(warehouseId).catch((error) => {
+      this.log.warn(`Recalc readiness sau giao dịch lỗi (batch ${batchId}): ${error.message}`);
+    });
+  }
 
   // Cây kho: warehouse → zones → shelves (+ số batch mỗi shelf)
   async tree(warehouseId: string) {
@@ -48,12 +69,32 @@ export class InventoryService {
     return item;
   }
 
-  async import(userId: string, batchId: string, quantity: number, note?: string) {
-    return this.applyTxn(userId, batchId, TransactionType.IMPORT, quantity, note);
+  async import(
+    userId: string,
+    batchId: string,
+    quantity: number,
+    note?: string,
+    source: TransactionSource = TransactionSource.SCAN,
+    scopeWarehouseId?: string | null,
+  ) {
+    await assertBatchInScope(this.prisma, scopeWarehouseId, batchId);
+    const result = await this.applyTxn(userId, batchId, TransactionType.IMPORT, quantity, note, source);
+    await this.recalcAfterTxn(batchId);
+    return result;
   }
 
-  async export(userId: string, batchId: string, quantity: number, note?: string) {
-    return this.applyTxn(userId, batchId, TransactionType.EXPORT, quantity, note);
+  async export(
+    userId: string,
+    batchId: string,
+    quantity: number,
+    note?: string,
+    source: TransactionSource = TransactionSource.SCAN,
+    scopeWarehouseId?: string | null,
+  ) {
+    await assertBatchInScope(this.prisma, scopeWarehouseId, batchId);
+    const result = await this.applyTxn(userId, batchId, TransactionType.EXPORT, quantity, note, source);
+    await this.recalcAfterTxn(batchId);
+    return result;
   }
 
   /**
@@ -64,11 +105,15 @@ export class InventoryService {
     userId: string,
     items: { batchId: string; quantity: number }[],
     note?: string,
+    scopeWarehouseId?: string | null,
   ) {
     if (items.length === 0) {
       throw new BadRequestException("Danh sách xuất lô rỗng");
     }
-    return this.prisma.$transaction(async (tx) => {
+    for (const item of items) {
+      await assertBatchInScope(this.prisma, scopeWarehouseId, item.batchId);
+    }
+    const result = await this.prisma.$transaction(async (tx) => {
       const results = [] as Awaited<ReturnType<typeof this.decrementInTx>>[];
       for (const item of items) {
         results.push(
@@ -85,6 +130,8 @@ export class InventoryService {
       }
       return { count: results.length, batches: results };
     });
+    await Promise.all(items.map((item) => this.recalcAfterTxn(item.batchId)));
+    return result;
   }
 
   async transfer(userId: string, batchId: string, toShelfId: string, quantity: number, note?: string) {

@@ -20,6 +20,10 @@ const KIND_LABEL: Record<string, string> = {
   SUSPECTED_LOSS: "Nghi thất thoát",
   SENSOR_FAULT: "Lỗi cảm biến",
   BAD_STORAGE: "Bảo quản kém",
+  FIRE_RISK: "Nghi cháy",
+  POWER_OUTAGE: "Mất điện",
+  STAT_ANOMALY: "Bất thường cảm biến",
+  PREDICTIVE_WARNING: "Cảnh báo sớm (dự đoán)",
 };
 
 export function IncidentView({ warehouseId }: { warehouseId: string }) {

@@ -6,6 +6,7 @@ export interface AuthUser {
   userId: string;
   email: string;
   role: UserRole;
+  warehouseId?: string | null; // scope kho (trưởng thôn); null = toàn xã
 }
 
 /** Request đã xác thực — thay cho `req: any` (CODING-STANDARDS §6.1). */

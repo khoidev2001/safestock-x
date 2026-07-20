@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Hanken_Grotesk, JetBrains_Mono } from "next/font/google";
 import { Providers } from "./providers";
 import "./globals.css";
+import "leaflet/dist/leaflet.css";
 
 const sans = Hanken_Grotesk({ subsets: ["latin", "vietnamese"], variable: "--font-sans-loaded", display: "swap" });
 const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono-loaded", display: "swap" });

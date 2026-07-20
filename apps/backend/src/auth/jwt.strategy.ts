@@ -9,6 +9,7 @@ export interface JwtPayload {
   sub: string;
   email: string;
   role: UserRole;
+  warehouseId?: string | null; // scope kho: null = toàn xã, có = trưởng thôn 1 kho
 }
 
 @Injectable()
@@ -25,6 +26,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   // Giá trị trả về gắn vào req.user
   async validate(payload: JwtPayload): Promise<AuthUser> {
-    return { userId: payload.sub, email: payload.email, role: payload.role };
+    return {
+      userId: payload.sub,
+      email: payload.email,
+      role: payload.role,
+      warehouseId: payload.warehouseId ?? null,
+    };
   }
 }

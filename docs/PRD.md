@@ -1,12 +1,12 @@
 # PRD – Ứng phó nhanh
 
-**Product Requirements Document (bản hoàn chỉnh v2.0)**
+**Product Requirements Document (bản hoàn chỉnh v2.2)**
 Nền tảng AI đánh giá năng lực sẵn sàng và điều phối vật tư cứu hộ trong tình huống khẩn cấp
 
 | | |
 |---|---|
-| Phiên bản | 2.1 (bổ sung cụm kho + Action Plan + workflow liên vai trò) |
-| Ngày | 2026-07-16 |
+| Phiên bản | 2.2 (Readiness theo trạng thái, điều kiện chặn và khả năng đáp ứng) |
+| Ngày | 2026-07-20 |
 | Trạng thái | Đang code — xem [13. Trạng thái hiện tại](#13-trạng-thái-hiện-tại) |
 | Dự thi | Cuộc thi Sáng tạo AI tỉnh Đắk Lắk (ai.daklak.gov.vn) |
 | Đội | 2 người |
@@ -33,7 +33,7 @@ Phần mềm quản lý kho thường trả lời *"kho có bao nhiêu?"*. Trong
 > Phần mềm thường quản lý hàng tồn kho. Ứng phó nhanh quản lý **năng lực phản ứng thực tế** của kho khi sự cố xảy ra — kể cả khi con người quá bận để nhập liệu.
 
 ### 1.4. Phạm vi MVP
-**5 module cốt lõi:** Quản lý kho · Readiness Score · Mission-to-Kit Compiler · Sensor Simulator (Digital Twin) · Mobile App.
+**5 module cốt lõi:** Quản lý kho · Mức sẵn sàng vận hành kho · Mission-to-Kit Compiler · Sensor Simulator (Digital Twin) · Mobile App.
 
 **Mock (không phần cứng thật):** ESP32/loadcell/camera/RFID/mesh. Dữ liệu cảm biến mô phỏng, **cùng schema JSON phần cứng thật sẽ xuất** → thay mock bằng thiết bị thật không đổi phần mềm. Đây là **lộ trình có tầm nhìn**, không phải thiếu kinh phí.
 
@@ -89,35 +89,43 @@ Mỗi giao dịch có `source` (SCAN/BULK/LOADCELL/RFID/MANUAL) — độ lệch
 - FR-INV-03 Mọi giao dịch có nhật ký 5W (ai/gì/trên gì/khi nào/vì sao)
 - FR-INV-04 Kiểm kê chỉ đếm IN_STOCK (trừ ON_LOAN khỏi kỳ vọng)
 
-### 3.2. Readiness Score — chỉ số sẵn sàng (chức năng AI cốt lõi #1)
+### 3.2. Mức sẵn sàng vận hành kho (chức năng hỗ trợ quyết định cốt lõi #1)
 
-Thay vì `Áo phao: 100 chiếc`, hiển thị:
+Readiness không phải một điểm số dùng để xếp hạng kho. Mục tiêu là trả lời: **kho có vận hành được ngay không, đang vướng gì và đáp ứng được tình huống cụ thể đến đâu?**
+
+Thay vì chỉ hiển thị `Readiness Score: 84/100`, giao diện chính phải trình bày:
+
+```text
+TRẠNG THÁI: CẦN XỬ LÝ
+Điều kiện chặn: Không
+Vấn đề: Thiếu 16 áo phao · 2 lô sắp hết hạn · 1 kệ bị khóa
+Hành động: Mở kệ B1 · kiểm tra 2 lô y tế · đề nghị điều chuyển áo phao
+Điểm tham khảo xu hướng: 84/100
 ```
-Tổng ghi nhận: 100 · Có mặt: 96 · Đúng vị trí: 92 · Đủ điều kiện: 88 · Tiếp cận ngay: 84
-Readiness Score: 84/100
-```
 
-**Công thức (6 thành phần, trọng số CẤU HÌNH được):**
-```
-28% Khả dụng số lượng + 22% Tình trạng + 15% Thời hạn
-+ 15% Khả năng tiếp cận + 10% Môi trường + 10% Độ tin cậy dữ liệu
-```
+**Ba tầng quyết định, theo đúng thứ tự ưu tiên:**
 
-**Tính ở 4 cấp:** vật tư → kệ → khu → kho. Mỗi điểm truy được về 6 thành phần + nguyên nhân trừ + đề xuất cải thiện.
+1. **Điều kiện chặn:** sự cố làm kho không thể vận hành; vật tư bắt buộc đã hỏng/hết hạn; vị trí chứa vật tư cần thiết bị khóa/chặn; dữ liệu quá cũ nên phải kiểm kê xác nhận trước khi xuất.
+2. **Trạng thái từng mặt:** số lượng khả dụng, tình trạng, hạn dùng, khả năng tiếp cận, môi trường bảo quản và độ tin cậy dữ liệu. Mỗi mặt phải có trạng thái, lý do và hành động; không chỉ có điểm.
+3. **Khả năng đáp ứng tình huống:** đối chiếu nhu cầu theo loại thiên tai, số người và thời gian với tồn thực sự khả dụng. Mức đáp ứng tổng bằng loại vật tư yếu nhất, không lấy trung bình để che thiếu hụt.
 
-**Đơn vị hỗn hợp:** mỗi loại tính điểm 0–100 theo đơn vị riêng (lít/chiếc/bộ) rồi gộp điểm chuẩn hóa — không cộng đơn vị thô.
+**Trạng thái vận hành chính:**
 
-**Ngưỡng hành động — biến điểm thành mệnh lệnh (cấu hình được):**
-| Điểm | Vùng | Hệ thống tự động |
+| Trạng thái | Ý nghĩa | Hành động hệ thống |
 |---|---|---|
-| ≥80 | 🟢 Sẵn sàng | Hiện xanh |
-| 70–79 | 🟡 Cần chú ý | Cảnh báo vàng |
-| 50–69 | 🟠 Suy giảm | Tự báo phụ trách + đề xuất khắc phục |
-| <50 | 🔴 Không đủ khả năng | Cảnh báo đỏ + cảnh báo khi lập nhiệm vụ mới |
+| Sẵn sàng | Không có điều kiện chặn; các mặt thiết yếu đạt yêu cầu | Cho phép chọn kho và tiếp tục đối chiếu nhu cầu tình huống |
+| Cần xử lý | Kho vẫn vận hành được nhưng có thiếu hụt, rủi ro hoặc dữ liệu cần xác minh | Nêu vấn đề, người phụ trách, hành động và mức ưu tiên |
+| Không thể điều phối | Có ít nhất một điều kiện chặn liên quan đến nhiệm vụ | Chặn chọn kho cho phần bị ảnh hưởng, cảnh báo và gợi ý kho/phương án khác |
 
-**Chiến lược tính lại (recalc):** event-driven cho môi trường (kéo slider → điểm rớt <2s) + on-write cho giao dịch + phái sinh cho hạn dùng (không lưu cứng trạng thái thời gian). Cache, invalidate theo khu.
+**Sáu thành phần và trọng số hiện tại** (`28%` số lượng, `22%` tình trạng, `15%` hạn dùng, `15%` tiếp cận, `10%` môi trường, `10%` độ tin cậy) chỉ dùng để tạo **điểm tham khảo xu hướng**. Đây là định mức nghiên cứu, phải cấu hình được và không phải quy chuẩn nghiệp vụ chính thức.
 
-**FR:** FR-RDY-01 breakdown truy nguồn 100% · FR-RDY-02 sensor >30ph không cập nhật → hạ độ tin cậy (không dùng dữ liệu ma).
+**Nguyên tắc bất biến:** điều kiện chặn và mức đáp ứng theo tình huống luôn có quyền ưu tiên cao hơn điểm tổng. Kho `90/100` vẫn không được dùng nếu vật tư bắt buộc không thể tiếp cận; kho `70/100` vẫn có thể được chọn nếu không có blocker và đáp ứng đủ nhiệm vụ sau khi người phụ trách xác nhận cảnh báo.
+
+**Tính ở 4 cấp:** lô vật tư → kệ → khu → kho. Mọi kết luận phải truy được về dữ liệu nguồn, nguyên nhân và thời điểm cập nhật.
+
+**Chiến lược tính lại:** event-driven cho môi trường/sự cố + on-write cho giao dịch/kiểm kê/mượn-trả + phái sinh cho hạn dùng. Khi dữ liệu thay đổi, hệ thống tính lại blocker, trạng thái từng mặt và điểm tham khảo trong dưới 2 giây.
+
+**FR:** FR-RDY-01 mọi trạng thái truy nguồn 100% · FR-RDY-02 sensor quá 30 phút không cập nhật không được dùng như dữ liệu hiện tại · FR-RDY-03 blocker luôn thắng điểm tổng · FR-RDY-04 trả mức đáp ứng theo từng loại vật tư và lấy loại yếu nhất · FR-RDY-05 mọi cảnh báo phải kèm hành động đề xuất.
 
 ### 3.3. Mission-to-Kit Compiler (chức năng AI cốt lõi #2)
 
@@ -158,6 +166,8 @@ Sự kiện đẩy realtime qua WebSocket (room theo kho) tới mobile + web.
 ### 3.5. Incident Intelligence — điều tra sự cố (nên-có)
 
 Hợp nhất sự kiện đa nguồn → timeline → chấm điểm nghiêm trọng → giải thích. Rule engine với **ngưỡng cụ thể** (vd loadcell giảm >3kg + cửa mở + RFID + không phiếu xuất ±5ph → nghi thất thoát). LLM viết giải thích, **không tự kết luận số liệu**. Thông báo in-app qua WebSocket. Mọi kết luận kèm bằng chứng truy nguồn (100%).
+
+Bổ sung 2 lớp phát hiện dùng thống kê thay vì chỉ ngưỡng tuyệt đối: **phát hiện bất thường (z-score)** — so độ lệch điểm mới nhất với baseline lịch sử từng cảm biến, bắt pattern lệch dù chưa vượt ngưỡng cứng; **cảnh báo sớm dự đoán (hồi quy tuyến tính)** — ngoại suy xu hướng gần nhất, báo trước khi chạm ngưỡng nguy hiểm (vd "nhiệt độ dự kiến vượt 35°C trong ~12 phút"). Cả hai vẫn là rule/thống kê thuần backend tính, LLM chỉ diễn giải khi được yêu cầu — giữ nguyên nguyên tắc bất biến của mục này.
 
 ### 3.6. Mobile App (vận hành hiện trường)
 
@@ -247,11 +257,11 @@ Simulator UI ──┘                                  ├─ Redis + BullMQ
 |---|---|
 | **LLM** (Gemini/Ollama/Claude) | Parse mô tả → JSON; giải thích kết quả; tóm tắt sự cố. KHÔNG tự tính tồn kho/kết luận số liệu |
 | **Backend** | Kiểm tra số lượng/quyền/hạn; giao dịch atomic; nhật ký; xác nhận dữ liệu |
-| **Rule Engine** | Readiness Score; hợp nhất bằng chứng; phân loại nghiêm trọng; sinh nhu cầu |
+| **Rule Engine** | Điều kiện chặn + trạng thái Readiness + điểm xu hướng; hợp nhất bằng chứng; phân loại nghiêm trọng; sinh nhu cầu, phát hiện bất thường thống kê + dự đoán xu hướng cảm biến |
 | **Greedy + FEFO** | Phân bổ vật tư; ưu tiên gần hết hạn; ưu tiên kho gần |
 
 ### 5.4. AI provider pluggable
-Đổi bằng env `AI_PROVIDER`. **Production = Ollama local** (0đ, offline, dữ liệu không rời cơ quan — chạy được trên PC văn phòng 16GB RAM + CPU, không cần GPU, dùng Qwen 2.5 3B). **Demo thi = Gemini** (free tier, khỏi cần máy mạnh). Cùng interface + schema JSON.
+Đổi bằng env `AI_PROVIDER`. **Production = Ollama local** (0đ, offline, dữ liệu không rời cơ quan; cấu hình hiện tại dùng Qwen 3.5 4B trên máy 16GB RAM). Gemini chỉ là provider cloud tùy chọn. Cùng interface + schema JSON.
 
 ### 5.5. Nền tảng
 - **DB:** PostgreSQL (dev Docker local; production Supabase)
@@ -282,7 +292,7 @@ Simulator UI ──┘                                  ├─ Redis + BullMQ
 
 **Vật tư:** item_categories, items (+consumable), item_batches (+condition, +circulation, expiryDate), inventory_transactions (+source), inventory_counts, loan_records, neighbor_warehouses
 
-**Readiness:** readiness_scores, readiness_components, readiness_rules (trọng số + ngưỡng cấu hình), readiness_recommendations
+**Readiness:** readiness_scores (điểm tham khảo), readiness_components, readiness_rules (blocker + trạng thái + trọng số cấu hình), readiness_recommendations
 
 **Cảm biến & sự cố:** virtual_devices (+currentValue, +updatedAt), sensor_events, simulation_scenarios, simulation_runs, incidents, incident_evidence
 
@@ -297,7 +307,7 @@ Simulator UI ──┘                                  ├─ Redis + BullMQ
 **Auth/RBAC:** POST /auth/{login,refresh} · GET /auth/me · GET /audit
 **Inventory:** POST /inventory/{export,import,transfer,bulk-export,adjust,reconcile,scan} · GET /inventory/discrepancies
 **Loan:** POST /loans · POST /loans/:id/return
-**Readiness:** GET /warehouses/:id/readiness · GET /zones/:id/readiness · POST /readiness/recalculate · GET /readiness/recommendations
+**Readiness:** GET /warehouses/:id/readiness (operationalStatus, blockers, dimensions, referenceScore) · GET /zones/:id/readiness · POST /readiness/recalculate · GET /readiness/recommendations
 **Mission:** POST /missions/{parse,generate-plan} · GET /missions/:id · POST /missions/:id/{action-plan,explain,approve,dispatch,confirm,prepare}
 **Simulator:** GET /simulator/scenarios · POST /simulator/{events,runs,runs/:id/play,runs/:id/pause,runs/:id/reset} · GET /simulator/warehouses/:id/{devices,timeline}
 **Incident:** GET /incidents · GET /incidents/:id/timeline · POST /incidents/:id/{acknowledge,assign,resolve}
@@ -308,10 +318,10 @@ Simulator UI ──┘                                  ├─ Redis + BullMQ
 ## 9. Kịch bản demo (5–7 phút) — "lõi diễn" vs "đạn Q&A"
 
 **DIỄN (6 bước):**
-1. Dashboard Readiness 91/100 · Sẵn sàng
+1. Dashboard: **Sẵn sàng**, không có điều kiện chặn; điểm xu hướng 91/100 hiển thị phụ
 2. Nhập tình huống (giọng nói): "Ngập lụt 120 người cô lập 48h, 20 trẻ em, 10 người già"
 3. AI lập phương án: phân tích → bộ vật tư → đối chiếu tồn → báo thiếu → gợi ý mượn kho lân cận
-4. Kéo slider độ ẩm kho y tế (Simulator) → Readiness rớt 91→78 realtime → cảnh báo bắn mobile
+4. Kéo slider độ ẩm kho y tế (Simulator) → trạng thái chuyển **Cần xử lý** trong thời gian thực, nêu rõ “độ ẩm vượt ngưỡng” và bắn cảnh báo mobile
 5. Nhân viên xuất kho theo phương án (mobile, quét QR / xuất lô)
 6. Kết: "Ứng phó nhanh cho biết kho đáp ứng tình huống nào, chuẩn bị bao lâu, điểm nghẽn ở đâu"
 
@@ -321,9 +331,9 @@ Simulator UI ──┘                                  ├─ Redis + BullMQ
 
 ## 10. Ưu tiên phạm vi
 
-**Phải làm thật tốt (3 trụ diễn):** Readiness Score · Mission-to-Kit · Sensor Simulator.
+**Phải làm thật tốt (3 trụ diễn):** trạng thái Readiness có lý do · Mission-to-Kit · Sensor Simulator.
 
-**Nên có:** Incident · mobile khép vòng đời · admin nâng cao (voice, so sánh readiness trước/sau).
+**Nên có:** Incident · mobile khép vòng đời · admin nâng cao (voice, so sánh trạng thái và khả năng đáp ứng trước/sau).
 
 **Polish (dư mới làm):** loadcell/RFID tự động · backup · offline push · chatbot hỏi-đáp kho · import Excel.
 
@@ -352,14 +362,14 @@ Simulator UI ──┘                                  ├─ Redis + BullMQ
 
 ---
 
-## 13. Trạng thái hiện tại (2026-07-16)
+## 13. Trạng thái hiện tại (2026-07-20)
 
-**Backend + AI service (mạnh nhất, vượt phạm vi PRD gốc):** Phase A (nền/auth/inventory) · B (sensor simulator) · C (Readiness Score) · D-E (Mission-to-Kit + Incident) · **J (GeoService)** · **K (cụm kho xã + AI Action Plan 8 mục, §3.7-3.8)** đã xong, có test + verify pass. **L (workflow liên vai trò + Notification, §3.9)** đã có code + test (`mission.workflow.spec.ts`) nhưng checklist ROADMAP.md chưa soát lại đầy đủ.
+**Backend (mạnh nhất, vượt phạm vi PRD gốc):** đã có nền/auth/RBAC/inventory, sensor simulator, Readiness Score hiện hành, Mission-to-Kit, Incident Intelligence + E2 anomaly/predictive warning, GeoService, cụm kho xã + AI Action Plan 8 mục, workflow liên vai trò + Notification, Normal Mode/Insights, chatbot hỏi-đáp kho, backup Supabase, admin/report. **Mô hình blocker + trạng thái theo PRD 2.2 chưa code**, là lát nâng cấp kế tiếp. Lần rà 2026-07-20: `pnpm --filter @safestock/backend test` pass 19 suite / 147 test.
 
-**Còn thiếu:** Phase M (Normal Mode — dự báo thiếu hụt/đề xuất nhập/cân bằng liên kho/xu hướng/thời tiết, chưa code) · loadcell/RFID tự động (Bp1) · backup tự động (Bp5) · chatbot hỏi-đáp (G4).
+**AI service:** đã có FastAPI + provider Gemini/Ollama, parse tình huống, explain phương án, Action Plan, assistant. Claude provider và endpoint explain-incident riêng chưa hoàn chỉnh theo roadmap.
 
-**Frontend web:** dashboard 8 view (Sự cố, Kiểm kê, Mượn-trả, Hậu kiểm, ...) đã dựng, nối API thật. Bản đồ điều phối trực quan + voice input mô tả tình huống chưa làm.
+**Frontend web:** không còn là placeholder. Dashboard Next.js đã có nhiều view: tổng quan/readiness, ngày thường/insights, trợ lý, kho vật tư, mô phỏng, nhiệm vụ/action-plan/map/notification, sự cố, kiểm kê, mượn-trả, bản đồ kho, báo cáo tháng, user, hậu kiểm. Lần rà 2026-07-20 chưa verify được build vì `next build` bị treo/im lặng và đã dừng thủ công.
 
-**Mobile:** chưa code (placeholder).
+**Còn thiếu/dở:** mobile Expo chưa có source app thực tế; RFID handler chưa xong (loadcell đã có); `explain-incident` riêng phía AI service chưa tick; frontend build cần điều tra trước khi chốt demo.
 
-Chi tiết tiến độ + verify từng lát: [BUILD-PLAN.md](BUILD-PLAN.md) · checklist đầy đủ: `apps/backend/ROADMAP.md`, `apps/frontend/ROADMAP.md`.
+Chi tiết tiến độ + verify từng lát: [BUILD-PLAN.md](BUILD-PLAN.md) · [codebase-summary.md](codebase-summary.md) · checklist đầy đủ: `apps/backend/ROADMAP.md`, `apps/frontend/ROADMAP.md`, `apps/mobile/ROADMAP.md`, `apps/ai-service/ROADMAP.md`.

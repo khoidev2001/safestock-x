@@ -1,5 +1,6 @@
 """Adapter Gemini (Google AI Studio, free tier). Default cho demo."""
 import time
+from typing import Any
 
 import httpx
 
@@ -22,7 +23,12 @@ class GeminiProvider(LLMProvider):
         self._api_key = api_key
         self._model = model
 
-    def generate_json(self, system_prompt: str, user_prompt: str) -> str:
+    def generate_json(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        json_schema: dict[str, Any] | None = None,
+    ) -> str:
         return self._call(system_prompt, user_prompt, json_mode=True)
 
     def generate_text(self, system_prompt: str, user_prompt: str) -> str:

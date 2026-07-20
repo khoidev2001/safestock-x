@@ -15,7 +15,7 @@
 | Mobile framework | **React Native + Expo (TypeScript)** | Share `shared-types` với backend. Build iOS qua Expo EAS sau |
 | Backend | NestJS + Prisma + PostgreSQL + Redis | |
 | AI service | Python + FastAPI | Lát muộn. **OR-Tools BỎ khỏi MVP** (greedy+FEFO đủ) — ghi "hướng phát triển" |
-| AI provider | **Pluggable** — đổi bằng env `AI_PROVIDER`. Default **Gemini** (free tier) | `gemini` (mặc định, free) / `ollama` (local, 0đ, offline, an toàn dữ liệu) / `claude` (cao cấp, trả phí). Cùng interface + schema JSON. Cần key Gemini → hỏi user cấp |
+| AI provider | **Pluggable** — đổi bằng env `AI_PROVIDER`. Default **Ollama + Qwen 3.5 4B local** | `ollama` (mặc định, 0đ, offline, an toàn dữ liệu) / `gemini` (cloud tùy chọn) / `claude` (cao cấp, trả phí). Cùng interface + schema JSON. |
 | Web admin + Simulator | Next.js + Tailwind + shadcn/ui | |
 | Monorepo | pnpm workspace | Không dùng Turborepo (giữ đơn giản) |
 | DB (production) | Supabase (Postgres) | Dev vẫn Docker Postgres local; đổi DATABASE_URL khi deploy |
@@ -33,9 +33,9 @@
 ### ⚠️ Ràng buộc thực tế (đội 1 người, ~5-6 tuần code thật)
 
 10 tuần trừ thiết kế + trình bày + buffer = **~5-6 tuần code**. Plan này đã cắt theo đó. Nguyên tắc:
-- **1 khoảnh khắc vàng > 6 module**: kéo slider độ ẩm → điểm rớt 91→78 → cảnh báo bắn xuống mobile. Cần B + C + WS + 1 màn mobile. Mọi thứ khác bổ trợ.
+- **1 khoảnh khắc vàng > 6 module**: kéo slider độ ẩm → trạng thái đổi từ Sẵn sàng sang Cần xử lý, hiện đúng nguyên nhân + hành động và bắn cảnh báo mobile. Cần B + C + WS + 1 màn mobile. Mọi thứ khác bổ trợ.
 - **Cái giết đội thi = demo lỗi live** (mất mạng, rate-limit, token hết hạn), KHÔNG phải thiếu tính năng. Mọi call AI của demo phải **cache sẵn**; chuẩn bị bản chạy **100% localhost/offline**.
-- **Con số phải chỉnh được + có disclaimer** (trọng số Readiness, định mức Mission) — "định mức tham khảo nghiên cứu", cho manager tinh chỉnh trong UI.
+- **Con số phải chỉnh được + có disclaimer** (trọng số tham khảo Readiness, định mức Mission) — "định mức tham khảo nghiên cứu". Trọng số không được ghi đè blocker hoặc mức đáp ứng thực tế.
 - **Deploy sớm, deploy thường** (từ tuần 3-4), **quay video mỗi module khi xong** — không dồn cuối.
 
 **Ngân sách thời gian core (không dư):** B(0.5t) → C(2t, đổ công nhất) → D(1t) → F-core(2.5t) → G trộn vào B/C. E + polish + H = chỉ khi dư.
@@ -159,7 +159,7 @@ pnpm --filter @safestock/backend seed          # seed dữ liệu mẫu
 ### B3. ⭐ Simulator UI tối thiểu (kéo G2-core lên đây, làm NGAY) ✅
 > Khoảnh khắc vàng phải xong SỚM + chắc, KHÔNG đợi hết Phase G. Chỉ cần đủ để kéo slider bắn event — trang đẹp để sau.
 - [x] 1 trang web thô: slider độ ẩm/nhiệt + nút chạy scenario + nút reset (`apps/backend/public/sim.html`)
-- [x] Kéo slider → POST events → WS bắn → (sau khi có C) điểm rớt
+- [x] Kéo slider → POST events → WS bắn → (sau khi có C v2.2) trạng thái/lý do cập nhật
 - **Verify:** ✅ kéo slider → event realtime; 6 scenario chạy; bad_storage đẩy humid→90
 - **File:** `apps/backend/public/sim.html` (serve qua ServeStaticModule)
 
@@ -227,9 +227,9 @@ pnpm --filter @safestock/backend seed          # seed dữ liệu mẫu
 
 ---
 
-## PHASE C — Readiness Score ⬜ (⭐ CỐT LÕI — đổ công nhất, ~1.5-2 tuần)
+## PHASE C — Trạng thái sẵn sàng vận hành kho 🔁 (score hiện có; blocker/status v2.2 chưa làm)
 
-> Chỉ số sẵn sàng. Rule engine tính điểm 6 thành phần, 4 cấp, kèm nguyên nhân trừ điểm + đề xuất. Differentiator số 1 khi thi.
+> Hệ thống quyết định theo thứ tự: **blocker → trạng thái 6 mặt → khả năng đáp ứng tình huống**. Điểm 0-100 chỉ là chỉ báo xu hướng phụ, không phải kết luận và không được tự mình cho phép/chặn điều phối.
 > **CẢNH BÁO:** schema A hiện KHÔNG tính được 4/6 thành phần (47% trọng số thiếu dữ liệu). Phải làm **C-minus (bổ sung schema)** TRƯỚC, nếu không tắc ngay ngày đầu.
 
 ### C-minus. Bổ sung schema nền (BẮT BUỘC trước C0) ⬜
@@ -247,9 +247,9 @@ pnpm --filter @safestock/backend seed          # seed dữ liệu mẫu
 - [ ] **#3 Đa kho: field `distanceKm` cho Warehouse** (khoảng cách tới điểm sự cố/trung tâm) — Mission ưu tiên kho gần
 - **Verify:** query đủ input 6 thành phần; mượn 1 áo phao → ON_LOAN, tổng kho không đổi, khả dụng-ngay giảm; xuất nước → tiêu hao thẳng
 
-### C0. Định nghĩa 6 CÔNG THỨC CON cụ thể + schema điểm ⬜
-> KHÔNG code "rule engine" chung chung. Viết ra con số rõ ràng trước.
-- [ ] Prisma: ReadinessScore, ReadinessScoreComponent, ReadinessRule (trọng số **configurable**, không hardcode), ReadinessRecommendation
+### C0. Định nghĩa 6 tín hiệu + schema trạng thái ⬜
+> KHÔNG code "rule engine" chung chung. Mỗi tín hiệu phải trả `status`, `reasons`, `actions`, dữ liệu nguồn và `referenceScore` tùy chọn.
+- [ ] Prisma/API: mở rộng ReadinessScore/Component/Rule/Recommendation để biểu diễn `operationalStatus`, `blockers`, trạng thái từng mặt và điểm tham khảo
 - [ ] Bảng công thức cụ thể (ví dụ khởi đầu, tinh chỉnh sau):
   - **Expiry (15%)**: còn>6th=100 · 2-6th=70 · <2th=40 · hết hạn=0
   - **Condition (22%)**: NEW=100 · USED=75 · NEEDS_CHECK=50 · MAINTENANCE=40 · DAMAGED=0. ON_LOAN không trừ tổng nhưng loại khỏi "khả dụng ngay"
@@ -257,39 +257,38 @@ pnpm --filter @safestock/backend seed          # seed dữ liệu mẫu
   - **Quantity (28%)**: min(countedQty/systemQty,1)×100; chưa kiểm kê → hạ theo dataReliability
   - **Environment (10%)**: nhiệt/ẩm trong ngưỡng=100; vượt → giảm tuyến tính
   - **DataReliability (10%)**: theo độ mới kiểm kê + số nguồn đồng thuận + sensor online
-- [ ] **Trọng số chỉnh được trong UI + disclaimer "định mức tham khảo nghiên cứu"** (chống hỏi vặn "số ở đâu ra")
+- [ ] **Trọng số chỉnh được trong UI + disclaimer "định mức tham khảo nghiên cứu"**; chỉ phục vụ điểm xu hướng, không dùng làm luật chặn duy nhất
 - [ ] **#24 Expiry = PHÁI SINH** từ `expiryDate` vs now, tính lúc đọc/recalc. KHÔNG lưu cứng status thời-gian (EXPIRING_SOON/OVERDUE) → khỏi cron, luôn đúng
 - [ ] **#25 Độ tươi sensor → dataReliability**: DeviceState có `updatedAt`. Sensor cập nhật <5ph=tin đầy đủ · 5-30ph=giảm · >30ph/offline=KHÔNG dùng giá trị + hạ dataReliability (sensor chết = tín hiệu, không phải dữ liệu ma)
 - **Verify:** unit test từng công thức con; sensor cũ >30ph → dataReliability giảm
 
-### C1. Tính điểm 4 cấp + breakdown + CHIẾN LƯỢC RECALC ⬜
-- [ ] Điểm batch/item → shelf/zone → warehouse (roll-up trọng số theo quantity)
+### C1. Tính trạng thái 4 cấp + breakdown + chiến lược recalc ⬜
+- [ ] Trạng thái batch/item → shelf/zone → warehouse; giữ roll-up điểm theo quantity chỉ để tham khảo xu hướng
 - [ ] **#21 Đơn vị hỗn hợp**: mỗi loại vật tư tính điểm 0-100 THEO ĐƠN VỊ RIÊNG (lít/chiếc/bộ), rồi mới gộp điểm chuẩn hóa — KHÔNG cộng đơn vị thô. Điểm 0-100 gộp được vì đã chuẩn hóa
 - [ ] **#23 RECALC 3 tầng (CỨU KHOẢNH KHẮC VÀNG):**
-  - **Event-driven cho môi trường**: SensorEvent tới → recalc NGAY zone/kho đó → điểm rớt <2s khi kéo slider. BẮT BUỘC đúng, nếu recalc theo lịch 5ph → demo đứng hình
+  - **Event-driven cho môi trường**: SensorEvent tới → recalc NGAY zone/kho đó → trạng thái, lý do và điểm xu hướng đổi <2s khi kéo slider. BẮT BUỘC đúng, nếu recalc theo lịch 5ph → demo đứng hình
   - **On-write**: xuất/nhập/sửa tay/mượn → recalc batch/zone liên quan
   - **Lazy**: expiry tính lúc đọc (#24)
-  - Cache điểm + invalidate theo ZONE (chỉ recalc phần đổi, không cả kho mỗi lần)
+  - Cache kết quả Readiness + invalidate theo ZONE (chỉ recalc phần đổi, không cả kho mỗi lần)
 - [ ] Môi trường lấy từ DeviceState (Phase B); chưa có B → giá trị mặc định "bình thường"
-- [ ] Lưu breakdown: mỗi điểm truy về 6 thành phần
-- **Verify:** GET /warehouses/:id/readiness trả điểm + breakdown; đổi status 1 batch → điểm đổi đúng hướng; **kéo slider độ ẩm (sim) → điểm zone rớt <2s** (khoảnh khắc vàng)
+- [ ] Lưu breakdown: mỗi trạng thái truy về 6 thành phần, lý do, hành động và timestamp nguồn
+- **Verify:** GET /warehouses/:id/readiness trả `operationalStatus`, `blockers`, `dimensions`, `referenceScore`; đổi trạng thái 1 batch → kết luận đổi đúng; **kéo slider độ ẩm → trạng thái môi trường đổi <2s**
 
-### C2. Nguyên nhân trừ điểm + đề xuất ⬜
-- [ ] Mỗi thành phần bị trừ → lý do cụ thể (vd "3 batch EXPIRING_SOON ở kệ B1")
+### C2. Nguyên nhân + hành động đề xuất ⬜
+- [ ] Mỗi mặt không đạt → lý do cụ thể (vd "3 lô sắp hết hạn ở kệ B1"), mức ưu tiên và dữ liệu nguồn
 - [ ] Recommendation (vd "kiểm tra 3 bộ sơ cứu sắp hết hạn")
 - [ ] POST /readiness/recalculate; GET /readiness/recommendations
-- **Verify:** tăng độ ẩm (sim) → điểm environment giảm → có recommendation kiểm tra
+- **Verify:** tăng độ ẩm → trạng thái môi trường đổi, nêu đúng khu/kệ và có hành động kiểm tra; không bắt người dùng tự diễn giải điểm
 
-### C3. ⭐ Ngưỡng hành động — biến điểm thành mệnh lệnh ⬜
-> Điểm tự nó không bảo ai làm gì → trang trí. Ngưỡng gắn mỗi vùng điểm với 1 HÀNH ĐỘNG hệ thống tự làm. Đây mới là "AI hỗ trợ quyết định" thật. Ngưỡng **cấu hình được** mỗi kho.
-- [ ] 4 vùng (mặc định, chỉnh được):
-  - **≥80** 🟢 Sẵn sàng — hiện xanh, không làm gì
-  - **70-79** 🟡 Cần chú ý — cảnh báo vàng dashboard
-  - **50-69** 🟠 Suy giảm — **tự gửi thông báo quản lý** + hiện đề xuất khắc phục
-  - **<50** 🔴 Không đủ khả năng — **cảnh báo đỏ + chặn/cảnh báo khi lập nhiệm vụ mới** + báo lãnh đạo
-- [ ] Bảng `ReadinessThreshold` (configurable) + hook: điểm đổi vùng → trigger notification/chặn
-- [ ] Mission (Phase D) đọc ngưỡng: kho <50 → cảnh báo "cân nhắc kho khác" khi lập phương án
-- **Verify:** đẩy độ ẩm (sim) → điểm rớt qua ngưỡng 70 → có cảnh báo; rớt <50 → chặn/cảnh báo khi tạo mission
+### C3. ⭐ Điều kiện chặn + trạng thái hành động ⬜
+> Luật chặn là điều kiện nghiệp vụ có bằng chứng, không suy ra duy nhất từ điểm trung bình.
+- [ ] Định nghĩa blocker cấu hình được: sự cố vận hành nghiêm trọng; vật tư bắt buộc hỏng/hết hạn; vật tư nhiệm vụ không tiếp cận được; dữ liệu quá cũ buộc kiểm kê xác nhận
+- [ ] Ba trạng thái: **READY** (Sẵn sàng), **NEEDS_ACTION** (Cần xử lý), **NOT_DISPATCHABLE** (Không thể điều phối)
+- [ ] Thứ tự quyết định: blocker liên quan nhiệm vụ → NOT_DISPATCHABLE; không blocker nhưng có cảnh báo → NEEDS_ACTION; còn lại → READY
+- [ ] Điểm tham khảo không được ghi đè blocker. Trường hợp điểm 90 nhưng áo phao bắt buộc bị khóa vẫn phải chặn nhiệm vụ lũ
+- [ ] Mission đọc blocker + mức đáp ứng theo từng SKU; khi bị chặn phải nêu lý do và gợi ý kho/phương án khác
+- [ ] Giữ `ReadinessThreshold` cũ trong giai đoạn migration chỉ để cảnh báo xu hướng; đánh dấu deprecated sau khi FE/BE chuyển xong
+- **Verify:** test điểm cao + blocker vẫn bị chặn; điểm thấp nhưng không blocker vẫn cho cán bộ tiếp tục sau cảnh báo; đẩy độ ẩm → NEEDS_ACTION + thông báo có lý do
 - **File:** `apps/backend/src/readiness/`
 
 ---
@@ -301,11 +300,11 @@ pnpm --filter @safestock/backend seed          # seed dữ liệu mẫu
 ### D0. AI service scaffold + provider pluggable (FastAPI) ⬜
 - [ ] apps/ai-service: FastAPI + Pydantic + venv
 - [ ] **Interface LLM chung** `LLMProvider` (method: parse structured JSON, generate text). 1 hàm factory chọn theo env `AI_PROVIDER`
-- [ ] Adapter: **GeminiProvider** (default, `google-generativeai`, free tier) · OllamaProvider (local, HTTP `localhost:11434`) · ClaudeProvider (`anthropic`)
-- [ ] Env: `AI_PROVIDER=gemini`, `GEMINI_API_KEY=` (hỏi user cấp), `OLLAMA_MODEL=qwen2.5`, `CLAUDE_API_KEY=`
+- [ ] Adapter: **OllamaProvider** (default, local HTTP `localhost:11434`) · GeminiProvider (cloud tùy chọn) · ClaudeProvider (`anthropic`)
+- [ ] Env: `AI_PROVIDER=ollama`, `OLLAMA_MODEL=qwen3.5:4b`, `GEMINI_API_KEY=`, `CLAUDE_API_KEY=`
 - [ ] Health endpoint báo provider đang dùng
-- [ ] **#10 Cấu hình tối thiểu Ollama (ghi báo cáo):** PC văn phòng xã **16GB RAM + CPU (KHÔNG cần GPU)** chạy được **Qwen 2.5 3B Q4** (~3-8s/câu, chấp nhận được vì parse/giải thích không cần realtime). Có GPU 8GB → Qwen 7B ~1-2s. → giải mâu thuẫn "local offline" vs "hạ tầng xã": khả thi với PC phổ thông
-- **Verify:** GET /health trả `{provider: "gemini"}`; đổi env sang ollama/claude không sửa code khác
+- [ ] **#10 Cấu hình Ollama (ghi báo cáo):** model hiện tại `qwen3.5:4b` Q4_K_M cần máy tối thiểu 16GB RAM; GPU được ưu tiên để giảm độ trễ. Benchmark thật phải ghi warm/cold latency, không cam kết tốc độ theo cấu hình ước đoán
+- **Verify:** GET /health trả `{provider: "ollama"}`; `ollama ps` đúng `qwen3.5:4b`; đổi env sang provider khác không sửa code nghiệp vụ
 - **Lộ trình kể khi thi:** **triển khai thật = Ollama local LUÔN** (0đ + offline + dữ liệu không rời cơ quan — an ninh dữ liệu). **Gemini/Claude CHỈ dùng khi demo thi** (khỏi cần máy mạnh lúc trình bày). Không khóa cứng 1 nhà cung cấp
 
 ### D1. Parse tình huống (structured JSON output) ⬜
@@ -324,7 +323,7 @@ pnpm --filter @safestock/backend seed          # seed dữ liệu mẫu
 - [ ] Bảng định mức (config): tình huống×điều kiện→vật tư×công thức (PRD 3.3) — **chỉnh được**
 - [ ] **#7 DẪN NGUỒN định mức thật** (không chỉ disclaimer): trích từ **Sphere Handbook** (chuẩn cứu trợ nhân đạo quốc tế — vd nước 15 lít/người/ngày) + nghị định/thông tư PCTT VN + tiêu chuẩn Hội CTĐ. Ghi nguồn vào bảng định mức + báo cáo. ~1-2h research, biến "số bịa" → "số có căn cứ"
 - [ ] Sinh danh sách nhu cầu từ JSON
-- [ ] Đối chiếu tồn kho sẵn sàng (dùng Inventory + Readiness)
+- [ ] Đối chiếu tồn khả dụng + blocker Readiness; tính mức đáp ứng từng loại và lấy loại yếu nhất
 - [ ] **Phân bổ GREEDY + FEFO** (~30 dòng): sort batch theo expiry → lấy dần tới đủ → thiếu thì báo thiếu + gợi ý thay thế. KHÔNG vượt tồn (NFR-05). Giải thích được cho giám khảo phi kỹ thuật trong 1 câu
 - [ ] **#3 Ưu tiên kho GẦN**: thiếu ở kho gần → bù từ kho xa, sort theo `distanceKm`. Greedy đủ giải (không cần OR-Tools). Chứng minh AI chọn đúng
 - [ ] Chỉ lấy từ vật tư `IN_STOCK` khả dụng (bỏ ON_LOAN/DAMAGED); consumable=false thì xuất = tạo ON_LOAN
@@ -413,12 +412,12 @@ pnpm --filter @safestock/backend seed          # seed dữ liệu mẫu
 - [ ] [Staff] Lịch sử thao tác của tôi + undo nhầm (đã có audit log)
 - [ ] [Staff] Chụp ảnh khi báo hỏng → lưu Cloudflare R2
 - [ ] [Rescue] Trạng thái nhiệm vụ realtime (thấy staff chuẩn bị tới đâu, X/Y món)
-- [ ] [Manager] Push cảnh báo khi readiness kho tụt dưới ngưỡng (<70)
+- [ ] [Manager] Push khi trạng thái chuyển NEEDS_ACTION/NOT_DISPATCHABLE; nội dung phải có lý do và hành động, không chỉ có điểm
 - [ ] [Mọi role] Badge offline rõ ràng ("đang offline, N thao tác chờ sync") — tăng niềm tin khi mất mạng hội trường
 
 **KHÔNG làm (scope creep):** chat nội bộ, chấm công, GPS đội hình, đa ngôn ngữ, yêu cầu vật tư khẩn từ mobile (mini Mission-to-Kit — để sau).
 
-- **Verify:** chạy trọn vòng: manager duyệt phương án → staff kiểm kê 1 kệ ra chênh lệch → rescue quét nhận + báo hỏng 1 món → readiness kho đổi
+- **Verify:** chạy trọn vòng: manager duyệt phương án → staff kiểm kê 1 kệ ra chênh lệch → rescue quét nhận + báo hỏng 1 món → trạng thái/lý do/mức đáp ứng cập nhật
 - **File:** `apps/mobile/`
 
 ---
@@ -433,31 +432,32 @@ pnpm --filter @safestock/backend seed          # seed dữ liệu mẫu
 - **Verify:** login web ok
 
 ### G1. Dashboard Readiness (làm CÙNG Phase C) ⬜
-- [ ] Tổng quan readiness (Recharts), điểm từng khu/nhóm + breakdown nguyên nhân trừ điểm
+- [ ] Tín hiệu chính: Sẵn sàng / Cần xử lý / Không thể điều phối; hiện blocker trước, sau đó 6 mặt + lý do + hành động
+- [ ] Điểm 0-100 và biểu đồ xu hướng đặt ở vai trò phụ, không dùng làm headline quyết định
 - [ ] Quản lý kho/vật tư/định mức, xem cảnh báo/nhiệm vụ
 - [ ] **UI sửa tay số lượng + đối chiếu kiểm kê** (Bp2): form adjust có lý do; màn reconcile hiện độ lệch hệ thống vs kiểm kê → xác nhận ghi đè
-- [ ] Sơ đồ kho = **SVG grid tô màu theo readiness** (KHÔNG React Flow — learning curve 2-3 ngày cho thứ SVG nửa ngày làm được)
-- **Verify:** dashboard hiển thị điểm thật, nguyên nhân trừ điểm; sửa tay 1 batch có audit; reconcile ghi đè
+- [ ] Sơ đồ kho = **SVG grid tô màu theo trạng thái vận hành** (KHÔNG React Flow — learning curve 2-3 ngày cho thứ SVG nửa ngày làm được)
+- **Verify:** dashboard trả lời được “có điều kiện chặn không, vấn đề gì, làm gì tiếp”; sửa tay 1 batch có audit; reconcile ghi đè
 
 ### G2. Simulator UI đầy đủ (nâng cấp từ B3) ⬜
 > B3 đã có slider tối thiểu. Đây là bản đẹp/đủ.
 - [ ] Chọn kho/khu/cảm biến; chỉnh nhiệt/ẩm/trọng lượng; bật-tắt thiết bị
 - [ ] Chạy scenario, tốc độ **x1/x10** (đồng bộ B1), pause/resume/reset
 - [ ] Timeline event realtime
-- **Verify:** kéo slider độ ẩm → event bắn → readiness rớt trên dashboard + alert mobile (KHOẢNH KHẮC VÀNG)
+- **Verify:** kéo slider độ ẩm → event bắn → trạng thái chuyển Cần xử lý, hiện nguyên nhân + alert mobile (KHOẢNH KHẮC VÀNG)
 - **File:** `apps/admin-web/`
 
 ### G3. Admin nâng cao — hỗ trợ quyết định & bối cảnh địa phương ⬜
 
 **CORE:**
 - [ ] **Voice input Mission (tiếng Việt)**: Web Speech API `lang='vi-VN'` → text hiện ra ô nhập → user SỬA lại → mới gọi /missions/parse. KHÔNG bắn thẳng voice→Claude (STT sai số/tên riêng). Phải có nút "gõ tay" + "tình huống mẫu" phòng mất mạng
-- [ ] **So sánh readiness trước/sau khi duyệt phương án**: hiện điểm kho hiện tại vs điểm sau khi xuất lô này → manager quyết có cơ sở. Rất "AI hỗ trợ quyết định"
+- [ ] **So sánh trước/sau phương án**: trạng thái, blocker và mức đáp ứng từng loại trước/sau khi xuất; điểm xu hướng chỉ hiển thị phụ
 
 **POLISH:**
 - [ ] ~~Bản đồ thiên tai~~ **#8 BỎ** — tĩnh = trang trí không data, dễ bị chê. Không làm
 - [ ] **Xuất báo cáo PDF 1 nút**: readiness + phương án + audit → PDF (react-pdf/print CSS). Ngôn ngữ "số hóa quy trình giấy"
 - [ ] **Màn hình "sức khỏe kho" tổng hợp**: 1 trang readiness + cảnh báo mở + vật tư sắp hết hạn + nhiệm vụ chờ duyệt. Màn chiếu lúc thuyết trình
-- **Verify:** nói 1 câu tiếng Việt → ra text đúng → sửa → parse ra JSON; duyệt phương án thấy điểm trước/sau
+- **Verify:** nói 1 câu tiếng Việt → ra text đúng → sửa → parse ra JSON; duyệt phương án thấy blocker và mức đáp ứng trước/sau
 - **File:** `apps/admin-web/`
 
 ### G4. Chatbot hỏi-đáp kho (context injection, KHÔNG phải RAG thật) ⬜
@@ -467,7 +467,7 @@ pnpm --filter @safestock/backend seed          # seed dữ liệu mẫu
 - [ ] Backend: endpoint POST /assistant/ask — lấy snapshot JSON kho hiện tại (1 query DB nội bộ: tồn + readiness + trạng thái) → nhét vào prompt LLM + câu hỏi
 - [ ] Prompt ràng buộc: CHỈ trả lời từ JSON, không có thì nói "không biết" (chống bịa số)
 - [ ] UI chat trong admin web (+ có thể mobile sau)
-- [ ] Ví dụ: "còn bao nhiêu áo phao trẻ em còn hạn?", "khu nào readiness thấp nhất?"
+- [ ] Ví dụ: "còn bao nhiêu áo phao trẻ em còn hạn?", "kho nào đang có điều kiện chặn và vì sao?"
 - **Lộ trình:** MVP = context injection; khi kho phình to thật (JSON vượt context) → nâng lên RAG vector. Kể được thành tầm nhìn scale
 - **Verify:** hỏi số liệu → bot trả đúng khớp DB; hỏi ngoài phạm vi → bot nói không biết (không bịa)
 - **File:** `apps/backend/src/assistant/`, `apps/admin-web/`
@@ -495,9 +495,9 @@ pnpm --filter @safestock/backend seed          # seed dữ liệu mẫu
 ### I-cuối (tuần 9-10)
 - [ ] **Bản demo chạy 100% localhost/offline** — coi mạng hội trường = KHÔNG tồn tại. Mọi call AI cache sẵn (D1b), dữ liệu seed sẵn. Có mạng = bonus
 - [ ] **#32 TÁCH "lõi diễn" vs "đạn Q&A"** (chống tham lam khoe hết → hời hợt):
-  - **DIỄN (6 bước, 5-7ph) — chỉ 3 trụ:** Dashboard Readiness 91 → nhập tình huống → AI lập phương án → kéo slider độ ẩm → điểm rớt 91→78 realtime → cảnh báo mobile → xuất kho theo phương án → kết
+  - **DIỄN (6 bước, 5-7ph) — chỉ 3 trụ:** Dashboard báo Sẵn sàng, không blocker → nhập tình huống → hệ thống tính mức đáp ứng → kéo slider độ ẩm → chuyển Cần xử lý và nêu lý do realtime → cảnh báo mobile → xuất kho theo phương án → kết
   - **KHÔNG diễn, chỉ TRẢ LỜI khi hỏi (slide phụ lục):** RBAC/hậu kiểm, mượn-trả, offline 3 lớp, phiếu giấy, backup, đa xã, loadcell 4 tầng, kiểm kê. Chiều sâu để chứng minh nghĩ kỹ, KHÔNG để diễn
-- [ ] Dữ liệu demo đẹp (kho đầy đủ, readiness 91, scenario mượt) + ≥5 scenario
+- [ ] Dữ liệu demo rõ: ban đầu Sẵn sàng; scenario tạo đúng một vấn đề có nguyên nhân/hành động; điểm 91 chỉ là thông tin phụ + ≥5 scenario
 - [ ] Kịch bản demo 5–7 phút (PRD 11) — **tập dượt nhiều lần trên đúng thiết bị thi** (test độ phân giải máy chiếu)
 - [ ] Ghép video demo, slide, poster, hoàn thiện báo cáo
 - [ ] Thư quan tâm CTĐ Đồng Xuân (ký + mộc) đính kèm hồ sơ
@@ -511,8 +511,8 @@ pnpm --filter @safestock/backend seed          # seed dữ liệu mẫu
 ## Thứ tự ưu tiên (bản thực-tế-1-người)
 
 **CORE — chắc thắng (ngân sách ~6 tuần). ⚠️ THỨ TỰ TỐI ƯU: DIFFERENTIATOR TRƯỚC, NỀN BỒI SAU:**
-`A ✅` → `B ✅` (gồm B3 slider) → **`C-minus + C` (Readiness NGAY — differentiator, đổ công nhất ~2t, gồm C3 ngưỡng + #23 recalc event-driven)** → `G0+G1` (dashboard hiện điểm — hoàn thiện khoảnh khắc vàng) → `A2-core` (permission + audit + hậu kiểm, ~1.5 ngày) → `Bp0+Bp2+Bp3+Bp4` (xuất lô + sửa tay/reconcile + kho lân cận + mượn-trả) → `D` (1t, greedy, dẫn nguồn định mức, đáp ứng=min) → `F0-F2` (2.5t, offline-đọc + nhập bù tay) → `G2` (simulator UI đầy đủ).
-**Vì sao:** Readiness là thứ ăn điểm nhất → xong SỚM + chắc (tuần 3-4), không để RBAC/Bp chắn. C chủ yếu đọc/tính → guard bồi sau dễ. Khoảnh khắc vàng (B3+C+G2) hoàn thiện trước, mọi thứ bồi quanh.
+`A ✅` → `B ✅` (gồm B3 slider) → **`C-minus + C` (Readiness NGAY — blocker + trạng thái + recalc event-driven)** → `G0+G1` (dashboard hiện trạng thái/lý do/hành động) → `A2-core` (permission + audit + hậu kiểm, ~1.5 ngày) → `Bp0+Bp2+Bp3+Bp4` (xuất lô + sửa tay/reconcile + kho lân cận + mượn-trả) → `D` (1t, greedy, dẫn nguồn định mức, đáp ứng=min) → `F0-F2` (2.5t, offline-đọc + nhập bù tay) → `G2` (simulator UI đầy đủ).
+**Vì sao:** Readiness có lý do và hành động là phần hỗ trợ quyết định rõ nhất → xong SỚM + chắc. Không lấy điểm tổng làm màn trình diễn chính; khoảnh khắc vàng phải cho thấy trạng thái đổi và hệ thống giải thích được vì sao.
 
 **NÊN-CÓ (nếu dư):** `A2-plus` (scope kho — đã bỏ duyệt 2 bước) → `Bp1` (loadcell/RFID tự sinh giao dịch — điểm nhấn IoT) → `Bp5` (backup Supabase) → `E` (Incident) → `F3` alert → `F4 CORE` (khép vòng đời) → `G3 CORE` (voice + readiness trước/sau) → phiếu PDF khẩn cấp (I-sớm).
 
@@ -526,9 +526,16 @@ pnpm --filter @safestock/backend seed          # seed dữ liệu mẫu
 
 ## Trạng thái hiện tại
 
-**Đang ở:** hết Phase A (A0 ✅, A1 ✅) + **Phase B (B0-B3 ✅)**. Backend nền + auth + inventory + sensor simulator chạy + verify pass.
-**Phase B verify pass (2026-07-15):** 10 device seed; ngưỡng lọc event + DeviceState current OK; runner scrubber x1/x10 play/pause/reset; WS room theo warehouse nhận event <650ms (<2s NFR-02); reproducible 27 event y hệt 2 lần cùng seed (NFR-04); UI tối thiểu tại `/sim.html` (slider + chạy scenario). 6 scenario: normal(+nhiễu), suspected_loss, sensor_fault, bad_storage, disconnect, misplaced.
-**Lát kế tiếp:** **Phase C-minus → C** (Readiness Score). C-minus: field DB đã có (Shelf.isBlocked/isLocked ✅ tạo ở B0, InventoryCount ✅). Còn định nghĩa 6 công thức con + tính điểm 4 cấp. Đầu vào môi trường lấy từ DeviceState (đã có).
-**Đã review kỹ (2026-07-15):** cắt OR-Tools (D greedy), cắt H, B→scrubber+nhiễu ✅, C thêm C-minus schema nền, F offline-ghi+push→polish, G xé nhỏ trộn B/C, I làm rải + deploy sớm.
+**Đang ở:** backend đã vượt xa mốc A/B/C ban đầu. Theo `apps/backend/ROADMAP.md` và source hiện có, backend đã xong/verify các phần: A0/A1/A2core, B0-B3, Cminus+C0-C3 dạng điểm, Bp0/Bp2/Bp3/Bp4/Bp5, D-proxy, E/E2, J, K, L, M, G4api, I. Readiness v2.2 theo blocker + trạng thái + khả năng đáp ứng **chưa code**. Backend hiện có 19 test suite / 147 test pass khi rà ngày 2026-07-20.
 
-_Cập nhật lần cuối: 2026-07-15._
+**Frontend:** không còn là placeholder. `apps/frontend` đã có Next.js dashboard với các view readiness, normal mode insights, assistant, inventory, simulator panel, mission/action-plan/map/notification, incident, stocktake, loan, report, users, audit. Lần rà gần nhất `pnpm --filter @safestock/frontend build` bị treo ở `next build`, cần điều tra trước khi coi là verify pass.
+
+**AI service:** đã có FastAPI + Gemini/Ollama provider, parse, explain, action-plan, assistant. Claude provider và explain-incident riêng vẫn còn trong roadmap/chưa hoàn chỉnh.
+
+**Mobile:** chưa triển khai source app thực tế; mới có package/README/ROADMAP. Nếu vẫn giữ mobile trong MVP demo, lát kế tiếp nên là F0 scaffold + login + dashboard đọc dữ liệu.
+
+**Lát kế tiếp thực tế:** sửa/verify build frontend → chốt demo web+backend ổn định → quyết định mobile tối thiểu hay ghi thành lộ trình → hoàn thiện RFID/explain-incident nếu còn thời gian.
+
+**Tóm tắt đối chiếu mới nhất:** xem `docs/codebase-summary.md`.
+
+_Cập nhật lần cuối: 2026-07-20._

@@ -19,10 +19,10 @@
 
 | App | Phase xong | Đang/kế tiếp |
 |---|---|---|
-| **Backend** | A0, A1, B0-B3, C-minus ✅ | C0-C3 (Readiness), A2-core (RBAC) |
-| **Frontend** | — (placeholder) | G0 scaffold → G1 dashboard (cùng BE-C) |
-| **Mobile** | — (placeholder) | F0 scaffold (cần API) |
-| **AI Service** | — (placeholder) | D0 scaffold (cần GEMINI_API_KEY) |
+| **Backend** | A0, A1, A2core, B0-B3, Bp0/Bp2/Bp3/Bp4/Bp5, Cminus+C0-C3, D-proxy, E/E2, J, K, L, M, G4api, I ✅ | Bp1 RFID còn dở; tiếp tục ổn định demo + xử lý FE build |
+| **Frontend** | G0, phần lớn G1, FE-K, các view dashboard/assistant/insights/report/map 🟡 | Verify lại `next build`; hoàn thiện simulator UI đầy đủ, CRUD/adjust/reconcile nếu cần |
+| **Mobile** | — (chưa có source app) | F0 scaffold nếu vẫn giữ mobile trong MVP |
+| **AI Service** | D0, D1, D3exp, K action-plan, assistant ✅ | Claude provider và explain-incident riêng còn dở |
 
 ---
 
@@ -30,8 +30,9 @@
 
 | App-Phase | Việc | Ai | Trạng thái |
 |---|---|---|---|
-| BE-Cminus | Schema nền Readiness | Claude | 🟡 branch feat/c-minus-schema (chưa merge) |
-| BE-C0 | 6 công thức con + schema điểm | | ⬜ kế tiếp |
+| FE-build | Điều tra `pnpm --filter @safestock/frontend build` treo ở `next build` | | ⬜ kế tiếp |
+| Mobile-F0 | Scaffold Expo nếu vẫn cần app hiện trường cho demo | | ⬜ kế tiếp |
+| BE-Bp1 | RFID tự sinh giao dịch từ tag mapping | | ⬜ nên-có |
 
 ---
 
@@ -45,6 +46,7 @@
 | AI Service (D0, D1) | |
 
 ## Ghi chú điều phối
-- **Song song được:** Backend (BE-C readiness) và Frontend (FE-G0 scaffold) tách; FE-G1 cần BE-C1 xong API. Mobile cần API inventory/readiness. AI-service độc lập (cần key Gemini).
+- **Song song được:** sửa build/frontend; scaffold mobile F0; hoàn thiện RFID/AI explain-incident không chặn nhau.
 - **File dễ đụng (báo nhau trước):** `apps/backend/prisma/schema.prisma`, `apps/backend/src/app.module.ts`, `apps/backend/prisma/seed.ts`, `packages/shared-types/src/index.ts`.
 - Mỗi lát = 1 branch → PR → review → merge.
+- **Nguồn trạng thái mới nhất:** [codebase-summary.md](codebase-summary.md) + ROADMAP từng app. README/BUILD-PLAN có thể là tài liệu kế hoạch, ROADMAP là checklist sát code hơn.

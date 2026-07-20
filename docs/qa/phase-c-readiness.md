@@ -53,3 +53,12 @@ Ngưỡng chỉnh được. Điểm không chỉ để nhìn — nó **kích ho�
 
 ### H: Sao không dùng máy học (ML) để tính điểm cho "AI" hơn?
 **Đ:** Readiness cần **giải thích được và kiểm chứng được** — người quản lý phải hiểu vì sao điểm thấp và sửa được. Mô hình ML hộp đen không phù hợp: cứu hộ cần minh bạch, không đoán mò. Chúng em dùng rule engine có trọng số minh bạch. AI (LLM) dùng ở khâu hiểu ngôn ngữ và giải thích — đúng thế mạnh của nó. Đây là lựa chọn có chủ đích, không phải thiếu năng lực ML.
+
+### H: Điểm sẵn sàng có tự cập nhật khi nhập/xuất kho không, hay chỉ khi cảm biến đổi?
+**Đ:** Có — **mọi giao dịch tồn kho** (nhập/xuất/xuất lô/sửa tay/kiểm kê) đều tự kích hoạt tính lại điểm ngay sau khi giao dịch hoàn tất, không cần bấm "tính lại" thủ công. Chạy **sau khi** giao dịch đã lưu (không nằm trong cùng transaction) — lỗi tính điểm không bao giờ làm hỏng giao dịch kho, chỉ ghi log cảnh báo. Trước đây chỉ cảm biến môi trường mới tự trigger; giờ đã nối đủ cả đường tồn kho.
+
+### H: Khi điểm rớt xuống mức nguy hiểm, hệ thống có tự báo ai không? Có bị báo dồn dập không?
+**Đ:** Có — rớt xuống DEGRADED/CRITICAL tự gửi thông báo cho vai trò phụ trách kho. Chống báo dồn: chỉ gửi khi **vùng điểm thực sự đổi** (so vùng cũ với vùng mới sau tính lại), không gửi lại nếu điểm dao động nhẹ quanh cùng một vùng. Đây cùng nguyên tắc chống spam đã áp dụng cho Incident Intelligence (BE-E2).
+
+### H: Nếu kho đang ở mức CRITICAL, hệ thống có cho lập nhiệm vụ cứu hộ mới không?
+**Đ:** Không — chặn ngay ở lúc lập phương án, trả lỗi rõ ràng kèm điểm hiện tại, thay vì cho lập phương án rồi phát hiện kho không đủ khả năng đáp ứng. Đây là ứng dụng trực tiếp của ngưỡng hành động (C3): điểm không chỉ để xem, nó **chặn được hành động sai** trước khi xảy ra. Nếu kho chưa từng được tính điểm (mới khởi tạo), không chặn — tránh chặn nhầm lúc hệ thống chưa có dữ liệu.

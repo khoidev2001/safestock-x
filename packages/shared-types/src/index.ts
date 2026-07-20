@@ -84,6 +84,8 @@ export enum Permission {
   WAREHOUSE_MANAGE = "warehouse:manage",
   AUDIT_VIEW = "audit:view",
   ADMIN_USERS = "admin:users",
+  REPORT_SUBMIT = "report:submit", // trưởng thôn gửi báo cáo kiểm kê tháng
+  REPORT_APPROVE = "report:approve", // admin xã duyệt báo cáo
 }
 
 /**
@@ -105,6 +107,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.LOAN_MANAGE,
     Permission.WAREHOUSE_MANAGE,
     Permission.NOTIFICATION_VIEW,
+    Permission.REPORT_SUBMIT, // trưởng thôn gửi báo cáo tháng
   ],
   [UserRole.RESCUE]: [
     // Cứu hộ: xem + XÁC NHẬN lấy vật tư.

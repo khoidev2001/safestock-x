@@ -3,14 +3,19 @@
 import {
   AlertTriangle,
   ArrowLeftRight,
+  Bot,
   ClipboardCheck,
   ClipboardList,
+  FileSpreadsheet,
   LayoutGrid,
+  LineChart,
   ListChecks,
   LogOut,
+  Map as MapIcon,
   Package,
   RadioTower,
   ShieldCheck,
+  UserCog,
   Warehouse,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -19,12 +24,17 @@ import { NotificationBell } from "@/components/mission/notification-bell";
 
 export type DashboardView =
   | "readiness"
+  | "insights"
+  | "assistant"
   | "inventory"
   | "simulator"
   | "mission"
   | "incident"
   | "stocktake"
   | "loan"
+  | "map"
+  | "report"
+  | "users"
   | "audit";
 
 interface DashboardShellProps {
@@ -37,20 +47,27 @@ const navItems: {
   id: DashboardView;
   label: string;
   icon: typeof LayoutGrid;
+  adminOnly?: boolean;
 }[] = [
   { id: "readiness", label: "Tổng quan", icon: LayoutGrid },
+  { id: "insights", label: "Ngày thường", icon: LineChart },
+  { id: "assistant", label: "Trợ lý", icon: Bot },
   { id: "inventory", label: "Kho vật tư", icon: Package },
   { id: "simulator", label: "Mô phỏng", icon: RadioTower },
   { id: "mission", label: "Nhiệm vụ", icon: ClipboardList },
   { id: "incident", label: "Sự cố", icon: AlertTriangle },
   { id: "stocktake", label: "Kiểm kê", icon: ClipboardCheck },
   { id: "loan", label: "Mượn-trả", icon: ArrowLeftRight },
+  { id: "map", label: "Bản đồ kho", icon: MapIcon },
+  { id: "report", label: "Báo cáo tháng", icon: FileSpreadsheet },
+  { id: "users", label: "Người dùng", icon: UserCog, adminOnly: true },
   { id: "audit", label: "Hậu kiểm", icon: ListChecks },
 ];
 
 export function DashboardShell({ activeView, children, onViewChange }: DashboardShellProps) {
   const router = useRouter();
   const { user, clear } = useAuth();
+  const visibleNav = navItems.filter((item) => !item.adminOnly || user?.role === "ADMIN");
 
   function logout() {
     clear();
@@ -72,7 +89,7 @@ export function DashboardShell({ activeView, children, onViewChange }: Dashboard
           </div>
 
           <nav className="mt-8 space-y-1" aria-label="Điều hướng chính">
-            {navItems.map((item) => (
+            {visibleNav.map((item) => (
               <NavButton
                 key={item.id}
                 isActive={activeView === item.id}
@@ -123,7 +140,7 @@ export function DashboardShell({ activeView, children, onViewChange }: Dashboard
               aria-label="Điều hướng chính trên di động"
               className="mx-auto mt-3 grid max-w-[1440px] grid-cols-4 gap-2 lg:hidden"
             >
-              {navItems.map((item) => (
+              {visibleNav.map((item) => (
                 <NavButton
                   key={item.id}
                   compact

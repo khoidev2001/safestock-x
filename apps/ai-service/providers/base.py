@@ -5,6 +5,7 @@ nghiệp vụ (backend + rule engine lo). AI output luôn xem là dữ liệu kh
 tin cậy — validate schema ở tầng gọi (CODING-STANDARDS §14).
 """
 from abc import ABC, abstractmethod
+from typing import Any
 
 
 class LLMProvider(ABC):
@@ -13,7 +14,12 @@ class LLMProvider(ABC):
     name: str = "base"
 
     @abstractmethod
-    def generate_json(self, system_prompt: str, user_prompt: str) -> str:
+    def generate_json(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        json_schema: dict[str, Any] | None = None,
+    ) -> str:
         """Sinh phản hồi kỳ vọng là JSON thuần (chuỗi). Tầng gọi tự parse + validate."""
         raise NotImplementedError
 

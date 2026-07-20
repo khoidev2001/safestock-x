@@ -11,7 +11,14 @@ import {
   Target,
   TrendingUp,
 } from "lucide-react";
-import type { ActionPlan } from "@/lib/mission-api";
+import dynamic from "next/dynamic";
+import type { ActionPlan, ClusterWarehouse } from "@/lib/mission-api";
+import type { LatLng } from "@/lib/geo";
+
+const IncidentMap = dynamic(() => import("./incident-map").then((m) => m.IncidentMap), {
+  ssr: false,
+  loading: () => <div className="h-[320px] animate-pulse rounded-md border bg-[var(--surface)]" />,
+});
 
 /** Màu theo mức khẩn cấp 1-5 — trực quan, người chưa rành nghiệp vụ đọc được ngay. */
 const SEVERITY = [
@@ -22,7 +29,7 @@ const SEVERITY = [
   { label: "Rất cao", color: "var(--color-critical)" },
 ];
 
-export function ActionPlanView({ plan }: { plan: ActionPlan }) {
+export function ActionPlanView({ plan, incidentPoint }: { plan: ActionPlan; incidentPoint?: LatLng | null }) {
   const sev = SEVERITY[Math.min(4, Math.max(0, plan.severityLevel - 1))];
 
   return (
@@ -129,6 +136,20 @@ export function ActionPlanView({ plan }: { plan: ActionPlan }) {
               </div>
             ))}
           </div>
+          {incidentPoint ? (
+            <div className="mt-3">
+              <IncidentMap
+                // plan.warehouses không có kind (CENTRAL/HAMLET) — dùng chung màu kho thôn, không ảnh hưởng số liệu
+                warehouses={plan.warehouses.map(
+                  (w): ClusterWarehouse => ({ id: w.name, name: w.name, kind: "HAMLET", lat: w.lat, lng: w.lng }),
+                )}
+                incidentPoint={incidentPoint}
+                officialDistances={
+                  new Map(plan.warehouses.map((w) => [w.name, { distanceKm: w.distanceKm, etaMinutes: w.etaMinutes }]))
+                }
+              />
+            </div>
+          ) : null}
         </Panel>
       )}
 

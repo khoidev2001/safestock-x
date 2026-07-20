@@ -7,7 +7,7 @@ from .ollama import OllamaProvider
 
 
 def build_provider() -> LLMProvider:
-    provider = os.getenv("AI_PROVIDER", "gemini").lower()
+    provider = os.getenv("AI_PROVIDER", "ollama").lower()
 
     if provider == "gemini":
         return GeminiProvider(
@@ -17,7 +17,7 @@ def build_provider() -> LLMProvider:
     if provider == "ollama":
         return OllamaProvider(
             base_url=os.getenv("OLLAMA_URL", "http://localhost:11434"),
-            model=os.getenv("OLLAMA_MODEL", "qwen2.5"),
+            model=os.getenv("OLLAMA_MODEL", "qwen3.5:4b"),
         )
     if provider == "claude":
         # Claude adapter thêm khi cần bản cao cấp — chưa dùng cho MVP.

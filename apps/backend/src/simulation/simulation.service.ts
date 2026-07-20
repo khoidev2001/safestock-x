@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { VirtualDeviceType } from "@prisma/client";
+import { TransactionSource, UserRole, VirtualDevice, VirtualDeviceType } from "@prisma/client";
+import { InventoryService } from "../inventory/inventory.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { ReadinessService } from "../readiness/readiness.service";
 
@@ -34,10 +35,12 @@ export interface EmitInput {
 export class SimulationService {
   private readonly log = new Logger(SimulationService.name);
   private recalcTimers = new Map<string, NodeJS.Timeout>();
+  private systemUserId: string | null = null;
 
   constructor(
     private prisma: PrismaService,
     private readiness: ReadinessService,
+    private inventory: InventoryService,
   ) {}
 
   firstWarehouse() {
@@ -71,6 +74,10 @@ export class SimulationService {
     const delta = SIGNIFICANT_DELTA[device.type] ?? 0;
     const significant =
       prev == null || Math.abs(input.value - prev) >= delta || delta === 0;
+
+    if (device.type === VirtualDeviceType.LOADCELL && prev != null && device.shelfId) {
+      await this.autoGenerateLoadcellTxn(device, prev, input.value);
+    }
 
     // Luôn cập nhật current
     await this.prisma.virtualDevice.update({
@@ -123,5 +130,48 @@ export class SimulationService {
       });
     }, RECALC_DEBOUNCE_MS);
     this.recalcTimers.set(warehouseId, timer);
+  }
+
+  /** Actor hệ thống cho giao dịch tự sinh (loadcell không có user thật thao tác) — cache 1 lần. */
+  private async getSystemUserId(): Promise<string | null> {
+    if (this.systemUserId) return this.systemUserId;
+    const admin = await this.prisma.user.findFirst({ where: { role: UserRole.ADMIN } });
+    this.systemUserId = admin?.id ?? null;
+    return this.systemUserId;
+  }
+
+  /**
+   * Loadcell đổi cân nặng đáng kể → suy số lượng qua Item.unitWeightKg → tự sinh
+   * InventoryTransaction (Bp1). Chỉ hỗ trợ kệ có batch, đơn giản hoá lấy batch đầu
+   * tiên tạo trên kệ nếu có nhiều batch (ponytail: đủ cho demo 1 SKU/kệ, nâng cấp
+   * khi cần map chính xác nhiều batch cùng kệ → thêm cảm biến/label riêng từng batch).
+   * Lỗi không chặn luồng emit() chính — cảm biến vẫn phải cập nhật currentValue.
+   */
+  private async autoGenerateLoadcellTxn(device: VirtualDevice, prev: number, newValue: number): Promise<void> {
+    try {
+      const deltaKg = prev - newValue;
+      if (Math.abs(deltaKg) < SIGNIFICANT_DELTA.LOADCELL!) return;
+
+      const batch = await this.prisma.itemBatch.findFirst({
+        where: { shelfId: device.shelfId! },
+        include: { item: true },
+        orderBy: { createdAt: "asc" },
+      });
+      if (!batch || !batch.item.unitWeightKg) return;
+
+      const deltaQty = Math.round(Math.abs(deltaKg) / batch.item.unitWeightKg);
+      if (deltaQty === 0) return;
+
+      const systemUserId = await this.getSystemUserId();
+      if (!systemUserId) return;
+
+      if (deltaKg > 0) {
+        await this.inventory.export(systemUserId, batch.id, deltaQty, "Tự động từ loadcell", TransactionSource.LOADCELL);
+      } else {
+        await this.inventory.import(systemUserId, batch.id, deltaQty, "Tự động từ loadcell", TransactionSource.LOADCELL);
+      }
+    } catch (error) {
+      this.log.warn(`Tự sinh giao dịch loadcell lỗi (device ${device.code}): ${(error as Error).message}`);
+    }
   }
 }

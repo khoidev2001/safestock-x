@@ -27,6 +27,8 @@ export interface WarehouseEta {
   name: string;
   distanceKm: number;
   etaMinutes: number;
+  lat: number;
+  lng: number;
 }
 
 /** Phần LLM viết (khớp ActionPlanNarrative của ai-service). */

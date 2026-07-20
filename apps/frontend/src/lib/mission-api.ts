@@ -47,7 +47,7 @@ export interface ActionPlan {
     shortage: number;
     fromWarehouses: string[];
   }[];
-  warehouses: { name: string; distanceKm: number; etaMinutes: number }[];
+  warehouses: { name: string; distanceKm: number; etaMinutes: number; lat: number; lng: number }[];
   forecasts: { label: string; probability: number }[];
   narrative: {
     objectives: string[];
@@ -56,6 +56,14 @@ export interface ActionPlan {
     followUpQuestions: string[];
   };
   generatedBy: "ai" | "template";
+}
+
+export interface ClusterWarehouse {
+  id: string;
+  name: string;
+  kind: "CENTRAL" | "HAMLET";
+  lat: number;
+  lng: number;
 }
 
 export interface AppNotification {
@@ -90,6 +98,9 @@ export const generatePlan = (input: GenerateInput) =>
   });
 
 export const getMission = (id: string) => apiFetch<Mission>(`/api/missions/${id}`);
+
+export const getClusterWarehouses = (warehouseId: string) =>
+  apiFetch<ClusterWarehouse[]>(`/api/missions/${warehouseId}/warehouses`);
 
 export const generateActionPlan = (id: string) =>
   apiFetch<ActionPlan>(`/api/missions/${id}/action-plan`, { method: "POST" });

@@ -7,8 +7,8 @@ AI service — parse tình huống + giải thích phương án. Provider plugga
 **Không phải Node** → không nằm trong pnpm workspace (chạy venv riêng). Đặt trong `apps/` cho gọn monorepo.
 
 **LLM provider pluggable** (env `AI_PROVIDER`):
-- `gemini` (default demo, free tier)
-- `ollama` (production, local, 0đ, offline)
+- `ollama` (mặc định, local, 0đ, offline)
+- `gemini` (tùy chọn cloud, free tier)
 - `claude` (cao cấp, trả phí)
 
 **Chức năng:**
