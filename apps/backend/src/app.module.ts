@@ -14,10 +14,16 @@ import { IncidentModule } from "./incident/incident.module";
 import { SimulationModule } from "./simulation/simulation.module";
 import { ReadinessModule } from "./readiness/readiness.module";
 import { NotificationModule } from "./notification/notification.module";
+import { InsightsModule } from "./insights/insights.module";
+import { AssistantModule } from "./assistant/assistant.module";
+import { BackupModule } from "./backup/backup.module";
+import { AdminModule } from "./admin/admin.module";
+import { ReportModule } from "./report/report.module";
+import { validateEnv } from "./config/env.validation";
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, envFilePath: ["../../.env", ".env"] }),
+    ConfigModule.forRoot({ isGlobal: true, envFilePath: ["../../.env", ".env"], validate: validateEnv }),
     // Serve UI tối thiểu B3 tại /sim.html — public ở apps/backend/public (dist/src → ../../public)
     ServeStaticModule.forRoot({ rootPath: join(__dirname, "..", "..", "public") }),
     PrismaModule,
@@ -32,6 +38,11 @@ import { NotificationModule } from "./notification/notification.module";
     ReadinessModule,
     SimulationModule,
     NotificationModule,
+    InsightsModule,
+    AssistantModule,
+    BackupModule,
+    AdminModule,
+    ReportModule,
   ],
 })
 export class AppModule {}

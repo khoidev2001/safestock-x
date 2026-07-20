@@ -36,6 +36,12 @@ export class AiClientService {
     return result.explanation;
   }
 
+  /** Hỏi-đáp kho: LLM trả lời chỉ dựa trên snapshot JSON (backend chụp), ngoài phạm vi → "không biết". */
+  async assistantAsk(question: string, snapshot: string): Promise<string> {
+    const result = await this.post<{ answer: string }>("/assistant", { question, snapshot });
+    return result.answer;
+  }
+
   /**
    * Sinh phần diễn giải Action Plan (mục tiêu/giai đoạn/cảnh báo/câu hỏi).
    * Context là số ĐÃ TÍNH (severity/forecasts/vật tư/kho/ETA). Có cache theo context.

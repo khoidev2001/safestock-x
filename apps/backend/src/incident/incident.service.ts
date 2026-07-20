@@ -1,11 +1,16 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { IncidentSeverity, IncidentState } from "@prisma/client";
+import { IncidentSeverity, IncidentState, NotificationKind, UserRole, VirtualDeviceType } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { NotificationService } from "../notification/notification.service";
 import { detectIncidents, DetectedIncident, SensorSignal } from "./incident.rules";
+import { detectStatisticalAnomaly, detectPredictiveWarning, CONTINUOUS_DEVICE_TYPES } from "./anomaly.rules";
 
 @Injectable()
 export class IncidentService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notifications: NotificationService,
+  ) {}
 
   /**
    * Quét sự kiện cảm biến gần đây của 1 kho, phát hiện sự cố + lưu.
@@ -28,9 +33,50 @@ export class IncidentService {
     }));
 
     const detected = detectIncidents(signals);
+
+    // Anomaly/predictive cần baseline lịch sử dài hơn cửa sổ scan thường (60ph) —
+    // query riêng, giới hạn 300 điểm/loại liên tục để chặn phình query theo thời gian.
+    const historyEvents = await this.prisma.sensorEvent.findMany({
+      where: { warehouseId, device: { type: { in: CONTINUOUS_DEVICE_TYPES as VirtualDeviceType[] } } },
+      include: { device: true },
+      orderBy: { createdAt: "desc" },
+      take: 300,
+    });
+    const history: SensorSignal[] = historyEvents
+      .reverse()
+      .map((e) => ({
+        deviceCode: e.device.code,
+        deviceType: e.device.type,
+        eventType: e.eventType,
+        value: e.value,
+        occurredAt: e.createdAt,
+      }));
+    detected.push(...detectStatisticalAnomaly(history));
+    detected.push(...detectPredictiveWarning(history));
+
+    // Chống spam trùng lặp: sự cố cùng kind+thiết bị đang mở (chưa RESOLVED) thì không tạo mới.
+    const openIncidents = await this.prisma.incident.findMany({
+      where: { warehouseId, state: { not: IncidentState.RESOLVED } },
+      include: { evidence: true },
+    });
+    const openKeys = new Set(
+      openIncidents.flatMap((i) => i.evidence.map((e) => `${i.kind}|${e.deviceCode}`)),
+    );
+
     const created = [] as Awaited<ReturnType<typeof this.persist>>[];
     for (const incident of detected) {
-      created.push(await this.persist(warehouseId, incident));
+      const isDuplicate = incident.evidence.some((e) => openKeys.has(`${incident.kind}|${e.deviceCode}`));
+      if (isDuplicate) continue;
+
+      const saved = await this.persist(warehouseId, incident);
+      created.push(saved);
+      await this.notifications.create({
+        recipientRole: UserRole.ADMIN,
+        kind: NotificationKind.INCIDENT_DETECTED,
+        title: saved.title,
+        body: `Mức độ ${saved.severity} · độ tin cậy ${Math.round(saved.confidence * 100)}%`,
+        warehouseId,
+      });
     }
     return { warehouseId, detected: created.length, incidents: created };
   }

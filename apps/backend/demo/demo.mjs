@@ -169,8 +169,68 @@ async function main() {
     console.log(`    ${C.dim}${new Date(log.createdAt).toLocaleTimeString("vi")}${C.reset} ${log.action.padEnd(18)} ${C.dim}${meta}${C.reset}`);
   }
 
+  // ---- Bước 7: Normal Mode — AI quản trị kho ngày thường ----
+  step(7, "AI ngày thường (Normal Mode) — dự báo, hết hạn, điều chuyển");
+  const insights = await api("GET", `/api/insights/warehouses/${wid}`);
+
+  if (insights.weatherAlert?.alert) {
+    console.log(`  ${C.red}☔ Cảnh báo mưa lớn 72h: ${Math.round(insights.weatherAlert.totalRainMm)}mm (nguy cơ ngập/cô lập)${C.reset}`);
+  } else if (insights.weatherAlert) {
+    info("Thời tiết 72h", `${Math.round(insights.weatherAlert.totalRainMm)}mm (Open-Meteo, dưới ngưỡng cảnh báo)`);
+  }
+
+  const forecastShown = insights.forecast
+    .filter((f) => f.daysLeft != null)
+    .sort((a, b) => a.daysLeft - b.daysLeft)
+    .slice(0, 5);
+  console.log(`  ${C.dim}Dự báo cạn kho (tốc độ xuất TB 30 ngày):${C.reset}`);
+  for (const f of forecastShown) {
+    const d = Math.floor(f.daysLeft);
+    const tag = f.lowStock ? `${C.red}${d <= 0 ? "ĐÃ CẠN" : `~${d}n (gấp!)`}${C.reset}` : `${C.green}~${d} ngày${C.reset}`;
+    console.log(`    ${f.itemName.padEnd(22)} tồn ${String(f.quantity).padStart(4)} · ${f.avgPerDay.toFixed(1)}/ngày → ${tag}`);
+  }
+
+  if (insights.expiryAlerts.length) {
+    console.log(`  ${C.yellow}Sắp/đã hết hạn:${C.reset}`);
+    for (const a of insights.expiryAlerts.slice(0, 4)) {
+      const txt = a.daysUntilExpiry < 0 ? `${C.red}quá hạn ${-a.daysUntilExpiry}n${C.reset}` : `còn ${a.daysUntilExpiry}n`;
+      console.log(`    ${a.itemName.padEnd(22)} SL ${a.quantity} · ${txt}`);
+    }
+  }
+
+  if (insights.rebalance.length) {
+    console.log(`  ${C.cyan}Đề xuất điều chuyển cân bằng cụm xã:${C.reset}`);
+    for (const r of insights.rebalance.slice(0, 3)) {
+      console.log(`    ${r.fromWarehouseName} → ${r.toWarehouseName}: ${r.suggestedQty} ${r.sku}`);
+    }
+  }
+
+  const report = await api("GET", `/api/insights/warehouses/${wid}/monthly-report`);
+  const upDown = report.trends
+    .filter((t) => t.changePercent != null)
+    .sort((a, b) => b.changePercent - a.changePercent);
+  if (upDown.length) {
+    const top = upDown[0], bottom = upDown[upDown.length - 1];
+    info("Xu hướng xuất", `${top.itemName} ${C.green}+${top.changePercent.toFixed(0)}%${C.reset}, ${bottom.itemName} ${C.red}${bottom.changePercent.toFixed(0)}%${C.reset} (so kỳ trước)`);
+  }
+  ok(`Báo cáo tháng: ${report.narrative.slice(0, 100)}…`);
+
+  // ---- Bước 8: Chatbot hỏi-đáp kho (ràng chỉ từ dữ liệu thật) ----
+  step(8, "Trợ lý hỏi-đáp kho — trả lời từ dữ liệu, ngoài phạm vi nói không biết");
+  const questions = ["Còn bao nhiêu gạo cứu trợ?", "Vật tư nào sắp hết hạn?", "Thủ đô nước Pháp là gì?"];
+  for (const q of questions) {
+    try {
+      const res = await api("POST", `/api/assistant/warehouses/${wid}/ask`, { question: q });
+      console.log(`  ${C.blue}Hỏi:${C.reset} ${q}`);
+      console.log(`  ${C.dim}Đáp:${C.reset} ${res.answer.slice(0, 140)}`);
+    } catch (e) {
+      console.log(`  ${C.blue}Hỏi:${C.reset} ${q} ${C.dim}(ai-service tắt — bỏ qua)${C.reset}`);
+    }
+  }
+
   console.log(`\n${C.bold}${C.green}✓ Demo hoàn tất — toàn bộ luồng backend chạy thật.${C.reset}`);
-  console.log(`${C.dim}  Readiness · Mission-to-Kit · Simulator realtime · Mượn-trả · Phân quyền · Audit${C.reset}\n`);
+  console.log(`${C.dim}  Emergency: Readiness · Mission-to-Kit · Realtime · Điều tra sự cố · Mượn-trả · Audit${C.reset}`);
+  console.log(`${C.dim}  Normal Mode: Dự báo cạn kho · Hết hạn · Điều chuyển · Thời tiết · Báo cáo tháng · Chatbot${C.reset}\n`);
 }
 
 /** Lấy điểm 1 khu theo code (A/B) qua truy vấn readiness đã lưu. */

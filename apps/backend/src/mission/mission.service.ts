@@ -7,6 +7,8 @@ import { LatLng } from "../geo/haversine";
 import { InventoryService } from "../inventory/inventory.service";
 import { NotificationService } from "../notification/notification.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { shouldBlockNewMission } from "../readiness/action-zone";
+import { ReadinessService } from "../readiness/readiness.service";
 import { assertTransition } from "./mission.workflow";
 import {
   ActionPlan,
@@ -40,6 +42,7 @@ export class MissionService {
     private ai: AiClientService,
     private notifications: NotificationService,
     private inventory: InventoryService,
+    private readiness: ReadinessService,
   ) {}
 
   /**
@@ -55,6 +58,13 @@ export class MissionService {
   ) {
     const warehouse = await this.prisma.warehouse.findUnique({ where: { id: warehouseId } });
     if (!warehouse) throw new NotFoundException("Không tìm thấy kho");
+
+    const readinessScore = await this.readiness.getWarehouseScore(warehouseId);
+    if (readinessScore && shouldBlockNewMission(readinessScore.zone)) {
+      throw new BadRequestException(
+        `Kho đang ở mức CRITICAL (điểm ${readinessScore.score}) — không thể lập phương án mới. Cần xử lý sự cố trước.`,
+      );
+    }
 
     const requirements = computeRequirements(incident);
     const available = await this.loadClusterBatches(warehouse.communeId, incidentPoint);
@@ -301,7 +311,20 @@ export class MissionService {
       name: w.name,
       distanceKm: results[i].km,
       etaMinutes: results[i].etaMinutes,
+      lat: w.lat as number,
+      lng: w.lng as number,
     }));
+  }
+
+  /** Toàn bộ kho (tổng + thôn) trong cụm xã, có toạ độ — cho map ghim điểm nạn (FE-K). */
+  async listClusterWarehouses(warehouseId: string) {
+    const warehouse = await this.prisma.warehouse.findUnique({ where: { id: warehouseId } });
+    const cluster = await this.prisma.warehouse.findMany({
+      where: { communeId: warehouse?.communeId ?? "" },
+    });
+    return cluster
+      .filter((w) => w.lat != null && w.lng != null)
+      .map((w) => ({ id: w.id, name: w.name, kind: w.kind, lat: w.lat as number, lng: w.lng as number }));
   }
 
   // ---- gom dữ liệu ----

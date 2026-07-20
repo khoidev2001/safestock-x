@@ -83,8 +83,12 @@ model User {
   passwordHash   String
   fullName       String
   role           UserRole               @default(WAREHOUSE)
+  // Scope kho: null = phụ trách toàn xã (kho tổng); có giá trị = trưởng thôn CHỈ quản kho này.
+  warehouseId    String?
+  warehouse      Warehouse?             @relation(fields: [warehouseId], references: [id])
   createdAt      DateTime               @default(now())
   transactions   InventoryTransaction[]
+  reports        MonthlyStockReport[]
 }
 
 enum WarehouseKind {
@@ -105,6 +109,33 @@ model Warehouse {
   distanceKm     Float           @default(0) // fallback thủ công khi chưa có lat/lng
   createdAt      DateTime        @default(now())
   zones          WarehouseZone[]
+  leaders        User[] // trưởng thôn scope kho này
+  reports        MonthlyStockReport[]
+}
+
+enum ReportStatus {
+  PENDING // trưởng thôn gửi, chờ admin xã duyệt
+  APPROVED // admin duyệt → đã áp reconcile vào tồn
+  REJECTED // admin từ chối
+}
+
+// Báo cáo kiểm kê tháng của kho thôn (BE Phase-thôn Luồng 2): trưởng thôn upload Excel
+// → PENDING → admin xã duyệt → áp reconcile từng dòng. rows = snapshot Excel đã parse.
+model MonthlyStockReport {
+  id                String       @id @default(cuid())
+  warehouseId       String
+  warehouse         Warehouse    @relation(fields: [warehouseId], references: [id])
+  submittedByUserId String
+  submittedBy       User         @relation(fields: [submittedByUserId], references: [id])
+  period            String // "YYYY-MM"
+  status            ReportStatus @default(PENDING)
+  rows              Json // [{sku, itemName, quantity, unit, expiryDate?, condition?, note?}]
+  note              String?
+  approvedByUserId  String?
+  approvedAt        DateTime?
+  createdAt         DateTime     @default(now())
+
+  @@index([warehouseId, period])
 }
 
 // Kho lân cận (xã khác) — NHẬP TAY, AI đọc để gợi ý mượn liên xã. KHÔNG sync DB thật (#30)
@@ -528,6 +559,8 @@ enum NotificationKind {
   RESCUE_CONFIRMED // cứu hộ xác nhận → báo kho
   WAREHOUSE_READY // kho chuẩn bị xong → báo admin + cứu hộ
   INTER_WAREHOUSE_REQUEST // thiếu → báo kho lân cận
+  INCIDENT_DETECTED // sensor phát hiện sự cố → báo admin
+  READINESS_DEGRADED // readiness rớt DEGRADED/CRITICAL → báo kho
 }
 
 model Notification {

@@ -16,7 +16,14 @@ export interface SensorSignal {
   occurredAt: Date;
 }
 
-export type IncidentKind = "SUSPECTED_LOSS" | "SENSOR_FAULT" | "BAD_STORAGE";
+export type IncidentKind =
+  | "SUSPECTED_LOSS"
+  | "SENSOR_FAULT"
+  | "BAD_STORAGE"
+  | "FIRE_RISK"
+  | "POWER_OUTAGE"
+  | "STAT_ANOMALY"
+  | "PREDICTIVE_WARNING";
 export type Severity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
 export interface EvidenceItem {
@@ -37,11 +44,13 @@ export interface DetectedIncident {
 }
 
 // Ngưỡng cụ thể — cấu hình được (giữ hằng số cho MVP).
-const RULES = {
+export const RULES = {
   loadcellDropKg: 3, // loadcell giảm > 3kg = đáng ngờ
   humidityHigh: 85, // độ ẩm > 85% = bảo quản xấu
   temperatureHigh: 35, // nhiệt độ > 35°C
   correlationWindowMs: 5 * 60 * 1000, // ±5 phút để coi là cùng sự kiện
+  smokeHigh: 30, // khói > 30ppm = đáng ngờ
+  fireTempJumpC: 15, // nhiệt độ tăng > 15°C trong cửa sổ tương quan = cháy thật, không phải nhiễu
 };
 
 /**
@@ -59,6 +68,12 @@ export function detectIncidents(signals: SensorSignal[]): DetectedIncident[] {
 
   const storage = detectBadStorage(signals);
   if (storage) incidents.push(storage);
+
+  const fire = detectFireRisk(signals);
+  if (fire) incidents.push(fire);
+
+  const power = detectPowerOutage(signals);
+  if (power) incidents.push(power);
 
   return incidents;
 }
@@ -148,6 +163,61 @@ function detectBadStorage(signals: SensorSignal[]): DetectedIncident | null {
     confidence: Math.min(1, evidence.reduce((s, e) => s + e.weight, 0)),
     title: "Điều kiện bảo quản không đạt",
     evidence,
+  };
+}
+
+/**
+ * Nghi cháy: khói vượt ngưỡng VÀ nhiệt độ tăng nhanh trong cùng cửa sổ tương quan.
+ * Cần cả 2 nguồn — chỉ khói (hơi nước/bụi) hoặc chỉ nhiệt (nắng nóng) không kết luận cháy.
+ */
+function detectFireRisk(signals: SensorSignal[]): DetectedIncident | null {
+  const smoke = signals.find((s) => s.deviceType === "SMOKE" && s.value > RULES.smokeHigh);
+  if (!smoke) return null;
+
+  const temps = signals
+    .filter((s) => s.deviceType === "TEMPERATURE")
+    .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
+  if (temps.length < 2) return null;
+
+  const near = (s: SensorSignal) => Math.abs(s.occurredAt.getTime() - smoke.occurredAt.getTime()) <= RULES.correlationWindowMs;
+  const nearTemps = temps.filter(near);
+  if (nearTemps.length === 0) return null;
+
+  const baseline = temps[0].value;
+  const peak = nearTemps.reduce((max, t) => Math.max(max, t.value), -Infinity);
+  const jump = peak - baseline;
+  if (jump < RULES.fireTempJumpC) return null;
+
+  return {
+    kind: "FIRE_RISK",
+    severity: "CRITICAL",
+    confidence: 1,
+    title: "Nghi ngờ hỏa hoạn",
+    evidence: [
+      { ...toEvidence(smoke), weight: 0.5, note: `Khói ${smoke.value}ppm vượt ngưỡng ${RULES.smokeHigh}ppm` },
+      { ...toEvidence(nearTemps[nearTemps.length - 1]), weight: 0.5, note: `Nhiệt độ tăng ${jump.toFixed(1)}°C trong cửa sổ tương quan` },
+    ],
+  };
+}
+
+/**
+ * Mất điện: POWER_OFF không kèm GATEWAY_OFFLINE cùng lúc — phân biệt mất điện thật
+ * vs lỗi mạng (đã là sự cố khác, tránh báo trùng).
+ */
+function detectPowerOutage(signals: SensorSignal[]): DetectedIncident | null {
+  const off = signals.find((s) => s.deviceType === "POWER" && s.eventType === "POWER_OFF");
+  if (!off) return null;
+
+  const near = (s: SensorSignal) => Math.abs(s.occurredAt.getTime() - off.occurredAt.getTime()) <= RULES.correlationWindowMs;
+  const gatewayOffline = signals.some((s) => s.deviceType === "GATEWAY" && s.eventType === "GATEWAY_OFFLINE" && near(s));
+  if (gatewayOffline) return null;
+
+  return {
+    kind: "POWER_OUTAGE",
+    severity: "HIGH", // ponytail: severity cố định, chưa tính theo thời lượng mất điện — nâng cấp khi có nhu cầu phân cấp rõ hơn
+    confidence: 0.8,
+    title: "Mất điện kho",
+    evidence: [{ ...toEvidence(off), weight: 1, note: "Nguồn điện kho mất, không kèm lỗi kết nối gateway" }],
   };
 }
 

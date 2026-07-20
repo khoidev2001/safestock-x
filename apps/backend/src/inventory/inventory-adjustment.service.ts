@@ -1,27 +1,49 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
 import { LoanStatus, Prisma, TransactionSource } from "@prisma/client";
 import { TransactionType } from "@safestock/shared-types";
 import { PrismaService } from "../prisma/prisma.service";
+import { ReadinessService } from "../readiness/readiness.service";
 import { sumOutstanding } from "./loan-math";
+import { assertBatchInScope } from "./warehouse-scope";
 
 /** Thao tác chỉnh tay + đối chiếu kiểm kê (Bp2) — tách khỏi giao dịch thường vì đều nhạy cảm, hậu kiểm. */
 @Injectable()
 export class InventoryAdjustmentService {
-  constructor(private prisma: PrismaService) {}
+  private readonly log = new Logger(InventoryAdjustmentService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private readiness: ReadinessService,
+  ) {}
+
+  /** Tính lại Readiness của kho chứa batch sau giao dịch đổi số lượng (C1). Không chặn response nếu lỗi. */
+  private async recalcAfterTxn(batchId: string): Promise<void> {
+    const batch = await this.prisma.itemBatch.findUnique({
+      where: { id: batchId },
+      select: { shelf: { select: { zone: { select: { warehouseId: true } } } } },
+    });
+    const warehouseId = batch?.shelf?.zone.warehouseId;
+    if (!warehouseId) return;
+    await this.readiness.recalculateWarehouse(warehouseId).catch((error) => {
+      this.log.warn(`Recalc readiness sau giao dịch lỗi (batch ${batchId}): ${error.message}`);
+    });
+  }
 
   /**
    * Điều chỉnh thủ công số lượng — thao tác nhạy cảm, lý do BẮT BUỘC.
    * Ghi audit 5W. Đặt số lượng tuyệt đối (không phải delta).
    */
-  async adjust(userId: string, batchId: string, newQuantity: number, reason: string) {
+  async adjust(userId: string, batchId: string, newQuantity: number, reason: string, scopeWarehouseId?: string | null) {
     if (newQuantity < 0) {
       throw new BadRequestException("Số lượng không được âm");
     }
-    return this.prisma.$transaction(async (tx) => {
+    await assertBatchInScope(this.prisma, scopeWarehouseId, batchId);
+    const result = await this.prisma.$transaction(async (tx) => {
       const before = await tx.itemBatch.findUnique({ where: { id: batchId } });
       if (!before) throw new NotFoundException("Không tìm thấy lô vật tư");
 
@@ -50,6 +72,8 @@ export class InventoryAdjustmentService {
       });
       return { batchId, before: before.quantity, after: newQuantity };
     });
+    await this.recalcAfterTxn(batchId);
+    return result;
   }
 
   /**
@@ -63,10 +87,12 @@ export class InventoryAdjustmentService {
     countedQty: number,
     applyOverride: boolean,
     note?: string,
+    scopeWarehouseId?: string | null,
   ) {
     if (countedQty < 0) throw new BadRequestException("Số kiểm kê không được âm");
+    await assertBatchInScope(this.prisma, scopeWarehouseId, batchId);
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const batch = await tx.itemBatch.findUnique({ where: { id: batchId } });
       if (!batch) throw new NotFoundException("Không tìm thấy lô vật tư");
 
@@ -99,6 +125,8 @@ export class InventoryAdjustmentService {
 
       return { batchId, expectedInStock, countedQty, onLoan, discrepancy, applied: willApply };
     });
+    if (result.applied) await this.recalcAfterTxn(batchId);
+    return result;
   }
 
   /** Tổng số đang mượn của 1 lô (LoanRecord chưa đóng). */

@@ -1,11 +1,13 @@
-import { Injectable } from "@nestjs/common";
-import { LoanStatus, VirtualDeviceType } from "@prisma/client";
+import { Injectable, Logger } from "@nestjs/common";
+import { LoanStatus, NotificationKind, UserRole, VirtualDeviceType } from "@prisma/client";
 import { READINESS_WEIGHTS } from "@safestock/shared-types";
+import { NotificationService } from "../notification/notification.service";
 import { PrismaService } from "../prisma/prisma.service";
 import {
   ActionThresholds,
   DEFAULT_THRESHOLDS,
   resolveActionZone,
+  shouldNotifyManager,
 } from "./action-zone";
 import { computeBatchReadiness, rollupReadiness } from "./compute";
 import {
@@ -28,7 +30,12 @@ interface ShelfReadiness extends WeightedReadiness {
 
 @Injectable()
 export class ReadinessService {
-  constructor(private prisma: PrismaService) {}
+  private readonly log = new Logger(ReadinessService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private notifications: NotificationService,
+  ) {}
 
   /**
    * Tính điểm toàn kho ở 4 cấp (lô→kệ→khu→kho) và lưu bản mới nhất.
@@ -42,12 +49,34 @@ export class ReadinessService {
     const zoneScores = this.scoreZones(shelfScores);
     const warehouseScore = rollupReadiness(shelfScores);
 
-    await this.persist(warehouseId, warehouseScore, zoneScores, shelfScores);
     const thresholds = await this.loadThresholds(warehouseId);
+    const oldScore = await this.prisma.readinessScore.findUnique({
+      where: { targetType_targetId: { targetType: "WAREHOUSE", targetId: warehouseId } },
+      select: { score: true },
+    });
+    const oldZone = oldScore ? resolveActionZone(oldScore.score, thresholds) : null;
+    const newZone = resolveActionZone(warehouseScore.score, thresholds);
+
+    await this.persist(warehouseId, warehouseScore, zoneScores, shelfScores);
+
+    if (oldZone !== newZone && shouldNotifyManager(newZone)) {
+      await this.notifications
+        .create({
+          recipientRole: UserRole.WAREHOUSE,
+          kind: NotificationKind.READINESS_DEGRADED,
+          title: `Readiness kho rớt ${newZone}`,
+          body: `Điểm hiện tại ${warehouseScore.score}`,
+          warehouseId,
+        })
+        .catch((error) => {
+          this.log.warn(`Gửi thông báo readiness lỗi (kho ${warehouseId}): ${error.message}`);
+        });
+    }
+
     return {
       warehouseId,
       score: warehouseScore.score,
-      zone: resolveActionZone(warehouseScore.score, thresholds),
+      zone: newZone,
       zones: zoneScores.size,
     };
   }

@@ -132,6 +132,43 @@ const SCENARIOS: Scenario[] = [
       { offsetMs: 5000, deviceCode: "scale_A2", eventType: "VISION_DETECTION", value: 1 },
     ],
   },
+  {
+    key: "fire",
+    name: "Nghi cháy",
+    description: "Khói tăng đột biến + nhiệt độ tăng nhanh trong ~10s, không kèm hoạt động cửa/RFID.",
+    durationMs: 15000,
+    events: [
+      { offsetMs: 2000, deviceCode: "smoke_B", eventType: "SMOKE_READING", value: 0 },
+      { offsetMs: 5000, deviceCode: "temp_B", eventType: "TEMP_READING", value: 28.5 }, // lệch seed 0.5°C để ép ghi baseline thật (seed = 28, không lệch thì bị lọc "không đổi")
+      { offsetMs: 8000, deviceCode: "smoke_B", eventType: "SMOKE_READING", value: 25 },
+      { offsetMs: 10000, deviceCode: "temp_B", eventType: "TEMP_READING", value: 42 },
+      { offsetMs: 11000, deviceCode: "smoke_B", eventType: "SMOKE_READING", value: 45 },
+      { offsetMs: 12000, deviceCode: "temp_B", eventType: "TEMP_READING", value: 55 },
+    ],
+  },
+  {
+    key: "heat_drift",
+    name: "Nhiệt tăng dần (cảnh báo sớm)",
+    description: "Nhiệt độ tăng đều, CHƯA chạm ngưỡng 35°C — minh hoạ cảnh báo sớm dự đoán báo TRƯỚC khi rule ngưỡng cũ kịp phát hiện.",
+    durationMs: 20000,
+    events: [
+      { offsetMs: 2000, deviceCode: "temp_B", eventType: "TEMP_READING", value: 28 },
+      { offsetMs: 6000, deviceCode: "temp_B", eventType: "TEMP_READING", value: 30 },
+      { offsetMs: 10000, deviceCode: "temp_B", eventType: "TEMP_READING", value: 31.5 },
+      { offsetMs: 14000, deviceCode: "temp_B", eventType: "TEMP_READING", value: 33 },
+      { offsetMs: 18000, deviceCode: "temp_B", eventType: "TEMP_READING", value: 34 },
+    ],
+  },
+  {
+    key: "power_outage",
+    name: "Mất điện",
+    description: "Nguồn điện mất rồi có lại sau một khoảng, không kèm gateway offline.",
+    durationMs: 25000,
+    events: [
+      { offsetMs: 3000, deviceCode: "power_main", eventType: "POWER_OFF", value: 0 },
+      { offsetMs: 18000, deviceCode: "power_main", eventType: "POWER_ON", value: 1 },
+    ],
+  },
 ];
 
 export const scenarios = SCENARIOS;
