@@ -1,8 +1,10 @@
 # Báo cáo review tính năng và feature
 
-**Dự án:** Ứng phó nhanh  
-**Ngày review:** 2026-07-20  
-**Phạm vi:** PRD, BUILD-PLAN, roadmap từng app, backend, frontend, AI service, mobile và kiểm thử hiện có  
+**Dự án:** Ứng phó nhanh
+
+**Ngày review:** 2026-07-20
+
+**Phạm vi:** PRD, BUILD-PLAN, roadmap từng app, backend, frontend, AI service, mobile và kiểm thử hiện có
 **Loại review:** Read-only audit, không sửa source code
 
 ## 1. Kết luận tổng quan

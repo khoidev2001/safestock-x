@@ -1,8 +1,10 @@
 # Đánh giá Ollama Qwen 3.5 4B
 
-Ngày chạy: 2026-07-20  
-Model: `qwen3.5:4b`, Q4_K_M, 4,7B tham số  
-Thiết bị lúc test: 100% GPU, context runtime 4096 token  
+Ngày chạy: 2026-07-20
+
+Model: `qwen3.5:4b`, Q4_K_M, 4,7B tham số
+
+Thiết bị lúc test: 100% GPU, context runtime 4096 token
 Phạm vi: chatbot kho, thời tiết, parse tình huống, giải thích điều phối và Action Plan.
 
 ## Kết quả AI thuần

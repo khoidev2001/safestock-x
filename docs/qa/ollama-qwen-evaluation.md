@@ -2,8 +2,9 @@
 
 > Baseline Qwen 2.5. Kết quả sau nâng cấp: [ollama-qwen35-4b-evaluation.md](ollama-qwen35-4b-evaluation.md).
 
-Ngày chạy: 2026-07-20  
-Model: `qwen2.5:latest` (4,7 GB), chạy local qua Ollama  
+Ngày chạy: 2026-07-20
+
+Model: `qwen2.5:latest` (4,7 GB), chạy local qua Ollama
 Phạm vi: chatbot kho, thời tiết, parse tình huống, giải thích điều phối và Action Plan.
 
 ## Kết quả 10 ca
