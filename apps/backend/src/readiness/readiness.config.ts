@@ -29,7 +29,7 @@ export const READINESS_CONFIG = {
     DAMAGED: 0,
   } as const,
 
-  /** Mỗi vi phạm tiếp cận trừ điểm này (isBlocked, isLocked). */
+  /** Kệ bị khóa hoặc thiếu quyền truy cập bị trừ mức này. */
   accessibilityPenaltyPerIssue: 50,
 
   environment: {

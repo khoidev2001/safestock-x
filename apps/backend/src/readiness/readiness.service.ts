@@ -1,5 +1,12 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { LoanStatus, NotificationKind, UserRole, VirtualDeviceType } from "@prisma/client";
+import {
+  IncidentState,
+  LoanStatus,
+  NotificationKind,
+  Prisma,
+  UserRole,
+  VirtualDeviceType,
+} from "@prisma/client";
 import { READINESS_WEIGHTS } from "@safestock/shared-types";
 import { NotificationService } from "../notification/notification.service";
 import { PrismaService } from "../prisma/prisma.service";
@@ -7,7 +14,6 @@ import {
   ActionThresholds,
   DEFAULT_THRESHOLDS,
   resolveActionZone,
-  shouldNotifyManager,
 } from "./action-zone";
 import { computeBatchReadiness, rollupReadiness } from "./compute";
 import {
@@ -17,6 +23,10 @@ import {
   ZoneEnvironment,
 } from "./readiness.gather";
 import { buildRecommendations } from "./recommendations";
+import {
+  assessOperationalReadiness,
+  OperationalReadinessAssessment,
+} from "./operational-readiness";
 import { ReadinessResult, WeightedReadiness } from "./readiness.types";
 
 /** Cảm biến không cập nhật quá ngưỡng này coi như "chết" — hạ độ tin cậy (#25). */
@@ -52,20 +62,27 @@ export class ReadinessService {
     const thresholds = await this.loadThresholds(warehouseId);
     const oldScore = await this.prisma.readinessScore.findUnique({
       where: { targetType_targetId: { targetType: "WAREHOUSE", targetId: warehouseId } },
-      select: { score: true },
+      select: { score: true, operationalStatus: true },
     });
-    const oldZone = oldScore ? resolveActionZone(oldScore.score, thresholds) : null;
     const newZone = resolveActionZone(warehouseScore.score, thresholds);
+    const assessment = await this.assessWarehouse(warehouseId, warehouseScore);
 
-    await this.persist(warehouseId, warehouseScore, zoneScores, shelfScores);
+    await this.persist(warehouseId, warehouseScore, zoneScores, shelfScores, assessment);
 
-    if (oldZone !== newZone && shouldNotifyManager(newZone)) {
+    if (
+      oldScore?.operationalStatus !== assessment.operationalStatus &&
+      assessment.operationalStatus !== "READY"
+    ) {
+      const reason = assessment.blockers[0]?.title ?? assessment.recommendedActions[0];
       await this.notifications
         .create({
           recipientRole: UserRole.WAREHOUSE,
           kind: NotificationKind.READINESS_DEGRADED,
-          title: `Readiness kho rớt ${newZone}`,
-          body: `Điểm hiện tại ${warehouseScore.score}`,
+          title:
+            assessment.operationalStatus === "NOT_DISPATCHABLE"
+              ? "Kho tạm thời không thể điều phối"
+              : "Kho có việc cần xử lý",
+          body: reason ?? `Điểm tham khảo hiện tại ${warehouseScore.score}/100`,
           warehouseId,
         })
         .catch((error) => {
@@ -78,6 +95,7 @@ export class ReadinessService {
       score: warehouseScore.score,
       zone: newZone,
       zones: zoneScores.size,
+      ...assessment,
     };
   }
 
@@ -100,10 +118,35 @@ export class ReadinessService {
     if (!score) return null;
 
     const thresholds = await this.loadThresholds(warehouseId);
+    const assessment = await this.assessWarehouse(warehouseId, {
+      score: score.score,
+      components: score.components.map((component) => ({
+        key: component.key as ReadinessResult["components"][number]["key"],
+        score: component.value,
+        reasons: component.reasons,
+      })),
+    });
     return {
       ...score,
       zone: resolveActionZone(score.score, thresholds),
+      ...assessment,
     };
+  }
+
+  /** Kết luận vận hành dùng sự cố chưa xử lý tại thời điểm đọc, tránh trạng thái bị cũ. */
+  private async assessWarehouse(
+    warehouseId: string,
+    readiness: ReadinessResult,
+  ): Promise<OperationalReadinessAssessment> {
+    const openIncidents = await this.prisma.incident.findMany({
+      where: { warehouseId, state: { not: IncidentState.RESOLVED } },
+      select: { kind: true, severity: true, title: true },
+    });
+    return assessOperationalReadiness({
+      referenceScore: readiness.score,
+      components: readiness.components,
+      openIncidents,
+    });
   }
 
   /** Đề xuất cải thiện của 1 kho (đã lưu lúc recalc). */
@@ -200,7 +243,6 @@ export class ReadinessService {
         );
         return {
           batch,
-          isBlocked: shelf.isBlocked,
           isLocked: shelf.isLocked,
           countedQty: lastCount?.countedQty ?? null,
           daysSinceLastCount: lastCount ? daysBetween(lastCount.countedAt, now) : null,
@@ -257,9 +299,10 @@ export class ReadinessService {
     warehouse: ReadinessResult,
     zones: Map<string, ReadinessResult>,
     shelves: ShelfReadiness[],
+    assessment: OperationalReadinessAssessment,
   ) {
     const writes = [
-      this.upsertScore(warehouseId, "WAREHOUSE", warehouseId, warehouse),
+      this.upsertScore(warehouseId, "WAREHOUSE", warehouseId, warehouse, assessment),
       ...[...zones].map(([zoneId, result]) =>
         this.upsertScore(warehouseId, "ZONE", zoneId, result),
       ),
@@ -275,6 +318,7 @@ export class ReadinessService {
     targetType: "WAREHOUSE" | "ZONE" | "SHELF",
     targetId: string,
     result: ReadinessResult,
+    assessment?: OperationalReadinessAssessment,
   ) {
     const componentData = result.components.map((component) => ({
       key: component.key,
@@ -298,12 +342,20 @@ export class ReadinessService {
         targetType,
         targetId,
         score: result.score,
+        operationalStatus: assessment?.operationalStatus ?? "READY",
+        blockers: (assessment?.blockers ?? []) as unknown as Prisma.InputJsonValue,
         components: { create: componentData },
         recommendations: { create: recommendationData },
       },
       update: {
         score: result.score,
         computedAt: new Date(),
+        ...(assessment
+          ? {
+              operationalStatus: assessment.operationalStatus,
+              blockers: assessment.blockers as unknown as Prisma.InputJsonValue,
+            }
+          : {}),
         components: { deleteMany: {}, create: componentData },
         recommendations: { deleteMany: {}, create: recommendationData },
       },

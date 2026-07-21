@@ -63,19 +63,20 @@ describe("scoreCondition", () => {
 describe("scoreAccessibility", () => {
   const penalty = READINESS_CONFIG.accessibilityPenaltyPerIssue;
 
-  it("should return 100 when not blocked and not locked", () => {
-    const result = scoreAccessibility({ isBlocked: false, isLocked: false }, penalty);
+  it("should return 100 when shelf is not locked", () => {
+    const result = scoreAccessibility({ isLocked: false }, penalty);
     expect(result.score).toBe(100);
     expect(result.reasons).toHaveLength(0);
   });
 
-  it("should subtract penalty for each issue", () => {
-    expect(scoreAccessibility({ isBlocked: true, isLocked: false }, penalty).score).toBe(50);
-    expect(scoreAccessibility({ isBlocked: true, isLocked: true }, penalty).score).toBe(0);
+  it("should subtract penalty when shelf is locked", () => {
+    const result = scoreAccessibility({ isLocked: true }, penalty);
+    expect(result.score).toBe(50);
+    expect(result.reasons).toContain("Kệ bị khóa hoặc thiếu quyền truy cập");
   });
 
   it("should never go below 0", () => {
-    expect(scoreAccessibility({ isBlocked: true, isLocked: true }, 80).score).toBe(0);
+    expect(scoreAccessibility({ isLocked: true }, 120).score).toBe(0);
   });
 });
 

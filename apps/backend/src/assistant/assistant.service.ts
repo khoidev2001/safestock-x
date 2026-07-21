@@ -45,7 +45,7 @@ export class AssistantService {
     const warehouse = await this.prisma.warehouse.findUnique({ where: { id: warehouseId } });
     if (!warehouse) throw new NotFoundException("Không tìm thấy kho");
 
-    const [batches, score, incidents, weather] = await Promise.all([
+    const [batches, storedScore, incidents, weather] = await Promise.all([
       this.prisma.itemBatch.findMany({
         where: { shelf: { zone: { warehouseId } }, circulation: "IN_STOCK" },
         include: {
@@ -62,6 +62,11 @@ export class AssistantService {
         ? this.weather.forecastRain(warehouse.lat, warehouse.lng)
         : Promise.resolve(null),
     ]);
+    let score = storedScore;
+    if (!score) {
+      await this.readiness.recalculateWarehouse(warehouseId);
+      score = await this.readiness.getWarehouseScore(warehouseId);
+    }
 
     const stockBySku = new Map<string, { itemName: string; unit: string; quantity: number; expiryDate: Date | null }>();
     for (const b of batches) {
@@ -86,7 +91,18 @@ export class AssistantService {
 
     return {
       warehouse: { name: warehouse.name, commune: warehouse.communeId },
-      readiness: score ? { score: score.score, zone: score.zone } : null,
+      readiness: score
+        ? {
+            score: score.score,
+            zone: score.zone,
+            operationalStatus: score.operationalStatus,
+            blockers: score.blockers.map((blocker) => ({
+              title: blocker.title,
+              reasons: blocker.reasons,
+            })),
+            recommendedActions: score.recommendedActions,
+          }
+        : null,
       weather: weather ? { ...weather, periodHours: 72 } : null,
       stock: [...stockBySku.entries()]
         .map(([sku, s]) => ({

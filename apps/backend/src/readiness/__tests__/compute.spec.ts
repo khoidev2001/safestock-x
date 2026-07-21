@@ -9,7 +9,7 @@ const perfectBatch = (overrides: Partial<BatchReadinessInput> = {}): BatchReadin
   quantity: 100,
   expiry: { expiryDate: null, now: NOW },
   condition: { condition: "NEW" },
-  accessibility: { isBlocked: false, isLocked: false },
+  accessibility: { isLocked: false },
   quantityAvailability: { systemQty: 100, countedQty: 100, onLoanQty: 0 },
   environment: { temperature: 28, humidity: 60 },
   dataReliability: { daysSinceLastCount: 3, sensorFresh: true },

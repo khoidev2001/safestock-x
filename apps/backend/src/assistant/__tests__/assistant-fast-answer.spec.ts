@@ -5,7 +5,13 @@ import {
 
 const snapshot: AssistantSnapshot = {
   warehouse: { name: "Kho thôn Phú Xuân", commune: "commune-1" },
-  readiness: { score: 73, zone: "ATTENTION" },
+  readiness: {
+    score: 73,
+    zone: "ATTENTION",
+    operationalStatus: "NEEDS_ACTION",
+    blockers: [],
+    recommendedActions: ["Kiểm kê và bổ sung các vật tư đang thiếu."],
+  },
   weather: { totalRainMm: 125.5, alert: true, periodHours: 72 },
   stock: [
     {
@@ -39,9 +45,15 @@ describe("resolveAssistantFastAnswer", () => {
     );
   });
 
-  it("trả điểm readiness không cần LLM", () => {
+  it("trả trạng thái readiness không cần LLM", () => {
     expect(resolveAssistantFastAnswer("Điểm sẵn sàng của kho hiện tại?", snapshot)).toBe(
-      "Điểm sẵn sàng của Kho thôn Phú Xuân hiện là 73/100, mức cần chú ý.",
+      "Kho thôn Phú Xuân hiện cần xử lý trước khi điều phối. Việc cần làm: Kiểm kê và bổ sung các vật tư đang thiếu. Điểm tham khảo 73/100.",
+    );
+  });
+
+  it("hiểu câu hỏi tự nhiên về khả năng đáp ứng của kho", () => {
+    expect(resolveAssistantFastAnswer("Kho sẵn sàng đáp ứng được chưa?", snapshot)).toBe(
+      "Kho thôn Phú Xuân hiện cần xử lý trước khi điều phối. Việc cần làm: Kiểm kê và bổ sung các vật tư đang thiếu. Điểm tham khảo 73/100.",
     );
   });
 

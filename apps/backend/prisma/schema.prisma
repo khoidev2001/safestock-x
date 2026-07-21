@@ -167,7 +167,6 @@ model Shelf {
   zoneId    String
   zone      WarehouseZone   @relation(fields: [zoneId], references: [id])
   code      String // ví dụ "A1", "A2"
-  isBlocked Boolean         @default(false) // lối đi bị chặn — Readiness "khả năng tiếp cận"
   isLocked  Boolean         @default(false) // bị khóa / thiếu quyền
   batches   ItemBatch[]
   devices   VirtualDevice[]
@@ -371,6 +370,8 @@ model ReadinessScore {
   targetType      ReadinessTargetType
   targetId        String
   score           Int // 0-100 tổng
+  operationalStatus String                    @default("READY")
+  blockers          Json                      @default("[]")
   computedAt      DateTime                  @default(now())
   components      ReadinessComponent[]
   recommendations ReadinessRecommendation[]
@@ -450,6 +451,7 @@ model Mission {
   parsedInput      Json // JSON tình huống đã parse (từ AI hoặc nhập tay)
   status           MissionStatus        @default(DRAFT)
   fulfillment      Float                @default(0) // mức đáp ứng % (min qua các loại)
+  readinessAssessment Json? // blocker + trạng thái + mức đáp ứng tại lúc lập phương án
   explanation      String? // giải thích AI (tiếng Việt)
   actionPlan       Json? // Incident Action Plan (8 mục, ActionPlanResponse từ AI)
   incidentLat      Float? // toạ độ điểm nạn (ghim tay) — tính khoảng cách kho gần nhất
