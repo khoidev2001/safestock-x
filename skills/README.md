@@ -63,6 +63,6 @@ npx -y skills add addyosmani/agent-skills -y
 ```
 1. Đọc CODING-STANDARDS.md            ← quy tắc bắt buộc
 2. Cài skill AI (4 lệnh mục 2)         ← 1 lần trên máy mình
-3. Xem README gốc + docs/ (PRD, BUILD-PLAN, CONTRIBUTING, WORK-LOG)
-4. Bắt đầu code theo phase, mỗi lát 1 branch → PR
+3. Xem README gốc + docs/PRD.md + CONTRIBUTING
+4. Nhận việc theo checklist master, mỗi lát 1 branch → PR
 ```
