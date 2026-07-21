@@ -448,7 +448,6 @@ Mỗi kệ hiển thị:
 - Số lô.
 - Readiness kệ nếu có.
 - Icon khóa nếu `isLocked`.
-- Icon chặn nếu `isBlocked`.
 
 Màu nền kệ:
 
@@ -1421,4 +1420,3 @@ Khi thiết kế xong cần tự kiểm:
 - [ ] Không dùng visual style marketing/generic AI.
 - [ ] Màu trạng thái nhất quán toàn hệ thống.
 - [ ] Empty/error/loading state được thiết kế đầy đủ.
-

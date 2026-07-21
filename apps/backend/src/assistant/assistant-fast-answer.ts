@@ -1,6 +1,12 @@
 export interface AssistantSnapshot {
   warehouse: { name: string; commune: string };
-  readiness: { score: number; zone: string } | null;
+  readiness: {
+    score: number;
+    zone: string;
+    operationalStatus: "READY" | "NEEDS_ACTION" | "NOT_DISPATCHABLE";
+    blockers: Array<{ title: string; reasons: string[] }>;
+    recommendedActions: string[];
+  } | null;
   weather: { totalRainMm: number; alert: boolean; periodHours: number } | null;
   stock: Array<{
     sku: string;
@@ -17,11 +23,13 @@ export interface AssistantSnapshot {
   }>;
 }
 
-const READINESS_ZONE_LABELS: Record<string, string> = {
-  READY: "sẵn sàng",
-  ATTENTION: "cần chú ý",
-  DEGRADED: "suy giảm",
-  CRITICAL: "nghiêm trọng",
+const OPERATIONAL_STATUS_LABELS: Record<
+  NonNullable<AssistantSnapshot["readiness"]>["operationalStatus"],
+  string
+> = {
+  READY: "sẵn sàng điều phối",
+  NEEDS_ACTION: "cần xử lý trước khi điều phối",
+  NOT_DISPATCHABLE: "chưa thể điều phối",
 };
 
 /** Trả lời tức thì các câu tra cứu xác định; câu mở trả null để chuyển sang LLM. */
@@ -39,7 +47,17 @@ export function resolveAssistantFastAnswer(
     return answerIncidents(snapshot);
   }
 
-  if (hasAny(normalizedQuestion, ["readiness", "diem san sang", "muc san sang"])) {
+  if (
+    hasAny(normalizedQuestion, [
+      "readiness",
+      "diem san sang",
+      "muc san sang",
+      "kho san sang",
+      "san sang dap ung",
+      "dap ung duoc chua",
+      "kha nang dieu phoi",
+    ])
+  ) {
     return answerReadiness(snapshot);
   }
 
@@ -96,8 +114,15 @@ function answerReadiness(snapshot: AssistantSnapshot): string {
     return `${snapshot.warehouse.name} chưa có dữ liệu điểm sẵn sàng.`;
   }
 
-  const zone = READINESS_ZONE_LABELS[snapshot.readiness.zone] ?? snapshot.readiness.zone;
-  return `Điểm sẵn sàng của ${snapshot.warehouse.name} hiện là ${snapshot.readiness.score}/100, mức ${zone}.`;
+  const status = OPERATIONAL_STATUS_LABELS[snapshot.readiness.operationalStatus];
+  const blocker = snapshot.readiness.blockers[0];
+  const action = snapshot.readiness.recommendedActions[0];
+  const detail = blocker
+    ? `Lý do: ${blocker.title}${blocker.reasons[0] ? ` — ${blocker.reasons[0]}` : ""}.`
+    : action
+      ? `Việc cần làm: ${action}`
+      : "Không có blocker vận hành đang mở.";
+  return `${snapshot.warehouse.name} hiện ${status}. ${detail} Điểm tham khảo ${snapshot.readiness.score}/100.`;
 }
 
 function answerExpiry(snapshot: AssistantSnapshot): string {

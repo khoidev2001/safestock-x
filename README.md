@@ -58,9 +58,9 @@ Monorepo pnpm · **Backend** NestJS + Prisma + PostgreSQL + Redis · **AI** Fast
 ```
 apps/
   backend/             # BE — NestJS ✅
-  frontend/            # FE — Next.js admin + simulator (Phase G, placeholder)
+  frontend/            # FE — Next.js admin + simulator + Readiness/Mission UI
   mobile/              # Mobile — Expo (Phase F, placeholder)
-  ai-service/          # AI — FastAPI, không thuộc pnpm workspace (Phase D, placeholder)
+  ai-service/          # AI — FastAPI + Ollama/Gemini, không thuộc pnpm workspace
 packages/
   shared-types/        # enum/type dùng chung BE↔FE↔mobile
   scenario-definitions/ # kịch bản mô phỏng cảm biến
@@ -84,10 +84,10 @@ pnpm be:dev                   # http://localhost:3100/api/health
 Simulator UI tối thiểu: `http://localhost:3100/sim.html`
 
 ## Trạng thái
-- ✅ Backend lõi đã vượt Phase A/B: auth/RBAC, inventory, readiness dạng điểm hiện hành, simulator, mission, incident, geo, notification, insights, assistant, backup, report/admin.
-- 🔁 Readiness v2.2 (blocker + trạng thái + khả năng đáp ứng; điểm chỉ hiển thị phụ) đã chốt trong PRD/BUILD-PLAN, chưa triển khai code.
+- ✅ Backend lõi đã vượt Phase A/B: auth/RBAC, inventory, Readiness v2.2, simulator, mission, incident, geo, notification, insights, assistant, backup, report/admin.
+- ✅ Readiness v2.2 đã triển khai: blocker có bằng chứng, 3 trạng thái vận hành, 6 chiều đánh giá, lọc lô đủ điều kiện và mức đáp ứng từng SKU; điểm chỉ hiển thị phụ.
 - ✅ AI service đã có FastAPI + Gemini/Ollama provider, parse tình huống, explain, action-plan, assistant.
-- 🟡 Frontend web admin đã có dashboard nhiều view, mission/action-plan/map/notification/assistant/insights; `next build` cần kiểm tra lại vì lần rà gần nhất bị treo.
+- ✅ Frontend web admin đã có dashboard nhiều view, trạng thái/lý do/hành động Readiness, mission/action-plan/map/notification/assistant/insights; build production đã pass ngày 2026-07-21.
 - ⬜ Mobile Expo chưa triển khai source app, mới có roadmap/package.
 - Chi tiết đối chiếu mới nhất: [docs/codebase-summary.md](docs/codebase-summary.md).
 
@@ -97,3 +97,8 @@ Simulator UI tối thiểu: `http://localhost:3100/sim.html`
 | `admin` | `admin123@` | ADMIN |
 | `staff@safestock.vn` | `staff123` | WAREHOUSE |
 | `rescue@safestock.vn` | `rescue123` | RESCUE |
+| `truongthon1@safestock.vn` ... `truongthon17@safestock.vn` | `truongthon123` | WAREHOUSE theo từng thôn |
+
+Seed chuẩn hiện có 1 kho trung tâm và đủ 17 thôn của xã Đồng Xuân. Tọa độ kho thôn để trống để ADMIN pin vị trí thật trên bản đồ. Chi tiết catalog, trạng thái mô phỏng và nguồn dữ liệu: [docs/SEED-DATASET.md](docs/SEED-DATASET.md).
+
+Hướng dẫn chạy và kiểm thử thủ công toàn bộ tính năng: [docs/HUONG-DAN-TEST.md](docs/HUONG-DAN-TEST.md).

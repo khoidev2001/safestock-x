@@ -14,7 +14,6 @@ export interface ZoneEnvironment {
 /** Dữ liệu 1 lô + phụ trợ để dựng BatchReadinessInput. */
 export interface BatchWithContext {
   batch: ItemBatch;
-  isBlocked: boolean;
   isLocked: boolean;
   /** Số kiểm kê gần nhất; null nếu chưa kiểm kê. */
   countedQty: number | null;
@@ -41,7 +40,7 @@ export function toBatchReadinessInput(
     quantity: batch.quantity,
     expiry: { expiryDate: batch.expiryDate, now },
     condition: { condition: batch.condition },
-    accessibility: { isBlocked: ctx.isBlocked, isLocked: ctx.isLocked },
+    accessibility: { isLocked: ctx.isLocked },
     quantityAvailability: {
       systemQty: batch.quantity,
       countedQty: ctx.countedQty,

@@ -1,4 +1,21 @@
 export type ReadinessZone = "READY" | "ATTENTION" | "DEGRADED" | "CRITICAL";
+export type OperationalStatus = "READY" | "NEEDS_ACTION" | "NOT_DISPATCHABLE";
+
+export function getOperationalStatusLabel(status: OperationalStatus): string {
+  return {
+    READY: "Sẵn sàng điều phối",
+    NEEDS_ACTION: "Cần xử lý",
+    NOT_DISPATCHABLE: "Chưa thể điều phối",
+  }[status];
+}
+
+export function getOperationalStatusColor(status: OperationalStatus): string {
+  return {
+    READY: "var(--color-ready)",
+    NEEDS_ACTION: "var(--color-attention)",
+    NOT_DISPATCHABLE: "var(--color-critical)",
+  }[status];
+}
 
 export function getReadinessZone(score: number): ReadinessZone {
   if (score >= 80) return "READY";

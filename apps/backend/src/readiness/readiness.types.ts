@@ -32,7 +32,6 @@ export interface ConditionInput {
 
 /** Input tính điểm khả năng tiếp cận. */
 export interface AccessibilityInput {
-  isBlocked: boolean;
   isLocked: boolean;
 }
 

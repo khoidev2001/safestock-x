@@ -168,7 +168,7 @@ export default function HomePage() {
           <WarehouseError />
         ) : (
           <>
-            {activeView !== "map" && (
+            {activeView === "readiness" && (
               <OperationsSummary
                 batches={batchesQuery.data}
                 incidents={incidentsQuery.data}

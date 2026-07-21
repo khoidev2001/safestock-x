@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { CirculationStatus, ItemCondition, MissionStatus, NotificationKind, Prisma, UserRole } from "@prisma/client";
+import { MissionStatus, NotificationKind, Prisma, UserRole } from "@prisma/client";
 import { IncidentType } from "@safestock/shared-types";
 import { AiClientService } from "../ai/ai-client.service";
 import { GeoService } from "../geo/geo.service";
@@ -7,8 +7,8 @@ import { LatLng } from "../geo/haversine";
 import { InventoryService } from "../inventory/inventory.service";
 import { NotificationService } from "../notification/notification.service";
 import { PrismaService } from "../prisma/prisma.service";
-import { shouldBlockNewMission } from "../readiness/action-zone";
 import { ReadinessService } from "../readiness/readiness.service";
+import { assessBatchEligibility } from "./batch-eligibility";
 import { assertTransition } from "./mission.workflow";
 import {
   ActionPlan,
@@ -24,8 +24,11 @@ import {
   AvailableBatch,
   computeRequirements,
   IncidentInput,
-  overallFulfillment,
 } from "./mission.compute";
+import {
+  assessMissionReadiness,
+  MissionReadinessAssessment,
+} from "./mission-readiness";
 
 /** Gợi ý mượn kho lân cận cho 1 SKU thiếu. */
 interface NeighborSuggestion {
@@ -59,19 +62,28 @@ export class MissionService {
     const warehouse = await this.prisma.warehouse.findUnique({ where: { id: warehouseId } });
     if (!warehouse) throw new NotFoundException("Không tìm thấy kho");
 
-    const readinessScore = await this.readiness.getWarehouseScore(warehouseId);
-    if (readinessScore && shouldBlockNewMission(readinessScore.zone)) {
+    const warehouseReadiness = await this.readiness.getWarehouseScore(warehouseId);
+    if (warehouseReadiness?.operationalStatus === "NOT_DISPATCHABLE") {
+      const reason = warehouseReadiness.blockers[0]?.title ?? "Kho có blocker vận hành";
       throw new BadRequestException(
-        `Kho đang ở mức CRITICAL (điểm ${readinessScore.score}) — không thể lập phương án mới. Cần xử lý sự cố trước.`,
+        `Kho chưa thể lập phương án mới: ${reason}. Cần xử lý nguyên nhân trước.`,
       );
     }
 
     const requirements = computeRequirements(incident);
-    const available = await this.loadClusterBatches(warehouse.communeId, incidentPoint);
+    const batchPool = await this.loadClusterBatches(
+      warehouse.communeId,
+      requirements.map((requirement) => requirement.sku),
+      incidentPoint,
+    );
     const neighbors = await this.prisma.neighborWarehouse.findMany({ where: { warehouseId } });
 
-    const allocations = requirements.map((req) => allocateGreedy(req, available));
-    const fulfillment = overallFulfillment(allocations);
+    const allocations = requirements.map((req) => allocateGreedy(req, batchPool.available));
+    const readinessAssessment = assessMissionReadiness(
+      allocations,
+      batchPool.unavailableReasonsBySku,
+    );
+    const fulfillment = readinessAssessment.fulfillment;
 
     const mission = await this.prisma.mission.create({
       data: {
@@ -83,6 +95,10 @@ export class MissionService {
         parsedInput: incident as unknown as Prisma.InputJsonValue,
         status: MissionStatus.DRAFT,
         fulfillment,
+        readinessAssessment: {
+          ...readinessAssessment,
+          warehouseOperationalStatus: warehouseReadiness?.operationalStatus ?? null,
+        } as unknown as Prisma.InputJsonValue,
         incidentLat: incidentPoint?.lat,
         incidentLng: incidentPoint?.lng,
         requirements: {
@@ -122,6 +138,7 @@ export class MissionService {
     if (mission.status !== MissionStatus.DRAFT) {
       throw new BadRequestException("Chỉ duyệt được nhiệm vụ ở trạng thái nháp");
     }
+    this.assertMissionDispatchable(mission.readinessAssessment);
     return this.prisma.mission.update({
       where: { id },
       data: { status: MissionStatus.APPROVED, approvedByUserId: userId, approvedAt: new Date() },
@@ -139,6 +156,7 @@ export class MissionService {
   async dispatch(id: string) {
     const mission = await this.requireMission(id);
     this.guardTransition(mission.status, MissionStatus.PENDING_RESCUE);
+    this.assertMissionDispatchable(mission.readinessAssessment);
     const updated = await this.prisma.mission.update({
       where: { id },
       data: { status: MissionStatus.PENDING_RESCUE },
@@ -223,6 +241,16 @@ export class MissionService {
     } catch (error) {
       throw new BadRequestException((error as Error).message);
     }
+  }
+
+  private assertMissionDispatchable(value: Prisma.JsonValue | null) {
+    const assessment = value as unknown as MissionReadinessAssessment | null;
+    if (assessment?.status !== "NOT_DISPATCHABLE") return;
+    const blocker = assessment.blockers[0];
+    const reason = blocker
+      ? `${blocker.itemName}: ${blocker.reasons[0] ?? "không có lô đủ điều kiện"}`
+      : "Không đủ vật tư thiết yếu đủ điều kiện";
+    throw new BadRequestException(`Chưa thể điều phối nhiệm vụ: ${reason}.`);
   }
 
   /**
@@ -336,9 +364,21 @@ export class MissionService {
    */
   private async loadClusterBatches(
     communeId: string,
+    requiredSkus: string[],
     incidentPoint?: LatLng,
-  ): Promise<AvailableBatch[]> {
+  ): Promise<{
+    available: AvailableBatch[];
+    unavailableReasonsBySku: Map<string, string[]>;
+  }> {
     const warehouses = await this.prisma.warehouse.findMany({ where: { communeId } });
+    const readinessByWarehouse = new Map(
+      await Promise.all(
+        warehouses.map(async (warehouse) => [
+          warehouse.id,
+          await this.readiness.getWarehouseScore(warehouse.id),
+        ] as const),
+      ),
+    );
 
     // Khoảng cách mỗi kho → điểm nạn (1 lần cho cả cụm).
     const distanceByWarehouse = await this.distancesToIncident(warehouses, incidentPoint);
@@ -346,9 +386,7 @@ export class MissionService {
     const batches = await this.prisma.itemBatch.findMany({
       where: {
         shelf: { zone: { warehouseId: { in: warehouses.map((w) => w.id) } } },
-        circulation: CirculationStatus.IN_STOCK,
-        condition: { notIn: [ItemCondition.DAMAGED] },
-        quantity: { gt: 0 },
+        item: { sku: { in: requiredSkus } },
       },
       include: {
         item: true,
@@ -358,23 +396,60 @@ export class MissionService {
     });
 
     const nameById = new Map(warehouses.map((w) => [w.id, w.name]));
+    const available: AvailableBatch[] = [];
+    const unavailableReasonsBySku = new Map<string, string[]>();
+    const now = new Date();
 
-    return batches.map((batch) => {
+    for (const batch of batches) {
+      const wid = batch.shelf?.zone.warehouseId;
+      const sourceReadiness = wid ? readinessByWarehouse.get(wid) : null;
+      if (sourceReadiness?.operationalStatus === "NOT_DISPATCHABLE") {
+        const reason = sourceReadiness.blockers[0]?.title ?? "Kho nguồn chưa thể điều phối";
+        addUnavailableReason(
+          unavailableReasonsBySku,
+          batch.item.sku,
+          `${batch.batchCode}: ${reason}`,
+        );
+        continue;
+      }
+
       const onLoan = batch.loans.reduce(
         (sum, loan) => sum + (loan.quantity - loan.returnedOk - loan.returnedDamaged - loan.lost),
         0,
       );
-      const wid = batch.shelf?.zone.warehouseId;
-      return {
+      const eligibility = assessBatchEligibility(
+        {
+          condition: batch.condition,
+          circulation: batch.circulation,
+          quantity: batch.quantity,
+          onLoanQuantity: onLoan,
+          expiryDate: batch.expiryDate,
+          isLocked: batch.shelf?.isLocked ?? true,
+        },
+        now,
+      );
+      if (!eligibility.eligible) {
+        for (const reason of eligibility.reasons) {
+          addUnavailableReason(
+            unavailableReasonsBySku,
+            batch.item.sku,
+            `${batch.batchCode}: ${reason}`,
+          );
+        }
+        continue;
+      }
+
+      available.push({
         batchId: batch.id,
         sku: batch.item.sku,
-        quantity: Math.max(0, batch.quantity - onLoan),
+        quantity: eligibility.availableQuantity,
         expiryDate: batch.expiryDate,
         warehouseId: wid,
         warehouseName: wid ? nameById.get(wid) : undefined,
         distanceKm: wid ? (distanceByWarehouse.get(wid) ?? 0) : 0,
-      };
-    });
+      });
+    }
+    return { available, unavailableReasonsBySku };
   }
 
   /** Khoảng cách mỗi kho → điểm nạn. Kho thiếu lat/lng → dùng distanceKm ghim tay. */
@@ -423,6 +498,12 @@ export class MissionService {
     }
     return suggestions.sort((a, b) => a.distanceKm - b.distanceKm);
   }
+}
+
+function addUnavailableReason(reasonsBySku: Map<string, string[]>, sku: string, reason: string) {
+  const reasons = reasonsBySku.get(sku) ?? [];
+  if (!reasons.includes(reason)) reasons.push(reason);
+  reasonsBySku.set(sku, reasons);
 }
 
 /** Tên các kho xuất hiện trong danh sách lô đã cấp (JSON allocations). */

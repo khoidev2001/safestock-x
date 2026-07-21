@@ -14,7 +14,7 @@ const ACTION_BY_COMPONENT: Record<ReadinessComponentKey, string> = {
   quantityAvailability: "Kiểm kê thực tế để xác nhận số lượng và bổ sung nếu thiếu",
   itemCondition: "Kiểm tra, bảo trì hoặc thay thế vật tư hư hỏng",
   expiry: "Ưu tiên sử dụng hoặc thay mới vật tư sắp hết hạn",
-  accessibility: "Dọn lối đi và mở khóa khu vực để lấy vật tư nhanh",
+  accessibility: "Mở khóa khu vực hoặc cấp quyền để lấy vật tư",
   environment: "Điều chỉnh nhiệt độ/độ ẩm về ngưỡng an toàn",
   dataReliability: "Kiểm kê lại và kiểm tra cảm biến để cập nhật dữ liệu",
 };

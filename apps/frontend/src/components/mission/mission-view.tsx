@@ -19,6 +19,7 @@ import {
   type Mission,
 } from "@/lib/mission-api";
 import { ActionPlanView } from "./action-plan-view";
+import { MissionReadinessPanel } from "./mission-readiness-panel";
 import { WorkflowStepper } from "./workflow-stepper";
 
 const IncidentMap = dynamic(() => import("./incident-map").then((m) => m.IncidentMap), {
@@ -49,6 +50,7 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
   const [form, setForm] = useState({ incidentType: "FLOOD", affectedPeople: 100, durationHours: 24, children: 0, elderly: 0, medicalSupportCases: 0 });
   const [incidentPoint, setIncidentPoint] = useState<LatLng | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
+  const [workflowError, setWorkflowError] = useState<string | null>(null);
 
   const warehousesQuery = useQuery({
     queryKey: ["cluster-warehouses", warehouseId],
@@ -84,7 +86,11 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
 
   const step = useMutation({
     mutationFn: (fn: (id: string) => Promise<Mission>) => fn(missionId as string),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["mission", missionId] }),
+    onSuccess: () => {
+      setWorkflowError(null);
+      return queryClient.invalidateQueries({ queryKey: ["mission", missionId] });
+    },
+    onError: (err) => setWorkflowError(err instanceof ApiError ? err.message : "Không thể chuyển bước nhiệm vụ"),
   });
 
   const mission = missionQuery.data;
@@ -197,6 +203,9 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
           <EmptyState isAdmin={isAdmin} />
         ) : (
           <>
+            {mission.readinessAssessment && (
+              <MissionReadinessPanel assessment={mission.readinessAssessment} />
+            )}
             <section className="rounded-md border bg-[var(--surface)] p-5">
               <WorkflowStepper status={mission.status} />
               <div className="mt-5 flex flex-wrap gap-2 border-t pt-4">
@@ -210,6 +219,7 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
                   busy={genActionPlan.isPending || step.isPending}
                 />
               </div>
+              {workflowError && <p className="mt-3 text-sm text-[var(--color-critical)]">{workflowError}</p>}
             </section>
 
             {mission.actionPlan ? (
@@ -257,7 +267,13 @@ function RoleActions({
           </button>
         )}
         {mission.actionPlan && (
-          <button className={btn} style={primary} onClick={onDispatch} disabled={busy}>
+          <button
+            className={btn}
+            style={primary}
+            onClick={onDispatch}
+            disabled={busy || mission.readinessAssessment?.status === "NOT_DISPATCHABLE"}
+            title={mission.readinessAssessment?.status === "NOT_DISPATCHABLE" ? "Xử lý blocker vật tư trước khi gửi" : undefined}
+          >
             <Send size={16} /> Gửi cho đội cứu hộ
           </button>
         )}

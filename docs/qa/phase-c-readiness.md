@@ -1,6 +1,6 @@
-# Q&A — Phase C (Readiness Score — differentiator)
+# Q&A — Phase C (Readiness vận hành v2.2)
 
-> Chỉ số sẵn sàng: 6 thành phần có trọng số, tính ở 4 cấp, kèm nguyên nhân trừ điểm + đề xuất + ngưỡng hành động.
+> Kết luận chính: blocker có bằng chứng + 3 trạng thái vận hành + khả năng đáp ứng nhiệm vụ. Sáu thành phần và điểm 0-100 dùng để giải thích, theo dõi xu hướng.
 >
 > Trạng thái: C0-C3 ✅ (6 công thức, tính điểm 4 cấp, recalc realtime, đề xuất, ngưỡng hành động).
 
@@ -28,13 +28,7 @@ Mỗi thành phần chuẩn hóa về thang 0-100, rồi gộp theo trọng số
 **Đ:** Không tin dữ liệu ma. Nếu cảm biến không cập nhật quá 30 phút, hệ thống **không dùng giá trị cũ** và **hạ điểm "độ tin cậy dữ liệu"** — biến "cảm biến chết" thành tín hiệu cảnh báo, không phải dữ liệu giả. Đây là lý do có riêng thành phần độ tin cậy dữ liệu.
 
 ### H: Điểm số để làm gì? Nhìn con số 84 thì người quản lý biết làm gì?
-**Đ:** Điểm gắn với **ngưỡng hành động** — hệ thống tự phản ứng theo vùng điểm:
-- ≥80: sẵn sàng (xanh)
-- 70-79: cần chú ý (cảnh báo vàng)
-- 50-69: suy giảm → **tự thông báo quản lý** + đề xuất khắc phục
-- <50: không đủ khả năng → **cảnh báo đỏ + cảnh báo khi lập nhiệm vụ mới**
-
-Ngưỡng chỉnh được. Điểm không chỉ để nhìn — nó **kích hoạt hành động**.
+**Đ:** Điểm 0-100 chỉ là chỉ báo xu hướng và lớp giải thích phụ. Màn hình chính trả lời trực tiếp: **Sẵn sàng điều phối / Cần xử lý / Chưa thể điều phối**, blocker nào đang tồn tại và cần làm gì. Điểm cao không được ghi đè blocker; điểm thấp nhưng không có blocker không tự động khóa kho.
 
 ### H: Điểm số có cập nhật tự động không, hay phải bấm tính lại?
 **Đ:** Tự động. Khi cảm biến môi trường thay đổi, hệ thống **tự tính lại điểm trong dưới 2 giây** — đã đo thực tế: đẩy độ ẩm một khu từ 60% lên 95% → điểm khu đó rớt ngay. Có cơ chế gộp nhiều thay đổi liên tiếp thành một lần tính (tránh tính dồn dập). Đây là điều làm hệ thống "sống": người quản lý thấy năng lực kho biến động realtime, không phải số liệu tĩnh của hôm qua.
@@ -46,10 +40,10 @@ Ngưỡng chỉnh được. Điểm không chỉ để nhìn — nó **kích ho�
 **Đ:** Sinh từ **chính nguyên nhân trừ điểm** — không phải câu chung chung. Ví dụ điểm "thời hạn" thấp vì "bộ sơ cứu sắp hết hạn" → đề xuất "Ưu tiên sử dụng hoặc thay mới vật tư sắp hết hạn". Đề xuất sắp theo thành phần yếu nhất trước, để người quản lý biết xử lý gì đầu tiên. Ở bản nâng cao, LLM sẽ diễn đạt đề xuất mượt hơn, nhưng căn cứ vẫn từ dữ liệu thật.
 
 ### H: Vì sao môi trường xấu mà điểm không rớt nhiều?
-**Đ:** Vì môi trường chỉ chiếm 10% trọng số — đúng thiết kế. Độ ẩm cao là cảnh báo cần xử lý, nhưng không phủ nhận việc kho vẫn có đủ vật tư đúng điều kiện. Chúng em **không phóng đại** để tạo hiệu ứng demo. Nếu muốn môi trường ảnh hưởng mạnh hơn với kho y tế (nhạy cảm độ ẩm), quản lý chỉnh trọng số lên — hệ thống cho phép.
+**Đ:** Vì điểm môi trường chỉ chiếm 10% trong chỉ báo xu hướng. Tuy nhiên kết luận vận hành đọc trạng thái môi trường riêng: chưa tới mức mất an toàn thì `NEEDS_ACTION`; khi thành phần môi trường bằng 0 thì tạo blocker `UNSAFE_ENVIRONMENT` và kho thành `NOT_DISPATCHABLE`. Do đó trọng số thấp không thể che một điều kiện nguy hiểm.
 
 ### H: Công thức tính điểm có kiểm thử không, hay chỉ áng chừng?
-**Đ:** Mỗi công thức con là một hàm thuần (không phụ thuộc database), có **kiểm thử tự động phủ mọi nhánh** — đã pass **52 test**: từng ngưỡng hết hạn, từng mức tình trạng, chưa kiểm kê, cảm biến hỏng, gộp trọng số, cuộn 4 cấp, sinh đề xuất, phân vùng hành động... Tách công thức khỏi truy vấn database giúp kiểm thử chính xác và dễ chỉnh.
+**Đ:** Mỗi công thức và luật kết luận là hàm thuần. Ngoài test ngưỡng cũ còn có test điểm cao + blocker vẫn chặn, điểm thấp không blocker chỉ cảnh báo, lọc lô hết hạn/kệ khóa/hỏng/cần kiểm tra và trừ phần đang mượn. Toàn backend pass **25 suite / 168 test** ngày 2026-07-21.
 
 ### H: Sao không dùng máy học (ML) để tính điểm cho "AI" hơn?
 **Đ:** Readiness cần **giải thích được và kiểm chứng được** — người quản lý phải hiểu vì sao điểm thấp và sửa được. Mô hình ML hộp đen không phù hợp: cứu hộ cần minh bạch, không đoán mò. Chúng em dùng rule engine có trọng số minh bạch. AI (LLM) dùng ở khâu hiểu ngôn ngữ và giải thích — đúng thế mạnh của nó. Đây là lựa chọn có chủ đích, không phải thiếu năng lực ML.
@@ -57,8 +51,8 @@ Ngưỡng chỉnh được. Điểm không chỉ để nhìn — nó **kích ho�
 ### H: Điểm sẵn sàng có tự cập nhật khi nhập/xuất kho không, hay chỉ khi cảm biến đổi?
 **Đ:** Có — **mọi giao dịch tồn kho** (nhập/xuất/xuất lô/sửa tay/kiểm kê) đều tự kích hoạt tính lại điểm ngay sau khi giao dịch hoàn tất, không cần bấm "tính lại" thủ công. Chạy **sau khi** giao dịch đã lưu (không nằm trong cùng transaction) — lỗi tính điểm không bao giờ làm hỏng giao dịch kho, chỉ ghi log cảnh báo. Trước đây chỉ cảm biến môi trường mới tự trigger; giờ đã nối đủ cả đường tồn kho.
 
-### H: Khi điểm rớt xuống mức nguy hiểm, hệ thống có tự báo ai không? Có bị báo dồn dập không?
-**Đ:** Có — rớt xuống DEGRADED/CRITICAL tự gửi thông báo cho vai trò phụ trách kho. Chống báo dồn: chỉ gửi khi **vùng điểm thực sự đổi** (so vùng cũ với vùng mới sau tính lại), không gửi lại nếu điểm dao động nhẹ quanh cùng một vùng. Đây cùng nguyên tắc chống spam đã áp dụng cho Incident Intelligence (BE-E2).
+### H: Khi kho chuyển sang trạng thái nguy hiểm, hệ thống có tự báo ai không? Có bị báo dồn dập không?
+**Đ:** Có. Hệ thống thông báo cho vai trò phụ trách kho khi `operationalStatus` đổi sang `NEEDS_ACTION` hoặc `NOT_DISPATCHABLE`, kèm blocker hoặc hành động đầu tiên. Nếu trạng thái không đổi thì không gửi lại chỉ vì điểm dao động.
 
-### H: Nếu kho đang ở mức CRITICAL, hệ thống có cho lập nhiệm vụ cứu hộ mới không?
-**Đ:** Không — chặn ngay ở lúc lập phương án, trả lỗi rõ ràng kèm điểm hiện tại, thay vì cho lập phương án rồi phát hiện kho không đủ khả năng đáp ứng. Đây là ứng dụng trực tiếp của ngưỡng hành động (C3): điểm không chỉ để xem, nó **chặn được hành động sai** trước khi xảy ra. Nếu kho chưa từng được tính điểm (mới khởi tạo), không chặn — tránh chặn nhầm lúc hệ thống chưa có dữ liệu.
+### H: Nếu điểm kho ở mức CRITICAL, hệ thống có cho lập nhiệm vụ cứu hộ mới không?
+**Đ:** Không quyết định theo chữ `CRITICAL` nữa. Hệ thống chỉ chặn lập phương án khi kho có blocker vận hành cụ thể. Sau đó Mission lọc từng lô; nếu một SKU thiết yếu không có lô đủ điều kiện, nhiệm vụ vẫn được lưu nháp để cán bộ xem thiếu gì nhưng không thể duyệt/gửi cho tới khi xử lý blocker hoặc bổ sung nguồn hàng.

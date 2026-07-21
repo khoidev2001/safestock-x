@@ -63,10 +63,10 @@ pnpm --filter @safestock/backend seed          # seed dữ liệu mẫu
 ### Tài khoản seed
 | Login | Password | Role |
 |---|---|---|
-| `admin` | `admin123@` | MANAGER |
-| `manager@safestock.vn` | `manager123` | MANAGER |
-| `staff@safestock.vn` | `staff123` | WAREHOUSE_STAFF |
-| `rescue@safestock.vn` | `rescue123` | RESCUE_TEAM |
+| `admin` | `admin123@` | ADMIN |
+| `staff@safestock.vn` | `staff123` | WAREHOUSE kho trung tâm |
+| `rescue@safestock.vn` | `rescue123` | RESCUE |
+| `truongthon1..17@safestock.vn` | `truongthon123` | WAREHOUSE theo từng thôn |
 
 ---
 
@@ -78,8 +78,8 @@ pnpm --filter @safestock/backend seed          # seed dữ liệu mẫu
 - [x] packages/shared-types (enums: ItemStatus, TransactionType, UserRole, IncidentType, Priority, VirtualDeviceType; READINESS_WEIGHTS; SensorEvent)
 - [x] apps/backend NestJS scaffold + PrismaModule + HealthController
 - [x] Prisma schema core: Organization, User, Warehouse, WarehouseZone, Shelf, ItemCategory, Item, ItemBatch, InventoryTransaction, AuditLog
-- [x] seed: org CTĐ Đồng Xuân, 2 zone, 4 shelf, 8 category/item/batch
-- **Verify:** ✅ `GET /api/health` → `{status:ok, database:up, redis:up}`; seed 4 users / 8 batches
+- [x] seed chuẩn: org CTĐ Đồng Xuân, 1 kho trung tâm + 17 kho thôn, 17 SKU, 126 lô, kiểm kê/mượn-trả/thiết bị/sự cố/lịch sử giao dịch
+- **Verify:** ✅ seed chạy idempotent 2 lần; 18 kho / 20 user / 126 batch / 190 giao dịch; chi tiết tại [SEED-DATASET.md](SEED-DATASET.md)
 - **File:** `pnpm-workspace.yaml`, `package.json`, `infrastructure/docker-compose.yml`, `packages/shared-types/`, `apps/backend/{prisma,src/{prisma,health}}`
 
 ### A1. Auth + Inventory ✅
@@ -138,7 +138,7 @@ pnpm --filter @safestock/backend seed          # seed dữ liệu mẫu
 ### B0. Schema + CRUD thiết bị ảo + trạng thái current ⬜
 - [ ] Prisma: VirtualDevice, SensorEvent, SimulationScenario, SimulationRun
 - [ ] **DeviceState** (hoặc field current trên VirtualDevice): giá trị mới nhất mỗi device — Readiness đọc cái này, KHÔNG query MAX(timestamp) mỗi lần tính (chậm)
-- [ ] Field cho Readiness (đồng bộ với C-minus): `Shelf.isBlocked`, `Shelf.isLocked` (khả năng tiếp cận)
+- [ ] Field cho Readiness (đồng bộ với C-minus): `Shelf.isLocked` (kệ khóa hoặc thiếu quyền truy cập)
 - [ ] CRUD virtual devices (gắn warehouse/zone/shelf); seed: loadcell mỗi shelf, temp/humidity mỗi zone, door, gateway
 - [ ] **Ngưỡng lọc trước khi lưu DB**: chỉ lưu event có nghĩa (đổi trạng thái / vượt ngưỡng), không lưu mỗi tick 25.0→25.1 → tránh phình bảng
 - **Verify:** list devices theo warehouse trả đúng cây; DeviceState cập nhật khi có event
@@ -203,7 +203,7 @@ pnpm --filter @safestock/backend seed          # seed dữ liệu mẫu
 > **#30 KIẾN TRÚC ĐA XÃ TỰ TRỊ (quan trọng):** mỗi xã = 1 máy chủ AI ĐỘC LẬP, KHÔNG nối DB xã khác. AI chỉ **GỢI Ý** liên hệ mượn ("thiếu áo phao, liên hệ xã B gần còn hàng") → con người tự gọi điện/bộ đàm → bên cho mượn (WAREHOUSE xã B) xuất đánh dấu `source=LOAN_OUT_INTERXA`, bên mượn nhập `source=LOAN_IN`. KHÔNG có sync DB tự động — xóa sạch bài toán đồng bộ đa kho. Đúng thực tế cứu hộ (liên xã vốn gọi bộ đàm).
 - [ ] **Bảng NeighborWarehouse (kho lân cận, nhập TAY)**: tên xã, distanceKm, tồn kho tóm tắt (cập nhật thủ công định kỳ). AI đọc bảng này để gợi ý mượn — KHÔNG realtime, KHÔNG nối DB thật
 - [ ] **#3+#19** Seed dữ liệu kho lân cận **LỆCH loại** (xã B nhiều áo phao ít nước, xã mình ngược lại) → Mission gợi ý mượn có kịch bản
-- [ ] **#12** Seed batch "bẩn": không `expiryDate`, MISPLACED, DAMAGED, kệ `isBlocked`, chưa kiểm kê → chứng minh xử lý thực tế lộn xộn + tôn Readiness
+- [ ] **#12** Seed lô cần xử lý: hết hạn, NEEDS_CHECK, DAMAGED và chưa kiểm kê → kiểm thử bộ lọc cấp phát + Readiness
 - **Verify:** Readiness phản ánh dữ liệu bẩn (điểm thấp có lý do); Mission thiếu → gợi ý liên hệ kho lân cận gần nhất còn hàng
 - **File:** `apps/backend/prisma/seed.ts`
 
@@ -227,13 +227,13 @@ pnpm --filter @safestock/backend seed          # seed dữ liệu mẫu
 
 ---
 
-## PHASE C — Trạng thái sẵn sàng vận hành kho 🔁 (score hiện có; blocker/status v2.2 chưa làm)
+## PHASE C — Trạng thái sẵn sàng vận hành kho ✅ (Readiness v2.2 đã tích hợp)
 
 > Hệ thống quyết định theo thứ tự: **blocker → trạng thái 6 mặt → khả năng đáp ứng tình huống**. Điểm 0-100 chỉ là chỉ báo xu hướng phụ, không phải kết luận và không được tự mình cho phép/chặn điều phối.
 > **CẢNH BÁO:** schema A hiện KHÔNG tính được 4/6 thành phần (47% trọng số thiếu dữ liệu). Phải làm **C-minus (bổ sung schema)** TRƯỚC, nếu không tắc ngay ngày đầu.
 
 ### C-minus. Bổ sung schema nền (BẮT BUỘC trước C0) ⬜
-- [x] `Shelf.isBlocked`, `Shelf.isLocked` → thành phần "khả năng tiếp cận" (đã làm ở B0)
+- [x] `Shelf.isLocked` → thành phần "khả năng tiếp cận" (đã làm ở B0)
 - [x] Bảng **InventoryCount** (kiểm kê): batchId, countedQty, countedAt, userId (đã tạo ở B0)
 - [x] **DeviceState current** theo zone → "môi trường" (đã có ở B0)
 - [ ] **Trạng thái vật tư 2 CHIỀU độc lập trên ItemBatch** (mở rộng ItemStatus hiện tại):
@@ -247,47 +247,47 @@ pnpm --filter @safestock/backend seed          # seed dữ liệu mẫu
 - [ ] **#3 Đa kho: field `distanceKm` cho Warehouse** (khoảng cách tới điểm sự cố/trung tâm) — Mission ưu tiên kho gần
 - **Verify:** query đủ input 6 thành phần; mượn 1 áo phao → ON_LOAN, tổng kho không đổi, khả dụng-ngay giảm; xuất nước → tiêu hao thẳng
 
-### C0. Định nghĩa 6 tín hiệu + schema trạng thái ⬜
+### C0. Định nghĩa 6 tín hiệu + schema trạng thái ✅
 > KHÔNG code "rule engine" chung chung. Mỗi tín hiệu phải trả `status`, `reasons`, `actions`, dữ liệu nguồn và `referenceScore` tùy chọn.
-- [ ] Prisma/API: mở rộng ReadinessScore/Component/Rule/Recommendation để biểu diễn `operationalStatus`, `blockers`, trạng thái từng mặt và điểm tham khảo
+- [x] Prisma/API: mở rộng ReadinessScore để lưu `operationalStatus`, `blockers`; API trả trạng thái từng mặt và `referenceScore`
 - [ ] Bảng công thức cụ thể (ví dụ khởi đầu, tinh chỉnh sau):
   - **Expiry (15%)**: còn>6th=100 · 2-6th=70 · <2th=40 · hết hạn=0
   - **Condition (22%)**: NEW=100 · USED=75 · NEEDS_CHECK=50 · MAINTENANCE=40 · DAMAGED=0. ON_LOAN không trừ tổng nhưng loại khỏi "khả dụng ngay"
-  - **Accessibility (15%)**: đúng vị trí +không blocked +không locked=100; mỗi vi phạm trừ
+  - **Accessibility (15%)**: kệ mở và đúng quyền=100; kệ khóa/thiếu quyền bị trừ
   - **Quantity (28%)**: min(countedQty/systemQty,1)×100; chưa kiểm kê → hạ theo dataReliability
   - **Environment (10%)**: nhiệt/ẩm trong ngưỡng=100; vượt → giảm tuyến tính
   - **DataReliability (10%)**: theo độ mới kiểm kê + số nguồn đồng thuận + sensor online
 - [ ] **Trọng số chỉnh được trong UI + disclaimer "định mức tham khảo nghiên cứu"**; chỉ phục vụ điểm xu hướng, không dùng làm luật chặn duy nhất
-- [ ] **#24 Expiry = PHÁI SINH** từ `expiryDate` vs now, tính lúc đọc/recalc. KHÔNG lưu cứng status thời-gian (EXPIRING_SOON/OVERDUE) → khỏi cron, luôn đúng
-- [ ] **#25 Độ tươi sensor → dataReliability**: DeviceState có `updatedAt`. Sensor cập nhật <5ph=tin đầy đủ · 5-30ph=giảm · >30ph/offline=KHÔNG dùng giá trị + hạ dataReliability (sensor chết = tín hiệu, không phải dữ liệu ma)
+- [x] **#24 Expiry = PHÁI SINH** từ `expiryDate` vs now khi tính; không lưu cứng status thời gian
+- [x] **#25 Độ tươi sensor → dataReliability**: sensor quá 30 phút bị coi là không còn tin cậy
 - **Verify:** unit test từng công thức con; sensor cũ >30ph → dataReliability giảm
 
-### C1. Tính trạng thái 4 cấp + breakdown + chiến lược recalc ⬜
-- [ ] Trạng thái batch/item → shelf/zone → warehouse; giữ roll-up điểm theo quantity chỉ để tham khảo xu hướng
+### C1. Tính trạng thái 4 cấp + breakdown + chiến lược recalc ✅
+- [x] Điểm batch/item → shelf/zone → warehouse; kết luận vận hành cấp kho và 6 chiều; điểm roll-up chỉ để tham khảo xu hướng
 - [ ] **#21 Đơn vị hỗn hợp**: mỗi loại vật tư tính điểm 0-100 THEO ĐƠN VỊ RIÊNG (lít/chiếc/bộ), rồi mới gộp điểm chuẩn hóa — KHÔNG cộng đơn vị thô. Điểm 0-100 gộp được vì đã chuẩn hóa
 - [ ] **#23 RECALC 3 tầng (CỨU KHOẢNH KHẮC VÀNG):**
   - **Event-driven cho môi trường**: SensorEvent tới → recalc NGAY zone/kho đó → trạng thái, lý do và điểm xu hướng đổi <2s khi kéo slider. BẮT BUỘC đúng, nếu recalc theo lịch 5ph → demo đứng hình
   - **On-write**: xuất/nhập/sửa tay/mượn → recalc batch/zone liên quan
   - **Lazy**: expiry tính lúc đọc (#24)
   - Cache kết quả Readiness + invalidate theo ZONE (chỉ recalc phần đổi, không cả kho mỗi lần)
-- [ ] Môi trường lấy từ DeviceState (Phase B); chưa có B → giá trị mặc định "bình thường"
-- [ ] Lưu breakdown: mỗi trạng thái truy về 6 thành phần, lý do, hành động và timestamp nguồn
+- [x] Môi trường lấy từ giá trị current của VirtualDevice; khu chưa có cảm biến dùng giá trị mặc định
+- [x] Breakdown trả 6 thành phần, lý do và hành động; blocker kho được lưu cùng thời điểm tính
 - **Verify:** GET /warehouses/:id/readiness trả `operationalStatus`, `blockers`, `dimensions`, `referenceScore`; đổi trạng thái 1 batch → kết luận đổi đúng; **kéo slider độ ẩm → trạng thái môi trường đổi <2s**
 
-### C2. Nguyên nhân + hành động đề xuất ⬜
+### C2. Nguyên nhân + hành động đề xuất ✅
 - [ ] Mỗi mặt không đạt → lý do cụ thể (vd "3 lô sắp hết hạn ở kệ B1"), mức ưu tiên và dữ liệu nguồn
-- [ ] Recommendation (vd "kiểm tra 3 bộ sơ cứu sắp hết hạn")
-- [ ] POST /readiness/recalculate; GET /readiness/recommendations
+- [x] Recommendation sinh từ thành phần không đạt, ưu tiên thành phần yếu
+- [x] POST /readiness/recalculate; GET /readiness/recommendations
 - **Verify:** tăng độ ẩm → trạng thái môi trường đổi, nêu đúng khu/kệ và có hành động kiểm tra; không bắt người dùng tự diễn giải điểm
 
-### C3. ⭐ Điều kiện chặn + trạng thái hành động ⬜
+### C3. ⭐ Điều kiện chặn + trạng thái hành động ✅
 > Luật chặn là điều kiện nghiệp vụ có bằng chứng, không suy ra duy nhất từ điểm trung bình.
-- [ ] Định nghĩa blocker cấu hình được: sự cố vận hành nghiêm trọng; vật tư bắt buộc hỏng/hết hạn; vật tư nhiệm vụ không tiếp cận được; dữ liệu quá cũ buộc kiểm kê xác nhận
-- [ ] Ba trạng thái: **READY** (Sẵn sàng), **NEEDS_ACTION** (Cần xử lý), **NOT_DISPATCHABLE** (Không thể điều phối)
-- [ ] Thứ tự quyết định: blocker liên quan nhiệm vụ → NOT_DISPATCHABLE; không blocker nhưng có cảnh báo → NEEDS_ACTION; còn lại → READY
-- [ ] Điểm tham khảo không được ghi đè blocker. Trường hợp điểm 90 nhưng áo phao bắt buộc bị khóa vẫn phải chặn nhiệm vụ lũ
-- [ ] Mission đọc blocker + mức đáp ứng theo từng SKU; khi bị chặn phải nêu lý do và gợi ý kho/phương án khác
-- [ ] Giữ `ReadinessThreshold` cũ trong giai đoạn migration chỉ để cảnh báo xu hướng; đánh dấu deprecated sau khi FE/BE chuyển xong
+- [x] Blocker kho: nguy cơ cháy CRITICAL đang mở, không thể tiếp cận toàn kho, môi trường bảo quản không an toàn
+- [x] Ba trạng thái: **READY** (Sẵn sàng), **NEEDS_ACTION** (Cần xử lý), **NOT_DISPATCHABLE** (Không thể điều phối)
+- [x] Thứ tự quyết định: blocker → NOT_DISPATCHABLE; không blocker nhưng có cảnh báo → NEEDS_ACTION; còn lại → READY
+- [x] Điểm tham khảo không được ghi đè blocker; có test điểm cao + blocker vẫn chặn và điểm thấp không blocker chỉ cảnh báo
+- [x] Mission lọc lô hỏng, cần kiểm tra, hết hạn, đang mượn hết, kệ khóa/chặn; trả mức đáp ứng và lý do từng SKU
+- [x] `ReadinessThreshold` cũ vẫn được trả dưới field `zone` để tương thích, không còn dùng làm luật chặn nhiệm vụ
 - **Verify:** test điểm cao + blocker vẫn bị chặn; điểm thấp nhưng không blocker vẫn cho cán bộ tiếp tục sau cảnh báo; đẩy độ ẩm → NEEDS_ACTION + thông báo có lý do
 - **File:** `apps/backend/src/readiness/`
 
@@ -526,15 +526,15 @@ pnpm --filter @safestock/backend seed          # seed dữ liệu mẫu
 
 ## Trạng thái hiện tại
 
-**Đang ở:** backend đã vượt xa mốc A/B/C ban đầu. Theo `apps/backend/ROADMAP.md` và source hiện có, backend đã xong/verify các phần: A0/A1/A2core, B0-B3, Cminus+C0-C3 dạng điểm, Bp0/Bp2/Bp3/Bp4/Bp5, D-proxy, E/E2, J, K, L, M, G4api, I. Readiness v2.2 theo blocker + trạng thái + khả năng đáp ứng **chưa code**. Backend hiện có 19 test suite / 147 test pass khi rà ngày 2026-07-20.
+**Đang ở:** backend đã vượt xa mốc A/B/C ban đầu. Readiness v2.2 đã nối vào API và Mission-to-Kit: blocker kho, trạng thái vận hành, lọc lô đủ điều kiện, mức đáp ứng từng SKU và chặn gửi nhiệm vụ khi thiếu hoàn toàn vật tư thiết yếu. Backend pass 25 test suite / 168 test và build sạch ngày 2026-07-21.
 
-**Frontend:** không còn là placeholder. `apps/frontend` đã có Next.js dashboard với các view readiness, normal mode insights, assistant, inventory, simulator panel, mission/action-plan/map/notification, incident, stocktake, loan, report, users, audit. Lần rà gần nhất `pnpm --filter @safestock/frontend build` bị treo ở `next build`, cần điều tra trước khi coi là verify pass.
+**Frontend:** dashboard Readiness đã chuyển từ điểm số làm headline sang trạng thái, blocker, lý do và hành động; màn Mission hiển thị khả năng đáp ứng từng vật tư. `tsc --noEmit` và `next build` pass ngày 2026-07-21.
 
 **AI service:** đã có FastAPI + Gemini/Ollama provider, parse, explain, action-plan, assistant. Claude provider và explain-incident riêng vẫn còn trong roadmap/chưa hoàn chỉnh.
 
 **Mobile:** chưa triển khai source app thực tế; mới có package/README/ROADMAP. Nếu vẫn giữ mobile trong MVP demo, lát kế tiếp nên là F0 scaffold + login + dashboard đọc dữ liệu.
 
-**Lát kế tiếp thực tế:** sửa/verify build frontend → chốt demo web+backend ổn định → quyết định mobile tối thiểu hay ghi thành lộ trình → hoàn thiện RFID/explain-incident nếu còn thời gian.
+**Lát kế tiếp thực tế:** kiểm thử trình duyệt luồng Readiness/Mission với dữ liệu seed → chốt demo web+backend ổn định → quyết định mobile tối thiểu hay ghi thành lộ trình → hoàn thiện RFID/explain-incident nếu còn thời gian.
 
 **Tóm tắt đối chiếu mới nhất:** xem `docs/codebase-summary.md`.
 

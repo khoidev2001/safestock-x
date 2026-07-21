@@ -1,5 +1,11 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { TransactionSource, UserRole, VirtualDevice, VirtualDeviceType } from "@prisma/client";
+import {
+  TransactionSource,
+  UserRole,
+  VirtualDevice,
+  VirtualDeviceType,
+  WarehouseKind,
+} from "@prisma/client";
 import { InventoryService } from "../inventory/inventory.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { ReadinessService } from "../readiness/readiness.service";
@@ -43,8 +49,18 @@ export class SimulationService {
     private inventory: InventoryService,
   ) {}
 
-  firstWarehouse() {
-    return this.prisma.warehouse.findFirst({ select: { id: true, name: true } });
+  firstWarehouse(scopeWarehouseId?: string | null) {
+    if (scopeWarehouseId) {
+      return this.prisma.warehouse.findUnique({
+        where: { id: scopeWarehouseId },
+        select: { id: true, name: true },
+      });
+    }
+    return this.prisma.warehouse.findFirst({
+      where: { kind: WarehouseKind.CENTRAL },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, name: true },
+    });
   }
 
   listDevices(warehouseId: string) {

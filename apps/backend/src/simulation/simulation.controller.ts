@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Query, Request, UseGuards } from "@nestjs/common";
 import { IsIn, IsInt, IsNumber, IsOptional, IsString } from "class-validator";
 import { scenarios } from "@safestock/scenario-definitions";
 import { JwtAuthGuard } from "../auth/guards";
+import { AuthenticatedRequest } from "../auth/authenticated-request";
 import { SimulationService } from "./simulation.service";
 import { RunnerService } from "./runner.service";
 
@@ -33,10 +34,10 @@ export class SimulationController {
     return scenarios.map((s) => ({ key: s.key, name: s.name, description: s.description }));
   }
 
-  // Tiện cho UI tối thiểu B3: lấy kho đầu tiên
+  // Tài khoản kho thôn vào đúng kho được gán; tài khoản toàn xã vào kho trung tâm.
   @Get("first-warehouse")
-  firstWarehouse() {
-    return this.sim.firstWarehouse();
+  firstWarehouse(@Request() req: AuthenticatedRequest) {
+    return this.sim.firstWarehouse(req.user.warehouseId);
   }
 
   @Get("warehouses/:id/devices")

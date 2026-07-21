@@ -46,7 +46,7 @@ export function WarehouseMap({ tree, isLoading }: WarehouseMapProps) {
 
             <div className="mt-3 grid grid-cols-2 gap-2">
               {zone.shelves.map((shelf) => {
-                const isRestricted = shelf.isBlocked || shelf.isLocked;
+                const isRestricted = shelf.isLocked;
                 return (
                   <div
                     key={shelf.id}
@@ -61,7 +61,7 @@ export function WarehouseMap({ tree, isLoading }: WarehouseMapProps) {
                       <span className="text-xs font-semibold">{shelf.code}</span>
                       {isRestricted ? (
                         <Lock
-                          aria-label="Kệ bị khóa hoặc bị chặn"
+                          aria-label="Kệ bị khóa"
                           size={14}
                           strokeWidth={1.8}
                           style={{ color: "var(--color-critical)" }}

@@ -39,7 +39,7 @@ File: `apps/backend/demo/demo.mjs`. **✅ verify: 6 bước chạy thật, phân
 
 ## BE-B0 — Sensor: schema + CRUD device + DeviceState ✅ 🔴
 - [x] Prisma: VirtualDevice(+currentValue), SensorEvent, SimulationScenario, SimulationRun
-- [x] Shelf.isBlocked/isLocked (accessibility cho Readiness)
+- [x] Shelf.isLocked (kệ khóa/thiếu quyền, dùng cho accessibility Readiness)
 - [x] CRUD device + seed thiết bị ảo (10 device)
 - [x] Ngưỡng lọc event trước khi lưu (tránh phình bảng)
 - **Verify:** ✅ list device đúng cây; DeviceState update; delta nhỏ → không lưu
@@ -88,7 +88,7 @@ File: `apps/backend/demo/demo.mjs`. **✅ verify: 6 bước chạy thật, phân
 - [x] Prisma: ReadinessScore, ReadinessComponent, ReadinessRule (trọng số configurable), ReadinessRecommendation, ReadinessThreshold
 - [x] Công thức Expiry (phái sinh từ expiryDate, không lưu cứng)
 - [x] Công thức Condition (NEW=100/USED=75/NEEDS_CHECK=50/DAMAGED=0; ON_LOAN xử lý ở Quantity)
-- [x] Công thức Accessibility (blocked/locked)
+- [x] Công thức Accessibility theo trạng thái khóa/quyền truy cập
 - [x] Công thức Quantity (countedQty/systemQty, trừ onLoan, cap 50 khi chưa kiểm kê)
 - [x] Công thức Environment (nhiệt/ẩm ngưỡng, mắt xích yếu nhất)
 - [x] Công thức DataReliability (độ mới kiểm kê + sensor fresh)
@@ -117,14 +117,17 @@ File: `apps/backend/demo/demo.mjs`. **✅ verify: 6 bước chạy thật, phân
 - **Verify:** ✅ recalc kho → 3 đề xuất (quantity/dataReliability/expiry) khớp breakdown; 4 test
 - **File:** `src/readiness/recommendations.ts`, `__tests__/recommendations.spec.ts`
 
-## BE-C3 — Ngưỡng hành động 4 vùng ✅ 🔴
+## BE-C3 — Trạng thái vận hành + blocker Readiness v2.2 ✅ 🔴
 - [x] 4 vùng READY≥80/ATTENTION≥70/DEGRADED≥50/CRITICAL<50 (configurable qua ReadinessThreshold)
 - [x] resolveActionZone + shouldNotifyManager + shouldBlockNewMission (thuần)
 - [x] GET/recalc trả kèm zone; ngưỡng đọc từ DB (rỗng → mặc định)
-- [x] Hook trigger thông báo thực tế: readiness đổi zone (so oldZone/newZone) + rớt DEGRADED/CRITICAL → NotificationKind.READINESS_DEGRADED cho WAREHOUSE (dedupe theo đổi zone thực sự, không spam dao động quanh ngưỡng)
-- [x] Mission đọc ngưỡng chặn khi CRITICAL: `generatePlan()` kiểm `shouldBlockNewMission` trước khi tạo → 400 kèm điểm hiện tại; FE hiển thị lỗi đỏ dưới nút thay vì im lặng
-- **Verify:** ✅ score 78 → zone ATTENTION; môi trường xấu → 71 vẫn ATTENTION (môi trường 10% không phóng đại); readiness rớt CRITICAL → generatePlan trả 400 rõ ràng; readiness rớt DEGRADED/CRITICAL → GET /notifications có READINESS_DEGRADED mới; 7 test action-zone
-- **File:** `src/readiness/{action-zone.ts,readiness.service.ts}`, `src/mission/mission.service.ts`, `apps/frontend/src/components/mission/mission-view.tsx`, `__tests__/action-zone.spec.ts`
+- [x] Kết luận `READY / NEEDS_ACTION / NOT_DISPATCHABLE`; blocker có quyền ưu tiên cao hơn điểm
+- [x] Blocker kho từ FIRE_RISK CRITICAL, accessibility=0 hoặc environment=0; thông báo khi trạng thái vận hành xấu đi
+- [x] Mission lọc lô hỏng, NEEDS_CHECK, hết hạn, kệ khóa/chặn và trừ phần đang mượn
+- [x] Lưu `readinessAssessment` từng mission; chặn approve/dispatch khi một SKU thiết yếu không cấp được
+- [x] Giữ `zone` 4 vùng làm contract tương thích và chỉ báo xu hướng, không dùng để chặn mission
+- **Verify:** ✅ test điểm 95 + blocker vẫn NOT_DISPATCHABLE; điểm 65 không blocker là NEEDS_ACTION; lọc expiry/lock/condition/loan; toàn backend 25 suite / 168 test và build pass ngày 2026-07-21
+- **File:** `src/readiness/{operational-readiness.ts,readiness.service.ts}`, `src/mission/{batch-eligibility.ts,mission-readiness.ts,mission.service.ts}`
 
 ## BE-Bp0 — Xuất lô 1 chạm + atomic ✅ 🔴
 - [x] POST /inventory/bulk-export (nhiều batch 1 transaction, thất bại 1 → rollback tất cả)
@@ -140,7 +143,7 @@ File: `apps/backend/demo/demo.mjs`. **✅ verify: 6 bước chạy thật, phân
 
 ## BE-Bp3 — Seed 2 kho + dữ liệu bẩn ✅ 🔴
 - [x] NeighborWarehouse seed lệch loại (kho chính nhiều áo phao ít nước; lân cận gần 8km nhiều nước, xa 35km nhiều áo phao)
-- [x] Seed batch bẩn: bạt không hạn+chưa kiểm kê, lô DAMAGED, lô MISPLACED, kệ B3 isBlocked
+- [x] Seed lô cần xử lý: hết hạn, DAMAGED, NEEDS_CHECK và chưa kiểm kê
 - [x] consumable + unitWeightKg seed cho catalog (áo phao/xuồng/đèn/bộ đàm tái sử dụng; nước/pin/sơ cứu tiêu hao)
 - **Verify:** ✅ recalc kho có dữ liệu bẩn → itemCondition 99 (DAMAGED kéo xuống), quantity/dataReliability thấp (chưa kiểm kê); 2 neighbor (8km/35km lệch loại) query được; 11 batch / 2 neighbor
 - **File:** `prisma/seed.ts`
@@ -180,13 +183,13 @@ File: `apps/backend/demo/demo.mjs`. **✅ verify: 6 bước chạy thật, phân
 
 ## BE-K — Cụm kho xã + AI Action Plan ✅ 🔴 (⭐ khác biệt thi)
 - [x] Chọn kho cùng communeId, tính khoảng cách kho→điểm nạn (GeoService), greedy kho thôn GẦN trước → tràn kho tổng (byNearestThenFefo: gần trước, cùng kho thì FEFO)
-- [x] Seed cụm kho: 1 kho tổng (CENTRAL) + 2 kho thôn (HAMLET) cùng communeId, lat/lng thật Phú Yên, tồn lệch nhau
+- [x] Seed cụm kho: 1 kho tổng (CENTRAL) + đủ 17 kho thôn (HAMLET) hiện hành cùng `communeId`; tọa độ thôn để trống chờ ADMIN pin vị trí thực
 - [x] ai-service POST /action-plan: schema ActionPlanNarrative (objectives/phases 0-2h,2-6h,6-24h/warnings/followUpQuestions), validate Pydantic + retry 4 lần, maxOutputTokens 4096
 - [x] Backend chấm severityLevel(1-5) + forecasts(%) bằng RULE (scoreSeverity/computeForecasts thuần) — chống LLM bịa số, LLM chỉ viết văn
 - [x] ETA từ GeoService vào context Action Plan (LLM dùng đúng số, không bịa ETA)
 - [x] ai-client.actionPlanNarrative có cache; Mission.actionPlan lưu JSON; endpoint POST /missions/:id/action-plan
 - [x] Template fallback (buildTemplateNarrative) khi LLM lỗi/mất mạng → 8 mục đầy đủ từ số backend
-- **Verify:** ✅ 23 test (K1 kho gần trước + FEFO; action-plan rule severity/forecast/template). E2E thật: generate-plan lũ 100 người điểm nạn gần Phú Xuân → áo phao lấy Phú Xuân(0km) trước tràn kho tổng, nước vét cả 3 kho; **AI Gemini ra Action Plan 8 mục dùng ĐÚNG số backend (110 áo phao, 620/880 nước, ETA kho, dự báo 56/69%) — bằng/hơn docx**; rút AI service → template fallback vẫn ra 8 mục
+- **Verify:** ✅ logic kho gần trước + FEFO và action-plan rule severity/forecast/template đã có test. Bộ seed 2026.07 kiểm tra đủ 17 thôn, 17 SKU, lô Mission khả dụng và tọa độ thôn để trống; cần pin tọa độ thật trước khi kiểm thử ETA/điều phối theo khoảng cách.
 - **File:** `src/mission/{action-plan.ts,mission.compute.ts,mission.service.ts,mission.controller.ts,dto.ts}`, `apps/ai-service/{main.py,schemas.py}`
 - **Ghi chú:** Fix Gemini JSON cắt cụt (2048→4096 token cho Action Plan tiếng Việt). Workflow liên role + Notification tách sang BE-L.
 

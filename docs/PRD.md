@@ -288,7 +288,7 @@ Simulator UI ──┘                                  ├─ Redis + BullMQ
 
 ## 7. Mô hình dữ liệu (nhóm chính)
 
-**Tổ chức & phân quyền:** organizations, users, roles (WAREHOUSE/RESCUE/ADMIN), permissions (hằng số code), user_warehouses (scope), warehouses (+distanceKm, **+kind CENTRAL/HAMLET, +communeId, +lat/lng**, §3.7), warehouse_zones, shelves (+isBlocked/isLocked)
+**Tổ chức & phân quyền:** organizations, users, roles (WAREHOUSE/RESCUE/ADMIN), permissions (hằng số code), user_warehouses (scope), warehouses (+distanceKm, **+kind CENTRAL/HAMLET, +communeId, +lat/lng**, §3.7), warehouse_zones, shelves (+isLocked)
 
 **Vật tư:** item_categories, items (+consumable), item_batches (+condition, +circulation, expiryDate), inventory_transactions (+source), inventory_counts, loan_records, neighbor_warehouses
 
@@ -362,14 +362,14 @@ Simulator UI ──┘                                  ├─ Redis + BullMQ
 
 ---
 
-## 13. Trạng thái hiện tại (2026-07-20)
+## 13. Trạng thái hiện tại (2026-07-21)
 
-**Backend (mạnh nhất, vượt phạm vi PRD gốc):** đã có nền/auth/RBAC/inventory, sensor simulator, Readiness Score hiện hành, Mission-to-Kit, Incident Intelligence + E2 anomaly/predictive warning, GeoService, cụm kho xã + AI Action Plan 8 mục, workflow liên vai trò + Notification, Normal Mode/Insights, chatbot hỏi-đáp kho, backup Supabase, admin/report. **Mô hình blocker + trạng thái theo PRD 2.2 chưa code**, là lát nâng cấp kế tiếp. Lần rà 2026-07-20: `pnpm --filter @safestock/backend test` pass 19 suite / 147 test.
+**Backend (mạnh nhất, vượt phạm vi PRD gốc):** đã có nền/auth/RBAC/inventory, sensor simulator, Readiness v2.2, Mission-to-Kit, Incident Intelligence + E2 anomaly/predictive warning, GeoService, cụm kho xã + AI Action Plan 8 mục, workflow liên vai trò + Notification, Normal Mode/Insights, chatbot hỏi-đáp kho, backup Supabase, admin/report. Readiness v2.2 đã dùng blocker có bằng chứng và ba trạng thái; Mission loại lô hỏng/cần kiểm tra/hết hạn/kệ khóa/không còn khả dụng, lưu đánh giá từng SKU và chặn gửi khi thiếu hoàn toàn vật tư thiết yếu. Ngày 2026-07-21: backend pass 25 suite / 168 test và build sạch.
 
 **AI service:** đã có FastAPI + provider Gemini/Ollama, parse tình huống, explain phương án, Action Plan, assistant. Claude provider và endpoint explain-incident riêng chưa hoàn chỉnh theo roadmap.
 
-**Frontend web:** không còn là placeholder. Dashboard Next.js đã có nhiều view: tổng quan/readiness, ngày thường/insights, trợ lý, kho vật tư, mô phỏng, nhiệm vụ/action-plan/map/notification, sự cố, kiểm kê, mượn-trả, bản đồ kho, báo cáo tháng, user, hậu kiểm. Lần rà 2026-07-20 chưa verify được build vì `next build` bị treo/im lặng và đã dừng thủ công.
+**Frontend web:** dashboard Next.js đã có nhiều view. Tổng quan Readiness ưu tiên trạng thái, blocker, lý do, hành động; điểm chỉ hiển thị phụ. Mission hiển thị mức đáp ứng và trạng thái từng vật tư. `tsc --noEmit` và `next build` pass ngày 2026-07-21.
 
-**Còn thiếu/dở:** mobile Expo chưa có source app thực tế; RFID handler chưa xong (loadcell đã có); `explain-incident` riêng phía AI service chưa tick; frontend build cần điều tra trước khi chốt demo.
+**Còn thiếu/dở:** mobile Expo chưa có source app thực tế; RFID handler chưa xong (loadcell đã có); `explain-incident` riêng phía AI service chưa tick; blocker theo cấu hình nghiệp vụ từng địa phương và kiểm thử E2E trình duyệt đầy đủ vẫn là lát tiếp theo.
 
 Chi tiết tiến độ + verify từng lát: [BUILD-PLAN.md](BUILD-PLAN.md) · [codebase-summary.md](codebase-summary.md) · checklist đầy đủ: `apps/backend/ROADMAP.md`, `apps/frontend/ROADMAP.md`, `apps/mobile/ROADMAP.md`, `apps/ai-service/ROADMAP.md`.
