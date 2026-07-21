@@ -1,4 +1,4 @@
-import { AlertTriangle, Ban, CheckCircle2 } from "lucide-react";
+import { ColorIcon } from "@/components/shared/color-icon";
 import type { MissionReadinessAssessment, MissionReadinessStatus } from "@/lib/mission-api";
 
 const STATUS_META: Record<MissionReadinessStatus, { label: string; color: string }> = {
@@ -15,7 +15,7 @@ export function MissionReadinessPanel({ assessment }: { assessment: MissionReadi
         <div className="flex items-start gap-3">
           <span className="mt-0.5" style={{ color: meta.color }}><StatusIcon status={assessment.status} /></span>
           <div>
-            <p className="text-xs font-medium uppercase text-[var(--text-muted)]">Khả năng đáp ứng nhiệm vụ</p>
+            <p className="text-xs font-medium text-[var(--text-muted)]">Khả năng đáp ứng nhiệm vụ</p>
             <h3 className="mt-1 font-semibold" style={{ color: meta.color }}>{meta.label}</h3>
           </div>
         </div>
@@ -53,7 +53,7 @@ export function MissionReadinessPanel({ assessment }: { assessment: MissionReadi
 }
 
 function StatusIcon({ status }: { status: MissionReadinessStatus }) {
-  if (status === "READY") return <CheckCircle2 aria-hidden="true" size={21} />;
-  if (status === "NOT_DISPATCHABLE") return <Ban aria-hidden="true" size={21} />;
-  return <AlertTriangle aria-hidden="true" size={21} />;
+  if (status === "READY") return <ColorIcon name="success" size={22} tone="green" />;
+  if (status === "NOT_DISPATCHABLE") return <ColorIcon name="blocked" size={22} tone="red" />;
+  return <ColorIcon name="warning" size={22} tone="amber" />;
 }

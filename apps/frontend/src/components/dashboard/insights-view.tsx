@@ -1,17 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import {
-  AlertTriangle,
-  ArrowRight,
-  CloudRain,
-  FileText,
-  Package,
-  Sparkles,
-  TrendingDown,
-  TrendingUp,
-  Clock,
-} from "lucide-react";
+import { ColorIcon } from "@/components/shared/color-icon";
 import {
   getMonthlyReport,
   getWarehouseInsights,
@@ -21,7 +11,7 @@ import {
   type WarehouseInsights,
 } from "@/lib/insights-api";
 
-/** Normal Mode: AI quản trị kho ngày thường — dự báo, hết hạn, cân bằng, thời tiết, báo cáo tháng. */
+/** Theo dõi vận hành thường ngày: dự báo, hết hạn, cân bằng, thời tiết và báo cáo tháng. */
 export function InsightsView({ warehouseId }: { warehouseId: string }) {
   const insightsQuery = useQuery({
     queryKey: ["insights", warehouseId],
@@ -32,8 +22,8 @@ export function InsightsView({ warehouseId }: { warehouseId: string }) {
   if (insightsQuery.isError || !insightsQuery.data) {
     return (
       <Panel>
-        <Header icon={<AlertTriangle size={18} strokeWidth={1.8} />} tone="var(--color-critical)" title="Không tải được insights" />
-        <p className="mt-2 text-sm text-[var(--text-muted)]">Kiểm tra backend hoặc quyền `readiness:view`.</p>
+        <Header icon={<ColorIcon name="warning" size={20} tone="red" />} tone="var(--color-critical)" title="Không tải được dữ liệu theo dõi" />
+        <p className="mt-2 text-sm text-[var(--text-muted)]">Kết nối dữ liệu đang gián đoạn. Vui lòng thử lại sau.</p>
       </Panel>
     );
   }
@@ -62,13 +52,13 @@ function WeatherBanner({ rainMm }: { rainMm: number }) {
       className="flex items-center gap-3 rounded-md border p-4"
       style={{ background: "color-mix(in oklch, var(--color-critical) 8%, transparent)", borderColor: "var(--color-critical)" }}
     >
-      <CloudRain aria-hidden="true" size={22} strokeWidth={1.8} style={{ color: "var(--color-critical)" }} />
+      <ColorIcon name="weather" size={24} tone="red" />
       <div>
         <p className="text-sm font-semibold" style={{ color: "var(--color-critical)" }}>
-          Cảnh báo mưa lớn 72h tới
+          Dự báo mưa lớn trong 72 giờ tới
         </p>
         <p className="text-sm text-[var(--text-muted)]">
-          Dự báo tổng lượng mưa <b className="tabular">{Math.round(rainMm)}mm</b> — nguy cơ ngập/cô lập kho. Rà soát vật tư chống lũ.
+          Tổng lượng mưa có thể đạt <b className="tabular">{Math.round(rainMm)} mm</b>. Cần rà soát vật tư chống lũ và khả năng tiếp cận kho.
         </p>
       </div>
     </div>
@@ -82,12 +72,12 @@ function ForecastCard({ forecast }: { forecast: ForecastItem[] }) {
 
   return (
     <Panel>
-      <Header icon={<Package size={18} strokeWidth={1.8} />} tone="var(--color-accent)" title="Dự báo cạn kho" />
+      <Header icon={<ColorIcon name="inventory" size={20} tone="orange" />} tone="var(--color-accent)" title="Nguy cơ thiếu hàng" />
       <p className="mt-1 text-sm text-[var(--text-muted)]">
-        Theo tốc độ xuất trung bình 30 ngày. {critical.length > 0 && <b style={{ color: "var(--color-critical)" }}>{critical.length} mặt hàng cần nhập gấp.</b>}
+        Ước tính từ lượng xuất trong 30 ngày gần nhất. {critical.length > 0 && <b style={{ color: "var(--color-critical)" }}>{critical.length} mặt hàng cần bổ sung sớm.</b>}
       </p>
       {sorted.length === 0 ? (
-        <Empty text="Chưa có dữ liệu xuất kho để dự báo." />
+        <Empty text="Chưa đủ dữ liệu xuất kho để ước tính." />
       ) : (
         <ul className="mt-4 divide-y">
           {sorted.slice(0, 8).map((f) => (
@@ -127,8 +117,8 @@ function ExpiryCard({ data }: { data: WarehouseInsights }) {
   const alerts = data.expiryAlerts;
   return (
     <Panel>
-      <Header icon={<Clock size={18} strokeWidth={1.8} />} tone="var(--color-accent)" title="Sắp hết hạn (30 ngày)" />
-      <p className="mt-1 text-sm text-[var(--text-muted)]">Lô gần hết hạn nhất lên đầu, gồm cả lô đã quá hạn.</p>
+      <Header icon={<ColorIcon name="time" size={20} tone="amber" />} tone="var(--color-accent)" title="Hạn dùng trong 30 ngày tới" />
+      <p className="mt-1 text-sm text-[var(--text-muted)]">Ưu tiên các lô đã quá hạn hoặc gần đến hạn sử dụng.</p>
       {alerts.length === 0 ? (
         <Empty text="Không có lô nào sắp hết hạn trong 30 ngày." />
       ) : (
@@ -161,8 +151,8 @@ function RebalanceCard({ data }: { data: WarehouseInsights }) {
   const items = data.rebalance;
   return (
     <Panel>
-      <Header icon={<ArrowRight size={18} strokeWidth={1.8} />} tone="var(--color-accent)" title="Đề xuất điều chuyển" />
-      <p className="mt-1 text-sm text-[var(--text-muted)]">Cân bằng tồn cùng mặt hàng giữa các kho trong xã. Hệ thống gợi ý, người điều phối quyết định.</p>
+      <Header icon={<ColorIcon name="transfer" size={20} tone="blue" />} tone="var(--color-accent)" title="Đề xuất điều chuyển" />
+      <p className="mt-1 text-sm text-[var(--text-muted)]">Đối chiếu cùng một mặt hàng giữa các kho. Người phụ trách quyết định việc điều chuyển.</p>
       {items.length === 0 ? (
         <Empty text="Tồn kho giữa các kho trong xã đang cân bằng." />
       ) : (
@@ -171,7 +161,7 @@ function RebalanceCard({ data }: { data: WarehouseInsights }) {
             <li key={`${r.sku}-${i}`} className="rounded-md border bg-[var(--surface-2)] px-3 py-2.5">
               <div className="flex items-center gap-2 text-sm">
                 <span className="truncate font-medium">{r.fromWarehouseName}</span>
-                <ArrowRight aria-hidden="true" className="shrink-0 text-[var(--text-muted)]" size={14} />
+                <ColorIcon name="arrowRight" size={16} tone="blue" />
                 <span className="truncate font-medium">{r.toWarehouseName}</span>
               </div>
               <p className="mt-1 text-xs text-[var(--text-muted)]">
@@ -193,25 +183,25 @@ function MonthlyReportCard({ warehouseId }: { warehouseId: string }) {
   return (
     <Panel>
       <div className="flex items-center justify-between gap-3">
-        <Header icon={<FileText size={18} strokeWidth={1.8} />} tone="var(--color-accent)" title="Báo cáo tháng" />
+        <Header icon={<ColorIcon name="report" size={20} tone="green" />} tone="var(--color-accent)" title="Nhận xét tháng" />
         <button
           type="button"
           onClick={() => report.mutate()}
           disabled={report.isPending}
           className="inline-flex items-center gap-2 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-fg)] transition hover:brightness-95 active:translate-y-px disabled:opacity-60"
         >
-          <Sparkles size={14} strokeWidth={2} />
-          {report.isPending ? "Đang sinh…" : "Sinh báo cáo"}
+          <ColorIcon name="magic" size={16} tone="amber" />
+          {report.isPending ? "Đang tổng hợp" : "Tạo nhận xét"}
         </button>
       </div>
 
       {!report.data && !report.isPending && (
         <p className="mt-3 text-sm text-[var(--text-muted)]">
-          Bấm <b>Sinh báo cáo</b> để AI phân tích xu hướng xuất kho tháng này so tháng trước.
+          Tạo bản nhận xét ngắn về biến động xuất kho của tháng này so với tháng trước.
         </p>
       )}
       {report.isError && (
-        <p className="mt-3 text-sm text-[var(--color-critical)]">Không sinh được báo cáo. Thử lại.</p>
+        <p className="mt-3 text-sm text-[var(--color-critical)]">Chưa thể tổng hợp nhận xét. Vui lòng thử lại.</p>
       )}
       {report.data && (
         <>
@@ -247,7 +237,7 @@ function TrendRow({ trend }: { trend: TrendItem }) {
           "Mới"
         ) : (
           <>
-            {up ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+            {up ? <ColorIcon name="trendUp" size={16} tone="green" /> : <ColorIcon name="trendDown" size={16} tone="red" />}
             <span className="tabular">{Math.abs(pct ?? 0).toFixed(0)}%</span>
           </>
         )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Ban, CheckCircle2, RefreshCw } from "lucide-react";
+import { ColorIcon } from "@/components/shared/color-icon";
 import type { OperationalStatus, WarehouseReadiness } from "@/lib/dashboard-api";
 import {
   getComponentLabel,
@@ -21,9 +21,9 @@ export function ReadinessOverview(props: ReadinessOverviewProps) {
   if (props.isError) {
     return (
       <StatePanel
-        icon={<AlertTriangle aria-hidden="true" size={18} />}
+        icon={<ColorIcon name="warning" size={20} tone="red" />}
         title="Không tải được trạng thái kho"
-        detail="Kiểm tra backend hoặc quyền readiness:view, rồi thử tải lại."
+        detail="Kết nối dữ liệu đang gián đoạn. Vui lòng thử lại sau ít phút."
         onRefresh={props.onRefresh}
         isRefreshing={props.isRefreshing}
       />
@@ -32,9 +32,9 @@ export function ReadinessOverview(props: ReadinessOverviewProps) {
   if (!props.readiness) {
     return (
       <StatePanel
-        icon={<RefreshCw aria-hidden="true" size={18} />}
-        title="Chưa đánh giá khả năng điều phối"
-        detail="Tính lại để kiểm tra tồn kho, vị trí, kiểm kê, cảm biến và sự cố hiện tại."
+        icon={<ColorIcon name="refresh" size={20} tone="blue" />}
+        title="Chưa có kết quả kiểm tra"
+        detail="Kiểm tra ngay để đối chiếu tồn kho, chất lượng, hạn dùng và các sự cố hiện tại."
         onRefresh={props.onRefresh}
         isRefreshing={props.isRefreshing}
       />
@@ -48,15 +48,15 @@ export function ReadinessOverview(props: ReadinessOverviewProps) {
   return (
     <section className="space-y-4">
       <div className="grid gap-4 lg:grid-cols-[minmax(320px,0.8fr)_minmax(0,1.2fr)]">
-        <div className="rounded-md border bg-[var(--surface)] p-5">
+        <div className="app-panel p-5">
           <div className="flex items-start justify-between gap-4">
             <div className="flex min-w-0 items-start gap-3">
               <span className="mt-0.5" style={{ color: tone }}>
                 <StatusIcon status={readiness.operationalStatus} />
               </span>
               <div className="min-w-0">
-                <p className="text-xs font-medium uppercase text-[var(--text-muted)]">
-                  Khả năng vận hành kho
+                <p className="text-xs font-medium text-[var(--text-muted)]">
+                  Kết luận hiện tại
                 </p>
                 <h2 className="mt-1 text-xl font-semibold" style={{ color: tone }}>
                   {getOperationalStatusLabel(readiness.operationalStatus)}
@@ -64,7 +64,7 @@ export function ReadinessOverview(props: ReadinessOverviewProps) {
               </div>
             </div>
             <span className="shrink-0 text-xs text-[var(--text-muted)]">
-              Tham khảo {Math.round(readiness.referenceScore ?? readiness.score)}/100
+              Chỉ số theo dõi {Math.round(readiness.referenceScore ?? readiness.score)}/100
             </span>
           </div>
 
@@ -82,7 +82,7 @@ export function ReadinessOverview(props: ReadinessOverviewProps) {
               </div>
             ) : (
               <p className="text-sm text-[var(--text-muted)]">
-                Không có điều kiện nào đang khóa việc điều phối.
+                Chưa ghi nhận vấn đề nào ngăn cản việc điều phối.
               </p>
             )}
           </div>
@@ -95,7 +95,7 @@ export function ReadinessOverview(props: ReadinessOverviewProps) {
           </div>
         </div>
 
-        <div className="rounded-md border bg-[var(--surface)] p-5">
+        <div className="app-panel p-5">
           <h3 className="text-sm font-semibold">Việc cần làm</h3>
           {actions.length > 0 ? (
             <ol className="mt-4 space-y-3">
@@ -110,17 +110,17 @@ export function ReadinessOverview(props: ReadinessOverviewProps) {
             </ol>
           ) : (
             <p className="mt-3 text-sm text-[var(--text-muted)]">
-              Chưa có hành động khắc phục bắt buộc.
+              Chưa có việc bắt buộc phải xử lý.
             </p>
           )}
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-md border bg-[var(--surface)]">
+      <div className="app-panel overflow-hidden">
         <div className="border-b px-5 py-4">
-          <h3 className="text-sm font-semibold">Bằng chứng theo 6 tiêu chí</h3>
+          <h3 className="text-sm font-semibold">Chi tiết theo 6 tiêu chí</h3>
           <p className="mt-1 text-xs text-[var(--text-muted)]">
-            Điểm dùng để theo dõi xu hướng, không tự quyết định khóa điều phối.
+            Chỉ số giúp theo dõi biến động; kết luận điều phối luôn đi kèm lý do cụ thể.
           </p>
         </div>
         <div className="divide-y">
@@ -129,7 +129,7 @@ export function ReadinessOverview(props: ReadinessOverviewProps) {
               <div>
                 <p className="text-sm font-medium">{getComponentLabel(dimension.key)}</p>
                 <p className="mt-0.5 text-xs text-[var(--text-muted)]">
-                  Tham khảo {Math.round(dimension.referenceScore)}/100
+                  Chỉ số {Math.round(dimension.referenceScore)}/100
                 </p>
               </div>
               <StatusBadge status={dimension.status} />
@@ -145,9 +145,9 @@ export function ReadinessOverview(props: ReadinessOverviewProps) {
 }
 
 function StatusIcon({ status }: { status: OperationalStatus }) {
-  if (status === "READY") return <CheckCircle2 aria-hidden="true" size={24} />;
-  if (status === "NOT_DISPATCHABLE") return <Ban aria-hidden="true" size={24} />;
-  return <AlertTriangle aria-hidden="true" size={24} />;
+  if (status === "READY") return <ColorIcon name="success" size={26} tone="green" />;
+  if (status === "NOT_DISPATCHABLE") return <ColorIcon name="blocked" size={26} tone="red" />;
+  return <ColorIcon name="warning" size={26} tone="amber" />;
 }
 
 function StatusBadge({ status }: { status: OperationalStatus }) {
@@ -176,8 +176,8 @@ function RefreshButton({ compact = false, isRefreshing, onRefresh }: {
 }) {
   return (
     <button className="inline-flex items-center gap-2 rounded-md border bg-[var(--surface)] px-3 py-2 text-sm font-medium hover:bg-[var(--surface-2)] disabled:opacity-60" disabled={isRefreshing} onClick={onRefresh} type="button">
-      <RefreshCw aria-hidden="true" className={isRefreshing ? "animate-spin" : ""} size={compact ? 14 : 16} />
-      {compact ? "Tính lại" : isRefreshing ? "Đang tính lại" : "Đánh giá lại"}
+      <ColorIcon className={isRefreshing ? "animate-spin" : ""} name="refresh" size={compact ? 16 : 18} tone="blue" />
+      {compact ? "Cập nhật" : isRefreshing ? "Đang kiểm tra" : "Kiểm tra lại"}
     </button>
   );
 }

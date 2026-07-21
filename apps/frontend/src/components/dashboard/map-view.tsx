@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MapPin, Pencil, Save } from "lucide-react";
+import { ColorIcon } from "@/components/shared/color-icon";
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-store";
@@ -76,7 +76,7 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
       <aside className="space-y-4">
         <section className="rounded-md border bg-[var(--surface)] p-4">
           <div className="flex items-center gap-2 text-sm font-semibold">
-            <MapPin size={16} strokeWidth={1.8} />
+            <ColorIcon name="location" size={18} tone="blue" />
             <span>Kho trong xã ({warehouses.length})</span>
           </div>
           {isAdmin ? (
@@ -90,8 +90,8 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
                 devMode ? "bg-[var(--color-accent)] text-[var(--color-accent-fg)]" : "border"
               }`}
             >
-              <Pencil size={15} />
-              {devMode ? "Đang ghim toạ độ (bấm để tắt)" : "Chế độ ghim toạ độ"}
+              <ColorIcon name="edit" size={17} tone="blue" />
+              {devMode ? "Đang cập nhật vị trí" : "Cập nhật vị trí kho"}
             </button>
           ) : (
             <p className="mt-2 text-xs text-[var(--text-muted)]">Chỉ quản trị xã ghim được toạ độ kho.</p>
@@ -102,7 +102,7 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
           <section className="rounded-md border bg-[var(--surface)] p-4">
             <h4 className="text-sm font-semibold">Ghim toạ độ</h4>
             <p className="mt-1 text-xs text-[var(--text-muted)]">
-              Kéo marker trên bản đồ, hoặc chọn 1 kho rồi click vị trí trên bản đồ. Bấm Lưu để ghi.
+              Kéo dấu ghim, hoặc chọn một kho rồi bấm vào vị trí tương ứng trên bản đồ. Sau đó chọn Lưu.
             </p>
             <ul className="mt-3 space-y-2">
               {warehouses.map((w) => {
@@ -126,7 +126,7 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
                           className={`rounded-md px-2 py-1 text-xs font-medium transition ${
                             picking ? "bg-[var(--color-accent)] text-[var(--color-accent-fg)]" : "border"
                           }`}
-                          title="Click vị trí trên bản đồ"
+                          title="Chọn vị trí trên bản đồ"
                         >
                           {picking ? "Đang chọn…" : "Chọn"}
                         </button>
@@ -137,7 +137,7 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
                             disabled={save.isPending}
                             className="inline-flex items-center gap-1 rounded-md bg-[var(--color-accent)] px-2 py-1 text-xs font-semibold text-[var(--color-accent-fg)] disabled:opacity-60"
                           >
-                            <Save size={13} /> Lưu
+                            <ColorIcon name="save" size={15} tone="green" /> Lưu
                           </button>
                         )}
                       </div>

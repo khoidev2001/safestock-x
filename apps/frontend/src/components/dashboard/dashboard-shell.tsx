@@ -1,24 +1,8 @@
 "use client";
 
-import {
-  AlertTriangle,
-  ArrowLeftRight,
-  Bot,
-  ClipboardCheck,
-  ClipboardList,
-  FileSpreadsheet,
-  LayoutGrid,
-  LineChart,
-  ListChecks,
-  LogOut,
-  Map as MapIcon,
-  Package,
-  RadioTower,
-  ShieldCheck,
-  UserCog,
-  Warehouse,
-} from "lucide-react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { ColorIcon, type ColorIconName, type ColorIconTone } from "@/components/shared/color-icon";
 import { useAuth } from "@/lib/auth-store";
 import { NotificationBell } from "@/components/mission/notification-bell";
 
@@ -46,23 +30,33 @@ interface DashboardShellProps {
 const navItems: {
   id: DashboardView;
   label: string;
-  icon: typeof LayoutGrid;
+  icon: ColorIconName;
+  tone: ColorIconTone;
+  group: "Điều hành" | "Nghiệp vụ kho" | "Quản trị";
   adminOnly?: boolean;
 }[] = [
-  { id: "readiness", label: "Tổng quan", icon: LayoutGrid },
-  { id: "insights", label: "Ngày thường", icon: LineChart },
-  { id: "assistant", label: "Trợ lý", icon: Bot },
-  { id: "inventory", label: "Kho vật tư", icon: Package },
-  { id: "simulator", label: "Mô phỏng", icon: RadioTower },
-  { id: "mission", label: "Nhiệm vụ", icon: ClipboardList },
-  { id: "incident", label: "Sự cố", icon: AlertTriangle },
-  { id: "stocktake", label: "Kiểm kê", icon: ClipboardCheck },
-  { id: "loan", label: "Mượn-trả", icon: ArrowLeftRight },
-  { id: "map", label: "Bản đồ kho", icon: MapIcon },
-  { id: "report", label: "Báo cáo tháng", icon: FileSpreadsheet },
-  { id: "users", label: "Người dùng", icon: UserCog, adminOnly: true },
-  { id: "audit", label: "Hậu kiểm", icon: ListChecks },
+  { id: "readiness", label: "Tổng quan", icon: "dashboard", tone: "green", group: "Điều hành" },
+  { id: "mission", label: "Điều phối cứu hộ", icon: "mission", tone: "orange", group: "Điều hành" },
+  { id: "insights", label: "Theo dõi, dự báo", icon: "insights", tone: "blue", group: "Điều hành" },
+  { id: "assistant", label: "Tra cứu kho", icon: "assistant", tone: "blue", group: "Điều hành" },
+  { id: "inventory", label: "Vật tư", icon: "inventory", tone: "orange", group: "Nghiệp vụ kho" },
+  { id: "stocktake", label: "Kiểm kê", icon: "stocktake", tone: "green", group: "Nghiệp vụ kho" },
+  { id: "loan", label: "Mượn, trả", icon: "loan", tone: "amber", group: "Nghiệp vụ kho" },
+  { id: "incident", label: "Sự cố", icon: "incident", tone: "red", group: "Nghiệp vụ kho" },
+  { id: "report", label: "Báo cáo tháng", icon: "report", tone: "green", group: "Nghiệp vụ kho" },
+  { id: "map", label: "Bản đồ kho", icon: "map", tone: "blue", group: "Nghiệp vụ kho" },
+  { id: "simulator", label: "Cảm biến thử nghiệm", icon: "simulator", tone: "amber", group: "Quản trị" },
+  { id: "users", label: "Tài khoản", icon: "users", tone: "blue", group: "Quản trị", adminOnly: true },
+  { id: "audit", label: "Nhật ký", icon: "audit", tone: "amber", group: "Quản trị" },
 ];
+
+const navGroups = ["Điều hành", "Nghiệp vụ kho", "Quản trị"] as const;
+
+const roleLabels: Record<string, string> = {
+  ADMIN: "Quản trị xã",
+  WAREHOUSE: "Phụ trách kho",
+  RESCUE: "Đội cứu hộ",
+};
 
 export function DashboardShell({ activeView, children, onViewChange }: DashboardShellProps) {
   const router = useRouter();
@@ -75,50 +69,55 @@ export function DashboardShell({ activeView, children, onViewChange }: Dashboard
   }
 
   return (
-    <main className="min-h-[100dvh] bg-[var(--bg)] text-[var(--text)]">
-      <div className="grid min-h-[100dvh] lg:grid-cols-[248px_1fr]">
-        <aside className="hidden border-r bg-[var(--surface)] px-4 py-5 lg:block">
-          <div className="flex items-center gap-3 px-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-md bg-[var(--color-accent)] text-sm font-bold text-[var(--color-accent-fg)]">
-              UP
-            </span>
-            <div>
-              <p className="font-semibold">Ứng phó nhanh</p>
-              <p className="text-xs text-[var(--text-muted)]">Điều phối cứu hộ & hậu cần</p>
-            </div>
+    <div className="min-h-[100dvh] bg-[var(--bg)] text-[var(--text)]">
+      <a className="skip-link" href="#noi-dung-chinh">Chuyển đến nội dung chính</a>
+      <div className="grid min-h-[100dvh] lg:grid-cols-[272px_1fr]">
+        <aside className="hidden border-r bg-[var(--surface)] px-5 py-6 lg:sticky lg:top-0 lg:block lg:h-[100dvh] lg:overflow-y-auto">
+          <div className="px-2 pb-5">
+            <Image
+              alt="Ứng phó nhanh"
+              className="h-auto w-full max-w-[232px]"
+              height={1080}
+              priority
+              sizes="232px"
+              src="/brand/ung-pho-nhanh-logo.png"
+              width={1920}
+            />
           </div>
 
-          <nav className="mt-8 space-y-1" aria-label="Điều hướng chính">
-            {visibleNav.map((item) => (
-              <NavButton
-                key={item.id}
-                isActive={activeView === item.id}
-                item={item}
-                onClick={() => onViewChange(item.id)}
-              />
-            ))}
+          <nav className="border-t pt-4" aria-label="Điều hướng chính">
+            {navGroups.map((group) => {
+              const items = visibleNav.filter((item) => item.group === group);
+              if (items.length === 0) return null;
+              return (
+                <div className="mb-5" key={group}>
+                  <p className="mb-1.5 px-3 text-xs font-semibold text-[var(--text-muted)]">{group}</p>
+                  <div className="space-y-0.5">
+                    {items.map((item) => (
+                      <NavButton
+                        key={item.id}
+                        isActive={activeView === item.id}
+                        item={item}
+                        onClick={() => onViewChange(item.id)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </nav>
 
-          <div className="mt-8 rounded-md border bg-[var(--surface-2)] p-3">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <ShieldCheck aria-hidden="true" size={16} strokeWidth={1.8} />
-              Hậu kiểm bật
-            </div>
-            <p className="mt-2 text-xs leading-relaxed text-[var(--text-muted)]">
-              Sửa tay, reconcile và xuất lô đều cần lý do, ghi audit 5W.
-            </p>
-          </div>
         </aside>
 
         <section className="min-w-0">
-          <header className="sticky top-0 z-10 border-b bg-[color-mix(in_oklch,var(--surface)_92%,transparent)] px-4 py-3 backdrop-blur md:px-6">
+          <header className="sticky top-0 z-10 border-b bg-[var(--surface)] px-4 py-4 md:px-7">
             <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4">
               <div className="flex min-w-0 items-center gap-3">
-                <Warehouse aria-hidden="true" size={19} strokeWidth={1.8} />
+                <ColorIcon name="warehouse" size={21} tone="blue" />
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">Bảng điều hành kho cứu hộ</p>
+                  <p className="truncate text-sm font-semibold">Kho vật tư xã Đồng Xuân</p>
                   <p className="truncate text-xs text-[var(--text-muted)]">
-                    {user?.email ?? "Chưa xác định"} · {user?.role ?? "NO_ROLE"}
+                    {user?.email ?? "Chưa xác định"} · {roleLabels[user?.role ?? ""] ?? "Chưa xác định vai trò"}
                   </p>
                 </div>
               </div>
@@ -131,14 +130,14 @@ export function DashboardShell({ activeView, children, onViewChange }: Dashboard
                   title="Đăng xuất"
                   type="button"
                 >
-                  <LogOut aria-hidden="true" size={17} strokeWidth={1.8} />
+                  <ColorIcon name="logout" size={19} tone="red" />
                 </button>
               </div>
             </div>
 
             <nav
               aria-label="Điều hướng chính trên di động"
-              className="mx-auto mt-3 grid max-w-[1440px] grid-cols-4 gap-2 lg:hidden"
+              className="mx-auto mt-3 flex max-w-[1440px] gap-1 overflow-x-auto pb-1 lg:hidden"
             >
               {visibleNav.map((item) => (
                 <NavButton
@@ -152,10 +151,10 @@ export function DashboardShell({ activeView, children, onViewChange }: Dashboard
             </nav>
           </header>
 
-          <div className="mx-auto max-w-[1440px] px-4 py-5 md:px-6">{children}</div>
+          <main className="mx-auto max-w-[1500px] px-4 py-7 md:px-7 md:py-8" id="noi-dung-chinh">{children}</main>
         </section>
       </div>
-    </main>
+    </div>
   );
 }
 
@@ -167,25 +166,26 @@ function NavButton({
 }: {
   compact?: boolean;
   isActive: boolean;
-  item: { id: DashboardView; label: string; icon: typeof LayoutGrid };
+  item: { id: DashboardView; label: string; icon: ColorIconName; tone: ColorIconTone };
   onClick: () => void;
 }) {
-  const Icon = item.icon;
   return (
     <button
       aria-current={isActive ? "page" : undefined}
-      className={`flex w-full items-center rounded-md text-sm transition active:translate-y-px ${
-        compact ? "justify-center gap-1.5 px-2 py-2 text-xs" : "gap-3 px-3 py-2 text-left"
+      className={`flex items-center rounded-md text-sm transition active:translate-y-px ${
+        compact ? "w-auto shrink-0 justify-center gap-2 px-3 py-2.5 text-xs" : "w-full gap-3 px-3 py-2.5 text-left"
       }`}
       onClick={onClick}
       style={{
-        background: isActive ? "var(--surface-2)" : "transparent",
-        color: isActive ? "var(--text)" : "var(--text-muted)",
+        background: isActive ? "var(--accent-soft)" : "transparent",
+        color: isActive ? "var(--color-accent)" : "var(--text-muted)",
       }}
       type="button"
     >
-      <Icon aria-hidden="true" size={compact ? 15 : 17} strokeWidth={1.8} />
-      <span className="truncate">{item.label}</span>
+      <span className={`inline-flex shrink-0 items-center justify-center ${compact ? "h-7 w-7" : "h-8 w-8"}`}>
+        <ColorIcon name={item.icon} size={compact ? 17 : 20} tone={item.tone} />
+      </span>
+      <span className={`truncate ${isActive ? "font-semibold" : "font-medium"}`}>{item.label}</span>
     </button>
   );
 }

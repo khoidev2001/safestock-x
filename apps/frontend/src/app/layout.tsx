@@ -1,15 +1,25 @@
 import type { Metadata } from "next";
-import { Hanken_Grotesk, JetBrains_Mono } from "next/font/google";
+import { Be_Vietnam_Pro, JetBrains_Mono } from "next/font/google";
 import { Providers } from "./providers";
 import "./globals.css";
 import "leaflet/dist/leaflet.css";
 
-const sans = Hanken_Grotesk({ subsets: ["latin", "vietnamese"], variable: "--font-sans-loaded", display: "swap" });
+const sans = Be_Vietnam_Pro({
+  subsets: ["latin", "vietnamese"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-sans-loaded",
+  display: "swap",
+});
 const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono-loaded", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Ứng phó nhanh | Điều phối cứu hộ & hậu cần thông minh",
-  description: "Giải pháp AI điều phối cứu hộ cứu nạn và hậu cần thông minh cho kho vật tư cấp xã",
+  title: "Ứng phó nhanh",
+  description: "Hệ thống quản lý vật tư và điều phối cứu hộ cấp xã",
+  icons: {
+    icon: [{ url: "/brand/ung-pho-nhanh-mark.png", type: "image/png" }],
+    shortcut: "/brand/ung-pho-nhanh-mark.png",
+    apple: "/brand/ung-pho-nhanh-mark.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

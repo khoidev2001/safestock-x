@@ -1,13 +1,14 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Check } from "lucide-react";
+import { ColorIcon } from "@/components/shared/color-icon";
 import {
   acknowledgeIncident,
   getIncidents,
   resolveIncident,
   type IncidentSummary,
 } from "@/lib/dashboard-api";
+import { Pagination, usePagination } from "@/components/shared/pagination";
 
 const SEVERITY: Record<string, { label: string; color: string }> = {
   LOW: { label: "Thấp", color: "var(--color-ready)" },
@@ -23,7 +24,7 @@ const KIND_LABEL: Record<string, string> = {
   FIRE_RISK: "Nghi cháy",
   POWER_OUTAGE: "Mất điện",
   STAT_ANOMALY: "Bất thường cảm biến",
-  PREDICTIVE_WARNING: "Cảnh báo sớm (dự đoán)",
+  PREDICTIVE_WARNING: "Cảnh báo sớm",
 };
 
 export function IncidentView({ warehouseId }: { warehouseId: string }) {
@@ -39,13 +40,15 @@ export function IncidentView({ warehouseId }: { warehouseId: string }) {
   const ack = useMutation({ mutationFn: acknowledgeIncident, onSuccess: invalidate });
   const resolve = useMutation({ mutationFn: (id: string) => resolveIncident(id), onSuccess: invalidate });
 
-  if (query.isLoading) return <Skeleton />;
   const incidents = query.data ?? [];
+  const pagination = usePagination(incidents);
+
+  if (query.isLoading) return <Skeleton />;
 
   if (incidents.length === 0) {
     return (
       <section className="rounded-md border bg-[var(--surface)] p-10 text-center">
-        <Check className="mx-auto text-[var(--color-ready)]" size={28} />
+        <ColorIcon className="mx-auto" name="success" size={30} tone="green" />
         <p className="mt-3 font-medium">Không có sự cố</p>
         <p className="mt-1 text-sm text-[var(--text-muted)]">Kho đang vận hành bình thường.</p>
       </section>
@@ -53,16 +56,25 @@ export function IncidentView({ warehouseId }: { warehouseId: string }) {
   }
 
   return (
-    <div className="space-y-3">
-      {incidents.map((inc) => (
-        <IncidentCard
-          key={inc.id}
-          incident={inc}
-          onAck={() => ack.mutate(inc.id)}
-          onResolve={() => resolve.mutate(inc.id)}
-          busy={ack.isPending || resolve.isPending}
-        />
-      ))}
+    <div>
+      <div className="space-y-3">
+        {pagination.pageItems.map((inc) => (
+          <IncidentCard
+            key={inc.id}
+            incident={inc}
+            onAck={() => ack.mutate(inc.id)}
+            onResolve={() => resolve.mutate(inc.id)}
+            busy={ack.isPending || resolve.isPending}
+          />
+        ))}
+      </div>
+      <Pagination
+        onPageChange={pagination.setPage}
+        page={pagination.page}
+        pageSize={pagination.pageSize}
+        totalItems={incidents.length}
+        totalPages={pagination.totalPages}
+      />
     </div>
   );
 }
@@ -89,7 +101,7 @@ function IncidentCard({
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex gap-3">
-          <AlertTriangle size={20} style={{ color: sev.color }} className="mt-0.5 shrink-0" />
+          <ColorIcon className="mt-0.5" name="incident" size={22} tone="red" />
           <div>
             <p className="font-semibold">{incident.title}</p>
             <p className="mt-0.5 text-sm text-[var(--text-muted)]">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
-import { Bot, Loader2, Send, User } from "lucide-react";
+import { ColorIcon } from "@/components/shared/color-icon";
 import { useEffect, useRef, useState } from "react";
 import { askAssistant } from "@/lib/assistant-api";
 import { ApiError } from "@/lib/api";
@@ -15,19 +15,24 @@ interface AssistantChatProps {
   warehouseId: string;
   compact?: boolean;
   isActive?: boolean;
+  onLongResponse?: () => void;
 }
 
+const LONG_RESPONSE_LENGTH = 280;
+
 const SUGGESTIONS = [
+  "Thôn Tân Bình có 150 người mắc kẹt, đang mưa to.",
   "Còn bao nhiêu áo phao người lớn?",
   "Vật tư nào sắp hết hạn?",
   "Kho đang có sự cố gì không?",
-  "Điểm sẵn sàng của kho hiện tại?",
+  "Kho hiện có thể điều phối vật tư không?",
 ];
 
 export function AssistantChat({
   warehouseId,
   compact = false,
   isActive = true,
+  onLongResponse,
 }: AssistantChatProps) {
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [input, setInput] = useState("");
@@ -38,9 +43,7 @@ export function AssistantChat({
     mutationFn: (question: string) => askAssistant(warehouseId, question),
     onSuccess: (response) => appendAssistantTurn(response.answer),
     onError: (error) => {
-      const message =
-        error instanceof ApiError ? error.message : "Không hỏi được trợ lý. Thử lại.";
-      appendAssistantTurn(message);
+      appendAssistantTurn(getAssistantErrorMessage(error));
     },
   });
 
@@ -59,6 +62,7 @@ export function AssistantChat({
 
   function appendAssistantTurn(text: string) {
     setTurns((currentTurns) => [...currentTurns, { role: "assistant", text }]);
+    if (compact && isLongResponse(text)) onLongResponse?.();
     scrollToLatest();
   }
 
@@ -97,8 +101,8 @@ export function AssistantChat({
 
         {ask.isPending ? (
           <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]" role="status">
-            <Loader2 aria-hidden="true" className="animate-spin" size={14} />
-            Đang tra cứu dữ liệu kho...
+            <ColorIcon className="animate-spin" name="loading" size={16} tone="blue" />
+            Đang phân tích tình huống...
           </div>
         ) : null}
       </div>
@@ -116,7 +120,7 @@ export function AssistantChat({
           className="min-w-0 flex-1 rounded-md border bg-[var(--surface)] px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-[var(--color-accent)]"
           maxLength={500}
           onChange={(event) => setInput(event.target.value)}
-          placeholder="Nhập câu hỏi về kho..."
+          placeholder="Nhập câu hỏi hoặc mô tả tình huống..."
           value={input}
         />
         <button
@@ -128,12 +132,25 @@ export function AssistantChat({
           title="Gửi câu hỏi"
           type="submit"
         >
-          <Send aria-hidden="true" size={16} strokeWidth={2} />
+          <ColorIcon name="send" size={18} tone="blue" />
           {compact ? null : "Gửi"}
         </button>
       </form>
     </div>
   );
+}
+
+function isLongResponse(text: string): boolean {
+  return text.length >= LONG_RESPONSE_LENGTH || text.split("\n").length >= 4;
+}
+
+function getAssistantErrorMessage(error: unknown): string {
+  if (!(error instanceof ApiError)) {
+    return "Chưa thể kết nối để tra cứu. Vui lòng thử lại sau.";
+  }
+  if (error.status === 401) return "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.";
+  if (error.status >= 500) return "Dịch vụ tra cứu đang tạm gián đoạn. Vui lòng thử lại sau.";
+  return "Chưa tìm được câu trả lời phù hợp. Hãy thử hỏi ngắn gọn hơn.";
 }
 
 function EmptyChat({
@@ -145,10 +162,10 @@ function EmptyChat({
 }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 py-6 text-center">
-      <Bot className="text-[var(--color-accent)]" size={compact ? 28 : 32} strokeWidth={1.6} />
+      <ColorIcon name="assistant" size={compact ? 30 : 34} tone="blue" />
       <div>
-        <p className="text-sm font-medium">Tôi có thể tra cứu dữ liệu kho</p>
-        <p className="mt-1 text-xs text-[var(--text-muted)]">Chọn câu hỏi gợi ý hoặc nhập câu hỏi bên dưới.</p>
+        <p className="text-sm font-semibold">Trợ lý ứng phó nhanh</p>
+        <p className="mt-1 text-xs text-[var(--text-muted)]">Mô tả tình huống cứu hộ hoặc hỏi về dữ liệu kho.</p>
       </div>
       <div className={`flex flex-wrap justify-center gap-2 ${compact ? "max-w-xs" : ""}`}>
         {SUGGESTIONS.map((suggestion) => (
@@ -181,7 +198,7 @@ function ChatBubble({ turn }: { turn: ChatTurn }) {
           color: isUser ? "var(--text)" : "var(--color-accent)",
         }}
       >
-        {isUser ? <User size={15} strokeWidth={1.8} /> : <Bot size={15} strokeWidth={1.8} />}
+        {isUser ? <ColorIcon name="user" size={17} tone="green" /> : <ColorIcon name="assistant" size={17} tone="blue" />}
       </span>
       <div
         className="max-w-[82%] whitespace-pre-wrap rounded-md px-3 py-2 text-sm leading-relaxed"

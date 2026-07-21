@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ClipboardList, Gauge, PackageSearch } from "lucide-react";
+import { ColorIcon } from "@/components/shared/color-icon";
 import type { IncidentSummary, InventoryBatch, WarehouseReadiness } from "@/lib/dashboard-api";
 import { getOperationalStatusLabel } from "./readiness-status";
 
@@ -18,28 +18,28 @@ export function OperationsSummary({ readiness, batches, incidents }: OperationsS
   return (
     <section className="grid gap-3 md:grid-cols-4">
       <MetricCard
-        icon={<Gauge aria-hidden="true" size={17} strokeWidth={1.8} />}
+        icon={<ColorIcon name="readiness" size={19} tone="green" />}
         label="Khả năng điều phối"
         value={readiness ? getOperationalStatusLabel(readiness.operationalStatus) : "Chưa đánh giá"}
-        note={blocker?.title ?? "Không có blocker vận hành"}
+        note={blocker?.title ?? "Không có vướng mắc cản trở điều phối"}
       />
       <MetricCard
-        icon={<PackageSearch aria-hidden="true" size={17} strokeWidth={1.8} />}
-        label="Lô sắp thiếu"
+        icon={<ColorIcon name="packageSearch" size={19} tone="orange" />}
+        label="Lô còn ít"
         value={String(lowQuantity)}
-        note="Ngưỡng theo demo: <= 10 đơn vị"
+        note="Các lô còn từ 10 đơn vị trở xuống"
       />
       <MetricCard
-        icon={<AlertTriangle aria-hidden="true" size={17} strokeWidth={1.8} />}
+        icon={<ColorIcon name="incident" size={19} tone="red" />}
         label="Sự cố mở"
         value={String(incidents?.length ?? 0)}
-        note="Từ incident engine"
+        note="Sự cố chưa được xử lý xong"
       />
       <MetricCard
-        icon={<ClipboardList aria-hidden="true" size={17} strokeWidth={1.8} />}
-        label="Khuyến nghị"
+        icon={<ColorIcon name="workflow" size={19} tone="blue" />}
+        label="Việc cần làm"
         value={recommendation ? "Có việc cần làm" : "Ổn định"}
-        note={recommendation ?? "Chưa có đề xuất mới"}
+        note={recommendation ?? "Chưa phát sinh việc cần xử lý"}
       />
     </section>
   );
@@ -57,7 +57,7 @@ function MetricCard({
   note: string;
 }) {
   return (
-    <div className="rounded-md border bg-[var(--surface)] p-4">
+    <div className="app-panel border-t-2 p-4" style={{ borderTopColor: "var(--color-accent)" }}>
       <div className="flex items-center gap-2 text-xs font-medium text-[var(--text-muted)]">
         {icon}
         {label}
