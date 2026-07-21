@@ -21,7 +21,6 @@ export interface ShelfSummary {
   id: string;
   code: string;
   name: string;
-  isBlocked: boolean;
   isLocked: boolean;
   _count?: { batches: number };
 }
@@ -47,12 +46,34 @@ export interface ReadinessRecommendation {
   message: string;
 }
 
+export type OperationalStatus = "READY" | "NEEDS_ACTION" | "NOT_DISPATCHABLE";
+
+export interface ReadinessBlocker {
+  code: string;
+  title: string;
+  reasons: string[];
+  source: "INCIDENT" | "READINESS_DIMENSION";
+}
+
+export interface ReadinessDimension {
+  key: ReadinessComponentKey;
+  status: OperationalStatus;
+  referenceScore: number;
+  reasons: string[];
+  recommendedAction: string | null;
+}
+
 export interface WarehouseReadiness {
   id: string;
   warehouseId: string;
   targetType: string;
   targetId: string;
   score: number;
+  referenceScore: number;
+  operationalStatus: OperationalStatus;
+  blockers: ReadinessBlocker[];
+  dimensions: ReadinessDimension[];
+  recommendedActions: string[];
   zone: "READY" | "ATTENTION" | "DEGRADED" | "CRITICAL";
   computedAt: string;
   components: ReadinessComponent[];

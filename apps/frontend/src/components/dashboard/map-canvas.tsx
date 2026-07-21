@@ -18,6 +18,7 @@ import type { AdminWarehouse } from "@/lib/warehouse-api";
 const OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>';
 const BASE_LAYERS = [
   {
+    id: "offline",
     // Offline: tile đã tải sẵn 5 xã cụm Đồng Xuân (zoom 10-15) ở public/tiles.
     // Mất mạng vẫn hiện. Ngoài vùng/zoom đã tải → tile trắng (errorTileUrl xử lý).
     name: "Offline (5 xã, không cần mạng)",
@@ -25,29 +26,31 @@ const BASE_LAYERS = [
     attribution: `${OSM_ATTR} · &copy; <a href="https://www.maptiler.com/">MapTiler</a> · offline cụm Đồng Xuân`,
     maxZoom: 15,
     // Tile tải từ endpoint raster 256px, cùng lưới XYZ chuẩn với Leaflet/OSM.
-    default: true,
     offline: true,
   },
   {
+    id: "osm",
     name: "Đường phố (OSM, cần mạng)",
     url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
     attribution: OSM_ATTR,
     maxZoom: 19,
-    default: false,
+    offline: false,
   },
   {
+    id: "topo",
     name: "Địa hình (Topo)",
     url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
     attribution: `${OSM_ATTR} · <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)`,
     maxZoom: 17,
-    default: false,
+    offline: false,
   },
   {
+    id: "satellite",
     name: "Vệ tinh",
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     attribution: "&copy; Esri, Maxar, Earthstar Geographics",
     maxZoom: 19,
-    default: false,
+    offline: false,
   },
 ];
 
@@ -78,6 +81,9 @@ export interface MapCanvasProps {
 
 export function MapCanvas({ warehouses, devMode, pickingId, onMarkerMove, onPickOnMap }: MapCanvasProps) {
   const [geo, setGeo] = useState<GeoData | null>(null);
+  const [preferredBaseLayer, setPreferredBaseLayer] = useState<"offline" | "osm">(() =>
+    typeof navigator !== "undefined" && navigator.onLine ? "osm" : "offline",
+  );
   const centralIcon = useMemo(() => pinIcon("var(--color-accent, #2f9e6e)"), []);
   const hamletIcon = useMemo(() => pinIcon("var(--text-muted, #8a8f98)", 26), []);
 
@@ -88,6 +94,18 @@ export function MapCanvas({ warehouses, devMode, pickingId, onMarkerMove, onPick
       .catch(() => setGeo(null));
   }, []);
 
+  useEffect(() => {
+    const selectOnlineMap = () => setPreferredBaseLayer("osm");
+    const selectOfflineMap = () => setPreferredBaseLayer("offline");
+
+    window.addEventListener("online", selectOnlineMap);
+    window.addEventListener("offline", selectOfflineMap);
+    return () => {
+      window.removeEventListener("online", selectOnlineMap);
+      window.removeEventListener("offline", selectOfflineMap);
+    };
+  }, []);
+
   const located = warehouses.filter((w) => w.lat != null && w.lng != null);
   const boundsPoints = located.map((w) => ({ lat: w.lat as number, lng: w.lng as number }));
 
@@ -96,7 +114,7 @@ export function MapCanvas({ warehouses, devMode, pickingId, onMarkerMove, onPick
       <MapContainer center={DEFAULT_CENTER} zoom={12} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
         <LayersControl position="topright">
           {BASE_LAYERS.map((layer) => (
-            <LayersControl.BaseLayer key={layer.name} name={layer.name} checked={layer.default}>
+            <LayersControl.BaseLayer key={layer.id} name={layer.name} checked={layer.id === preferredBaseLayer}>
               <TileLayer
                 url={layer.url}
                 attribution={layer.attribution}

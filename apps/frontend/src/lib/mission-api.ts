@@ -20,6 +20,25 @@ export interface MissionRequirement {
   neighborSuggestion: { name: string; distanceKm: number; available: number }[] | null;
 }
 
+export type MissionReadinessStatus = "READY" | "NEEDS_ACTION" | "NOT_DISPATCHABLE";
+
+export interface MissionReadinessAssessment {
+  status: MissionReadinessStatus;
+  fulfillment: number;
+  warehouseOperationalStatus: MissionReadinessStatus | null;
+  items: {
+    sku: string;
+    itemName: string;
+    required: number;
+    allocated: number;
+    shortage: number;
+    fulfillment: number;
+    status: MissionReadinessStatus;
+  }[];
+  blockers: { sku: string; itemName: string; reasons: string[] }[];
+  recommendedActions: string[];
+}
+
 export interface Mission {
   id: string;
   incidentType: string;
@@ -30,6 +49,7 @@ export interface Mission {
   incidentLat: number | null;
   incidentLng: number | null;
   actionPlan: ActionPlan | null;
+  readinessAssessment: MissionReadinessAssessment | null;
   requirements: MissionRequirement[];
 }
 

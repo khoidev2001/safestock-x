@@ -20,10 +20,10 @@
 
 ## FE-G1 - Dashboard Readiness 🟡 CORE
 > Đây là màn hoàn thiện khoảnh khắc vàng cùng Simulator. Lát hiện tại đã dựng cockpit đọc dữ liệu thật, còn CRUD/adjust/reconcile để lát tiếp.
-- [x] Tổng quan Readiness toàn kho bằng Recharts
-- [x] Breakdown 6 thành phần
-- [x] Khuyến nghị cấp kho từ backend
-- [x] Ngưỡng hành động 4 vùng bằng màu trạng thái
+- [x] Tổng quan khả năng vận hành theo READY / NEEDS_ACTION / NOT_DISPATCHABLE
+- [x] Breakdown 6 thành phần, lý do và điểm tham khảo
+- [x] Blocker và hành động khắc phục từ backend
+- [x] Điểm 0-100 chuyển thành thông tin phụ, không còn là headline
 - [x] Sơ đồ kho dạng grid theo khu/kệ, không dùng React Flow
 - [x] Danh sách vật tư trọng yếu đọc từ API
 - [ ] Điểm readiness từng khu/nhóm trên sơ đồ kho
@@ -31,7 +31,7 @@
 - [ ] UI sửa tay số lượng, form adjust có lý do bắt buộc
 - [ ] UI reconcile, hiển thị lệch hệ thống vs kiểm kê rồi xác nhận ghi đè
 - [x] Loading / empty / error state cho các call chính
-- **Verify hiện tại:** recalc readiness thật tạo score 78, 6 components, 3 recommendations; desktop/mobile screenshot không overlap.
+- **Verify hiện tại:** `tsc --noEmit` + `next build` pass ngày 2026-07-21; UI đọc `operationalStatus`, `blockers`, `dimensions`, `recommendedActions`.
 - **Verify còn lại:** adjust có audit; reconcile ghi đè; kéo slider G2 làm readiness rớt realtime.
 
 ## FE-G2 - Simulator UI đầy đủ ⬜ CORE
@@ -45,6 +45,7 @@
 - [x] Action Plan view: 8 mục giống docx (đánh giá/severity/mục tiêu/cấp phát/điều phối kho+ETA/3 giai đoạn/cảnh báo/dự báo %/câu hỏi)
 - [x] Map ghim điểm kho (tổng/thôn) + điểm nạn (React-Leaflet + OSM/CartoDB, click/kéo ghim, nhập toạ độ tay, tự fit-bounds, tile đổi theo dark mode)
 - [x] Workflow liên role: ADMIN sinh→RESCUE xác nhận→WAREHOUSE chuẩn bị; nút theo role
+- [x] Hiển thị đánh giá từng SKU; vô hiệu hóa gửi nhiệm vụ khi có vật tư thiết yếu không cấp được
 - [x] Notification UI: chuông + realtime WebSocket theo role
 - **Verify:** ✅ ADMIN sinh Action Plan 8 mục → RESCUE nhận thông báo xác nhận → WAREHOUSE nhận chuẩn bị; map hiện kho tổng/thôn cùng xã + điểm nạn, khoảng cách ước tính (Haversine client) trước khi lập phương án, đổi sang ETA chính thức backend sau khi có Action Plan.
 - **File:** `apps/frontend/src/components/mission/{incident-map.tsx,mission-view.tsx,action-plan-view.tsx}`, `apps/frontend/src/lib/{geo.ts,mission-api.ts}`, `apps/backend/src/mission/{mission.controller.ts,mission.service.ts,action-plan.ts}`

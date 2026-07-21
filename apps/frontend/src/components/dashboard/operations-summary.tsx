@@ -2,7 +2,7 @@
 
 import { AlertTriangle, ClipboardList, Gauge, PackageSearch } from "lucide-react";
 import type { IncidentSummary, InventoryBatch, WarehouseReadiness } from "@/lib/dashboard-api";
-import { getComponentLabel } from "./readiness-status";
+import { getOperationalStatusLabel } from "./readiness-status";
 
 interface OperationsSummaryProps {
   readiness: WarehouseReadiness | null | undefined;
@@ -12,18 +12,16 @@ interface OperationsSummaryProps {
 
 export function OperationsSummary({ readiness, batches, incidents }: OperationsSummaryProps) {
   const lowQuantity = (batches ?? []).filter((batch) => batch.quantity <= 10).length;
-  const recommendation = readiness?.recommendations?.[0];
-  const weakestComponent = readiness?.components
-    ? [...readiness.components].sort((a, b) => a.value - b.value)[0]
-    : null;
+  const recommendation = readiness?.recommendedActions?.[0] ?? readiness?.recommendations?.[0]?.message;
+  const blocker = readiness?.blockers?.[0];
 
   return (
     <section className="grid gap-3 md:grid-cols-4">
       <MetricCard
         icon={<Gauge aria-hidden="true" size={17} strokeWidth={1.8} />}
-        label="Điểm nghẽn"
-        value={weakestComponent ? getComponentLabel(weakestComponent.key) : "Chưa có"}
-        note={weakestComponent ? `${Math.round(weakestComponent.value)}/100` : "Cần tính readiness"}
+        label="Khả năng điều phối"
+        value={readiness ? getOperationalStatusLabel(readiness.operationalStatus) : "Chưa đánh giá"}
+        note={blocker?.title ?? "Không có blocker vận hành"}
       />
       <MetricCard
         icon={<PackageSearch aria-hidden="true" size={17} strokeWidth={1.8} />}
@@ -40,8 +38,8 @@ export function OperationsSummary({ readiness, batches, incidents }: OperationsS
       <MetricCard
         icon={<ClipboardList aria-hidden="true" size={17} strokeWidth={1.8} />}
         label="Khuyến nghị"
-        value={recommendation ? getComponentLabel(recommendation.component) : "Ổn định"}
-        note={recommendation?.message ?? "Chưa có đề xuất mới"}
+        value={recommendation ? "Có việc cần làm" : "Ổn định"}
+        note={recommendation ?? "Chưa có đề xuất mới"}
       />
     </section>
   );
