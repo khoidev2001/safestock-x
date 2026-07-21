@@ -1,5 +1,7 @@
 # Plan: MapView trên Dashboard + Dev mode pin toạ độ kho
 
+> **Trạng thái 2026-07-21:** chức năng pin tọa độ đã triển khai. Seed hiện có 1 kho trung tâm + 17 kho thôn; tọa độ kho thôn để `null` để ADMIN pin vị trí thực. Các mô tả “3 kho/toạ độ ước lượng” bên dưới được giữ làm lịch sử trước triển khai.
+
 > Hiển thị bản đồ thật (Leaflet + OSM) trên dashboard với vị trí các kho trong xã. Bật "chế độ dev" cho ADMIN kéo/pin lại toạ độ từng kho rồi lưu DB — để user tự tool vị trí kho chính xác thay cho toạ độ seed ước lượng.
 
 ## Context — vì sao

@@ -19,8 +19,8 @@
 
 | App | Phase xong | Đang/kế tiếp |
 |---|---|---|
-| **Backend** | A0, A1, A2core, B0-B3, Bp0/Bp2/Bp3/Bp4/Bp5, Cminus+C0-C3, D-proxy, E/E2, J, K, L, M, G4api, I ✅ | Bp1 RFID còn dở; tiếp tục ổn định demo + xử lý FE build |
-| **Frontend** | G0, phần lớn G1, FE-K, các view dashboard/assistant/insights/report/map 🟡 | Verify lại `next build`; hoàn thiện simulator UI đầy đủ, CRUD/adjust/reconcile nếu cần |
+| **Backend** | A0, A1, A2core, B0-B3, Bp0/Bp2/Bp3/Bp4/Bp5, Readiness v2.2, D-proxy, E/E2, J, K, L, M, G4api, I ✅ | Bp1 RFID còn dở; tiếp tục ổn định demo/E2E |
+| **Frontend** | G0, G1 Readiness v2.2, FE-K, các view dashboard/assistant/insights/report/map 🟡 | Kiểm thử browser; hoàn thiện simulator UI đầy đủ, CRUD/adjust/reconcile nếu cần |
 | **Mobile** | — (chưa có source app) | F0 scaffold nếu vẫn giữ mobile trong MVP |
 | **AI Service** | D0, D1, D3exp, K action-plan, assistant ✅ | Claude provider và explain-incident riêng còn dở |
 
@@ -30,7 +30,7 @@
 
 | App-Phase | Việc | Ai | Trạng thái |
 |---|---|---|---|
-| FE-build | Điều tra `pnpm --filter @safestock/frontend build` treo ở `next build` | | ⬜ kế tiếp |
+| FE-E2E | Kiểm thử browser luồng Readiness → Mission sau v2.2 | | ⬜ kế tiếp |
 | Mobile-F0 | Scaffold Expo nếu vẫn cần app hiện trường cho demo | | ⬜ kế tiếp |
 | BE-Bp1 | RFID tự sinh giao dịch từ tag mapping | | ⬜ nên-có |
 

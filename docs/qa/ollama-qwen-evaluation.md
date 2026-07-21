@@ -17,7 +17,7 @@ Phạm vi: chatbot kho, thời tiết, parse tình huống, giải thích điề
 | 4 | Điểm sẵn sàng hiện tại là bao nhiêu? | 96/100, mức sẵn sàng | 8 ms | Đạt |
 | 5 | Ba ngày tới có mưa lớn không? | 1,6 mm/72 giờ, chưa cảnh báo mưa lớn | 990 ms | Đạt |
 | 6 | Thủ đô nước Pháp là gì? | Từ chối vì ngoài phạm vi kho | 3,64 s | Đạt |
-| 7 | Lũ tại Phú Xuân, 170-180 người, 48 giờ, 25 trẻ, 15 người già | FLOOD; lấy cận trên 180; đủ nhóm dễ tổn thương | 8,16 s | Đạt |
+| 7 | Lũ tại Phước Huệ, 170-180 người, 48 giờ, 25 trẻ, 15 người già | FLOOD; lấy cận trên 180; đủ nhóm dễ tổn thương | 8,16 s | Đạt |
 | 8 | Cháy chợ Hòa An, 40 người, 6 giờ, 3 ca y tế | FIRE; 40 người; 3 ca y tế; CRITICAL | 7,35 s | Đạt |
 | 9 | Giải thích điều phối cho 180 người, đáp ứng 72%, thiếu 300 chai và 50 áo phao | Giữ đúng toàn bộ số, không thêm số liệu | 8,71 s | Đạt |
 | 10 | Sinh Action Plan cho lũ 180 người, 48 giờ | Đủ 3 giai đoạn, mục tiêu, cảnh báo, câu hỏi; thuần tiếng Việt | 22,02 s | Đạt, chậm |

@@ -1,5 +1,7 @@
 # Plan: Hoàn thành 100% checklist Backend
 
+> Tài liệu lịch sử. Luật chặn mission theo điểm CRITICAL trong plan này đã được thay thế bởi Readiness v2.2: blocker có bằng chứng + mức đáp ứng từng SKU. Xem `PRD.md` và `BUILD-PLAN.md`.
+
 ## Context
 
 Backend đã ✅ phần lớn ROADMAP.md (A0→L). Còn lại 1 số mục dở dang/chưa làm. User yêu cầu code hết các mục còn lại — nhưng bất kỳ việc nào đụng FE hoặc ai-service phải hỏi trước qua AskUserQuestion, chỉ code khi được accept.

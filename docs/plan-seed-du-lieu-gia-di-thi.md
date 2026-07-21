@@ -1,5 +1,7 @@
 # Kế hoạch: Seed dữ liệu giả "chuẩn đi thi thật"
 
+> **Đã được thay thế ngày 2026-07-21:** implementation hiện hành mở rộng thành bộ dữ liệu 1 kho trung tâm + 17 thôn, có kiểm kê, mượn-trả, cảm biến, sự cố và sổ giao dịch khớp tồn. Xem [SEED-DATASET.md](SEED-DATASET.md). Nội dung bên dưới được giữ làm lịch sử quyết định.
+
 > Mục tiêu: 1 file seed tổng thể — số liệu sinh động, hợp lý nghiệp vụ, KHÔNG trống ở bất kỳ view nào — để demo trước giám khảo chạy đủ 4 chế độ: Emergency (mission), Normal Mode (insights), Chatbot, Incident.
 
 ## Context — vì sao cần

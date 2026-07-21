@@ -254,7 +254,7 @@ Backend test hiện tập trung vào rule và hàm thuần: readiness, mission c
 
 ### P3 - Hoàn thiện deliverable
 
-1. Điều tra nguyên nhân `next build` bị treo.
+1. Bổ sung E2E browser cho các workflow chính; build frontend đã pass ngày 2026-07-21.
 2. Bổ sung integration/E2E test cho các workflow chính.
 3. Scaffold và triển khai Mobile F0-F4 nếu Mobile vẫn thuộc MVP.
 4. Verify backup, Ollama offline và demo end-to-end trong môi trường thật.

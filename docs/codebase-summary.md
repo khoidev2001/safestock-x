@@ -1,6 +1,6 @@
 # Codebase Summary — Ứng phó nhanh
 
-_Cập nhật: 2026-07-20. Nguồn đối chiếu: README, PRD, BUILD-PLAN, WORK-LOG, ROADMAP từng app, QA docs, `docs/plan-*.md`, cấu trúc source và test/build cục bộ._
+_Cập nhật: 2026-07-21. Nguồn đối chiếu: README, PRD, BUILD-PLAN, WORK-LOG, ROADMAP từng app, QA docs, `docs/plan-*.md`, cấu trúc source và test/build cục bộ._
 
 ## Tổng quan
 
@@ -17,8 +17,8 @@ Tech stack hiện tại:
 
 | App | Trạng thái |
 |---|---|
-| Backend | Mạnh nhất, đã có đa số feature lõi và nhiều phần nên-có/polish. Test pass 18 suite / 141 test khi rà ngày 2026-07-20. |
-| Frontend | Đã có admin dashboard nhiều view và mission/map/action-plan/notification. Build Next.js cần kiểm lại vì lần rà gần nhất bị treo/im lặng và đã bị dừng thủ công. |
+| Backend | Mạnh nhất, đã có đa số feature lõi và Readiness v2.2. Test pass 25 suite / 168 test, build pass ngày 2026-07-21. |
+| Frontend | Đã có admin dashboard nhiều view, Readiness v2.2 và mission/map/action-plan/notification. Typecheck + Next.js production build pass ngày 2026-07-21. |
 | AI service | Đã có FastAPI, parse/explain/action-plan/assistant với Gemini/Ollama. Claude provider và explain-incident riêng chưa hoàn chỉnh theo roadmap. |
 | Mobile | Chưa triển khai app, chỉ có `package.json`, `README.md`, `ROADMAP.md`. |
 
@@ -29,22 +29,24 @@ Tech stack hiện tại:
 - Inventory: warehouse tree, scan SKU, list batch, import/export/transfer, bulk-export atomic, adjust, reconcile/stocktake, chống xuất âm kho.
 - Loan: mượn-trả vật tư không tiêu hao, trả ok/hỏng/mất, tính tồn khả dụng trừ đang mượn.
 - Sensor Simulator: virtual devices, deterministic scenarios, runner play/pause/reset x1/x10, WebSocket room theo kho, `sim.html`.
-- Readiness Score: 6 công thức, tính điểm batch/shelf/zone/warehouse, recommendations, action zones, recalc realtime/on-write, notification khi tụt ngưỡng.
-- Mission-to-Kit: AI parse tình huống, định mức rule, greedy + FEFO, fulfillment theo mắt xích yếu nhất, explain, approve/generate.
+- Readiness v2.2: 6 công thức và điểm xu hướng 4 cấp; blocker có bằng chứng; READY/NEEDS_ACTION/NOT_DISPATCHABLE; lý do, hành động, recalc realtime/on-write và notification theo trạng thái.
+- Mission-to-Kit: AI parse tình huống, định mức rule, greedy + FEFO, loại lô hết hạn/hỏng/cần kiểm tra/kệ khóa/không còn khả dụng, fulfillment theo mắt xích yếu nhất, đánh giá từng SKU, explain, approve/generate.
 - GeoService + cụm kho xã: `CENTRAL/HAMLET`, `communeId`, lat/lng, Haversine, Google Routes fallback, quota counter.
 - Action Plan: kế hoạch 8 mục, severity/forecast do backend rule tính, LLM chỉ viết diễn giải, template fallback khi AI lỗi.
 - Workflow liên role: ADMIN tạo mission, RESCUE confirm, WAREHOUSE prepare, READY/COMPLETED, notification realtime theo role.
 - Incident Intelligence: rule engine sự cố, evidence timeline, acknowledge/assign/resolve, anomaly z-score, predictive warning, dedupe.
 - Normal Mode/Insights: forecast cạn kho, expiry alert, rebalance, trends, weather Open-Meteo, monthly report fallback.
-- Assistant: hỏi-đáp kho bằng snapshot JSON, giới hạn không bịa số/không trả lời ngoài phạm vi.
+- Assistant: hỏi-đáp kho bằng snapshot JSON, fast-path tiếng Việt cho readiness/tồn kho/sự cố/hạn dùng/thời tiết, Ollama cho câu mở; tự tính readiness lần đầu và giới hạn không bịa số.
 - Backup: BullMQ cron/manual, `pg_dump`, upload Supabase Storage, giữ 3 bản.
 - Admin/Report: quản lý user/warehouse, báo cáo Excel/tháng, parser Excel.
+- Standard dataset: 1 kho trung tâm + đủ 17 thôn Đồng Xuân, 17 SKU/126 lô, kiểm kê, mượn-trả, cảm biến, incident và lịch sử giao dịch khớp tồn; tọa độ thôn chờ ADMIN pin.
 
 ## Feature Đã Có Trong Frontend
 
 - Auth/login, token store, route guard, dashboard shell responsive.
 - Dashboard views: tổng quan/readiness, ngày thường, trợ lý, kho vật tư, mô phỏng, nhiệm vụ, sự cố, kiểm kê, mượn-trả, bản đồ kho, báo cáo tháng, users, audit.
-- Mission UI: nhập tình huống, ghim điểm nạn trên map, action plan 8 mục, workflow theo role, notification bell realtime.
+- Readiness UI: trạng thái vận hành làm headline, blocker/lý do/hành động, điểm xu hướng hiển thị phụ và breakdown 6 chiều.
+- Mission UI: nhập tình huống, ghim điểm nạn trên map, đánh giá đáp ứng từng SKU, action plan 8 mục, workflow theo role, notification bell realtime.
 - GIS/map: Leaflet, GeoJSON/tile offline trong `public`, map warehouse/incident.
 - Assistant/insights/report/admin API clients và UI tương ứng.
 
@@ -60,11 +62,10 @@ Tech stack hiện tại:
 ## Chưa Xong / Còn Rủi Ro
 
 - Mobile app chưa code.
-- Frontend build chưa verify được trong lượt rà 2026-07-20: `pnpm --filter @safestock/frontend build` bị treo ở `next build`, đã dừng process.
+- Chưa có test E2E browser tự động cho toàn luồng Readiness → Mission; hiện đã verify typecheck/build và unit test backend.
 - RFID handler trong Bp1 chưa xong; loadcell đã có.
 - AI `explain-incident` riêng chưa tick trong roadmap AI.
 - Một số docs cũ vẫn có trạng thái thấp hơn thực tế nếu chưa được đồng bộ hết; nguồn gần nhất nên ưu tiên `apps/backend/ROADMAP.md`, `apps/frontend/ROADMAP.md`, và file này.
-- Repo đang dirty nhiều file modified/untracked; mọi update tiếp theo cần tránh reset/checkout làm mất thay đổi.
 
 ## Plan/Docs Bổ Sung Đã Có
 
@@ -77,12 +78,12 @@ Tech stack hiện tại:
 
 ## Verify Gần Nhất
 
-- Backend: `pnpm --filter @safestock/backend test` pass, 18 suite / 141 test.
-- Frontend: `pnpm --filter @safestock/frontend build` chưa pass do process bị treo/im lặng và bị dừng thủ công.
+- Backend: `pnpm --filter @safestock/backend test -- --runInBand` pass 25 suite / 168 test; `nest build` pass; seed idempotent 2 lần.
+- Frontend: `tsc --noEmit` và `pnpm --filter @safestock/frontend build` pass.
 
 ## Khuyến Nghị Tiếp Theo
 
-1. Sửa/điều tra nguyên nhân `next build` treo trước khi demo.
+1. Viết/chạy E2E browser cho kho READY, NEEDS_ACTION và NOT_DISPATCHABLE, gồm cả nhiệm vụ thiếu SKU.
 2. Chốt mobile: hoặc triển khai F0-F2 tối thiểu, hoặc ghi rõ mobile là lộ trình nếu deadline gấp.
-3. Đồng bộ tiếp các docs cũ nếu còn nhắc trạng thái A/B/C cũ.
+3. Đồng bộ các Q&A cũ còn mô tả điểm số là luật chặn duy nhất.
 4. Nếu chuẩn bị nộp thi, ưu tiên demo script backend + web dashboard ổn định hơn mở rộng feature mới.
