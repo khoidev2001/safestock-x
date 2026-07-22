@@ -5,10 +5,12 @@ import { ColorIcon } from "@/components/shared/color-icon";
 import { useEffect, useRef, useState } from "react";
 import { askAssistant } from "@/lib/assistant-api";
 import { ApiError } from "@/lib/api";
+import { useIncidentAlerts } from "@/lib/incident-alert-store";
 
 interface ChatTurn {
   role: "user" | "assistant";
   text: string;
+  kind?: "alert"; // bong bóng cảnh báo AI tự sinh (khác câu trả lời hỏi-đáp thường)
 }
 
 interface AssistantChatProps {
@@ -38,6 +40,8 @@ export function AssistantChat({
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const renderedAlertIds = useRef<Set<string>>(new Set());
+  const alerts = useIncidentAlerts((s) => s.alerts);
 
   const ask = useMutation({
     mutationFn: (question: string) => askAssistant(warehouseId, question),
@@ -50,6 +54,22 @@ export function AssistantChat({
   useEffect(() => {
     if (isActive) inputRef.current?.focus();
   }, [isActive]);
+
+  // Trộn cảnh báo AI (sự cố mới đã giải thích) thành bong bóng chủ động; dedupe theo id.
+  useEffect(() => {
+    const fresh = alerts.filter((a) => !renderedAlertIds.current.has(a.id));
+    if (fresh.length === 0) return;
+    fresh.forEach((a) => renderedAlertIds.current.add(a.id));
+    setTurns((current) => [
+      ...current,
+      ...fresh.map((a): ChatTurn => ({
+        role: "assistant",
+        kind: "alert",
+        text: `⚠️ Cảnh báo mới — ${a.title}\n${a.explanation}`,
+      })),
+    ]);
+    scrollToLatest();
+  }, [alerts]);
 
   function scrollToLatest() {
     requestAnimationFrame(() => {
@@ -185,6 +205,7 @@ function EmptyChat({
 
 function ChatBubble({ turn }: { turn: ChatTurn }) {
   const isUser = turn.role === "user";
+  const isAlert = turn.kind === "alert";
 
   return (
     <div className={`flex gap-2.5 ${isUser ? "flex-row-reverse" : ""}`}>
@@ -194,17 +215,30 @@ function ChatBubble({ turn }: { turn: ChatTurn }) {
         style={{
           background: isUser
             ? "var(--surface)"
-            : "color-mix(in oklch, var(--color-accent) 16%, var(--surface))",
-          color: isUser ? "var(--text)" : "var(--color-accent)",
+            : isAlert
+              ? "color-mix(in oklch, var(--color-critical) 18%, var(--surface))"
+              : "color-mix(in oklch, var(--color-accent) 16%, var(--surface))",
+          color: isUser ? "var(--text)" : isAlert ? "var(--color-critical)" : "var(--color-accent)",
         }}
       >
-        {isUser ? <ColorIcon name="user" size={17} tone="green" /> : <ColorIcon name="assistant" size={17} tone="blue" />}
+        {isUser ? (
+          <ColorIcon name="user" size={17} tone="green" />
+        ) : isAlert ? (
+          <ColorIcon name="warning" size={17} tone="red" />
+        ) : (
+          <ColorIcon name="assistant" size={17} tone="blue" />
+        )}
       </span>
       <div
         className="max-w-[82%] whitespace-pre-wrap rounded-md px-3 py-2 text-sm leading-relaxed"
         style={{
-          background: isUser ? "var(--color-accent)" : "var(--surface)",
+          background: isUser
+            ? "var(--color-accent)"
+            : isAlert
+              ? "color-mix(in oklch, var(--color-critical) 10%, transparent)"
+              : "var(--surface)",
           color: isUser ? "var(--color-accent-fg)" : "var(--text)",
+          border: isAlert ? "1px solid color-mix(in oklch, var(--color-critical) 35%, transparent)" : undefined,
         }}
       >
         {turn.text}

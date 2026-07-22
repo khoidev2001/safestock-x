@@ -6,6 +6,7 @@ import { AuthenticatedRequest } from "../auth/authenticated-request";
 import { JwtAuthGuard } from "../auth/guards";
 import { PermissionGuard } from "../rbac/permission.guard";
 import { RequirePermission } from "../rbac/permissions.decorator";
+import { buildIncidentContext } from "./incident.context";
 import { IncidentService } from "./incident.service";
 
 class ActionDto {
@@ -41,8 +42,7 @@ export class IncidentController {
   @Post(":id/explain")
   async explain(@Param("id") id: string) {
     const incident = await this.incidents.getWithTimeline(id);
-    const context = this.buildContext(incident);
-    const explanation = await this.ai.explain(context);
+    const explanation = await this.ai.explain(buildIncidentContext(incident));
     await this.incidents.setExplanation(id, explanation);
     return { explanation };
   }
@@ -60,22 +60,5 @@ export class IncidentController {
   @Post(":id/resolve")
   resolve(@Request() req: AuthenticatedRequest, @Param("id") id: string, @Body() dto: ActionDto) {
     return this.incidents.transition(id, "resolve", req.user.userId, dto.note);
-  }
-
-  private buildContext(incident: {
-    title: string;
-    kind: string;
-    severity: string;
-    confidence: number;
-    evidence: { note: string | null; occurredAt: Date }[];
-  }): string {
-    const timeline = incident.evidence
-      .map((e) => `${new Date(e.occurredAt).toLocaleTimeString("vi")} — ${e.note}`)
-      .join("\n");
-    return [
-      `Sự cố: ${incident.title} (mức ${incident.severity}, độ tin cậy ${Math.round(incident.confidence * 100)}%).`,
-      `Các bằng chứng theo thời gian:`,
-      timeline,
-    ].join("\n");
   }
 }

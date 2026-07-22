@@ -28,6 +28,16 @@ export class NotificationService {
     return notification;
   }
 
+  /**
+   * Cập nhật 1 thông báo đã có + đẩy lại realtime (cùng id → client thay tại chỗ,
+   * không nhân đôi). Dùng khi AI enrich xong: đè body của cảnh báo vừa tạo bằng text AI.
+   */
+  async updateAndPush(id: string, data: { title?: string; body?: string }) {
+    const notification = await this.prisma.notification.update({ where: { id }, data });
+    this.push(notification.recipientRole, notification);
+    return notification;
+  }
+
   /** Danh sách thông báo của role (mới nhất trước). */
   list(role: UserRole, onlyUnread = false) {
     return this.prisma.notification.findMany({

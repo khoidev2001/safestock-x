@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import {
   TransactionSource,
   UserRole,
@@ -6,6 +6,7 @@ import {
   VirtualDeviceType,
   WarehouseKind,
 } from "@prisma/client";
+import { IncidentService } from "../incident/incident.service";
 import { InventoryService } from "../inventory/inventory.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { ReadinessService } from "../readiness/readiness.service";
@@ -27,6 +28,10 @@ const ENV_DEVICE_TYPES: VirtualDeviceType[] = [
 // Gộp nhiều event môi trường liên tiếp thành 1 lần recalc (tránh dồn dập lúc chạy scenario).
 const RECALC_DEBOUNCE_MS = 300;
 
+// Quét sự cố nặng hơn recalc (3 query + 300 điểm lịch sử), nên debounce dài hơn để
+// gộp cả burst event của 1 lần chỉnh/1 scenario thành 1 lần scan.
+const INCIDENT_SCAN_DEBOUNCE_MS = 1200;
+
 export interface EmitInput {
   warehouseId: string;
   deviceCode: string;
@@ -41,23 +46,32 @@ export interface EmitInput {
 export class SimulationService {
   private readonly log = new Logger(SimulationService.name);
   private recalcTimers = new Map<string, NodeJS.Timeout>();
+  private incidentScanTimers = new Map<string, NodeJS.Timeout>();
   private systemUserId: string | null = null;
 
   constructor(
     private prisma: PrismaService,
     private readiness: ReadinessService,
     private inventory: InventoryService,
+    private incidents: IncidentService,
   ) {}
 
-  firstWarehouse(scopeWarehouseId?: string | null) {
+  async firstWarehouse(userId: string, scopeWarehouseId?: string | null) {
     if (scopeWarehouseId) {
       return this.prisma.warehouse.findUnique({
         where: { id: scopeWarehouseId },
         select: { id: true, name: true },
       });
     }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { organizationId: true },
+    });
+    if (!user) throw new UnauthorizedException("Tài khoản không còn tồn tại");
+
     return this.prisma.warehouse.findFirst({
-      where: { kind: WarehouseKind.CENTRAL },
+      where: { kind: WarehouseKind.CENTRAL, organizationId: user.organizationId },
       orderBy: { createdAt: "asc" },
       select: { id: true, name: true },
     });
@@ -108,7 +122,7 @@ export class SimulationService {
 
     if (!significant) return null;
 
-    return this.prisma.sensorEvent.create({
+    const saved = await this.prisma.sensorEvent.create({
       data: {
         deviceId: device.id,
         warehouseId: input.warehouseId,
@@ -121,6 +135,12 @@ export class SimulationService {
         runId: input.runId,
       },
     });
+
+    // Event vừa persist → quét sự cố (debounce) để cảnh báo tự bật realtime
+    // qua NotificationService/gateway. scanWarehouse đọc sensorEvent đã lưu.
+    this.scheduleIncidentScan(input.warehouseId);
+
+    return saved;
   }
 
   timeline(warehouseId: string, limit = 50) {
@@ -146,6 +166,23 @@ export class SimulationService {
       });
     }, RECALC_DEBOUNCE_MS);
     this.recalcTimers.set(warehouseId, timer);
+  }
+
+  /**
+   * Lên lịch quét sự cố cho 1 kho, gộp burst event trong INCIDENT_SCAN_DEBOUNCE_MS
+   * thành 1 lần scan. Không chặn luồng emit(): lỗi chỉ log warn. Cảnh báo mới (nếu có)
+   * được scanWarehouse tự đẩy tới ADMIN qua NotificationService → gateway realtime.
+   */
+  private scheduleIncidentScan(warehouseId: string): void {
+    const existing = this.incidentScanTimers.get(warehouseId);
+    if (existing) clearTimeout(existing);
+    const timer = setTimeout(() => {
+      this.incidentScanTimers.delete(warehouseId);
+      this.incidents.scanWarehouse(warehouseId).catch((error) => {
+        this.log.warn(`Quét sự cố lỗi cho kho ${warehouseId}: ${error.message}`);
+      });
+    }, INCIDENT_SCAN_DEBOUNCE_MS);
+    this.incidentScanTimers.set(warehouseId, timer);
   }
 
   /** Actor hệ thống cho giao dịch tự sinh (loadcell không có user thật thao tác) — cache 1 lần. */

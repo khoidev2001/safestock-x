@@ -37,7 +37,7 @@ export class SimulationController {
   // Tài khoản kho thôn vào đúng kho được gán; tài khoản toàn xã vào kho trung tâm.
   @Get("first-warehouse")
   firstWarehouse(@Request() req: AuthenticatedRequest) {
-    return this.sim.firstWarehouse(req.user.warehouseId);
+    return this.sim.firstWarehouse(req.user.userId, req.user.warehouseId);
   }
 
   @Get("warehouses/:id/devices")

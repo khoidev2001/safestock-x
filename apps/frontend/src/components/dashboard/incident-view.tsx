@@ -93,6 +93,7 @@ function IncidentCard({
   const sev = SEVERITY[incident.severity] ?? SEVERITY.MEDIUM;
   const isOpen = incident.state === "OPEN";
   const isResolved = incident.state === "RESOLVED";
+  const explanation = incident.explanation ?? null;
 
   return (
     <section
@@ -125,7 +126,7 @@ function IncidentCard({
         </div>
       </div>
 
-      <div className="mt-3 flex items-center justify-between border-t pt-3">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t pt-3">
         <span className="text-xs font-medium text-[var(--text-muted)]">
           Trạng thái: {isResolved ? "Đã xử lý" : isOpen ? "Chưa xử lý" : "Đang xử lý"}
         </span>
@@ -151,6 +152,22 @@ function IncidentCard({
           </div>
         )}
       </div>
+
+      {/* Giải thích AI tự sinh khi sự cố mới bật (backend enrich). */}
+      {explanation && (
+        <div
+          className="mt-3 flex items-start gap-2 rounded-md p-3"
+          style={{ background: "color-mix(in oklch, #7c3aed 10%, transparent)", border: "1px solid color-mix(in oklch, #7c3aed 35%, transparent)" }}
+        >
+          <span
+            className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide text-white"
+            style={{ background: "#7c3aed" }}
+          >
+            AI
+          </span>
+          <p className="text-sm leading-relaxed">{explanation}</p>
+        </div>
+      )}
     </section>
   );
 }

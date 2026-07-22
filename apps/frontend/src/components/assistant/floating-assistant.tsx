@@ -3,6 +3,7 @@
 import { ColorIcon } from "@/components/shared/color-icon";
 import { useEffect, useRef, useState } from "react";
 import { AssistantChat } from "./assistant-chat";
+import { useIncidentAlerts } from "@/lib/incident-alert-store";
 
 interface FloatingAssistantProps {
   warehouseId: string;
@@ -16,6 +17,8 @@ export function FloatingAssistant({
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const autoOpenReq = useIncidentAlerts((s) => s.autoOpenReq);
+  const clearAutoOpen = useIncidentAlerts((s) => s.clearAutoOpen);
 
   useEffect(() => {
     if (isHidden) {
@@ -23,6 +26,14 @@ export function FloatingAssistant({
       setIsExpanded(false);
     }
   }, [isHidden]);
+
+  // Sự cố nghiêm trọng (HIGH/CRITICAL) đã được AI giải thích → tự mở trợ lý để người dùng thấy ngay.
+  useEffect(() => {
+    if (autoOpenReq === 0 || isHidden) return;
+    setIsOpen(true);
+    setIsExpanded(true);
+    clearAutoOpen();
+  }, [autoOpenReq, isHidden, clearAutoOpen]);
 
   useEffect(() => {
     if (!isOpen) return;

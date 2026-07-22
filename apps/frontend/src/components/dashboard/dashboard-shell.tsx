@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ColorIcon, type ColorIconName, type ColorIconTone } from "@/components/shared/color-icon";
 import { useAuth } from "@/lib/auth-store";
 import { NotificationBell } from "@/components/mission/notification-bell";
+import { UserProfileButton } from "@/components/profile/user-profile-button";
 
 export type DashboardView =
   | "readiness"
@@ -25,6 +26,7 @@ interface DashboardShellProps {
   activeView: DashboardView;
   children: React.ReactNode;
   onViewChange: (view: DashboardView) => void;
+  warehouseName?: string;
 }
 
 const navItems: {
@@ -58,7 +60,7 @@ const roleLabels: Record<string, string> = {
   RESCUE: "Đội cứu hộ",
 };
 
-export function DashboardShell({ activeView, children, onViewChange }: DashboardShellProps) {
+export function DashboardShell({ activeView, children, onViewChange, warehouseName }: DashboardShellProps) {
   const router = useRouter();
   const { user, clear } = useAuth();
   const visibleNav = navItems.filter((item) => !item.adminOnly || user?.role === "ADMIN");
@@ -115,23 +117,17 @@ export function DashboardShell({ activeView, children, onViewChange }: Dashboard
               <div className="flex min-w-0 items-center gap-3">
                 <ColorIcon name="warehouse" size={21} tone="blue" />
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">Kho vật tư xã Đồng Xuân</p>
+                  <p className="truncate text-sm font-semibold">
+                    {warehouseName || user?.warehouseName || user?.unitName || "Đang tải đơn vị"}
+                  </p>
                   <p className="truncate text-xs text-[var(--text-muted)]">
-                    {user?.email ?? "Chưa xác định"} · {roleLabels[user?.role ?? ""] ?? "Chưa xác định vai trò"}
+                    {user?.fullName || user?.email || "Chưa xác định"} · {roleLabels[user?.role ?? ""] ?? "Chưa xác định vai trò"}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <NotificationBell />
-                <button
-                  aria-label="Đăng xuất"
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-md border bg-[var(--surface)] transition hover:bg-[var(--surface-2)] active:translate-y-px"
-                  onClick={logout}
-                  title="Đăng xuất"
-                  type="button"
-                >
-                  <ColorIcon name="logout" size={19} tone="red" />
-                </button>
+                <UserProfileButton onLogout={logout} />
               </div>
             </div>
 

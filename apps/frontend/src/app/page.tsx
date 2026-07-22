@@ -4,8 +4,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ColorIcon } from "@/components/shared/color-icon";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { io, type Socket } from "socket.io-client";
+import { BASE } from "@/lib/api";
 import { DashboardShell, type DashboardView } from "@/components/dashboard/dashboard-shell";
 import { FloatingAssistant } from "@/components/assistant/floating-assistant";
+import { useIncidentAlertsBridge } from "@/components/assistant/use-incident-alerts";
 import { InventoryTable } from "@/components/dashboard/inventory-table";
 import { AuditView } from "@/components/dashboard/audit-view";
 import { IncidentView } from "@/components/dashboard/incident-view";
@@ -92,6 +95,8 @@ export default function HomePage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const token = useAuth((state) => state.token);
+  const user = useAuth((state) => state.user);
+  const role = user?.role;
   const hasHydrated = useAuth((state) => state.hasHydrated);
   const [activeView, setActiveView] = useState<DashboardView>("readiness");
 
@@ -100,9 +105,9 @@ export default function HomePage() {
   }, [hasHydrated, token, router]);
 
   const warehouseQuery = useQuery({
-    queryKey: ["first-warehouse"],
+    queryKey: ["first-warehouse", user?.id],
     queryFn: getFirstWarehouse,
-    enabled: hasHydrated && Boolean(token),
+    enabled: hasHydrated && Boolean(token && user?.id),
   });
 
   const warehouseId = warehouseQuery.data?.id;
@@ -142,7 +147,24 @@ export default function HomePage() {
     queryKey: ["open-incidents", warehouseId],
     queryFn: () => getOpenIncidents(warehouseId ?? ""),
     enabled: Boolean(warehouseId),
+    refetchInterval: 12_000, // fallback nếu WebSocket rớt — bắt kịp AI enrich
   });
+
+  // Realtime: có "notification" (sự cố mới / AI enrich xong) → refetch sự cố để nạp explanation.
+  useEffect(() => {
+    if (!role) return;
+    const socket: Socket = io(BASE, { transports: ["websocket"] });
+    socket.on("connect", () => socket.emit("join-role", { role }));
+    socket.on("notification", () => {
+      queryClient.invalidateQueries({ queryKey: ["open-incidents", warehouseId] });
+    });
+    return () => {
+      socket.disconnect();
+    };
+  }, [role, warehouseId, queryClient]);
+
+  // Cầu nối: sự cố có explanation (AI) → bong bóng cảnh báo trong trợ lý + tự mở nếu nghiêm trọng.
+  useIncidentAlertsBridge(incidentsQuery.data);
 
   const recalculateMutation = useMutation({
     mutationFn: () =>
@@ -155,7 +177,11 @@ export default function HomePage() {
   if (!hasHydrated || !token) return null;
 
   return (
-    <DashboardShell activeView={activeView} onViewChange={setActiveView}>
+    <DashboardShell
+      activeView={activeView}
+      onViewChange={setActiveView}
+      warehouseName={warehouseQuery.data?.name}
+    >
       <div className="space-y-5">
         <PageHeading
           subtitle={viewCopy[activeView].subtitle}

@@ -78,7 +78,8 @@ export function NotificationBell() {
                 items.map((n) => (
                   <div key={n.id} className="border-b px-4 py-3 last:border-0">
                     <p className="text-sm font-medium">{n.title}</p>
-                    <p className="mt-0.5 text-xs text-[var(--text-muted)]">{n.body}</p>
+                    {/* body có thể dài khi kèm giải thích AI → gói 3 dòng, tránh tràn dropdown. */}
+                    <p className="mt-0.5 line-clamp-3 text-xs text-[var(--text-muted)]">{n.body}</p>
                   </div>
                 ))
               )}

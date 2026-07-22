@@ -13,7 +13,9 @@
       "@prisma/engines",
       "prisma",
       "@tailwindcss/oxide",
-      "sharp"
+      "sharp",
+      "electron",
+      "esbuild"
     ]
   },
   "scripts": {
@@ -23,6 +25,7 @@
     "be:dev": "pnpm --filter @safestock/backend start:dev",
     "be:db": "pnpm --filter @safestock/backend prisma:push && pnpm --filter @safestock/backend seed",
     "fe:dev": "pnpm --filter @safestock/frontend dev",
+    "desktop:dev": "pnpm --filter @safestock/desktop dev",
     "mobile:dev": "pnpm --filter @safestock/mobile start",
     "ai:dev": "cd apps/ai-service && .\\.venv\\Scripts\\python.exe -m uvicorn main:app --port 8000",
     "demo": "node apps/backend/demo/demo.mjs"
