@@ -243,8 +243,14 @@ Thứ tự quyết định bắt buộc:
 - [ ] Report approval atomic, idempotent và xử lý đúng SKU có nhiều batch.
 - [ ] Role frontend/backend cho report thống nhất.
 - [ ] AI service có automated test và policy redaction/output đầy đủ.
+- [ ] Forecast nâng từ trung bình phẳng lên dự báo thống kê có độ tin cậy và reorder point (chi tiết: `docs/plan-tang-ham-luong-ai-di-thi.md`, B2).
+- [ ] Trợ lý có RAG trích dẫn nguồn định mức (Sphere/PCTT) chạy offline; không trả lời ngoài corpus (chi tiết: plan AI, B1).
+- [ ] Dự báo nhu cầu theo thời tiết: nối forecast tiêu thụ + mưa 72h Open-Meteo để cảnh báo thiếu vật tư trước thiên tai (plan AI, B4).
+- [ ] Semantic search vật tư bằng embedding local (plan AI, B5).
+- [ ] Bản tin AI đầu ngày tóm tắt readiness/forecast/incident/thời tiết cho lãnh đạo xã (plan AI, B6).
+- [ ] Chuẩn hóa nhập liệu bằng embedding, chỉ gợi ý cho người duyệt, làm sau khi inventory ổn định (plan AI, B7).
 
-**Verdict:** basic usable; thiếu integration/security proof.
+**Verdict:** basic usable; thiếu integration/security proof. Ghi chú chiều sâu AI: phần "forecast/insight" hiện là thống kê tuyến tính, không phải ML — cần gọi đúng tên và nâng theo plan AI để chống bị bắt bài khi phản biện.
 
 ### 5.8. Mobile
 
@@ -561,6 +567,8 @@ Toàn bộ F0-F4 vẫn chưa làm: toolchain, Expo scaffold, auth, home/kho, QR,
 | Tài liệu | Vai trò |
 |---|---|
 | `docs/PRD.md` | Nguồn sự thật duy nhất: PRD + trạng thái + checklist + plan |
+| `docs/plan-tang-ham-luong-ai-di-thi.md` | Plan tăng chiều sâu AI dự thi (RAG trích dẫn, forecast thống kê, chống gãy demo); trạng thái vẫn tick tại PRD |
+| `docs/plan-app-desktop-gia-lap-cam-bien.md` | Plan app desktop giả lập cảm biến + cắm cảnh báo sự cố vào luồng emit (app phản ứng realtime); trạng thái vẫn tick tại PRD |
 | `docs/HUONG-DAN-CAI-DAT-VA-CHAY.md` | Hướng dẫn cài đặt/chạy |
 | `docs/HUONG-DAN-TEST.md` | Hướng dẫn test thủ công |
 | `docs/SEED-DATASET.md` | Contract dataset/seed |
