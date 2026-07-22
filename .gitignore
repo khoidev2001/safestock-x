@@ -19,8 +19,7 @@ venv/
 prisma/*.db
 *.tsbuildinfo
 
-# Dữ liệu tải/sinh cục bộ; giữ trên máy demo, không đưa vào lịch sử Git
-/apps/frontend/public/tiles/
+# Báo cáo xuất cục bộ; dữ liệu có thể chứa thông tin vận hành và được sinh lại khi cần
 /apps/backend/baocao-*.xlsx
 
 # Ghi chú làm việc nội bộ (AI memory) — không đẩy lên repo chung
