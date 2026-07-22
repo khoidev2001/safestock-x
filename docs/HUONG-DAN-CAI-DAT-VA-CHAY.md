@@ -88,6 +88,31 @@ pnpm infra:logs
 
 ## 5. Tạo schema và dữ liệu ban đầu
 
+### 5.1. Nâng schema cho database đã có dữ liệu
+
+Sau mỗi lần pull code có thay đổi `apps/backend/prisma/schema.prisma`, chạy:
+
+```powershell
+pnpm be:schema:diff
+pnpm be:schema
+```
+
+`be:schema:diff` in SQL dự kiến để kiểm tra trước. Với bản cập nhật hồ sơ ngày 2026-07-22, database cũ chỉ nên có ba lệnh thêm cột nullable `User.phone`, `User.notificationEmail` và `User.avatarUrl`. Nếu output có drop cột/bảng, đổi kiểu hoặc thay đổi unrelated, dừng lại và kiểm tra đúng `DATABASE_URL` cùng schema drift trước khi push.
+
+`be:schema` chạy `prisma db push --skip-generate`, không chạy seed. Backup database đang vận hành trước khi áp dụng thay đổi schema.
+
+Nếu code mới cần generate lại Prisma Client, dừng backend trước rồi chạy:
+
+```powershell
+pnpm be:generate
+```
+
+Trên Windows, generate khi backend đang chạy có thể lỗi `EPERM` vì tiến trình Node đang khóa Prisma query-engine DLL. Việc này không liên quan đến trạng thái cột trong PostgreSQL.
+
+Đọc kỹ output của Prisma trước khi xác nhận nếu một thay đổi tương lai có cảnh báo mất dữ liệu. Không dùng `--accept-data-loss` trên database đang vận hành nếu chưa backup và duyệt thay đổi.
+
+### 5.2. Tạo mới hoặc chủ động reset dữ liệu demo
+
 Chỉ chạy bước này khi tạo database mới hoặc chủ động muốn làm lại dữ liệu demo:
 
 ```powershell
@@ -169,7 +194,8 @@ Lệnh này dừng container nhưng giữ dữ liệu trong Docker volumes. Khô
 
 ```powershell
 pnpm install --frozen-lockfile
-pnpm --filter @safestock/backend prisma:generate
+pnpm be:generate
+pnpm be:schema
 pnpm --filter @safestock/backend build
 pnpm --filter @safestock/frontend build
 ```

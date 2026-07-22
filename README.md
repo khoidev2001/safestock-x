@@ -51,12 +51,24 @@ pnpm ai:dev
 - AI health: `http://localhost:8000/health`
 - Simulator legacy: `http://localhost:3100/sim.html`
 
+Sau khi pull code mới trên database đã có dữ liệu, đồng bộ Prisma schema trước khi chạy backend:
+
+```powershell
+pnpm be:schema:diff
+pnpm be:schema
+```
+
+Kiểm tra SQL do `be:schema:diff` in ra trước; dừng lại nếu có lệnh drop/type change ngoài dự kiến. `be:schema` không chạy seed, không generate Prisma Client và không chủ động xóa dữ liệu. Nếu cần generate client, dừng backend trước rồi chạy `pnpm be:generate`. Không dùng `pnpm be:db` cho database đang vận hành vì bước seed sẽ reset dữ liệu demo.
+
 ## Lệnh chính
 
 | Lệnh | Mục đích |
 |---|---|
 | `pnpm infra:up` | Khởi động PostgreSQL và Redis |
 | `pnpm infra:down` | Dừng hạ tầng local |
+| `pnpm be:generate` | Generate Prisma Client; trên Windows cần dừng backend để tránh khóa DLL |
+| `pnpm be:schema:diff` | In SQL chênh lệch giữa database hiện tại và Prisma schema để duyệt trước |
+| `pnpm be:schema` | Đồng bộ database schema, không generate/seed/reset dữ liệu |
 | `pnpm be:db` | Push schema và seed dữ liệu dev |
 | `pnpm be:dev` | Chạy backend watch mode |
 | `pnpm fe:dev` | Chạy frontend cổng 3200 |

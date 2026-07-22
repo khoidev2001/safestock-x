@@ -5,12 +5,12 @@
 
 | Thuộc tính | Giá trị |
 |---|---|
-| Phiên bản | 3.0 - bản hợp nhất |
-| Ngày đối chiếu | 2026-07-21 |
+| Phiên bản | 3.1 - cập nhật chức năng đã triển khai |
+| Ngày đối chiếu | 2026-07-22 |
 | Trạng thái | Đang phát triển; chưa đạt MVP end-to-end; chưa an toàn để mở Internet production |
 | Mức hoàn thành thực tế | Khoảng 45-55% nếu chấm theo workflow vận hành và PRD |
 | Điểm audit khó tính | 4,5/10 |
-| Phạm vi kiểm chứng | Toàn bộ tài liệu, backend, frontend, AI service, mobile, shared packages và hạ tầng |
+| Phạm vi kiểm chứng | Toàn bộ tài liệu, backend, frontend, desktop, AI service, mobile, shared packages và hạ tầng |
 
 ## 0. Cách dùng tài liệu
 
@@ -46,6 +46,18 @@ Trạng thái hiện tại:
 | Deployment/offline | Có domain, tunnel và script nền; chưa nghiệm thu đầy đủ |
 | MVP theo PRD | Chưa hoàn thành |
 | Production Internet | Chưa được phép coi là an toàn |
+
+### 1.1. Chức năng mới đã có và bằng chứng bàn giao (2026-07-22)
+
+| Chức năng | Hành vi hiện có | Bằng chứng chính | Giới hạn phải biết |
+|---|---|---|---|
+| Hồ sơ cá nhân | Nút profile thay nút đăng xuất; xem/sửa avatar, họ tên, số điện thoại, email cá nhân nhận cảnh báo; xem đơn vị dạng `Xã ...`; đăng xuất nằm trong dialog | `apps/frontend/src/components/profile/`, `apps/frontend/src/lib/profile-api.ts`, `apps/backend/src/auth/`, `apps/backend/src/auth/__tests__/auth-profile.spec.ts` | Email cá nhân chưa có bước xác minh; avatar là WebP data URL lưu DB, giới hạn 80.000 ký tự |
+| Scope tài khoản theo xã | `/auth/me` đọc hồ sơ mới từ DB; admin toàn xã mở kho trung tâm thuộc đúng `organizationId`; cache profile/kho tách theo user | `apps/backend/src/auth/auth.service.ts`, `apps/backend/src/simulation/simulation.service.ts`, `apps/backend/src/simulation/__tests__/first-warehouse.spec.ts`, `apps/frontend/src/components/dashboard/dashboard-shell.tsx` | Scope chưa được centralize cho mọi API/WebSocket; bản đồ offline vẫn là bộ dữ liệu cụm Đồng Xuân |
+| Email cảnh báo sự cố | SMTP tùy chọn; gửi tới email cá nhân đúng tổ chức/kho, loại trùng, dùng BCC; `ALERT_EMAIL_TO` chỉ fallback; template không hiển thị điểm tin cậy | `apps/backend/src/mail/`, `apps/backend/src/incident/incident.service.ts`, `.env.example` | Chưa có email verification/outbox/retry bền vững; SMTP lỗi chỉ log và không chặn luồng sự cố |
+| AI diễn giải sự cố | Sự cố rule-based tạo ngay; AI chạy nền để lưu explanation, cập nhật notification và email; AI lỗi vẫn giữ sự cố/email rule-based | `apps/backend/src/incident/incident.context.ts`, `apps/backend/src/incident/__tests__/incident-enrich.spec.ts`, `apps/frontend/src/components/dashboard/incident-view.tsx` | Chưa có bộ redaction/output-safety đầy đủ cho AI service; AI không được quyết định severity hoặc bịa số |
+| Cảnh báo trong trợ lý web | Sau khi query/refetch thấy sự cố đã có AI explanation, dữ liệu được đồng bộ sang bong bóng trợ lý; sự cố nghiêm trọng có thể tự mở cảnh báo | `apps/frontend/src/components/assistant/use-incident-alerts.ts`, `apps/frontend/src/lib/incident-alert-store.ts`, `apps/frontend/src/components/assistant/floating-assistant.tsx` | Incident view vẫn polling; WebSocket handshake chưa xác thực JWT và chưa có browser E2E |
+| App desktop giả lập cảm biến | Electron app đăng nhập admin demo, chọn backend, xem/chỉnh thiết bị, chạy scenario, theo dõi readiness, incident và log realtime | `apps/desktop/`, lệnh `pnpm desktop:dev` | Chỉ là công cụ demo/test; credentials tài khoản seed đang hard-code trong renderer; chưa được phép ghi production |
+| Sensor emit tự kích hoạt incident | Event cảm biến đã persist sẽ lên lịch scan incident debounce 1,2 giây; burst event được gộp, lỗi scan không chặn cập nhật sensor | `apps/backend/src/simulation/simulation.service.ts`, `apps/backend/src/simulation/__tests__/incident-scan-debounce.spec.ts` | Dedupe chỉ chặn sự cố cùng loại/thiết bị còn mở; simulator isolation/permission production vẫn chưa hoàn tất |
 
 Năm blocker trực tiếp:
 
@@ -161,6 +173,10 @@ Thứ tự quyết định bắt buộc:
 
 - [x] NestJS, Prisma, PostgreSQL, Redis, health check và seed có thật.
 - [x] JWT access/refresh, permission map và ba role có thật.
+- [x] `GET/PATCH /api/auth/me` có hồ sơ DB-backed và chỉ cho tự sửa họ tên, số điện thoại, email cảnh báo, avatar.
+- [x] Login/refresh trả hồ sơ mở rộng; frontend cache hồ sơ theo user và không giữ profile của tài khoản trước.
+- [x] Admin toàn xã chọn kho trung tâm trong đúng `organizationId`; tài khoản kho mở đúng kho được gán.
+- [ ] Email cá nhân nhận cảnh báo có bước xác minh trước khi kích hoạt.
 - [ ] Warehouse/organization scope áp nhất quán cho mọi read, write, AI snapshot và WebSocket.
 - [ ] Auth có rate limit, refresh rotation/revocation và quản lý session.
 - [ ] Token frontend không còn phụ thuộc `localStorage` cho mô hình production.
@@ -225,15 +241,20 @@ Thứ tự quyết định bắt buộc:
 
 - [x] Có virtual device, scenario deterministic, runner và event timeline.
 - [x] Có rule incident, evidence, anomaly và predictive warning.
+- [x] Sensor event đã persist tự kích hoạt incident scan nền có debounce; không chặn luồng emit khi scan lỗi.
+- [x] App desktop Electron có điều khiển thiết bị/scenario, readiness, incident và log realtime cho demo local.
+- [x] Sự cố mới được AI diễn giải nền, lưu explanation, cập nhật notification/email; AI lỗi vẫn giữ cảnh báo rule-based.
+- [x] Email sự cố hỗ trợ SMTP, người nhận theo profile + organization/warehouse scope, BCC và fallback vận hành.
+- [x] Web hiển thị explanation và đưa sự cố vào bong bóng trợ lý sau khi query/refetch thấy bản AI enrichment.
 - [ ] Simulator mutation bị khóa khỏi production và có permission/scope riêng.
 - [ ] Next.js có play/pause/reset/x1/x10 và chỉnh thiết bị; hiện panel chủ yếu read-only.
 - [ ] Socket.IO handshake xác thực JWT; room do server cấp.
 - [ ] Readiness/incident UI subscribe realtime đúng kho.
 - [ ] Incident view có detail, evidence timeline, assign/ack/resolve đúng permission.
-- [ ] AI `/explain-incident` và test output safety hoàn chỉnh.
+- [ ] Redaction, prompt-injection defense và output-safety test cho AI explain-incident hoàn chỉnh.
 - [ ] `sim.html` không dùng CDN/credential hard-code nếu còn dùng cho demo.
 
-**Verdict:** engine có thật nhưng integration hiện unsafe và demo path chưa đạt.
+**Verdict:** demo path đã có app desktop và phản ứng sensor -> readiness/incident; integration vẫn chưa an toàn cho production vì simulator permission/isolation và WebSocket auth chưa đạt.
 
 ### 5.7. Normal Mode, assistant và report
 
@@ -267,6 +288,7 @@ Thứ tự quyết định bắt buộc:
 
 - [x] Domain `ungphonhanh.life`, Cloudflare, tunnel và HTTPS đã có nền.
 - [x] Frontend/backend có Windows autostart script nền.
+- [x] Backend/frontend build production pass và live trả HTTP 200 sau cập nhật 2026-07-22.
 - [ ] PostgreSQL/Redis/AI/Ollama không public và firewall được kiểm chứng từ ngoài.
 - [ ] CORS, security headers, upload limits và auth hardening hoàn tất.
 - [ ] Prisma migration history thay cho chỉ `db push`.
@@ -279,16 +301,19 @@ Thứ tự quyết định bắt buộc:
 
 ## 6. Quality gates hiện tại
 
-| Gate | Kết quả 2026-07-21 |
+| Gate | Kết quả 2026-07-22 |
 |---|---|
-| Backend Jest | 25/25 suite, 168/168 test pass |
-| Backend coverage | 69,44% statements; 60,42% branches; 65,35% functions; 69,38% lines |
+| Backend Jest | 29/29 suite, 188/188 test pass |
+| Backend coverage | Chưa chạy lại ngày 2026-07-22; số audit 2026-07-21 là 69,44% statements; 60,42% branches; 65,35% functions; 69,38% lines |
 | Shared types build | Pass |
 | Scenario definitions build | Pass |
 | Backend build | Pass |
 | Frontend production build | Pass |
+| Desktop typecheck/build | Pass (`tsc --noEmit`, `electron-vite build`) |
 | Prisma validate | Pass |
-| Backend/frontend/AI health local | HTTP 200 |
+| Backend/frontend health local | HTTP 200 tại thời điểm kiểm tra 2026-07-22 |
+| AI health local | Chưa chạy lại trong đợt cập nhật PRD này |
+| Live frontend + backend health | HTTP 200; database/Redis báo `up` tại thời điểm kiểm tra |
 | Frontend lint | Fail; ESLint chưa cấu hình, `next lint` deprecated |
 | Frontend automated test | Không có |
 | AI automated test | Không có |
@@ -341,7 +366,7 @@ ADMIN bật demo mode
   -> reset đưa dữ liệu demo về trạng thái biết trước
 ```
 
-Hiện trạng: **Chưa đạt**. Engine có; Next control thiếu; WebSocket chưa auth; production data chưa được cách ly.
+Hiện trạng: **Một phần**. App desktop đã có slider thiết bị, chạy scenario x1/x10, reset và quan sát Readiness/incident; chưa có pause, Next.js control đầy đủ, WebSocket auth, production isolation, portable-package acceptance hoặc nghiệm thu Ollama/SMTP live.
 
 ### 7.4. Workflow online/offline pilot
 
@@ -510,6 +535,7 @@ Chỉ gọi MVP hoàn thành khi tất cả điều kiện sau được tick:
 |---|---|---|---|
 | `apps/backend` | API, auth/scope, inventory, readiness, mission, simulator, incident, geo, report, backup | `pnpm be:dev`, `pnpm --filter @safestock/backend test`, `pnpm --filter @safestock/backend build` | Checklist P0-P3 trong tài liệu này |
 | `apps/frontend` | Web role-facing và dashboard | `pnpm fe:dev`, `pnpm --filter @safestock/frontend build` | Checklist P1-P2 |
+| `apps/desktop` | Công cụ Electron giả lập cảm biến và quan sát phản ứng realtime | `pnpm desktop:dev`, `pnpm --filter @safestock/desktop typecheck`, `pnpm --filter @safestock/desktop build` | Mục 5.6; chỉ dùng demo/test |
 | `apps/ai-service` | Parse/narrative bằng Gemini/Ollama | `pnpm ai:dev` | Mục 5.7 và P2 |
 | `apps/mobile` | App Android hiện trường | `pnpm mobile:dev` sau khi scaffold | Mục 5.8 và P4 |
 | `packages/shared-types` | Enum/type/permission contract dùng chung | build theo workspace | Phải đổi cùng public contract |
@@ -518,7 +544,7 @@ Chỉ gọi MVP hoàn thành khi tất cả điều kiện sau được tick:
 
 ### 11.2. Nội dung roadmap backend đã hấp thụ
 
-Đã có và được giữ: nền monorepo, auth cơ bản, inventory read/write nền, simulator engine, readiness formulas, FEFO mission, Action Plan, Geo fallback, incident rules, insights, assistant, backup mechanism và server-side env validation.
+Đã có và được giữ: nền monorepo, auth cơ bản, hồ sơ cá nhân DB-backed, inventory read/write nền, simulator engine, sensor-to-incident debounce, readiness formulas, FEFO mission, Action Plan, Geo fallback, incident rules, AI incident enrichment, email cảnh báo, insights, assistant, backup mechanism và server-side env validation.
 
 Các dấu `✅` cũ không còn được hiểu là hoàn thành end-to-end. Backlog thật đã chuyển vào P0-P3, gồm scope, transfer, loan, mission fulfillment, WebSocket, report, integration/concurrency test và production hardening.
 
@@ -530,13 +556,13 @@ Hạng mục backend riêng còn mở nhưng không phải blocker mặc định
 
 ### 11.3. Nội dung roadmap frontend đã hấp thụ
 
-Đã có: login/layout, Readiness overview, warehouse map, Mission/Action Plan view, map pin, notification UI, insights, report/admin views và assistant.
+Đã có: login/layout, profile cá nhân, header/kho theo tài khoản, Readiness overview, warehouse map, Mission/Action Plan view, map pin, notification UI, incident explanation, cảnh báo sự cố trong trợ lý, insights, report/admin views và assistant.
 
 Còn phải làm hoặc chứng minh:
 
 - Inventory CRUD/write workflow, adjust/reconcile và mutation error handling.
 - Mission inbox, stable route, deep-link và ba phiên role độc lập.
-- Simulator controls + realtime Readiness/incident.
+- Simulator controls trên Next.js; app desktop đã có control và quan sát realtime nhưng chưa thay thế workflow role-facing trên web.
 - Permission-aware navigation.
 - Readiness theo zone/shelf nếu cần cho quyết định vận hành.
 - Voice input, readiness trước/sau, PDF và presentation health view là P4/polish; không chặn P0.
@@ -548,7 +574,7 @@ Roadmap cũ ghi Insights chưa làm và frontend placeholder là thông tin đã
 
 - Gemini và Ollama là provider đang hỗ trợ; Ollama là lựa chọn local/offline.
 - Claude branch chưa triển khai và được **defer khỏi MVP** trừ khi có quyết định mới.
-- `/explain-incident`, redaction, output-safety tests và automated tests nằm ở P2.
+- Explain-incident đã được nối vào luồng sự cố và có focused test; redaction, prompt-injection defense và output-safety tests đầy đủ vẫn nằm ở P2.
 - AI không được thực thi SQL/shell/xóa dữ liệu/gửi mail hoặc tự mutation nghiệp vụ.
 
 ### 11.5. Nội dung roadmap Mobile đã hấp thụ
@@ -590,3 +616,4 @@ Các roadmap cũ của app đã chuyển vào archive. Nếu tài liệu lịch 
 4. Demo thi được phép dùng `sim.html`/API script hay bắt buộc toàn bộ qua UI role-facing?
 5. Deliverable seed là một cụm xã Đồng Xuân hay hai xã như PRD cũ từng ghi?
 6. Offline GIS tiles sẽ được đóng gói và cập nhật bằng cơ chế nào trên máy pilot?
+7. Email cá nhân phải xác minh bằng link/OTP trước khi nhận dữ liệu sự cố hay pilot chấp nhận lưu trực tiếp?
