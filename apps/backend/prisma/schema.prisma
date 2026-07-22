@@ -439,7 +439,9 @@ enum MissionStatus {
   APPROVED // (cũ, giữ tương thích)
   IN_PROGRESS // đang thực hiện
   COMPLETED // hoàn thành
-  REJECTED // từ chối
+  REJECTED // đội cứu hộ từ chối (kèm lý do), chờ admin xử lý
+  DEFERRED // admin tiếp nhận đơn từ chối → tạm hoãn, sửa + gửi lại sau
+  CANCELLED // admin huỷ nhiệm vụ (kèm lý do) — kết thúc luồng
 }
 
 // Nhiệm vụ cứu hộ — sinh từ tình huống, gồm nhu cầu + phương án phân bổ.
@@ -456,6 +458,8 @@ model Mission {
   fulfillment         Float                @default(0) // mức đáp ứng % (min qua các loại)
   readinessAssessment Json? // blocker + trạng thái + mức đáp ứng tại lúc lập phương án
   explanation         String? // giải thích AI (tiếng Việt)
+  rejectionReason     String? // lý do đội cứu hộ từ chối (thiếu nhân lực/vật tư/xin trì hoãn) — admin đọc sau
+  adminNote           String? // ghi chú admin khi tạm hoãn/gửi lại/huỷ — đội cứu hộ đọc
   actionPlan          Json? // Incident Action Plan (8 mục, ActionPlanResponse từ AI)
   incidentLat         Float? // toạ độ điểm nạn (ghim tay) — tính khoảng cách kho gần nhất
   incidentLng         Float?
@@ -566,6 +570,9 @@ enum NotificationKind {
   INTER_WAREHOUSE_REQUEST // thiếu → báo kho lân cận
   INCIDENT_DETECTED // sensor phát hiện sự cố → báo admin
   READINESS_DEGRADED // readiness rớt DEGRADED/CRITICAL → báo kho
+  MISSION_REJECTED // đội cứu hộ từ chối nhiệm vụ (kèm lý do) → báo admin
+  MISSION_DEFERRED // admin tiếp nhận đơn → tạm hoãn, báo đội cứu hộ
+  MISSION_CANCELLED // admin huỷ nhiệm vụ (kèm lý do) → báo đội cứu hộ
 }
 
 model Notification {

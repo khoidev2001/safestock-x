@@ -3,18 +3,22 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ColorIcon } from "@/components/shared/color-icon";
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-store";
+import { useMissionFocus } from "@/lib/mission-focus-store";
 import type { LatLng } from "@/lib/geo";
 import { ApiError } from "@/lib/api";
 import {
+  cancelMission,
   confirmMission,
+  deferMission,
   dispatchMission,
   generateActionPlan,
   generatePlan,
   getClusterWarehouses,
   getMission,
   prepareMission,
+  resendMission,
   type GenerateInput,
   type Mission,
 } from "@/lib/mission-api";
@@ -51,6 +55,16 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
   const [incidentPoint, setIncidentPoint] = useState<LatLng | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
+
+  // Mở đúng nhiệm vụ khi bấm thông báo (chuông) — kể cả mission đã REJECTED/DEFERRED.
+  const focusMissionId = useMissionFocus((s) => s.focusMissionId);
+  const clearFocus = useMissionFocus((s) => s.clearFocus);
+  useEffect(() => {
+    if (focusMissionId) {
+      setMissionId(focusMissionId);
+      clearFocus();
+    }
+  }, [focusMissionId, clearFocus]);
 
   const warehousesQuery = useQuery({
     queryKey: ["cluster-warehouses", warehouseId],
@@ -208,7 +222,7 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
             )}
             <section className="app-panel p-5">
               <WorkflowStepper status={mission.status} />
-              <div className="mt-5 flex flex-wrap gap-2 border-t pt-4">
+              <div className="mt-5 border-t pt-4">
                 <RoleActions
                   mission={mission}
                   role={role}
@@ -216,6 +230,9 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
                   onDispatch={() => step.mutate(dispatchMission)}
                   onConfirm={() => step.mutate(confirmMission)}
                   onPrepare={() => step.mutate(prepareMission)}
+                  onDefer={() => step.mutate(deferMission)}
+                  onResend={(note) => step.mutate((id) => resendMission(id, note))}
+                  onCancel={(note) => step.mutate((id) => cancelMission(id, note))}
                   busy={genActionPlan.isPending || step.isPending}
                 />
               </div>
@@ -236,6 +253,10 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
   );
 }
 
+const actionBtn =
+  "flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition active:translate-y-px disabled:opacity-60";
+const primaryStyle = { background: "var(--color-accent)", color: "var(--color-accent-fg)" };
+
 /** Nút hành động hiện theo role + trạng thái — người dùng chỉ thấy việc của mình. */
 function RoleActions({
   mission,
@@ -244,6 +265,9 @@ function RoleActions({
   onDispatch,
   onConfirm,
   onPrepare,
+  onDefer,
+  onResend,
+  onCancel,
   busy,
 }: {
   mission: Mission;
@@ -252,52 +276,175 @@ function RoleActions({
   onDispatch: () => void;
   onConfirm: () => void;
   onPrepare: () => void;
+  onDefer: () => void;
+  onResend: (note: string) => void;
+  onCancel: (note: string) => void;
   busy: boolean;
 }) {
-  const btn =
-    "flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition active:translate-y-px disabled:opacity-60";
-  const primary = { background: "var(--color-accent)", color: "var(--color-accent-fg)" };
+  const isAdmin = role === "ADMIN";
+  const showReason =
+    (mission.status === "REJECTED" || mission.status === "DEFERRED") && mission.rejectionReason;
 
-  if (role === "ADMIN" && mission.status === "DRAFT") {
-    return (
-      <>
-        {!mission.actionPlan && (
-          <button className={btn} style={primary} onClick={onGenerateActionPlan} disabled={busy}>
-            <ColorIcon name="mission" size={18} tone="orange" /> Lập kế hoạch cứu hộ
-          </button>
-        )}
-        {mission.actionPlan && (
-          <button
-            className={btn}
-            style={primary}
-            onClick={onDispatch}
-            disabled={busy || mission.readinessAssessment?.status === "NOT_DISPATCHABLE"}
-            title={mission.readinessAssessment?.status === "NOT_DISPATCHABLE" ? "Cần xử lý phần vật tư còn thiếu trước khi gửi" : undefined}
-          >
-            <ColorIcon name="send" size={18} tone="blue" /> Gửi cho đội cứu hộ
-          </button>
-        )}
-      </>
-    );
-  }
-  if (role === "RESCUE" && mission.status === "PENDING_RESCUE") {
-    return (
-      <button className={btn} style={primary} onClick={onConfirm} disabled={busy}>
-        Xác nhận nhận nhiệm vụ
-      </button>
-    );
-  }
-  if (role === "WAREHOUSE" && mission.status === "PENDING_WAREHOUSE") {
-    return (
-      <button className={btn} style={primary} onClick={onPrepare} disabled={busy}>
-        Chuẩn bị và xuất kho
-      </button>
-    );
-  }
   return (
-    <p className="text-sm text-[var(--text-muted)]">
-      {statusHint(mission.status, role)}
-    </p>
+    <div className="space-y-4">
+      {showReason && (
+        <div className="rounded-md border border-[var(--color-critical)]/40 bg-[var(--color-critical)]/5 p-3">
+          <p className="text-xs font-semibold text-[var(--color-critical)]">Lý do đội cứu hộ từ chối</p>
+          <p className="mt-1 text-sm">{mission.rejectionReason}</p>
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        {isAdmin && mission.status === "DRAFT" && (
+          <>
+            {!mission.actionPlan && (
+              <button className={actionBtn} style={primaryStyle} onClick={onGenerateActionPlan} disabled={busy}>
+                <ColorIcon name="mission" size={18} tone="orange" /> Lập kế hoạch cứu hộ
+              </button>
+            )}
+            {mission.actionPlan && (
+              <button
+                className={actionBtn}
+                style={primaryStyle}
+                onClick={onDispatch}
+                disabled={busy || mission.readinessAssessment?.status === "NOT_DISPATCHABLE"}
+                title={mission.readinessAssessment?.status === "NOT_DISPATCHABLE" ? "Cần xử lý phần vật tư còn thiếu trước khi gửi" : undefined}
+              >
+                <ColorIcon name="send" size={18} tone="blue" /> Gửi cho đội cứu hộ
+              </button>
+            )}
+          </>
+        )}
+
+        {role === "RESCUE" && mission.status === "PENDING_RESCUE" && (
+          <button className={actionBtn} style={primaryStyle} onClick={onConfirm} disabled={busy}>
+            Xác nhận nhận nhiệm vụ
+          </button>
+        )}
+
+        {role === "WAREHOUSE" && mission.status === "PENDING_WAREHOUSE" && (
+          <button className={actionBtn} style={primaryStyle} onClick={onPrepare} disabled={busy}>
+            Chuẩn bị và xuất kho
+          </button>
+        )}
+
+        {/* ADMIN xử lý đơn từ chối: tiếp nhận (tạm hoãn) hoặc huỷ */}
+        {isAdmin && mission.status === "REJECTED" && (
+          <AdminRejectionActions onDefer={onDefer} onCancel={onCancel} busy={busy} />
+        )}
+
+        {/* ADMIN gửi lại nhiệm vụ tạm hoãn (kèm ghi chú) hoặc huỷ */}
+        {isAdmin && mission.status === "DEFERRED" && (
+          <AdminDeferredActions onResend={onResend} onCancel={onCancel} busy={busy} />
+        )}
+
+        {!actionableFor(mission.status, role) && (
+          <p className="text-sm text-[var(--text-muted)]">{statusHint(mission.status, role)}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Có nút hành động cho role ở trạng thái này không (để quyết định hiện hint). */
+function actionableFor(status: string, role: string | undefined): boolean {
+  if (role === "ADMIN") return ["DRAFT", "REJECTED", "DEFERRED"].includes(status);
+  if (role === "RESCUE") return status === "PENDING_RESCUE";
+  if (role === "WAREHOUSE") return status === "PENDING_WAREHOUSE";
+  return false;
+}
+
+/** REJECTED + ADMIN: tiếp nhận (tạm hoãn) hoặc huỷ (kèm lý do). */
+function AdminRejectionActions({
+  onDefer,
+  onCancel,
+  busy,
+}: {
+  onDefer: () => void;
+  onCancel: (note: string) => void;
+  busy: boolean;
+}) {
+  const [cancelling, setCancelling] = useState(false);
+  const [note, setNote] = useState("");
+
+  if (cancelling) {
+    return (
+      <div className="w-full space-y-2">
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={2}
+          placeholder="Lý do huỷ nhiệm vụ (gửi cho đội cứu hộ)"
+          className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+        />
+        <div className="flex gap-2">
+          <button className={actionBtn} style={{ background: "var(--color-critical)", color: "#fff" }} onClick={() => onCancel(note)} disabled={busy}>
+            Xác nhận huỷ
+          </button>
+          <button className={`${actionBtn} border`} onClick={() => setCancelling(false)} disabled={busy}>
+            Quay lại
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <button className={actionBtn} style={primaryStyle} onClick={onDefer} disabled={busy}>
+        <ColorIcon name="workflow" size={18} tone="blue" /> Tiếp nhận (tạm hoãn)
+      </button>
+      <button className={`${actionBtn} border border-[var(--color-critical)] text-[var(--color-critical)]`} onClick={() => setCancelling(true)} disabled={busy}>
+        Huỷ nhiệm vụ
+      </button>
+    </>
+  );
+}
+
+/** DEFERRED + ADMIN: ghi chú phản hồi rồi gửi lại, hoặc huỷ. */
+function AdminDeferredActions({
+  onResend,
+  onCancel,
+  busy,
+}: {
+  onResend: (note: string) => void;
+  onCancel: (note: string) => void;
+  busy: boolean;
+}) {
+  const [note, setNote] = useState("");
+  const [cancelling, setCancelling] = useState(false);
+
+  return (
+    <div className="w-full space-y-2">
+      <textarea
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        rows={2}
+        placeholder={cancelling ? "Lý do huỷ nhiệm vụ" : "Ghi chú phản hồi cho đội cứu hộ (vd: đã điều thêm nhân lực/vật tư)"}
+        className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+      />
+      <div className="flex flex-wrap gap-2">
+        {cancelling ? (
+          <>
+            <button className={actionBtn} style={{ background: "var(--color-critical)", color: "#fff" }} onClick={() => onCancel(note)} disabled={busy}>
+              Xác nhận huỷ
+            </button>
+            <button className={`${actionBtn} border`} onClick={() => setCancelling(false)} disabled={busy}>
+              Quay lại
+            </button>
+          </>
+        ) : (
+          <>
+            <button className={actionBtn} style={primaryStyle} onClick={() => onResend(note)} disabled={busy}>
+              <ColorIcon name="send" size={18} tone="blue" /> Gửi lại cho đội cứu hộ
+            </button>
+            <button className={`${actionBtn} border border-[var(--color-critical)] text-[var(--color-critical)]`} onClick={() => setCancelling(true)} disabled={busy}>
+              Huỷ nhiệm vụ
+            </button>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -306,6 +453,9 @@ function statusHint(status: string, role: string | undefined): string {
   if (status === "PENDING_RESCUE") return "Đang chờ đội cứu hộ xác nhận.";
   if (status === "PENDING_WAREHOUSE") return "Đang chờ kho chuẩn bị vật tư.";
   if (status === "DRAFT" && role !== "ADMIN") return "Bộ phận điều phối đang lập kế hoạch.";
+  if (status === "REJECTED") return "Đội cứu hộ đã từ chối. Chờ bộ phận điều phối xử lý.";
+  if (status === "DEFERRED") return "Nhiệm vụ đang tạm hoãn, chờ bộ phận điều phối cập nhật và gửi lại.";
+  if (status === "CANCELLED") return "Nhiệm vụ đã huỷ.";
   return "Không có hành động cho vai trò của bạn ở bước này.";
 }
 

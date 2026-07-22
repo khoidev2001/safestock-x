@@ -190,6 +190,101 @@ export class MissionService {
   }
 
   /**
+   * RESCUE từ chối nhiệm vụ (kèm lý do) → REJECTED, notify ADMIN.
+   * Lý do lưu vào mission.rejectionReason để admin xem xét (chỉnh nhân lực/vật tư
+   * hoặc duyệt trì hoãn rồi gửi lại — luồng đó ở web, ngoài phạm vi bước này).
+   */
+  async rejectByRescue(id: string, reason: string) {
+    const mission = await this.requireMission(id);
+    this.guardTransition(mission.status, MissionStatus.REJECTED);
+    const updated = await this.prisma.mission.update({
+      where: { id },
+      data: { status: MissionStatus.REJECTED, rejectionReason: reason },
+    });
+    await this.notifications.create({
+      recipientRole: UserRole.ADMIN,
+      kind: NotificationKind.MISSION_REJECTED,
+      title: "Đội cứu hộ từ chối nhiệm vụ",
+      body: `${mission.incidentType} — ${mission.affectedPeople} người. Lý do: ${reason}`,
+      missionId: id,
+    });
+    return updated;
+  }
+
+  /**
+   * ADMIN tiếp nhận đơn từ chối → tạm hoãn (REJECTED → DEFERRED), báo RESCUE.
+   * Mission vào danh sách tạm hoãn để admin sửa/ghi chú rồi gửi lại sau.
+   */
+  async deferByAdmin(id: string, note?: string) {
+    const mission = await this.requireMission(id);
+    this.guardTransition(mission.status, MissionStatus.DEFERRED);
+    const updated = await this.prisma.mission.update({
+      where: { id },
+      data: { status: MissionStatus.DEFERRED, adminNote: note ?? null },
+    });
+    await this.notifications.create({
+      recipientRole: UserRole.RESCUE,
+      kind: NotificationKind.MISSION_DEFERRED,
+      title: "Đơn từ chối đã được tiếp nhận",
+      body: `${mission.incidentType} — ${mission.affectedPeople} người. Đang được xem xét, sẽ cập nhật lại.${note ? ` Ghi chú: ${note}` : ""}`,
+      missionId: id,
+    });
+    return updated;
+  }
+
+  /**
+   * ADMIN gửi lại nhiệm vụ tạm hoãn cho đội cứu hộ (DEFERRED → PENDING_RESCUE),
+   * kèm ghi chú phản hồi. Đội cứu hộ xác nhận / từ chối lại như bình thường.
+   */
+  async resendByAdmin(id: string, note?: string) {
+    const mission = await this.requireMission(id);
+    this.guardTransition(mission.status, MissionStatus.PENDING_RESCUE);
+    const updated = await this.prisma.mission.update({
+      where: { id },
+      data: { status: MissionStatus.PENDING_RESCUE, adminNote: note ?? mission.adminNote },
+    });
+    await this.notifications.create({
+      recipientRole: UserRole.RESCUE,
+      kind: NotificationKind.MISSION_ASSIGNED,
+      title: "Nhiệm vụ đã cập nhật — mời xác nhận lại",
+      body: `${mission.incidentType} — ${mission.affectedPeople} người.${note ? ` Phản hồi: ${note}` : ""}`,
+      missionId: id,
+    });
+    return updated;
+  }
+
+  /**
+   * ADMIN huỷ nhiệm vụ (REJECTED|DEFERRED → CANCELLED), kèm lý do gửi đội cứu hộ.
+   * Kết thúc luồng — không gửi lại được nữa.
+   */
+  async cancelByAdmin(id: string, note?: string) {
+    const mission = await this.requireMission(id);
+    this.guardTransition(mission.status, MissionStatus.CANCELLED);
+    const updated = await this.prisma.mission.update({
+      where: { id },
+      data: { status: MissionStatus.CANCELLED, adminNote: note ?? null },
+    });
+    await this.notifications.create({
+      recipientRole: UserRole.RESCUE,
+      kind: NotificationKind.MISSION_CANCELLED,
+      title: "Nhiệm vụ đã huỷ",
+      body: `${mission.incidentType} — ${mission.affectedPeople} người. Nhiệm vụ đã huỷ.${note ? ` Lý do: ${note}` : ""}`,
+      missionId: id,
+    });
+    return updated;
+  }
+
+  /** Danh sách nhiệm vụ (lọc theo trạng thái nếu truyền) — mới nhất trước. */
+  listMissions(statuses?: MissionStatus[]) {
+    return this.prisma.mission.findMany({
+      where: statuses && statuses.length > 0 ? { status: { in: statuses } } : undefined,
+      orderBy: { createdAt: "desc" },
+      include: { requirements: true },
+      take: 100,
+    });
+  }
+
+  /**
    * WAREHOUSE chuẩn bị: xuất kho theo phương án (bulk-export) → READY,
    * notify ADMIN + RESCUE. Chỉ xuất phần đã cấp (allocated), bỏ phần thiếu.
    */

@@ -13,6 +13,10 @@ const TRANSITIONS: Record<string, MissionStatus[]> = {
   [MissionStatus.RESCUE_CONFIRMED]: [MissionStatus.PENDING_WAREHOUSE],
   [MissionStatus.PENDING_WAREHOUSE]: [MissionStatus.READY, MissionStatus.REJECTED],
   [MissionStatus.READY]: [MissionStatus.COMPLETED],
+  // Admin xử lý đơn từ chối của đội cứu hộ: tiếp nhận (tạm hoãn) hoặc huỷ.
+  [MissionStatus.REJECTED]: [MissionStatus.DEFERRED, MissionStatus.CANCELLED],
+  // Tạm hoãn: gửi lại cho đội cứu hộ (sau khi sửa/ghi chú) hoặc huỷ hẳn.
+  [MissionStatus.DEFERRED]: [MissionStatus.PENDING_RESCUE, MissionStatus.CANCELLED],
 };
 
 export function canTransition(from: MissionStatus, to: MissionStatus): boolean {

@@ -28,8 +28,30 @@ function completedIndex(status: MissionStatus): number {
   }
 }
 
+/** Trạng thái ngoài luồng 3 bước — hiện băng riêng thay vì stepper. */
+const OFF_FLOW: Partial<Record<MissionStatus, { label: string; tone: string }>> = {
+  REJECTED: { label: "Đội cứu hộ đã từ chối", tone: "var(--color-critical)" },
+  DEFERRED: { label: "Tạm hoãn — chờ điều phối cập nhật", tone: "var(--color-attention)" },
+  CANCELLED: { label: "Nhiệm vụ đã huỷ", tone: "var(--text-muted)" },
+};
+
 export function WorkflowStepper({ status }: { status: MissionStatus }) {
   const done = completedIndex(status);
+  const offFlow = OFF_FLOW[status];
+
+  if (offFlow) {
+    return (
+      <div
+        className="flex items-center gap-2 rounded-md border px-4 py-3"
+        style={{ borderColor: offFlow.tone }}
+      >
+        <span className="h-2.5 w-2.5 rounded-full" style={{ background: offFlow.tone }} />
+        <span className="text-sm font-semibold" style={{ color: offFlow.tone }}>
+          {offFlow.label}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center">

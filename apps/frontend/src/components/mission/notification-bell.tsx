@@ -7,11 +7,19 @@ import { io, type Socket } from "socket.io-client";
 import { BASE } from "@/lib/api";
 import { useAuth } from "@/lib/auth-store";
 import { getNotifications, markAllRead } from "@/lib/mission-api";
+import { useMissionFocus } from "@/lib/mission-focus-store";
 
-export function NotificationBell() {
+export function NotificationBell({ onOpenMission }: { onOpenMission?: () => void }) {
   const role = useAuth((s) => s.user?.role);
+  const focusMission = useMissionFocus((s) => s.focusMission);
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+
+  function openMission(missionId: string) {
+    focusMission(missionId);
+    onOpenMission?.();
+    setOpen(false);
+  }
 
   const notifQuery = useQuery({
     queryKey: ["notifications"],
@@ -75,13 +83,26 @@ export function NotificationBell() {
                   Chưa có thông báo.
                 </p>
               ) : (
-                items.map((n) => (
-                  <div key={n.id} className="border-b px-4 py-3 last:border-0">
-                    <p className="text-sm font-medium">{n.title}</p>
-                    {/* body có thể dài khi kèm giải thích AI → gói 3 dòng, tránh tràn dropdown. */}
-                    <p className="mt-0.5 line-clamp-3 text-xs text-[var(--text-muted)]">{n.body}</p>
-                  </div>
-                ))
+                items.map((n) =>
+                  n.missionId ? (
+                    <button
+                      key={n.id}
+                      type="button"
+                      onClick={() => openMission(n.missionId as string)}
+                      className="block w-full border-b px-4 py-3 text-left transition last:border-0 hover:bg-[var(--surface-2)]"
+                    >
+                      <p className="text-sm font-medium">{n.title}</p>
+                      <p className="mt-0.5 line-clamp-3 text-xs text-[var(--text-muted)]">{n.body}</p>
+                      <p className="mt-1 text-[11px] font-semibold text-[var(--color-accent)]">Xem nhiệm vụ →</p>
+                    </button>
+                  ) : (
+                    <div key={n.id} className="border-b px-4 py-3 last:border-0">
+                      <p className="text-sm font-medium">{n.title}</p>
+                      {/* body có thể dài khi kèm giải thích AI → gói 3 dòng, tránh tràn dropdown. */}
+                      <p className="mt-0.5 line-clamp-3 text-xs text-[var(--text-muted)]">{n.body}</p>
+                    </div>
+                  ),
+                )
               )}
             </div>
           </div>

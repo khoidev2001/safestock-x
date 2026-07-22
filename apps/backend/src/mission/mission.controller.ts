@@ -1,11 +1,12 @@
-import { Body, Controller, Get, Param, Post, Request, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Query, Request, UseGuards } from "@nestjs/common";
+import { MissionStatus } from "@prisma/client";
 import { IncidentType, Permission } from "@safestock/shared-types";
 import { AuthenticatedRequest } from "../auth/authenticated-request";
 import { JwtAuthGuard } from "../auth/guards";
 import { PermissionGuard } from "../rbac/permission.guard";
 import { RequirePermission } from "../rbac/permissions.decorator";
 import { AiClientService } from "../ai/ai-client.service";
-import { GeneratePlanDto, ParseDto } from "./dto";
+import { AdminNoteDto, GeneratePlanDto, ParseDto, RejectMissionDto } from "./dto";
 import { IncidentInput } from "./mission.compute";
 import { MissionService } from "./mission.service";
 
@@ -37,6 +38,16 @@ export class MissionController {
         ? { lat: dto.incidentLat, lng: dto.incidentLng }
         : undefined;
     return this.missions.generatePlan(dto.warehouseId, incident, req.user.userId, incidentPoint);
+  }
+
+  /** Danh sách nhiệm vụ, lọc theo trạng thái (vd ?status=DEFERRED,REJECTED). */
+  @RequirePermission(Permission.MISSION_VIEW)
+  @Get()
+  list(@Query("status") status?: string) {
+    const statuses = status
+      ? (status.split(",").filter((s) => s in MissionStatus) as MissionStatus[])
+      : undefined;
+    return this.missions.listMissions(statuses);
   }
 
   @RequirePermission(Permission.MISSION_VIEW)
@@ -93,6 +104,34 @@ export class MissionController {
   @Post(":id/confirm")
   confirm(@Param("id") id: string) {
     return this.missions.confirmByRescue(id);
+  }
+
+  /** RESCUE từ chối nhiệm vụ kèm lý do (PENDING_RESCUE → REJECTED), báo ADMIN. */
+  @RequirePermission(Permission.MISSION_CONFIRM)
+  @Post(":id/reject")
+  reject(@Param("id") id: string, @Body() dto: RejectMissionDto) {
+    return this.missions.rejectByRescue(id, dto.reason);
+  }
+
+  /** ADMIN tiếp nhận đơn từ chối → tạm hoãn (REJECTED → DEFERRED), báo RESCUE. */
+  @RequirePermission(Permission.MISSION_CREATE)
+  @Post(":id/defer")
+  defer(@Param("id") id: string, @Body() dto: AdminNoteDto) {
+    return this.missions.deferByAdmin(id, dto.note);
+  }
+
+  /** ADMIN gửi lại nhiệm vụ tạm hoãn cho RESCUE (DEFERRED → PENDING_RESCUE). */
+  @RequirePermission(Permission.MISSION_CREATE)
+  @Post(":id/resend")
+  resend(@Param("id") id: string, @Body() dto: AdminNoteDto) {
+    return this.missions.resendByAdmin(id, dto.note);
+  }
+
+  /** ADMIN huỷ nhiệm vụ (REJECTED|DEFERRED → CANCELLED), báo RESCUE kèm lý do. */
+  @RequirePermission(Permission.MISSION_CREATE)
+  @Post(":id/cancel")
+  cancel(@Param("id") id: string, @Body() dto: AdminNoteDto) {
+    return this.missions.cancelByAdmin(id, dto.note);
   }
 
   /** WAREHOUSE chuẩn bị + xuất kho (PENDING_WAREHOUSE → READY). */

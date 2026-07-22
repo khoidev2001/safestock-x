@@ -7,7 +7,9 @@ export type MissionStatus =
   | "PENDING_WAREHOUSE"
   | "READY"
   | "COMPLETED"
-  | "REJECTED";
+  | "REJECTED"
+  | "DEFERRED"
+  | "CANCELLED";
 
 export interface MissionRequirement {
   sku: string;
@@ -51,6 +53,8 @@ export interface Mission {
   actionPlan: ActionPlan | null;
   readinessAssessment: MissionReadinessAssessment | null;
   requirements: MissionRequirement[];
+  rejectionReason?: string | null;
+  adminNote?: string | null;
 }
 
 export interface ActionPlan {
@@ -119,6 +123,9 @@ export const generatePlan = (input: GenerateInput) =>
 
 export const getMission = (id: string) => apiFetch<Mission>(`/api/missions/${id}`);
 
+export const listMissions = (statuses?: MissionStatus[]) =>
+  apiFetch<Mission[]>(`/api/missions${statuses?.length ? `?status=${statuses.join(",")}` : ""}`);
+
 export const getClusterWarehouses = (warehouseId: string) =>
   apiFetch<ClusterWarehouse[]>(`/api/missions/${warehouseId}/warehouses`);
 
@@ -132,6 +139,14 @@ export const confirmMission = (id: string) =>
   apiFetch<Mission>(`/api/missions/${id}/confirm`, { method: "POST" });
 export const prepareMission = (id: string) =>
   apiFetch<Mission>(`/api/missions/${id}/prepare`, { method: "POST" });
+
+// Admin xử lý đơn từ chối của đội cứu hộ
+export const deferMission = (id: string, note?: string) =>
+  apiFetch<Mission>(`/api/missions/${id}/defer`, { method: "POST", body: JSON.stringify({ note }) });
+export const resendMission = (id: string, note?: string) =>
+  apiFetch<Mission>(`/api/missions/${id}/resend`, { method: "POST", body: JSON.stringify({ note }) });
+export const cancelMission = (id: string, note?: string) =>
+  apiFetch<Mission>(`/api/missions/${id}/cancel`, { method: "POST", body: JSON.stringify({ note }) });
 
 // Thông báo
 export const getNotifications = (unread = false) =>

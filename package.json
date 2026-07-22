@@ -34,6 +34,8 @@
     "demo": "node apps/backend/demo/demo.mjs"
   },
   "devDependencies": {
-    "socket.io-client": "^4.8.3"
+    "@types/react": "~19.2.4",
+    "socket.io-client": "^4.8.3",
+    "typescript": "~6.0.3"
   }
 }

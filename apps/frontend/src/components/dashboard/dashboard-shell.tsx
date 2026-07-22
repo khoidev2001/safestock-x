@@ -126,7 +126,7 @@ export function DashboardShell({ activeView, children, onViewChange, warehouseNa
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <NotificationBell />
+                <NotificationBell onOpenMission={() => onViewChange("mission")} />
                 <UserProfileButton onLogout={logout} />
               </div>
             </div>

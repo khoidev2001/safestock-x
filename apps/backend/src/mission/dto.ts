@@ -7,6 +7,20 @@ export class ParseDto {
   description!: string;
 }
 
+/** Đội cứu hộ từ chối nhiệm vụ — bắt buộc nêu lý do (admin xem xét sau). */
+export class RejectMissionDto {
+  @IsString()
+  @MinLength(3)
+  reason!: string;
+}
+
+/** Admin xử lý đơn từ chối (tạm hoãn / gửi lại / huỷ) — ghi chú không bắt buộc. */
+export class AdminNoteDto {
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
 /** Lập phương án: parse rồi phân bổ, HOẶC truyền tình huống đã parse sẵn. */
 export class GeneratePlanDto {
   @IsString()
