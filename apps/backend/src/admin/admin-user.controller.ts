@@ -11,7 +11,7 @@ class CreateUserDto {
   email!: string;
 
   @IsString()
-  @MinLength(6)
+  @MinLength(8)
   password!: string;
 
   @IsString()
@@ -30,7 +30,7 @@ class UpdateUserDto {
   @IsOptional() @IsString() @MinLength(2) fullName?: string;
   @IsOptional() @IsEnum(UserRole) role?: UserRole;
   @IsOptional() @IsString() warehouseId?: string | null;
-  @IsOptional() @IsString() @MinLength(6) password?: string;
+  @IsOptional() @IsString() @MinLength(8) password?: string;
 }
 
 @UseGuards(JwtAuthGuard, PermissionGuard)

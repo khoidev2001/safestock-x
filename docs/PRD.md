@@ -1,375 +1,592 @@
-# PRD – Ứng phó nhanh
+# PRD + Checklist + Kế hoạch cuối - Ứng phó nhanh
 
-**Product Requirements Document (bản hoàn chỉnh v2.2)**
-Nền tảng AI đánh giá năng lực sẵn sàng và điều phối vật tư cứu hộ trong tình huống khẩn cấp
+> Nguồn sự thật duy nhất về phạm vi sản phẩm, trạng thái thực tế và thứ tự triển khai.
+> Các plan, audit, work-log cũ đã chuyển vào `docs/archive/2026-07-21-before-master-prd/` để tra cứu lịch sử, không dùng để kết luận tiến độ hiện tại.
 
-| | |
+| Thuộc tính | Giá trị |
 |---|---|
-| Phiên bản | 2.2 (Readiness theo trạng thái, điều kiện chặn và khả năng đáp ứng) |
-| Ngày | 2026-07-20 |
-| Trạng thái | Đang code — xem [13. Trạng thái hiện tại](#13-trạng-thái-hiện-tại) |
-| Dự thi | Cuộc thi Sáng tạo AI tỉnh Đắk Lắk (ai.daklak.gov.vn) |
-| Đội | 2 người |
-| Bối cảnh | Bão lũ Phú Yên (cũ) 2025 — nay thuộc Đắk Lắk |
-| Kế hoạch chi tiết | Xem [BUILD-PLAN.md](BUILD-PLAN.md) |
+| Phiên bản | 3.0 - bản hợp nhất |
+| Ngày đối chiếu | 2026-07-21 |
+| Trạng thái | Đang phát triển; chưa đạt MVP end-to-end; chưa an toàn để mở Internet production |
+| Mức hoàn thành thực tế | Khoảng 45-55% nếu chấm theo workflow vận hành và PRD |
+| Điểm audit khó tính | 4,5/10 |
+| Phạm vi kiểm chứng | Toàn bộ tài liệu, backend, frontend, AI service, mobile, shared packages và hạ tầng |
 
-> Tài liệu này mô tả **CÁI GÌ** và **TẠI SAO**. Chi tiết **LÀM THẾ NÀO** (phase, verify, thứ tự) ở [BUILD-PLAN.md](BUILD-PLAN.md).
+## 0. Cách dùng tài liệu
 
----
+Tài liệu này đồng thời là:
 
-## 1. Tổng quan
+1. **PRD:** sản phẩm phải giải quyết gì, cho ai, theo contract nào.
+2. **Checklist:** phần nào đã đạt, phần nào còn thiếu hoặc đang hỏng.
+3. **Plan:** thứ tự sửa và điều kiện thoát từng giai đoạn.
 
-### 1.1. Vấn đề
-Phần mềm quản lý kho thường trả lời *"kho có bao nhiêu?"*. Trong cứu hộ khẩn cấp, câu đó không đủ — số trên sổ không phản ánh **năng lực phản ứng thực tế**: vật tư có thể đã hỏng, hết hạn, sai vị trí, bị che chắn, hoặc đang được mượn. Khi bão lũ ập tới (như Phú Yên 2025), đội cứu hộ cần biết ngay *cái gì thực sự dùng được, chuẩn bị mất bao lâu, thiếu gì*.
+Quy ước:
 
-### 1.2. Giải pháp
-Ứng phó nhanh quản lý **năng lực phản ứng thực tế của kho**, trả lời 4 câu hỏi:
-1. Vật tư nào đang thực sự sẵn sàng sử dụng?
-2. Kho đáp ứng được tình huống khẩn cấp nào?
-3. Với một tình huống cụ thể, cần chuẩn bị gì?
-4. Điểm nghẽn nào khiến cứu hộ bị chậm?
+- `[x]` chỉ dùng khi hành vi đã tồn tại và có bằng chứng build/test hoặc kiểm tra thực tế.
+- `[ ]` nghĩa là chưa đạt điều kiện nghiệm thu, kể cả khi đã có một phần code/UI.
+- `Một phần` không được tính là hoàn thành MVP.
+- Dấu tick trong roadmap cũ không phải bằng chứng nếu workflow end-to-end chưa chạy.
+- Khi code thay đổi, cập nhật mục checklist tương ứng tại đây; không tạo thêm plan rời nếu chưa thật sự cần một thiết kế chuyên sâu.
 
-### 1.3. Tuyên bố giá trị
-> Phần mềm thường quản lý hàng tồn kho. Ứng phó nhanh quản lý **năng lực phản ứng thực tế** của kho khi sự cố xảy ra — kể cả khi con người quá bận để nhập liệu.
+## 1. Kết luận điều hành
 
-### 1.4. Phạm vi MVP
-**5 module cốt lõi:** Quản lý kho · Mức sẵn sàng vận hành kho · Mission-to-Kit Compiler · Sensor Simulator (Digital Twin) · Mobile App.
+Ứng phó nhanh có lõi kỹ thuật thật. Readiness, Mission-to-Kit, rule engine, Action Plan, Geo fallback và cách giới hạn LLM đều có giá trị. Dự án không phải mock UI.
 
-**Mock (không phần cứng thật):** ESP32/loadcell/camera/RFID/mesh. Dữ liệu cảm biến mô phỏng, **cùng schema JSON phần cứng thật sẽ xuất** → thay mock bằng thiết bị thật không đổi phần mềm. Đây là **lộ trình có tầm nhìn**, không phải thiếu kinh phí.
+Khoảng cách lớn nhất không nằm ở số lượng endpoint. Vấn đề là các lát cắt chưa ghép thành workflow đúng, an toàn, atomic, scoped theo kho và dùng được qua nhiều tài khoản độc lập.
 
-**Ngoài phạm vi:** nhận diện khuôn mặt, CV phức tạp, blockchain, drone, GIS phức tạp, dự báo thiên tai cấp tỉnh.
+Trạng thái hiện tại:
 
-> Mọi định mức vật tư là **tham khảo nghiên cứu** (dẫn nguồn Sphere Handbook + quy định PCTT VN), không phải hướng dẫn nghiệp vụ chính thức.
+| Thành phần | Đánh giá thực tế |
+|---|---|
+| Backend rule/algorithm | Khá mạnh, nhiều phần chạy thật |
+| Backend nghiệp vụ dữ liệu | Còn lỗi integrity, concurrency, scope nghiêm trọng |
+| Frontend web | Trình bày được nhiều màn; workflow vận hành còn thiếu/hỏng |
+| AI service | Gemini/Ollama dùng được; test và hardening thiếu |
+| Mobile | Chưa có source app thực tế |
+| Deployment/offline | Có domain, tunnel và script nền; chưa nghiệm thu đầy đủ |
+| MVP theo PRD | Chưa hoàn thành |
+| Production Internet | Chưa được phép coi là an toàn |
 
----
+Năm blocker trực tiếp:
 
-## 2. Đối tượng sử dụng — 3 vai trò
+1. Simulator có thể làm sai tồn kho thật và ghi actor admin không đúng.
+2. Transfer nhận `quantity` nhưng di chuyển toàn batch.
+3. Mission đa role không chạy qua các phiên đăng nhập độc lập.
+4. Web trả vật tư gửi sai contract backend.
+5. Kịch bản demo simulator -> readiness realtime -> mobile QR chưa tồn tại end-to-end.
 
-Xã thường **1 người phụ trách kho** → gộp còn 3 role:
+## 2. Bài toán và giá trị sản phẩm
 
-| Role | Ai | Làm gì |
+### 2.1. Vấn đề
+
+Phần mềm kho thông thường trả lời kho đang ghi nhận bao nhiêu hàng. Trong cứu hộ, cần biết vật tư nào **thực sự dùng được ngay**, có bị hỏng/hết hạn/khóa/đang mượn không, kho đáp ứng được tình huống nào và điểm nghẽn nào làm chậm phản ứng.
+
+### 2.2. Giải pháp
+
+Ứng phó nhanh phải trả lời bốn câu hỏi:
+
+1. Vật tư nào đang thực sự sẵn sàng?
+2. Kho có blocker vận hành nào?
+3. Với tình huống cụ thể, cần gì và đáp ứng được bao nhiêu?
+4. Ai phải làm gì tiếp theo để chuẩn bị và bàn giao vật tư?
+
+### 2.3. Tuyên bố giá trị
+
+> Ứng phó nhanh quản lý năng lực phản ứng thực tế của kho, không chỉ số tồn trên sổ.
+
+### 2.4. Mục tiêu MVP
+
+- Quản lý tồn, lô, tình trạng, lưu hành, kiểm kê, mượn-trả và audit.
+- Đánh giá Readiness theo blocker, sáu chiều, lý do và hành động.
+- Biên dịch tình huống thành nhu cầu, phân bổ FEFO và Action Plan có kiểm chứng số.
+- Khép workflow ADMIN -> RESCUE -> WAREHOUSE qua các phiên độc lập.
+- Mô phỏng cảm biến deterministic, realtime nhưng không gây rủi ro cho dữ liệu production.
+- Chạy được online qua domain và offline trong LAN với AI local.
+- Có bộ kiểm thử đủ chứng minh quyền, concurrency và workflow chính.
+- Nếu Mobile còn là deliverable: có APK và test trên thiết bị thật.
+
+### 2.5. Ngoài phạm vi MVP
+
+- Nhận diện khuôn mặt, computer vision phức tạp, blockchain, drone.
+- Đồng bộ database tự động giữa các xã.
+- Offline-write tự động merge tồn kho.
+- OR-Tools hoặc tối ưu hóa phức tạp khi greedy + FEFO đã đủ.
+- Dự báo thiên tai cấp tỉnh hoặc bản đồ GIS nghiệp vụ quy mô lớn.
+- AI tự tính tồn, tự duyệt nghiệp vụ, chạy SQL/shell hoặc thực thi hành động nguy hiểm.
+
+## 3. Người dùng, quyền và ranh giới dữ liệu
+
+| Role | Trách nhiệm | Không được phép |
 |---|---|---|
-| **WAREHOUSE** | Cán bộ phụ trách kho | Toàn bộ vận hành: quét QR nhập/xuất, kiểm kê, báo hỏng, xuất lô khẩn cấp, sửa tay, đối chiếu kiểm kê, cho mượn, duyệt phương án |
-| **RESCUE** | Đội cứu hộ | Xem phương án AI đề xuất, mượn–hoàn vật tư, gửi yêu cầu vật tư. Không đụng quản trị kho |
-| **ADMIN** | Quản trị/giám sát | + Quản lý người dùng, xem toàn bộ nhật ký, cấu hình, **hậu kiểm** thao tác nhạy cảm |
+| `ADMIN` | Quản trị user, tạo mission, giám sát, hậu kiểm, cấu hình | Không được thay actor thật bằng admin hệ thống cho thao tác tự động |
+| `WAREHOUSE` | Vận hành kho được phân công, chuẩn bị/xuất mission, kiểm kê, mượn-trả | Không đọc/ghi kho ngoài scope nếu không được giao rõ |
+| `RESCUE` | Xem và xác nhận mission, nhận/hoàn vật tư, xem thông tin cần thiết | Không mutate simulator, tồn kho hoặc incident bằng quyền xem |
 
-**Mô hình kiểm soát: HẬU KIỂM** (không duyệt 2 bước). WAREHOUSE tự làm thao tác nhạy cảm + tự chịu trách nhiệm (lý do bắt buộc + nhật ký không xóa được) → ADMIN soi lại sau. Phù hợp quy mô xã ít người, không cản cứu hộ khẩn cấp.
+Quyết định nền:
 
----
+- Mô hình kiểm soát là **hậu kiểm**, không duyệt hai bước cho mọi thao tác.
+- Mỗi xã vận hành một hệ thống và một database độc lập.
+- Trong xã: một kho tổng + nhiều kho thôn dùng chung `communeId`.
+- Liên xã: chỉ lưu metadata kho lân cận và gợi ý liên hệ; không sync database.
+- Mọi read/write/AI snapshot phải được scope theo tổ chức, xã và kho.
+- WebSocket room do server suy ra từ JWT và assignment; client không tự khai role/kho đáng tin cậy.
 
-## 3. Yêu cầu chức năng
+## 4. Nguyên tắc kiến trúc bất biến
 
-### 3.1. Quản lý kho + nhập/xuất đa nguồn
+### 4.1. AI và nghiệp vụ
 
-**Phân cấp:** Kho → Khu vực → Kệ → Danh mục → Vật tư → Lô.
+| Thành phần | Được làm | Không được làm |
+|---|---|---|
+| LLM | Parse tiếng Việt, diễn giải, viết narrative theo context | Tính tồn, tự bịa số, tự phê duyệt, thực thi mutation |
+| Backend | Auth, scope, transaction, audit, state transition | Tin dữ liệu quyền từ client |
+| Rule engine | Readiness, severity, forecast, nhu cầu, fulfillment | Dùng trung bình để che thiếu vật tư thiết yếu |
 
-**Trạng thái vật tư — 2 chiều độc lập:**
-- **Tình trạng:** `NEW` (mới) · `USED` (cũ, đã dùng) · `NEEDS_CHECK` (cần kiểm tra) · `DAMAGED` (hư hỏng)
-- **Lưu hành:** `IN_STOCK` (trong kho) · `ON_LOAN` (đang mượn — vẫn thuộc kho, không tính mất) · `RETURNED` (vừa hoàn, chờ kiểm tra)
+Mọi con số tồn, phần trăm đáp ứng, severity, ETA và forecast phải truy được về backend/rule/GeoService. LLM chỉ dùng số đã cung cấp.
 
-**Loại vật tư:** `consumable=true` (nước/lương thực/pin — xuất = tiêu hao) vs `consumable=false` (áo phao/xuồng/đèn — xuất = mượn, sẽ hoàn).
+### 4.2. Readiness
 
-**4 tầng nhập/xuất — mỗi tầng bắt cái tầng trên sót:**
-1. **Quét QR** — chính xác từng món (thường ngày)
-2. **Xuất lô 1 chạm** — chế độ khẩn cấp, xuất cả kệ/theo nhiệm vụ
-3. **Loadcell/RFID tự động** — cảm biến phát hiện biến động → tự sinh giao dịch (loadcell = *tín hiệu trigger*, không phải nguồn đếm chính xác)
-4. **Kiểm kê định kỳ + sửa tay** — nguồn sự thật cao nhất, ghi đè tất cả
+Thứ tự quyết định bắt buộc:
 
-Mỗi giao dịch có `source` (SCAN/BULK/LOADCELL/RFID/MANUAL) — độ lệch giữa các nguồn feed vào "độ tin cậy dữ liệu" của Readiness.
+1. Blocker vận hành.
+2. Trạng thái từng chiều: số lượng, tình trạng, hạn dùng, tiếp cận, môi trường, độ tin cậy.
+3. Khả năng đáp ứng tình huống theo SKU yếu nhất.
+4. Điểm 0-100 chỉ để xem xu hướng.
 
-**Mượn–trả (LoanRecord):** vật tư `consumable=false` xuất = tạo phiếu mượn → ON_LOAN → hoàn từng phần (ok/hỏng/mất): ok→USED về kho, hỏng→DAMAGED, mất→trừ tổng kho.
+### 4.3. Tồn kho
 
-**Giao dịch:** nhập/xuất/chuyển/hoàn/điều chỉnh — mọi thao tác có nhật ký bất biến.
+- Không cho tồn âm.
+- Xuất, mượn, hoàn, fulfillment và duyệt báo cáo phải transactionally safe.
+- Partial transfer phải tách batch hoặc contract phải đổi rõ thành whole-batch. Bản kế hoạch này chọn **tách batch khi chuyển một phần** để khớp contract `quantity`.
+- ON_LOAN không được tính là khả dụng.
+- Mượn một phần không được khóa toàn bộ batch còn lại.
+- Audit phải ghi đúng actor, target, thời điểm, lý do và before/after.
 
-**Concurrency:** update nguyên tử có điều kiện (`quantity >= x`) → 2 người xuất cùng lúc không âm kho.
+### 4.4. Simulator
 
-**FR chính:**
-- FR-INV-01 Xuất 1 vật tư qua QR ≤ 3 bước
-- FR-INV-02 Không cho xuất quá tồn sẵn sàng (100%)
-- FR-INV-03 Mọi giao dịch có nhật ký 5W (ai/gì/trên gì/khi nào/vì sao)
-- FR-INV-04 Kiểm kê chỉ đếm IN_STOCK (trừ ON_LOAN khỏi kỳ vọng)
+- Simulator là môi trường demo/test, không phải nguồn được phép tự do sửa tồn production.
+- Production mặc định disable mutation simulator.
+- Nếu bật trong demo mode: permission riêng, warehouse scope, system actor riêng và dữ liệu/tenant tách biệt.
+- Cùng seed phải sinh cùng chuỗi sự kiện.
 
-### 3.2. Mức sẵn sàng vận hành kho (chức năng hỗ trợ quyết định cốt lõi #1)
+### 4.5. Online/offline
 
-Readiness không phải một điểm số dùng để xếp hạng kho. Mục tiêu là trả lời: **kho có vận hành được ngay không, đang vướng gì và đáp ứng được tình huống cụ thể đến đâu?**
+- Online: `ungphonhanh.life` qua Cloudflare Tunnel, same-origin web/API.
+- Offline trong LAN: backend, PostgreSQL, Redis, AI Service và Ollama chạy local.
+- Mất LAN ngoài hiện trường: chỉ offline-read; nhập bù bằng quy trình có kiểm soát khi mạng về.
+- Không phụ thuộc CDN cho kịch bản demo offline.
 
-Thay vì chỉ hiển thị `Readiness Score: 84/100`, giao diện chính phải trình bày:
+## 5. Ma trận yêu cầu và trạng thái thực tế
+
+### 5.1. Nền tảng, auth và scope
+
+- [x] NestJS, Prisma, PostgreSQL, Redis, health check và seed có thật.
+- [x] JWT access/refresh, permission map và ba role có thật.
+- [ ] Warehouse/organization scope áp nhất quán cho mọi read, write, AI snapshot và WebSocket.
+- [ ] Auth có rate limit, refresh rotation/revocation và quản lý session.
+- [ ] Token frontend không còn phụ thuộc `localStorage` cho mô hình production.
+- [ ] Navigation chỉ hiển thị route user có quyền và backend vẫn enforce độc lập.
+
+**Verdict:** nền auth có, security boundary chưa đạt production.
+
+### 5.2. Inventory và audit
+
+- [x] Đọc cây kho, batch, scan SKU và tồn cơ bản.
+- [x] Backend có import, export, bulk export, adjust và reconcile.
+- [x] Export thường/bulk có conditional update chống âm tồn ở một số path.
+- [ ] Transfer theo `quantity` đúng semantics, atomic và scoped nguồn/đích.
+- [ ] Web có đủ import/export/bulk/transfer/adjust; hiện phần lớn backend-only.
+- [ ] Mọi mutation có error state rõ; không được nuốt lỗi thành trạng thái rỗng/an toàn.
+- [ ] Audit 5W đạt 100% với actor thật và target đầy đủ.
+- [ ] Concurrency test chứng minh không âm tồn và không lost update.
+
+**Verdict:** backend feature nhiều nhưng chưa thể gọi là inventory workflow hoàn chỉnh.
+
+### 5.3. Mượn-trả
+
+- [x] Có model và endpoint borrow/return.
+- [x] Có khái niệm ok/hỏng/mất và trừ phần đang mượn khỏi khả dụng.
+- [ ] Web gửi đúng contract `{ ok, damaged, lost }`.
+- [ ] Borrow/return atomic khi hai request đồng thời.
+- [ ] Tình trạng hỏng được lưu đúng, không mất thông tin condition.
+- [ ] Partial loan chỉ trừ số lượng mượn, không làm toàn batch mất eligibility.
+- [ ] Web có luồng tạo phiếu, hoàn từng phần và hiển thị lỗi.
+
+**Verdict:** hiện không dùng được end-to-end an toàn.
+
+### 5.4. Readiness
+
+- [x] Có sáu thành phần, trọng số, reason và recommendation.
+- [x] Có trạng thái `READY / NEEDS_ACTION / NOT_DISPATCHABLE` và blocker nền.
+- [x] Mission loại lô hỏng, cần kiểm tra, hết hạn, kệ khóa và phần đang mượn.
+- [ ] Blocker theo vật tư bắt buộc/tình huống và cấu hình địa phương đầy đủ.
+- [ ] Recalc nhất quán sau mọi loan, report, transfer và mutation liên quan.
+- [ ] Dữ liệu sensor quá hạn được thể hiện là unknown/stale, không thành safe state.
+- [ ] Web cập nhật readiness realtime dưới 2 giây khi dữ liệu đổi.
+- [ ] Browser E2E chứng minh blocker luôn thắng điểm tổng.
+
+**Verdict:** hướng sản phẩm mạnh; implementation là strong partial, chưa hoàn tất contract PRD.
+
+### 5.5. Mission-to-Kit và Action Plan
+
+- [x] Parse tình huống qua Gemini/Ollama và validate schema.
+- [x] Backend tính nhu cầu, FEFO, greedy và mức đáp ứng theo SKU yếu nhất.
+- [x] Action Plan 8 mục có backend severity/forecast và template fallback.
+- [x] GeoService có Haversine offline và Google Routes fallback/quota guard.
+- [ ] Fulfillment atomic, idempotent và không double-export khi retry.
+- [ ] Allocation/fulfillment scoped theo kho được giao.
+- [ ] Mission inbox/list theo role và trạng thái.
+- [ ] Notification deep-link mở đúng mission.
+- [ ] ADMIN, RESCUE, WAREHOUSE hoàn thành workflow qua ba phiên độc lập.
+- [ ] Seed/toạ độ đủ để chứng minh chọn kho gần nhất trong demo.
+
+**Verdict:** compute tốt; workflow vận hành chưa khép kín.
+
+### 5.6. Simulator, realtime và incident
+
+- [x] Có virtual device, scenario deterministic, runner và event timeline.
+- [x] Có rule incident, evidence, anomaly và predictive warning.
+- [ ] Simulator mutation bị khóa khỏi production và có permission/scope riêng.
+- [ ] Next.js có play/pause/reset/x1/x10 và chỉnh thiết bị; hiện panel chủ yếu read-only.
+- [ ] Socket.IO handshake xác thực JWT; room do server cấp.
+- [ ] Readiness/incident UI subscribe realtime đúng kho.
+- [ ] Incident view có detail, evidence timeline, assign/ack/resolve đúng permission.
+- [ ] AI `/explain-incident` và test output safety hoàn chỉnh.
+- [ ] `sim.html` không dùng CDN/credential hard-code nếu còn dùng cho demo.
+
+**Verdict:** engine có thật nhưng integration hiện unsafe và demo path chưa đạt.
+
+### 5.7. Normal Mode, assistant và report
+
+- [x] Có forecast cạn kho, hạn dùng, rebalance, trend, weather và monthly narrative.
+- [x] Có assistant dùng snapshot kho, câu nhanh, Ollama cho câu mở và trả lời trực tiếp tình huống khẩn cấp trong chat; tình huống có người mắc kẹt có fallback không phụ thuộc AI/database.
+- [ ] Snapshot assistant/insights scope đúng kho và quyền.
+- [ ] Report approval atomic, idempotent và xử lý đúng SKU có nhiều batch.
+- [ ] Role frontend/backend cho report thống nhất.
+- [ ] AI service có automated test và policy redaction/output đầy đủ.
+- [ ] Forecast nâng từ trung bình phẳng lên dự báo thống kê có độ tin cậy và reorder point (chi tiết: `docs/plan-tang-ham-luong-ai-di-thi.md`, B2).
+- [ ] Trợ lý có RAG trích dẫn nguồn định mức (Sphere/PCTT) chạy offline; không trả lời ngoài corpus (chi tiết: plan AI, B1).
+- [ ] Dự báo nhu cầu theo thời tiết: nối forecast tiêu thụ + mưa 72h Open-Meteo để cảnh báo thiếu vật tư trước thiên tai (plan AI, B4).
+- [ ] Semantic search vật tư bằng embedding local (plan AI, B5).
+- [ ] Bản tin AI đầu ngày tóm tắt readiness/forecast/incident/thời tiết cho lãnh đạo xã (plan AI, B6).
+- [ ] Chuẩn hóa nhập liệu bằng embedding, chỉ gợi ý cho người duyệt, làm sau khi inventory ổn định (plan AI, B7).
+
+**Verdict:** basic usable; thiếu integration/security proof. Ghi chú chiều sâu AI: phần "forecast/insight" hiện là thống kê tuyến tính, không phải ML — cần gọi đúng tên và nâng theo plan AI để chống bị bắt bài khi phản biện.
+
+### 5.8. Mobile
+
+- [ ] Expo scaffold và auth bằng SecureStore.
+- [ ] Trang chủ, kho, readiness, mission và cảnh báo.
+- [ ] QR scan + nhập SKU tay + nhập/xuất/chuyển/kiểm tra/báo hỏng.
+- [ ] RESCUE nhận/hoàn vật tư và báo hỏng/mất.
+- [ ] Offline-read cache và badge trạng thái.
+- [ ] APK build, cài và test trên thiết bị Android thật.
+
+**Verdict:** chưa triển khai. Nếu Mobile vẫn nằm trong MVP/deliverable, toàn bộ MVP chưa thể hoàn thành.
+
+### 5.9. Deployment, backup và vận hành
+
+- [x] Domain `ungphonhanh.life`, Cloudflare, tunnel và HTTPS đã có nền.
+- [x] Frontend/backend có Windows autostart script nền.
+- [ ] PostgreSQL/Redis/AI/Ollama không public và firewall được kiểm chứng từ ngoài.
+- [ ] CORS, security headers, upload limits và auth hardening hoàn tất.
+- [ ] Prisma migration history thay cho chỉ `db push`.
+- [ ] Backup có checksum/retry/retention và restore drill thành công.
+- [ ] Reboot máy chủ tự phục hồi toàn bộ service.
+- [ ] Test online -> mất Internet -> LAN offline -> online phục hồi.
+- [ ] Offline GIS tile đóng gói reproducible từ fresh checkout.
+
+**Verdict:** có thiết kế và một phần hạ tầng; chưa nghiệm thu production/pilot.
+
+## 6. Quality gates hiện tại
+
+| Gate | Kết quả 2026-07-21 |
+|---|---|
+| Backend Jest | 25/25 suite, 168/168 test pass |
+| Backend coverage | 69,44% statements; 60,42% branches; 65,35% functions; 69,38% lines |
+| Shared types build | Pass |
+| Scenario definitions build | Pass |
+| Backend build | Pass |
+| Frontend production build | Pass |
+| Prisma validate | Pass |
+| Backend/frontend/AI health local | HTTP 200 |
+| Frontend lint | Fail; ESLint chưa cấu hình, `next lint` deprecated |
+| Frontend automated test | Không có |
+| AI automated test | Không có |
+| Browser E2E | Không có |
+| API/controller integration | Gần như không có |
+| Concurrency test | Không có |
+| CI workflow | Không có |
+| Prisma migrations | Không có |
+| Dependency audit production | 16 finding: 6 high, 9 moderate, 1 low |
+
+Kết luận: test hiện tại chứng minh tốt các hàm rule/compute thuần. Chưa chứng minh authorization, controller contract, concurrency, WebSocket hoặc workflow đa role.
+
+## 7. Workflow nghiệm thu bắt buộc
+
+### 7.1. Workflow kho thường ngày
 
 ```text
-TRẠNG THÁI: CẦN XỬ LÝ
-Điều kiện chặn: Không
-Vấn đề: Thiếu 16 áo phao · 2 lô sắp hết hạn · 1 kệ bị khóa
-Hành động: Mở kệ B1 · kiểm tra 2 lô y tế · đề nghị điều chuyển áo phao
-Điểm tham khảo xu hướng: 84/100
+WAREHOUSE đăng nhập
+  -> xem đúng kho được giao
+  -> nhập/xuất/chuyển/adjust/reconcile
+  -> audit đúng actor và lý do
+  -> Readiness cập nhật
+  -> ADMIN hậu kiểm
 ```
 
-**Ba tầng quyết định, theo đúng thứ tự ưu tiên:**
+Hiện trạng: **Một phần**. Read có UI; nhiều write path thiếu UI; transfer sai; error handling yếu.
 
-1. **Điều kiện chặn:** sự cố làm kho không thể vận hành; vật tư bắt buộc đã hỏng/hết hạn; vị trí chứa vật tư cần thiết bị khóa/chặn; dữ liệu quá cũ nên phải kiểm kê xác nhận trước khi xuất.
-2. **Trạng thái từng mặt:** số lượng khả dụng, tình trạng, hạn dùng, khả năng tiếp cận, môi trường bảo quản và độ tin cậy dữ liệu. Mỗi mặt phải có trạng thái, lý do và hành động; không chỉ có điểm.
-3. **Khả năng đáp ứng tình huống:** đối chiếu nhu cầu theo loại thiên tai, số người và thời gian với tồn thực sự khả dụng. Mức đáp ứng tổng bằng loại vật tư yếu nhất, không lấy trung bình để che thiếu hụt.
+### 7.2. Workflow cứu hộ đa role
 
-**Trạng thái vận hành chính:**
-
-| Trạng thái | Ý nghĩa | Hành động hệ thống |
-|---|---|---|
-| Sẵn sàng | Không có điều kiện chặn; các mặt thiết yếu đạt yêu cầu | Cho phép chọn kho và tiếp tục đối chiếu nhu cầu tình huống |
-| Cần xử lý | Kho vẫn vận hành được nhưng có thiếu hụt, rủi ro hoặc dữ liệu cần xác minh | Nêu vấn đề, người phụ trách, hành động và mức ưu tiên |
-| Không thể điều phối | Có ít nhất một điều kiện chặn liên quan đến nhiệm vụ | Chặn chọn kho cho phần bị ảnh hưởng, cảnh báo và gợi ý kho/phương án khác |
-
-**Sáu thành phần và trọng số hiện tại** (`28%` số lượng, `22%` tình trạng, `15%` hạn dùng, `15%` tiếp cận, `10%` môi trường, `10%` độ tin cậy) chỉ dùng để tạo **điểm tham khảo xu hướng**. Đây là định mức nghiên cứu, phải cấu hình được và không phải quy chuẩn nghiệp vụ chính thức.
-
-**Nguyên tắc bất biến:** điều kiện chặn và mức đáp ứng theo tình huống luôn có quyền ưu tiên cao hơn điểm tổng. Kho `90/100` vẫn không được dùng nếu vật tư bắt buộc không thể tiếp cận; kho `70/100` vẫn có thể được chọn nếu không có blocker và đáp ứng đủ nhiệm vụ sau khi người phụ trách xác nhận cảnh báo.
-
-**Tính ở 4 cấp:** lô vật tư → kệ → khu → kho. Mọi kết luận phải truy được về dữ liệu nguồn, nguyên nhân và thời điểm cập nhật.
-
-**Chiến lược tính lại:** event-driven cho môi trường/sự cố + on-write cho giao dịch/kiểm kê/mượn-trả + phái sinh cho hạn dùng. Khi dữ liệu thay đổi, hệ thống tính lại blocker, trạng thái từng mặt và điểm tham khảo trong dưới 2 giây.
-
-**FR:** FR-RDY-01 mọi trạng thái truy nguồn 100% · FR-RDY-02 sensor quá 30 phút không cập nhật không được dùng như dữ liệu hiện tại · FR-RDY-03 blocker luôn thắng điểm tổng · FR-RDY-04 trả mức đáp ứng theo từng loại vật tư và lấy loại yếu nhất · FR-RDY-05 mọi cảnh báo phải kèm hành động đề xuất.
-
-### 3.3. Mission-to-Kit Compiler (chức năng AI cốt lõi #2)
-
-Nhập tình huống (văn bản/giọng nói tiếng Việt) → JSON → nhu cầu → phương án → giải thích → phê duyệt.
-
-Ví dụ input: *"Ngập lụt xã A, 150 người cô lập 48h, 25 trẻ em, 15 người già, 4 ca cần y tế."*
-
-**Quy trình:**
-```
-Mô tả → LLM parse → JSON có cấu trúc
-  → Rule Engine (định mức, dẫn nguồn Sphere) sinh nhu cầu
-  → đối chiếu tồn kho + Readiness
-  → phân bổ GREEDY + FEFO (ưu tiên gần hết hạn còn đủ điều kiện)
-  → thiếu → gợi ý mượn kho lân cận (ưu tiên gần)
-  → LLM giải thích → WAREHOUSE phê duyệt
+```text
+ADMIN tạo mission
+  -> RESCUE nhận notification và mở mission
+  -> RESCUE xác nhận
+  -> WAREHOUSE nhận mission theo kho
+  -> chuẩn bị và fulfill một lần
+  -> ADMIN + RESCUE thấy READY
+  -> bàn giao/hoàn vật tư có audit
 ```
 
-**Mức đáp ứng % = MIN qua các loại** (mắt xích yếu nhất — thiếu nước thì đủ áo phao vô nghĩa), không phải trung bình đẹp.
+Hiện trạng: **Chưa đạt**. Mission ID nằm trong local React state; không có inbox/deep-link; fulfillment chưa đủ an toàn.
 
-**Phân bổ:** greedy + FEFO (OR-Tools bỏ khỏi MVP — greedy đủ ở quy mô này, dễ giải thích; OR-Tools là hướng phát triển). Không vượt tồn sẵn sàng. Chỉ lấy IN_STOCK khả dụng.
+### 7.3. Workflow simulator demo
 
-**FR:** FR-MTK-01 tạo phương án <10s · FR-MTK-02 không vượt tồn 100% · FR-MTK-03 mọi con số do backend/rule engine tính, LLM chỉ parse + diễn đạt.
-
-### 3.4. Sensor Simulator — Digital Twin (thay phần cứng IoT)
-
-> Gọi đúng: "mô phỏng lớp cảm biến", không khoe "Digital Twin công nghiệp".
-
-Sinh sự kiện cảm biến theo kịch bản **deterministic** (cùng seed → cùng dãy). Mô hình **timeline-scrubber**: kịch bản = danh sách sự kiện có `offsetMs`, runner là con trỏ chạy qua (như trình phát video). Tốc độ x1/x10, play/pause/reset.
-
-**Thiết bị ảo:** loadcell, nhiệt độ, độ ẩm, khói, cửa, RFID gateway, camera AI, nguồn điện, gateway. Mỗi thiết bị giữ **giá trị current** (Readiness đọc trực tiếp). Ngưỡng lọc: chỉ lưu sự kiện có nghĩa.
-
-**≥5 kịch bản (PRD gốc 3.4):** bình thường (có nhiễu seed), nghi thất thoát, lỗi cảm biến, bảo quản xấu, mất kết nối, sai vị trí. **Nhiễu ngẫu nhiên có seed** ở kịch bản bình thường → chứng minh AI phân biệt nhiễu vs sự cố thật (không chỉ đọc kịch bản).
-
-Sự kiện đẩy realtime qua WebSocket (room theo kho) tới mobile + web.
-
-**FR:** FR-SIM-01 reproducible 100% cùng seed · FR-SIM-02 đổi dữ liệu → mobile cập nhật <2s.
-
-### 3.5. Incident Intelligence — điều tra sự cố (nên-có)
-
-Hợp nhất sự kiện đa nguồn → timeline → chấm điểm nghiêm trọng → giải thích. Rule engine với **ngưỡng cụ thể** (vd loadcell giảm >3kg + cửa mở + RFID + không phiếu xuất ±5ph → nghi thất thoát). LLM viết giải thích, **không tự kết luận số liệu**. Thông báo in-app qua WebSocket. Mọi kết luận kèm bằng chứng truy nguồn (100%).
-
-Bổ sung 2 lớp phát hiện dùng thống kê thay vì chỉ ngưỡng tuyệt đối: **phát hiện bất thường (z-score)** — so độ lệch điểm mới nhất với baseline lịch sử từng cảm biến, bắt pattern lệch dù chưa vượt ngưỡng cứng; **cảnh báo sớm dự đoán (hồi quy tuyến tính)** — ngoại suy xu hướng gần nhất, báo trước khi chạm ngưỡng nguy hiểm (vd "nhiệt độ dự kiến vượt 35°C trong ~12 phút"). Cả hai vẫn là rule/thống kê thuần backend tính, LLM chỉ diễn giải khi được yêu cầu — giữ nguyên nguyên tắc bất biến của mục này.
-
-### 3.6. Mobile App (vận hành hiện trường)
-
-**Điều hướng:** Trang chủ · Kho · Quét QR · Nhiệm vụ · Cảnh báo.
-
-Chức năng: xem Readiness + cảnh báo + nhiệm vụ; quét QR xuất/nhập/chuyển/kiểm tra/báo hỏng (có nút nhập SKU tay dự phòng); nhận cảnh báo realtime; mượn–hoàn (RESCUE).
-
-**Offline 3 tình huống:**
-- Mất internet, LAN còn → chuyển AI sang Ollama local, chạy đủ
-- Mất LAN (ra hiện trường) → offline-đọc (cache xem kho) + trao đổi ngoài (bộ đàm/SMS) + nhập bù tay khi mạng về. **Không** sync tự động (tránh âm kho)
-- Mất điện toàn kho → offline-đọc trên điện thoại + phiếu giấy in sẵn + UPS máy chủ
-
-### 3.7. Cụm kho xã + GeoService (đã bổ sung sau v2.0)
-
-**Mô hình cụm kho:** 1 xã = 1 hệ thống, 1 DB. Trong xã có **1 kho tổng** (`CENTRAL`, trung tâm hành chính, dự trữ lớn) + **nhiều kho thôn** (`HAMLET`, mỗi thôn 1 kho nhỏ), cùng `communeId` → AI query trực tiếp cả cụm (KHÔNG "móc DB kho khác"). Tọa độ kho **ghim tay** (`lat`/`lng`), không geocode.
-
-**GeoService — khoảng cách/ETA kho→điểm nạn:**
-- **Haversine** (thuần, offline, luôn chạy) làm nền — 2 lat/lng → km, ETA = km÷tốc độ giả định (`GEO_ASSUMED_SPEED_KMH`)
-- **Google Routes** (Compute Route Matrix) làm chính khi có mạng + key — đường bộ thật. Lỗi/timeout/hết quota → tự lùi về Haversine, không ném lỗi lên workflow
-- **2 lớp chặn quota** để không bao giờ bị trừ tiền: app tự đếm, tới `GEO_MONTHLY_CAP` (mặc định 8.500/tháng) thì ngừng gọi Google; ngoài ra đặt **quota cap 9.000** trên Google Cloud Console (Google enforce cứng, dưới free-tier 10.000)
-
-Mission (3.3) dùng GeoService để chọn kho thôn **gần điểm nạn nhất còn hàng**, tràn sang kho tổng/thôn khác cùng xã khi thiếu, rồi mới gợi ý mượn xã lân cận (`NeighborWarehouse`, nhập tay, không sync DB — giữ nguyên §5.2).
-
-### 3.8. AI Incident Action Plan — kế hoạch hành động cứu hộ (đã bổ sung sau v2.0)
-
-Nâng Mission-to-Kit từ "danh sách vật tư + đáp ứng %" thành **kế hoạch hành động 8 mục** (khớp/hơn tài liệu phân tích tình huống cứu hộ tham khảo):
-1. Đánh giá tình huống + mức khẩn cấp (1–5)
-2. Mục tiêu cứu hộ 6 giờ đầu
-3. Phương án cấp phát vật tư
-4. Điều phối kho — kèm khoảng cách + ETA (từ GeoService, §3.7)
-5. Phương án theo 3 giai đoạn: 0–2h / 2–6h / 6–24h
-6. Cảnh báo nguy cơ
-7. Dự báo theo tỷ lệ % (định tính, có ghi rõ là ước lượng)
-8. Câu hỏi bổ sung để tăng độ chính xác
-
-**Nguyên tắc bất biến:** mục 1 (severity) và mục 7 (dự báo %) tính bằng **rule backend kiểm chứng được**, LLM CHỈ viết phần diễn giải (mục tiêu/giai đoạn/cảnh báo/câu hỏi) dựa trên số đã tính — không tự bịa số. ETA đưa vào context từ GeoService, LLM dùng đúng số này khi viết "điều phối".
-
-**Fallback không mạng/LLM lỗi:** dựng plan bằng template từ số backend — vẫn ra đủ 8 mục, không phụ thuộc LLM khi demo.
-
-### 3.9. Workflow liên vai trò + Notification (đã bổ sung sau v2.0)
-
-Mission đi qua trạng thái: `DRAFT → PENDING_RESCUE → RESCUE_CONFIRMED → PENDING_WAREHOUSE → READY → COMPLETED` (giữ `REJECTED`):
-```
-ADMIN nhập tình huống → AI sinh Action Plan (chọn kho theo §3.7)
-  → notify RESCUE → RESCUE xác nhận lấy
-  → notify WAREHOUSE → WAREHOUSE chuẩn bị + xuất (bulk-export)
-  → notify ADMIN + RESCUE (READY)
-  → thiếu → notify kho lân cận
-```
-Thông báo qua model `Notification` (DB, theo role) + Socket.IO room theo role (realtime in-app). Phân quyền bổ sung: `mission:confirm` (RESCUE), `mission:fulfill` (WAREHOUSE), `mission:create` chuyển hẳn về ADMIN.
-
----
-
-## 4. Yêu cầu phi chức năng
-
-| ID | Yêu cầu | Mục tiêu |
-|---|---|---|
-| NFR-01 | Tạo phương án | < 10s |
-| NFR-02 | Độ trễ cảnh báo mô phỏng | < 2s |
-| NFR-03 | Giao dịch có nhật ký | 100% |
-| NFR-04 | Reproducibility scenario cùng seed | 100% |
-| NFR-05 | Phương án không vượt tồn | 100% |
-| NFR-06 | Kết luận có bằng chứng | 100% |
-| NFR-07 | Thao tác quét để xuất | ≤ 3 bước |
-| NFR-08 | Thời gian demo | 5–7 phút |
-| NFR-09 | Auth | JWT access + refresh |
-| NFR-10 | Dự phòng offline | Có (3 lớp) |
-
----
-
-## 5. Kiến trúc
-
-### 5.1. Tổng thể
-```
-Mobile (Expo) ─┐
-Web Admin ─────┼─ REST + WebSocket ─→ NestJS API ─┬─ PostgreSQL
-Simulator UI ──┘                                  ├─ Redis + BullMQ
-                                                  └─ AI Service (FastAPI)
-                                                       └─ LLM provider (Gemini/Ollama/Claude)
+```text
+ADMIN bật demo mode
+  -> chọn kho/scenario/seed
+  -> play/pause/x10/reset
+  -> event realtime đúng room
+  -> Readiness/incident đổi dưới 2 giây
+  -> reset đưa dữ liệu demo về trạng thái biết trước
 ```
 
-### 5.2. Đa xã tự trị (quyết định kiến trúc quan trọng)
-**Mỗi xã = 1 máy chủ độc lập, KHÔNG sync DB xã khác.** Trong 1 xã, cụm kho (1 `CENTRAL` + n `HAMLET` cùng `communeId`, §3.7) **dùng chung 1 DB** → AI query trực tiếp cả cụm, không phải "kho lân cận". Chỉ khi vét hết cụm kho cùng xã vẫn thiếu, AI mới **gợi ý** liên hệ kho **xã khác** (đọc bảng `NeighborWarehouse` nhập tay) → con người tự gọi bộ đàm/điện thoại → bên cho mượn xuất đánh dấu `LOAN_OUT`, bên mượn nhập `LOAN_IN`. Xóa bỏ bài toán đồng bộ đa kho liên xã, đúng thực tế liên xã.
+Hiện trạng: **Chưa đạt**. Engine có; Next control thiếu; WebSocket chưa auth; production data chưa được cách ly.
 
-### 5.3. Phân vai AI vs nghiệp vụ
-| Bên | Trách nhiệm |
+### 7.4. Workflow online/offline pilot
+
+```text
+Domain hoạt động
+  -> mất Internet
+  -> user chuyển sang hostname/IP LAN
+  -> API, DB, Redis, Ollama vẫn chạy
+  -> tile offline hiển thị
+  -> Internet phục hồi, domain hoạt động lại
+```
+
+Hiện trạng: **Chưa nghiệm thu**.
+
+## 8. Checklist triển khai cuối
+
+### P0 - Chặn corruption, privilege bypass và double-write
+
+- [ ] Tách simulator demo/prod; production disable mutation mặc định.
+- [ ] Thêm permission simulator riêng, scope kho và system actor riêng.
+- [ ] Centralize organization/commune/warehouse scope cho REST, AI snapshot và WebSocket.
+- [ ] Sửa transfer partial bằng tách batch transactionally; authorize source/destination.
+- [ ] Xác thực Socket.IO handshake; server tự join role/warehouse room.
+- [ ] Tách `incident:view`, `incident:ack`, `incident:assign`, `incident:resolve`.
+- [ ] Sửa loan return contract; borrow/return atomic; giữ condition hỏng; partial loan đúng.
+- [ ] Mission fulfillment atomic, idempotent, scoped theo allocation/kho.
+- [ ] Report approval atomic, idempotent, multi-batch đúng.
+- [ ] Giới hạn upload, nâng dependency có CVE high trên path public.
+
+Điều kiện thoát P0:
+
+- Không còn Critical/High data-integrity hoặc authorization đã biết.
+- Có integration/concurrency test tái hiện và khóa từng lỗi.
+- Retry request không làm xuất hoặc duyệt hai lần.
+
+### P1 - Khép workflow lõi trên web
+
+- [ ] Backend mission list/inbox filter theo role, trạng thái và warehouse assignment.
+- [ ] Mission route/deep-link ổn định; refresh trình duyệt không mất mission.
+- [ ] Notification click mở đúng mission/incident.
+- [ ] UI inventory import/export/bulk/transfer/adjust/reconcile.
+- [ ] UI borrow + return từng phần, validate tổng và hiển thị lỗi mutation.
+- [ ] Role-aware navigation và route guard.
+- [ ] Không biến API error/unknown thành empty/healthy state.
+- [ ] Simulator controls đầy đủ trong Next.js.
+- [ ] Readiness và incident realtime theo kho.
+- [ ] Incident detail/evidence/action UI hoàn chỉnh.
+
+Điều kiện thoát P1:
+
+- Ba tài khoản ADMIN/RESCUE/WAREHOUSE chạy trọn workflow cứu hộ ở ba browser context.
+- Workflow kho thường ngày dùng được từ UI, không cần script/API thủ công.
+- Demo simulator không chạm dữ liệu production.
+
+### P2 - Hoàn thiện contract sản phẩm và test
+
+- [ ] Hoàn thiện blocker Readiness theo vật tư bắt buộc/tình huống.
+- [ ] Recalc coverage cho mọi mutation ảnh hưởng readiness.
+- [ ] Dữ liệu stale/unknown có UI và rule rõ.
+- [ ] Seed/toạ độ/provenance đủ chứng minh phân bổ gần nhất và liên xã.
+- [ ] Hoàn thiện AI explain-incident, redaction và automated tests.
+- [ ] Cấu hình ESLint hiện hành; lint pass.
+- [ ] Controller/API integration tests cho auth, scope, DTO và transition.
+- [ ] Concurrency tests cho stock, loan, mission và report.
+- [ ] Browser E2E cho login, inventory, mission, simulator và report.
+- [ ] CI chạy lint, typecheck, test, build và Prisma validate.
+- [ ] Tạo Prisma migration baseline và quy trình migrate/rollback.
+
+Điều kiện thoát P2:
+
+- Quality gate chạy tự động trên clean checkout.
+- Không còn contract frontend/backend lệch ở workflow chính.
+- Coverage tập trung vào boundary rủi ro, không chỉ tăng số phần trăm.
+
+### P3 - Hardening và nghiệm thu pilot
+
+- [ ] CORS allowlist theo domain/LAN; Helmet/security headers; request size limits.
+- [ ] Login rate limit; refresh rotation/revocation; logout thu hồi session phù hợp.
+- [ ] Docker bind nội bộ; firewall chặn PostgreSQL, Redis, AI Service và Ollama.
+- [ ] Secret production ngoài Git; bỏ credential demo/hard-code.
+- [ ] Backup retry/checksum/retention; restore drill ghi nhận RPO/RTO.
+- [ ] Reboot test toàn bộ Windows services, Docker, AI và Ollama.
+- [ ] Online/LAN/offline/recovery acceptance test.
+- [ ] Offline tiles/package không phụ thuộc CDN.
+- [ ] Scan cổng public và dependency audit không còn high exploitable trong scope.
+- [ ] Logging/monitoring đủ truy login, mutation, queue, backup và lỗi AI.
+
+Điều kiện thoát P3:
+
+- Có biên bản nghiệm thu pilot và restore drill.
+- Chỉ web/API cần thiết lộ ra Internet.
+- Demo offline chạy từ fresh boot không cần Internet/CDN.
+
+### P4 - Mobile và deliverable dự thi
+
+- [ ] Chốt Mobile là bắt buộc trong MVP hay hậu MVP.
+- [ ] Nếu bắt buộc: làm F0-F4, build APK và test thiết bị thật.
+- [ ] Voice input `vi-VN` có fallback gõ tay.
+- [ ] PDF/báo cáo/phiếu giấy dự phòng theo nhu cầu trình diễn.
+- [ ] Chốt seed một cụm xã hay hai xã và sửa toàn bộ claim cho thống nhất.
+- [ ] Chốt demo chính 5-7 phút; không dùng bước chưa tồn tại.
+- [ ] Quay video, slide, poster, báo cáo kỹ thuật và tài liệu kiến trúc.
+- [ ] Đồng bộ README và mọi claim public theo checklist master này.
+
+Điều kiện thoát P4:
+
+- Tất cả deliverable bắt buộc tồn tại, mở được và được test.
+- Demo chạy lặp lại trên máy thi với dữ liệu reset được.
+- Không còn claim “hoàn thành” trái với source hoặc acceptance test.
+
+## 9. Thứ tự thực hiện đề xuất
+
+Không làm song song quá nhiều module trước khi P0 đóng. Thứ tự:
+
+1. **Sprint nền an toàn:** simulator isolation, scope, transfer, WebSocket, loan, mission/report transaction.
+2. **Sprint workflow:** mission inbox/deep-link, inventory/loan UI, error states, simulator controls.
+3. **Sprint proof:** integration, concurrency, browser E2E, lint, CI, migrations.
+4. **Sprint pilot:** network hardening, backup/restore, reboot, online/offline acceptance.
+5. **Sprint deliverable:** Mobile nếu bắt buộc, voice/PDF/polish, demo/video/slide.
+
+Ước lượng lịch chỉ được lập sau khi chốt Mobile và phạm vi demo. Không dùng phần trăm endpoint để ước lượng hoàn thành.
+
+## 10. Definition of Done cho MVP
+
+Chỉ gọi MVP hoàn thành khi tất cả điều kiện sau được tick:
+
+### Chức năng
+
+- [ ] Inventory nhập/xuất/chuyển/adjust/reconcile dùng được từ UI.
+- [ ] Loan borrow/return đúng contract và concurrency-safe.
+- [ ] Readiness nêu đúng blocker, lý do, hành động và unknown state.
+- [ ] Mission ba role chạy qua phiên độc lập, không mất state khi refresh.
+- [ ] Fulfillment không double-export và đúng warehouse scope.
+- [ ] Simulator demo realtime, reproducible và không sửa production stock.
+- [ ] Nếu Mobile còn trong PRD: APK chạy trên thiết bị thật.
+
+### Bảo mật và dữ liệu
+
+- [ ] Không còn Critical/High integrity/authorization finding.
+- [ ] REST/WebSocket/AI snapshot áp scope nhất quán.
+- [ ] DB/Redis/AI/Ollama không public.
+- [ ] Secrets production không nằm trong Git/tài liệu/client.
+- [ ] Backup restore thành công.
+
+### Chất lượng
+
+- [ ] Lint, typecheck, test và build pass trên clean checkout.
+- [ ] Integration test khóa DTO, permission, scope và transition.
+- [ ] Concurrency test khóa stock/loan/mission/report.
+- [ ] Browser E2E khóa các workflow chính.
+- [ ] CI chạy tự động.
+- [ ] Prisma migrations có lịch sử và thử migrate fresh DB.
+
+### Vận hành và demo
+
+- [ ] Online qua domain và offline LAN đều chạy.
+- [ ] Reboot máy chủ tự khởi động đầy đủ.
+- [ ] Demo 5-7 phút chạy lặp lại, không cần CDN.
+- [ ] Dataset, slide, video và claim khớp source thật.
+
+## 11. Monorepo: ownership và roadmap đã hợp nhất
+
+### 11.1. Ownership
+
+| Module | Trách nhiệm | Lệnh chính | Nguồn trạng thái |
+|---|---|---|---|
+| `apps/backend` | API, auth/scope, inventory, readiness, mission, simulator, incident, geo, report, backup | `pnpm be:dev`, `pnpm --filter @safestock/backend test`, `pnpm --filter @safestock/backend build` | Checklist P0-P3 trong tài liệu này |
+| `apps/frontend` | Web role-facing và dashboard | `pnpm fe:dev`, `pnpm --filter @safestock/frontend build` | Checklist P1-P2 |
+| `apps/ai-service` | Parse/narrative bằng Gemini/Ollama | `pnpm ai:dev` | Mục 5.7 và P2 |
+| `apps/mobile` | App Android hiện trường | `pnpm mobile:dev` sau khi scaffold | Mục 5.8 và P4 |
+| `packages/shared-types` | Enum/type/permission contract dùng chung | build theo workspace | Phải đổi cùng public contract |
+| `packages/scenario-definitions` | Scenario deterministic | build theo workspace | Mục 5.6 |
+| `infrastructure` | Docker, tunnel, Windows services, backup/offline | `pnpm infra:up` | P3 |
+
+### 11.2. Nội dung roadmap backend đã hấp thụ
+
+Đã có và được giữ: nền monorepo, auth cơ bản, inventory read/write nền, simulator engine, readiness formulas, FEFO mission, Action Plan, Geo fallback, incident rules, insights, assistant, backup mechanism và server-side env validation.
+
+Các dấu `✅` cũ không còn được hiểu là hoàn thành end-to-end. Backlog thật đã chuyển vào P0-P3, gồm scope, transfer, loan, mission fulfillment, WebSocket, report, integration/concurrency test và production hardening.
+
+Hạng mục backend riêng còn mở nhưng không phải blocker mặc định:
+
+- RFID handler chưa làm; chỉ đưa vào MVP nếu câu chuyện phần cứng yêu cầu.
+- Claude provider không phải backend contract và không cần cho MVP local-first.
+- Double-confirm không thay thế atomicity/audit; hậu kiểm vẫn là mô hình chính.
+
+### 11.3. Nội dung roadmap frontend đã hấp thụ
+
+Đã có: login/layout, Readiness overview, warehouse map, Mission/Action Plan view, map pin, notification UI, insights, report/admin views và assistant.
+
+Còn phải làm hoặc chứng minh:
+
+- Inventory CRUD/write workflow, adjust/reconcile và mutation error handling.
+- Mission inbox, stable route, deep-link và ba phiên role độc lập.
+- Simulator controls + realtime Readiness/incident.
+- Permission-aware navigation.
+- Readiness theo zone/shelf nếu cần cho quyết định vận hành.
+- Voice input, readiness trước/sau, PDF và presentation health view là P4/polish; không chặn P0.
+- ESLint, frontend automated test và browser E2E.
+
+Roadmap cũ ghi Insights chưa làm và frontend placeholder là thông tin đã lỗi thời; source hiện có các view này.
+
+### 11.4. Nội dung roadmap AI đã hấp thụ
+
+- Gemini và Ollama là provider đang hỗ trợ; Ollama là lựa chọn local/offline.
+- Claude branch chưa triển khai và được **defer khỏi MVP** trừ khi có quyết định mới.
+- `/explain-incident`, redaction, output-safety tests và automated tests nằm ở P2.
+- AI không được thực thi SQL/shell/xóa dữ liệu/gửi mail hoặc tự mutation nghiệp vụ.
+
+### 11.5. Nội dung roadmap Mobile đã hấp thụ
+
+Toàn bộ F0-F4 vẫn chưa làm: toolchain, Expo scaffold, auth, home/kho, QR, offline-read, mission, alert, bàn giao và APK. Chi tiết đã nằm ở mục 5.8/P4; không duy trì checklist riêng ngoài tài liệu master.
+
+### 11.6. README policy
+
+- Root `README.md` chỉ là cổng vào, quick start và cảnh báo trạng thái.
+- README theo app chỉ mô tả ownership, cách chạy và giới hạn hiện tại.
+- README không chứa roadmap/checklist tiến độ riêng.
+- Không tạo lại `apps/*/ROADMAP.md`; mọi backlog cập nhật tại đây.
+
+## 12. Tài liệu còn hiệu lực
+
+| Tài liệu | Vai trò |
 |---|---|
-| **LLM** (Gemini/Ollama/Claude) | Parse mô tả → JSON; giải thích kết quả; tóm tắt sự cố. KHÔNG tự tính tồn kho/kết luận số liệu |
-| **Backend** | Kiểm tra số lượng/quyền/hạn; giao dịch atomic; nhật ký; xác nhận dữ liệu |
-| **Rule Engine** | Điều kiện chặn + trạng thái Readiness + điểm xu hướng; hợp nhất bằng chứng; phân loại nghiêm trọng; sinh nhu cầu, phát hiện bất thường thống kê + dự đoán xu hướng cảm biến |
-| **Greedy + FEFO** | Phân bổ vật tư; ưu tiên gần hết hạn; ưu tiên kho gần |
+| `docs/PRD.md` | Nguồn sự thật duy nhất: PRD + trạng thái + checklist + plan |
+| `docs/plan-tang-ham-luong-ai-di-thi.md` | Plan tăng chiều sâu AI dự thi (RAG trích dẫn, forecast thống kê, chống gãy demo); trạng thái vẫn tick tại PRD |
+| `docs/plan-app-desktop-gia-lap-cam-bien.md` | Plan app desktop giả lập cảm biến + cắm cảnh báo sự cố vào luồng emit (app phản ứng realtime); trạng thái vẫn tick tại PRD |
+| `docs/HUONG-DAN-CAI-DAT-VA-CHAY.md` | Hướng dẫn cài đặt/chạy |
+| `docs/HUONG-DAN-TEST.md` | Hướng dẫn test thủ công |
+| `docs/SEED-DATASET.md` | Contract dataset/seed |
+| `docs/CONTRIBUTING.md` | Quy trình cộng tác |
+| `docs/BAN-MO-TA-Y-TUONG.md` | Nội dung hồ sơ/ý tưởng dự thi |
+| `docs/qa/` | Bằng chứng Q&A/QA theo lát cắt; không phải trạng thái tổng |
+| `docs/archive/` | Lịch sử plan/audit/work-log đã bị thay thế |
+| `README.md` | Cổng vào và quick start monorepo |
+| `apps/*/README.md` | Hướng dẫn module ngắn, không phải roadmap |
+| `skills/README.md` | Hướng dẫn coding standards và skill cho dev |
 
-### 5.4. AI provider pluggable
-Đổi bằng env `AI_PROVIDER`. **Production = Ollama local** (0đ, offline, dữ liệu không rời cơ quan; cấu hình hiện tại dùng Qwen 3.5 4B trên máy 16GB RAM). Gemini chỉ là provider cloud tùy chọn. Cùng interface + schema JSON.
+Các roadmap cũ của app đã chuyển vào archive. Nếu tài liệu lịch sử xung đột, tài liệu này và bằng chứng source/test mới nhất được ưu tiên.
 
-### 5.5. Nền tảng
-- **DB:** PostgreSQL (dev Docker local; production Supabase)
-- **Backup:** cron 17:00 hằng ngày → Supabase, giữ 3 bản, skip nếu mất net
-- **Thời gian:** server là nguồn timestamp duy nhất (giờ VN +07:00), client không gửi timestamp
-- **Storage:** Cloudflare R2 (ảnh báo hỏng)
-- **Deploy:** web Vercel · backend Railway/Render · mobile Expo EAS
+## 13. Câu hỏi chưa giải quyết
 
----
-
-## 6. Công nghệ
-
-| Thành phần | Công nghệ |
-|---|---|
-| Monorepo | pnpm workspace |
-| Mobile | React Native + Expo + TypeScript (Expo Router, TanStack Query, Zustand, expo-camera, Socket.IO client) |
-| Backend | NestJS + Prisma + PostgreSQL + Redis + BullMQ + Socket.IO + JWT |
-| AI Service | Python + FastAPI + Pydantic + LLM provider pluggable |
-| Web Admin | Next.js + Tailwind + shadcn/ui + Recharts + SVG (sơ đồ kho) |
-| Shared | `@safestock/shared-types` (enum + type dùng chung) |
-| Hạ tầng | Docker Compose · GitHub · GitHub Actions · Supabase · Cloudflare R2 |
-
----
-
-## 7. Mô hình dữ liệu (nhóm chính)
-
-**Tổ chức & phân quyền:** organizations, users, roles (WAREHOUSE/RESCUE/ADMIN), permissions (hằng số code), user_warehouses (scope), warehouses (+distanceKm, **+kind CENTRAL/HAMLET, +communeId, +lat/lng**, §3.7), warehouse_zones, shelves (+isLocked)
-
-**Vật tư:** item_categories, items (+consumable), item_batches (+condition, +circulation, expiryDate), inventory_transactions (+source), inventory_counts, loan_records, neighbor_warehouses
-
-**Readiness:** readiness_scores (điểm tham khảo), readiness_components, readiness_rules (blocker + trạng thái + trọng số cấu hình), readiness_recommendations
-
-**Cảm biến & sự cố:** virtual_devices (+currentValue, +updatedAt), sensor_events, simulation_scenarios, simulation_runs, incidents, incident_evidence
-
-**Nhiệm vụ:** missions (+actionPlan Json, +incidentLat/lng, +status mở rộng §3.9), mission_requirements, mission_allocations
-
-**Hệ thống:** audit_logs (5W), attachments, refresh_tokens, **notifications** (recipientRole/userId, kind, read, §3.9), **api_usage** (đếm quota GeoService/tháng, §3.7)
-
----
-
-## 8. API chính
-
-**Auth/RBAC:** POST /auth/{login,refresh} · GET /auth/me · GET /audit
-**Inventory:** POST /inventory/{export,import,transfer,bulk-export,adjust,reconcile,scan} · GET /inventory/discrepancies
-**Loan:** POST /loans · POST /loans/:id/return
-**Readiness:** GET /warehouses/:id/readiness (operationalStatus, blockers, dimensions, referenceScore) · GET /zones/:id/readiness · POST /readiness/recalculate · GET /readiness/recommendations
-**Mission:** POST /missions/{parse,generate-plan} · GET /missions/:id · POST /missions/:id/{action-plan,explain,approve,dispatch,confirm,prepare}
-**Simulator:** GET /simulator/scenarios · POST /simulator/{events,runs,runs/:id/play,runs/:id/pause,runs/:id/reset} · GET /simulator/warehouses/:id/{devices,timeline}
-**Incident:** GET /incidents · GET /incidents/:id/timeline · POST /incidents/:id/{acknowledge,assign,resolve}
-**Notification:** GET /notifications · POST /notifications/:id/read · POST /notifications/read-all
-
----
-
-## 9. Kịch bản demo (5–7 phút) — "lõi diễn" vs "đạn Q&A"
-
-**DIỄN (6 bước):**
-1. Dashboard: **Sẵn sàng**, không có điều kiện chặn; điểm xu hướng 91/100 hiển thị phụ
-2. Nhập tình huống (giọng nói): "Ngập lụt 120 người cô lập 48h, 20 trẻ em, 10 người già"
-3. AI lập phương án: phân tích → bộ vật tư → đối chiếu tồn → báo thiếu → gợi ý mượn kho lân cận
-4. Kéo slider độ ẩm kho y tế (Simulator) → trạng thái chuyển **Cần xử lý** trong thời gian thực, nêu rõ “độ ẩm vượt ngưỡng” và bắn cảnh báo mobile
-5. Nhân viên xuất kho theo phương án (mobile, quét QR / xuất lô)
-6. Kết: "Ứng phó nhanh cho biết kho đáp ứng tình huống nào, chuẩn bị bao lâu, điểm nghẽn ở đâu"
-
-**KHÔNG diễn — chỉ trả lời khi hỏi (slide phụ lục):** RBAC/hậu kiểm, mượn-trả, offline 3 lớp, phiếu giấy, backup, đa xã, loadcell 4 tầng, kiểm kê. Chiều sâu để chứng minh nghĩ kỹ.
-
----
-
-## 10. Ưu tiên phạm vi
-
-**Phải làm thật tốt (3 trụ diễn):** trạng thái Readiness có lý do · Mission-to-Kit · Sensor Simulator.
-
-**Nên có:** Incident · mobile khép vòng đời · admin nâng cao (voice, so sánh trạng thái và khả năng đáp ứng trước/sau).
-
-**Polish (dư mới làm):** loadcell/RFID tự động · backup · offline push · chatbot hỏi-đáp kho · import Excel.
-
-**Đã cắt:** Diễn tập AI (Drill) · OR-Tools · duyệt 2 bước · bản đồ thiên tai tĩnh.
-
----
-
-## 11. Rủi ro & giả định
-
-| Rủi ro | Giảm thiểu |
-|---|---|
-| LLM parse sai schema | Validation Pydantic + retry (mọi provider) |
-| Demo mất mạng | Bản chạy 100% localhost + cache mọi call AI |
-| Rate-limit Gemini khi demo | Cache kết quả parse câu demo |
-| Scenario không reproducible | Seed cố định, timeline-scrubber deterministic |
-| Phạm vi phình to | Bám 3 trụ diễn, phần còn lại là đạn Q&A |
-| Thực thi 2 người/thời gian | Thứ tự: differentiator (Readiness) trước, nền bồi sau |
-
-**Giả định:** định mức là tham khảo nghiên cứu (có dẫn nguồn); không phần cứng thật trong MVP; máy chủ xã ≥16GB RAM chạy Ollama; đội quen hệ TypeScript.
-
----
-
-## 12. Deliverables dự thi
-
-Ứng dụng mobile Android (APK) · Web quản trị + Simulator · Backend API · AI service · Bộ dữ liệu mẫu (2 xã) · ≥5 scenario · Video demo 5–7ph · Tài liệu kiến trúc · Báo cáo kỹ thuật · Slide · Poster · Thư quan tâm CTĐ Đồng Xuân (ký + mộc) · Mã nguồn GitHub.
-
----
-
-## 13. Trạng thái hiện tại (2026-07-21)
-
-**Backend (mạnh nhất, vượt phạm vi PRD gốc):** đã có nền/auth/RBAC/inventory, sensor simulator, Readiness v2.2, Mission-to-Kit, Incident Intelligence + E2 anomaly/predictive warning, GeoService, cụm kho xã + AI Action Plan 8 mục, workflow liên vai trò + Notification, Normal Mode/Insights, chatbot hỏi-đáp kho, backup Supabase, admin/report. Readiness v2.2 đã dùng blocker có bằng chứng và ba trạng thái; Mission loại lô hỏng/cần kiểm tra/hết hạn/kệ khóa/không còn khả dụng, lưu đánh giá từng SKU và chặn gửi khi thiếu hoàn toàn vật tư thiết yếu. Ngày 2026-07-21: backend pass 25 suite / 168 test và build sạch.
-
-**AI service:** đã có FastAPI + provider Gemini/Ollama, parse tình huống, explain phương án, Action Plan, assistant. Claude provider và endpoint explain-incident riêng chưa hoàn chỉnh theo roadmap.
-
-**Frontend web:** dashboard Next.js đã có nhiều view. Tổng quan Readiness ưu tiên trạng thái, blocker, lý do, hành động; điểm chỉ hiển thị phụ. Mission hiển thị mức đáp ứng và trạng thái từng vật tư. `tsc --noEmit` và `next build` pass ngày 2026-07-21.
-
-**Còn thiếu/dở:** mobile Expo chưa có source app thực tế; RFID handler chưa xong (loadcell đã có); `explain-incident` riêng phía AI service chưa tick; blocker theo cấu hình nghiệp vụ từng địa phương và kiểm thử E2E trình duyệt đầy đủ vẫn là lát tiếp theo.
-
-Chi tiết tiến độ + verify từng lát: [BUILD-PLAN.md](BUILD-PLAN.md) · [codebase-summary.md](codebase-summary.md) · checklist đầy đủ: `apps/backend/ROADMAP.md`, `apps/frontend/ROADMAP.md`, `apps/mobile/ROADMAP.md`, `apps/ai-service/ROADMAP.md`.
+1. Mobile APK còn là deliverable bắt buộc hay chuyển sang hậu MVP?
+2. Simulator chỉ là công cụ demo/test hay sẽ được bật trong production?
+3. Một WAREHOUSE chỉ fulfill allocation của kho mình hay được vận hành cả cụm xã?
+4. Demo thi được phép dùng `sim.html`/API script hay bắt buộc toàn bộ qua UI role-facing?
+5. Deliverable seed là một cụm xã Đồng Xuân hay hai xã như PRD cũ từng ghi?
+6. Offline GIS tiles sẽ được đóng gói và cập nhật bằng cơ chế nào trên máy pilot?

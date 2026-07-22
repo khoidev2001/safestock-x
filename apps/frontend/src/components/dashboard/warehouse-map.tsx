@@ -1,6 +1,6 @@
 "use client";
 
-import { Lock, MapPinned } from "lucide-react";
+import { ColorIcon } from "@/components/shared/color-icon";
 import type { WarehouseTree } from "@/lib/dashboard-api";
 
 interface WarehouseMapProps {
@@ -45,38 +45,22 @@ export function WarehouseMap({ tree, isLoading }: WarehouseMapProps) {
             </div>
 
             <div className="mt-3 grid grid-cols-2 gap-2">
-              {zone.shelves.map((shelf) => {
-                const isRestricted = shelf.isLocked;
-                return (
-                  <div
-                    key={shelf.id}
-                    className="min-h-20 rounded-md border p-2"
-                    style={{
-                      background: isRestricted
-                        ? "color-mix(in oklch, var(--color-critical) 9%, var(--surface))"
-                        : "var(--surface)",
-                    }}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold">{shelf.code}</span>
-                      {isRestricted ? (
-                        <Lock
-                          aria-label="Kệ bị khóa"
-                          size={14}
-                          strokeWidth={1.8}
-                          style={{ color: "var(--color-critical)" }}
-                        />
-                      ) : null}
-                    </div>
-                    <p className="mt-2 line-clamp-2 text-xs text-[var(--text-muted)]">
-                      {shelf.name}
-                    </p>
-                    <p className="tabular mt-2 text-xs font-medium">
-                      {shelf._count?.batches ?? 0} lô
-                    </p>
+              {zone.shelves.map((shelf) => (
+                <div
+                  key={shelf.id}
+                  className="min-h-20 rounded-md border bg-[var(--surface)] p-2"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold">{shelf.code}</span>
                   </div>
-                );
-              })}
+                  <p className="mt-2 line-clamp-2 text-xs text-[var(--text-muted)]">
+                    {shelf.name}
+                  </p>
+                  <p className="tabular mt-2 text-xs font-medium">
+                    {shelf._count?.batches ?? 0} lô
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
         ))}
@@ -88,10 +72,10 @@ export function WarehouseMap({ tree, isLoading }: WarehouseMapProps) {
 function PanelTitle() {
   return (
     <div className="flex items-center gap-2">
-      <MapPinned aria-hidden="true" size={18} strokeWidth={1.8} />
+      <ColorIcon name="map" size={20} tone="blue" />
       <div>
         <h2 className="text-sm font-semibold">Sơ đồ kho</h2>
-        <p className="text-xs text-[var(--text-muted)]">Grid theo khu và kệ, ưu tiên quét nhanh</p>
+        <p className="text-xs text-[var(--text-muted)]">Vị trí các kệ được sắp theo từng khu</p>
       </div>
     </div>
   );

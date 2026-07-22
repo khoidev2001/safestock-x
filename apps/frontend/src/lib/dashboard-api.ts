@@ -128,6 +128,8 @@ export interface IncidentSummary {
   state: string;
   confidence: number;
   detectedAt: string;
+  // LLM diễn giải (tiếng Việt) — backend tự sinh khi sự cố mới bật; list() trả sẵn nếu có.
+  explanation?: string | null;
 }
 
 export async function getFirstWarehouse(): Promise<WarehouseSummary> {

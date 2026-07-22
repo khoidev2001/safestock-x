@@ -29,3 +29,10 @@ export function createUser(input: CreateUserInput): Promise<AdminUser> {
 export function deleteUser(id: string): Promise<unknown> {
   return apiFetch(`/api/admin/users/${id}`, { method: "DELETE" });
 }
+
+export function updateUserPassword(id: string, password: string): Promise<AdminUser> {
+  return apiFetch<AdminUser>(`/api/admin/users/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ password }),
+  });
+}

@@ -1,6 +1,6 @@
 # Q&A phòng thủ — câu hỏi xoáy giám khảo có thể hỏi
 
-> Mỗi phase code xong → sinh câu hỏi khó giám khảo có thể hỏi + câu trả lời chuẩn. Đây là **"đạn Q&A"** (BUILD-PLAN #32): không diễn trong 6 bước demo, chỉ dùng khi bị hỏi.
+> Mỗi lát chức năng được nghiệm thu có thể bổ sung câu hỏi khó giám khảo và câu trả lời chuẩn. Đây là **"đạn Q&A"**: không thay thế checklist hoặc trạng thái trong `docs/PRD.md`.
 >
 > Quy tắc: câu trả lời phải **thành thật** (thừa nhận giới hạn), **có căn cứ** (dẫn thiết kế/số liệu), **ngắn gọn** (giám khảo không nghe giảng bài).
 

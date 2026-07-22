@@ -1,26 +1,14 @@
 # @safestock/ai-service
 
-AI service — parse tình huống + giải thích phương án. Provider pluggable.
+FastAPI service dùng LLM để parse tình huống, viết diễn giải và hỗ trợ trợ lý ứng phó trực tiếp trong khung chat.
 
-**Stack (dựng ở Phase D):** Python + FastAPI + Pydantic.
+Đã có: Gemini/Ollama provider, `/parse`, `/explain`, `/action-plan`, `/assistant`, Pydantic validation và fallback ở các luồng chính. `/assistant` trả lời cả câu hỏi kho lẫn mô tả tình huống khẩn cấp, không yêu cầu chuyển màn hình. Claude provider và `/explain-incident` chưa hoàn chỉnh; automated test/hardening còn thiếu.
 
-**Không phải Node** → không nằm trong pnpm workspace (chạy venv riêng). Đặt trong `apps/` cho gọn monorepo.
+AI service không thuộc pnpm workspace và dùng virtual environment riêng.
 
-**LLM provider pluggable** (env `AI_PROVIDER`):
-- `ollama` (mặc định, local, 0đ, offline)
-- `gemini` (tùy chọn cloud, free tier)
-- `claude` (cao cấp, trả phí)
-
-**Chức năng:**
-- POST /parse — mô tả tình huống (text) → JSON có cấu trúc (validation Pydantic + retry)
-- POST /explain — giải thích phương án (tiếng Việt)
-
-Hiện tại: **placeholder**. Xem [BUILD-PLAN.md](../../docs/BUILD-PLAN.md) Phase D0.
-
-## Chạy (khi đã scaffold)
-```bash
+```powershell
 cd apps/ai-service
-python -m venv .venv && source .venv/Scripts/activate  # Windows Git Bash
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+.\.venv\Scripts\python.exe -m uvicorn main:app --port 8000
 ```
+
+Health: `http://localhost:8000/health`. Contract và backlog chính thức nằm tại [docs/PRD.md](../../docs/PRD.md).

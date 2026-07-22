@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Send, Sparkles } from "lucide-react";
+import { ColorIcon } from "@/components/shared/color-icon";
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-store";
@@ -61,7 +61,7 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
     queryKey: ["mission", missionId],
     queryFn: () => getMission(missionId as string),
     enabled: Boolean(missionId),
-    refetchInterval: 5000, // cập nhật trạng thái workflow từ role khác
+    refetchInterval: 5000, // Cập nhật trạng thái khi bộ phận khác hoàn tất phần việc.
   });
 
   const genPlan = useMutation({
@@ -76,7 +76,7 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
       setMissionId(m.id);
       setPlanError(null);
     },
-    onError: (err) => setPlanError(err instanceof ApiError ? err.message : "Lỗi lập phương án"),
+    onError: (err) => setPlanError(err instanceof ApiError ? err.message : "Chưa thể lập phương án. Vui lòng thử lại."),
   });
 
   const genActionPlan = useMutation({
@@ -90,7 +90,7 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
       setWorkflowError(null);
       return queryClient.invalidateQueries({ queryKey: ["mission", missionId] });
     },
-    onError: (err) => setWorkflowError(err instanceof ApiError ? err.message : "Không thể chuyển bước nhiệm vụ"),
+    onError: (err) => setWorkflowError(err instanceof ApiError ? err.message : "Chưa thể cập nhật nhiệm vụ. Vui lòng thử lại."),
   });
 
   const mission = missionQuery.data;
@@ -108,10 +108,10 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
       {/* Cột trái: nhập tình huống (chỉ ADMIN lập) */}
       <div className="space-y-4">
         {isAdmin && (
-          <section className="rounded-md border bg-[var(--surface)] p-5">
+          <section className="app-panel p-5">
             <h2 className="font-semibold">Tình huống khẩn cấp</h2>
             <p className="mt-1 text-sm text-[var(--text-muted)]">
-              Chọn tình huống mẫu hoặc nhập chi tiết, rồi sinh phương án cứu hộ.
+              Nhập quy mô ảnh hưởng để hệ thống tính nhu cầu vật tư ban đầu.
             </p>
 
             <div className="mt-4 flex flex-wrap gap-2">
@@ -154,11 +154,11 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
               disabled={genPlan.isPending || !incidentPoint}
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-md bg-[var(--color-accent)] px-4 py-2.5 font-semibold text-[var(--color-accent-fg)] transition hover:brightness-95 active:translate-y-px disabled:opacity-60"
             >
-              <Sparkles size={17} strokeWidth={2} />
-              {genPlan.isPending ? "Đang lập phương án…" : "Lập phương án phân bổ"}
+              <ColorIcon name="mission" size={19} tone="orange" />
+              {genPlan.isPending ? "Đang tính nhu cầu" : "Tính nhu cầu vật tư"}
             </button>
             {!incidentPoint && (
-              <p className="mt-2 text-xs text-[var(--text-muted)]">Ghim điểm nạn trên bản đồ trước khi lập phương án.</p>
+              <p className="mt-2 text-xs text-[var(--text-muted)]">Đánh dấu vị trí xảy ra sự cố trên bản đồ trước khi tiếp tục.</p>
             )}
             {planError && (
               <p className="mt-2 text-xs text-[var(--color-critical)]">{planError}</p>
@@ -167,10 +167,10 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
         )}
 
         {isAdmin && (
-          <section className="rounded-md border bg-[var(--surface)] p-5">
-            <h3 className="text-sm font-semibold">Điểm nạn & kho trong xã</h3>
+          <section className="app-panel p-5">
+            <h3 className="text-sm font-semibold">Vị trí sự cố và các kho</h3>
             <p className="mt-1 text-sm text-[var(--text-muted)]">
-              {mission ? "Vị trí đã ghim khi lập phương án." : "Click hoặc kéo ghim lên bản đồ để đặt điểm nạn."}
+              {mission ? "Vị trí đã được ghi nhận trong phương án." : "Bấm trên bản đồ hoặc kéo dấu ghim đến vị trí xảy ra sự cố."}
             </p>
             <div className="mt-3">
               <IncidentMap
@@ -185,10 +185,10 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
 
         {/* Bảng phân bổ nhanh khi đã có mission */}
         {mission && (
-          <section className="rounded-md border bg-[var(--surface)] p-5">
+          <section className="app-panel p-5">
             <h3 className="text-sm font-semibold">Tóm tắt nhu cầu</h3>
             <p className="mt-1 text-sm text-[var(--text-muted)]">
-              {mission.incidentType} · {mission.affectedPeople} người · đáp ứng{" "}
+              {INCIDENT_TYPES.find((item) => item.value === mission.incidentType)?.label ?? mission.incidentType} · {mission.affectedPeople} người · có thể đáp ứng{" "}
               <b style={{ color: mission.fulfillment >= 70 ? "var(--color-ready)" : "var(--color-critical)" }}>
                 {mission.fulfillment}%
               </b>
@@ -206,7 +206,7 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
             {mission.readinessAssessment && (
               <MissionReadinessPanel assessment={mission.readinessAssessment} />
             )}
-            <section className="rounded-md border bg-[var(--surface)] p-5">
+            <section className="app-panel p-5">
               <WorkflowStepper status={mission.status} />
               <div className="mt-5 flex flex-wrap gap-2 border-t pt-4">
                 <RoleActions
@@ -226,7 +226,7 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
               <ActionPlanView plan={mission.actionPlan} incidentPoint={effectiveIncidentPoint} />
             ) : (
               <div className="rounded-md border border-dashed bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-muted)]">
-                Bấm <b>Sinh phương án cứu hộ</b> để AI lập kế hoạch hành động chi tiết.
+                Chọn <b>Lập kế hoạch cứu hộ</b> để tạo các bước thực hiện chi tiết.
               </div>
             )}
           </>
@@ -263,7 +263,7 @@ function RoleActions({
       <>
         {!mission.actionPlan && (
           <button className={btn} style={primary} onClick={onGenerateActionPlan} disabled={busy}>
-            <Sparkles size={16} /> Sinh phương án cứu hộ
+            <ColorIcon name="mission" size={18} tone="orange" /> Lập kế hoạch cứu hộ
           </button>
         )}
         {mission.actionPlan && (
@@ -272,9 +272,9 @@ function RoleActions({
             style={primary}
             onClick={onDispatch}
             disabled={busy || mission.readinessAssessment?.status === "NOT_DISPATCHABLE"}
-            title={mission.readinessAssessment?.status === "NOT_DISPATCHABLE" ? "Xử lý blocker vật tư trước khi gửi" : undefined}
+            title={mission.readinessAssessment?.status === "NOT_DISPATCHABLE" ? "Cần xử lý phần vật tư còn thiếu trước khi gửi" : undefined}
           >
-            <Send size={16} /> Gửi cho đội cứu hộ
+            <ColorIcon name="send" size={18} tone="blue" /> Gửi cho đội cứu hộ
           </button>
         )}
       </>
@@ -290,7 +290,7 @@ function RoleActions({
   if (role === "WAREHOUSE" && mission.status === "PENDING_WAREHOUSE") {
     return (
       <button className={btn} style={primary} onClick={onPrepare} disabled={busy}>
-        Chuẩn bị & xuất kho
+        Chuẩn bị và xuất kho
       </button>
     );
   }
@@ -302,17 +302,17 @@ function RoleActions({
 }
 
 function statusHint(status: string, role: string | undefined): string {
-  if (status === "READY") return "✓ Kho đã chuẩn bị xong, sẵn sàng giao cho đội cứu hộ.";
+  if (status === "READY") return "Kho đã chuẩn bị xong và sẵn sàng giao vật tư cho đội cứu hộ.";
   if (status === "PENDING_RESCUE") return "Đang chờ đội cứu hộ xác nhận.";
   if (status === "PENDING_WAREHOUSE") return "Đang chờ kho chuẩn bị vật tư.";
-  if (status === "DRAFT" && role !== "ADMIN") return "Cơ quan đang lập kế hoạch.";
+  if (status === "DRAFT" && role !== "ADMIN") return "Bộ phận điều phối đang lập kế hoạch.";
   return "Không có hành động cho vai trò của bạn ở bước này.";
 }
 
 function EmptyState({ isAdmin }: { isAdmin: boolean }) {
   return (
     <div className="rounded-md border border-dashed bg-[var(--surface)] p-10 text-center">
-      <Sparkles className="mx-auto text-[var(--color-accent)]" size={28} />
+      <ColorIcon className="mx-auto" name="workflow" size={30} tone="blue" />
       <p className="mt-3 font-medium">Chưa có nhiệm vụ cứu hộ</p>
       <p className="mt-1 text-sm text-[var(--text-muted)]">
         {isAdmin

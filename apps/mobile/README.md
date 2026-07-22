@@ -1,18 +1,9 @@
 # @safestock/mobile
 
-App vận hành hiện trường cho nhân viên kho + đội cứu hộ.
+Ứng dụng hiện trường dự kiến dùng React Native + Expo cho WAREHOUSE và RESCUE.
 
-**Stack (dựng ở Phase F):** React Native + Expo + TypeScript + Expo Router + TanStack Query + Zustand + expo-camera + Socket.IO client.
+Trạng thái: chưa có source app thực tế; script `start` hiện chỉ báo placeholder. Mobile chưa được tính là hoàn thành dưới bất kỳ roadmap cũ nào.
 
-**Chức năng:**
-- Đăng nhập (JWT, SecureStore)
-- Trang chủ: Readiness, cảnh báo, nhiệm vụ
-- Quét QR → xuất/nhập/chuyển/kiểm tra/báo hỏng (+ nút nhập SKU tay dự phòng)
-- Nhiệm vụ: danh sách vật tư cần lấy theo phương án
-- Cảnh báo realtime (Socket.IO in-app)
-- Mượn–hoàn (RESCUE)
-- Offline-đọc (cache kho khi mất mạng)
+Phạm vi dự kiến: auth bằng SecureStore, readiness, mission/cảnh báo, QR nhập-xuất-chuyển, mượn-hoàn, kiểm kê nhanh và offline-read.
 
-Hiện tại: **placeholder**. Xem [BUILD-PLAN.md](../../docs/BUILD-PLAN.md) Phase F.
-
-**Lưu ý toolchain:** cần Android SDK/emulator hoặc điện thoại USB debug. Emulator gọi host qua `10.0.2.2:3100`, máy thật qua IP LAN.
+Quyết định Mobile có bắt buộc trong MVP hay không đang mở tại [docs/PRD.md](../../docs/PRD.md).

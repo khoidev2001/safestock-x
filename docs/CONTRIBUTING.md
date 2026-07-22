@@ -32,8 +32,8 @@ feat(readiness): tính điểm 6 thành phần 4 cấp + breakdown
 Commit nhỏ, độc lập, một mục tiêu. KHÔNG commit `update`/`fix`/`done`/`sua loi`/`final`.
 
 ## Chia việc theo checklist ngày
-- Checklist bám [BUILD-PLAN.md](BUILD-PLAN.md) — mỗi lát 1 branch/PR.
-- Ai nhận việc gì → ghi vào [WORK-LOG.md](WORK-LOG.md), tránh giẫm chân.
+- Checklist bám [PRD.md](PRD.md) — mỗi lát 1 branch/PR.
+- Ghi người phụ trách và phạm vi file trong issue/PR đang làm, tránh giẫm chân.
 - Việc backend (C Readiness, D Mission) và frontend (F mobile, G web) tách được → làm song song sau khi API xong.
 
 ## Chống conflict

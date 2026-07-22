@@ -1,16 +1,12 @@
 # @safestock/frontend
 
-Web quản trị + Digital Twin Simulator UI.
+Web Next.js cho dashboard Readiness, inventory, Mission/Action Plan, incident, map, report, assistant và quản trị.
 
-**Stack (dựng ở Phase G):** Next.js + Tailwind + shadcn/ui + TanStack Query + Recharts + Socket.IO client.
+Trạng thái: production build pass; chưa workflow-ready. Mission đa role thiếu inbox/deep-link, inventory write UI và simulator controls chưa đầy đủ, frontend lint/test/E2E chưa đạt.
 
-**Chức năng:**
-- Dashboard Readiness Score (điểm 4 cấp, breakdown, ngưỡng hành động)
-- Quản lý kho/vật tư/định mức + sửa tay + đối chiếu kiểm kê
-- Simulator UI (kéo slider cảm biến, chạy scenario, timeline realtime)
-- Mission: nhập tình huống (voice/text) → xem phương án → duyệt
-- Sơ đồ kho SVG tô màu theo readiness
+```powershell
+pnpm --filter @safestock/frontend dev
+pnpm --filter @safestock/frontend build
+```
 
-Hiện tại: **placeholder**. Bản simulator tối thiểu tạm ở `apps/backend/public/sim.html`.
-
-Xem [BUILD-PLAN.md](../../docs/BUILD-PLAN.md) Phase G.
+Frontend chạy tại `http://localhost:3200`. Contract sản phẩm, checklist còn thiếu và thứ tự làm nằm tại [docs/PRD.md](../../docs/PRD.md).

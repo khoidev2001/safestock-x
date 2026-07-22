@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { IncidentModule } from "../incident/incident.module";
 import { InventoryModule } from "../inventory/inventory.module";
 import { ReadinessModule } from "../readiness/readiness.module";
 import { SimulationController } from "./simulation.controller";
@@ -7,7 +8,7 @@ import { RunnerService } from "./runner.service";
 import { SimulationGateway } from "./simulation.gateway";
 
 @Module({
-  imports: [ReadinessModule, InventoryModule],
+  imports: [ReadinessModule, InventoryModule, IncidentModule],
   controllers: [SimulationController],
   providers: [SimulationService, RunnerService, SimulationGateway],
   exports: [SimulationService, RunnerService],

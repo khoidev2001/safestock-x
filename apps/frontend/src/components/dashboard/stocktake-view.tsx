@@ -1,9 +1,10 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ClipboardCheck } from "lucide-react";
+import { ColorIcon } from "@/components/shared/color-icon";
 import { useState } from "react";
 import { getInventoryBatches, reconcileBatch, type InventoryBatch } from "@/lib/dashboard-api";
+import { Pagination, usePagination } from "@/components/shared/pagination";
 
 export function StocktakeView({ warehouseId }: { warehouseId: string }) {
   const query = useQuery({
@@ -12,24 +13,33 @@ export function StocktakeView({ warehouseId }: { warehouseId: string }) {
     enabled: Boolean(warehouseId),
   });
 
-  if (query.isLoading) return <Skeleton />;
   const batches = query.data ?? [];
+  const pagination = usePagination(batches);
+
+  if (query.isLoading) return <Skeleton />;
 
   return (
     <section className="rounded-md border bg-[var(--surface)]">
       <div className="border-b px-5 py-4">
         <div className="flex items-center gap-2 font-semibold">
-          <ClipboardCheck size={18} /> Kiểm kê thực tế
+          <ColorIcon name="stocktake" size={20} tone="green" /> Kiểm kê thực tế
         </div>
         <p className="mt-1 text-sm text-[var(--text-muted)]">
-          Nhập số đếm thực tế từng lô. Lệch so hệ thống sẽ hiện để bạn xác nhận ghi đè (có ghi audit).
+          Nhập số đếm thực tế của từng lô. Mọi thay đổi số lượng đều được lưu trong nhật ký.
         </p>
       </div>
       <div className="divide-y">
-        {batches.map((b) => (
+        {pagination.pageItems.map((b) => (
           <StocktakeRow key={b.id} batch={b} warehouseId={warehouseId} />
         ))}
       </div>
+      <Pagination
+        onPageChange={pagination.setPage}
+        page={pagination.page}
+        pageSize={pagination.pageSize}
+        totalItems={batches.length}
+        totalPages={pagination.totalPages}
+      />
     </section>
   );
 }
@@ -69,7 +79,7 @@ function StocktakeRow({ batch, warehouseId }: { batch: InventoryBatch; warehouse
       <input
         type="number"
         min={0}
-        placeholder="Đếm thực"
+        placeholder="Thực tế"
         value={counted}
         onChange={(e) => setCounted(e.target.value)}
         className="tabular w-24 rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
@@ -91,7 +101,7 @@ function StocktakeRow({ batch, warehouseId }: { batch: InventoryBatch; warehouse
         className="rounded-md px-3 py-2 text-xs font-semibold text-[var(--color-accent-fg)] transition active:translate-y-px disabled:opacity-40"
         style={{ background: "var(--color-accent)" }}
       >
-        Ghi đè
+        Cập nhật
       </button>
     </div>
   );

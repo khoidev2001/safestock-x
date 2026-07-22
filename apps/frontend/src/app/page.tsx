@@ -1,11 +1,14 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle } from "lucide-react";
+import { ColorIcon } from "@/components/shared/color-icon";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { io, type Socket } from "socket.io-client";
+import { BASE } from "@/lib/api";
 import { DashboardShell, type DashboardView } from "@/components/dashboard/dashboard-shell";
 import { FloatingAssistant } from "@/components/assistant/floating-assistant";
+import { useIncidentAlertsBridge } from "@/components/assistant/use-incident-alerts";
 import { InventoryTable } from "@/components/dashboard/inventory-table";
 import { AuditView } from "@/components/dashboard/audit-view";
 import { IncidentView } from "@/components/dashboard/incident-view";
@@ -35,56 +38,56 @@ import {
 
 const viewCopy: Record<DashboardView, { title: string; subtitle: string }> = {
   readiness: {
-    title: "Readiness và vận hành kho",
-    subtitle: "Điểm sẵn sàng, điểm nghẽn và trạng thái tổng quan.",
+    title: "Tình trạng sẵn sàng",
+    subtitle: "Theo dõi khả năng vận hành, các vướng mắc và việc cần xử lý.",
   },
   insights: {
-    title: "AI quản trị kho ngày thường",
-    subtitle: "Dự báo cạn kho, cảnh báo hết hạn, điều chuyển cân bằng, thời tiết và báo cáo tháng.",
+    title: "Theo dõi và dự báo",
+    subtitle: "Nhận biết sớm nguy cơ thiếu hàng, hết hạn và nhu cầu điều chuyển giữa các kho.",
   },
   assistant: {
-    title: "Trợ lý hỏi-đáp kho",
-    subtitle: "Hỏi nhanh về tồn kho, hạn dùng, sự cố — AI trả lời từ dữ liệu kho hiện tại.",
+    title: "Tra cứu kho",
+    subtitle: "Hỏi nhanh về số lượng, hạn dùng, sự cố và khả năng đáp ứng hiện tại.",
   },
   map: {
     title: "Bản đồ kho trong xã",
-    subtitle: "Vị trí kho tổng + kho thôn trên nền bản đồ, ranh giới xã. Quản trị ghim toạ độ.",
+    subtitle: "Theo dõi vị trí kho xã, kho thôn và cập nhật tọa độ khi cần.",
   },
   report: {
     title: "Báo cáo kiểm kê tháng",
-    subtitle: "Trưởng thôn gửi báo cáo Excel cuối tháng; cơ quan xã duyệt để cập nhật tồn kho.",
+    subtitle: "Tiếp nhận báo cáo từ các thôn, kiểm tra và cập nhật số liệu tồn kho.",
   },
   users: {
-    title: "Quản lý người dùng",
-    subtitle: "Cấp tài khoản trưởng thôn (gán kho), đội cứu hộ, quản trị xã.",
+    title: "Quản lý tài khoản",
+    subtitle: "Cấp quyền sử dụng cho phụ trách kho, đội cứu hộ và quản trị xã.",
   },
   mission: {
     title: "Điều phối cứu hộ",
-    subtitle: "Lập phương án AI, điều phối kho gần nạn nhân và workflow liên vai trò.",
+    subtitle: "Ghi nhận tình huống, xác định nhu cầu và phối hợp cấp phát vật tư.",
   },
   inventory: {
     title: "Kho vật tư",
-    subtitle: "Danh sách lô, vị trí kệ và tình trạng vật tư hiện có.",
+    subtitle: "Tra cứu từng lô hàng, vị trí lưu trữ và số lượng hiện có.",
   },
   simulator: {
-    title: "Mô phỏng cảm biến",
-    subtitle: "Thiết bị ảo, timeline event và dữ liệu thay thế IoT.",
+    title: "Cảm biến thử nghiệm",
+    subtitle: "Theo dõi dữ liệu mô phỏng trước khi kết nối thiết bị thực tế.",
   },
   incident: {
     title: "Sự cố kho",
-    subtitle: "Phát hiện thất thoát, lỗi cảm biến, bảo quản kém và xử lý.",
+    subtitle: "Ghi nhận và xử lý các vấn đề ảnh hưởng đến vật tư hoặc hoạt động của kho.",
   },
   stocktake: {
     title: "Kiểm kê",
-    subtitle: "Đối chiếu số đếm thực tế với hệ thống, ghi đè có audit.",
+    subtitle: "Đối chiếu số đếm thực tế với số liệu đang được ghi nhận.",
   },
   loan: {
-    title: "Mượn - trả",
-    subtitle: "Phiếu mượn vật tư tái sử dụng đang mở và ghi nhận hoàn.",
+    title: "Mượn, trả vật tư",
+    subtitle: "Theo dõi vật tư đã cho mượn và ghi nhận số lượng được hoàn trả.",
   },
   audit: {
-    title: "Hậu kiểm",
-    subtitle: "Nhật ký thao tác quan trọng, tra soát theo đối tượng.",
+    title: "Nhật ký hoạt động",
+    subtitle: "Tra cứu những thay đổi quan trọng đã thực hiện trên hệ thống.",
   },
 };
 
@@ -92,6 +95,8 @@ export default function HomePage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const token = useAuth((state) => state.token);
+  const user = useAuth((state) => state.user);
+  const role = user?.role;
   const hasHydrated = useAuth((state) => state.hasHydrated);
   const [activeView, setActiveView] = useState<DashboardView>("readiness");
 
@@ -100,9 +105,9 @@ export default function HomePage() {
   }, [hasHydrated, token, router]);
 
   const warehouseQuery = useQuery({
-    queryKey: ["first-warehouse"],
+    queryKey: ["first-warehouse", user?.id],
     queryFn: getFirstWarehouse,
-    enabled: hasHydrated && Boolean(token),
+    enabled: hasHydrated && Boolean(token && user?.id),
   });
 
   const warehouseId = warehouseQuery.data?.id;
@@ -142,7 +147,24 @@ export default function HomePage() {
     queryKey: ["open-incidents", warehouseId],
     queryFn: () => getOpenIncidents(warehouseId ?? ""),
     enabled: Boolean(warehouseId),
+    refetchInterval: 12_000, // fallback nếu WebSocket rớt — bắt kịp AI enrich
   });
+
+  // Realtime: có "notification" (sự cố mới / AI enrich xong) → refetch sự cố để nạp explanation.
+  useEffect(() => {
+    if (!role) return;
+    const socket: Socket = io(BASE, { transports: ["websocket"] });
+    socket.on("connect", () => socket.emit("join-role", { role }));
+    socket.on("notification", () => {
+      queryClient.invalidateQueries({ queryKey: ["open-incidents", warehouseId] });
+    });
+    return () => {
+      socket.disconnect();
+    };
+  }, [role, warehouseId, queryClient]);
+
+  // Cầu nối: sự cố có explanation (AI) → bong bóng cảnh báo trong trợ lý + tự mở nếu nghiêm trọng.
+  useIncidentAlertsBridge(incidentsQuery.data);
 
   const recalculateMutation = useMutation({
     mutationFn: () =>
@@ -155,10 +177,13 @@ export default function HomePage() {
   if (!hasHydrated || !token) return null;
 
   return (
-    <DashboardShell activeView={activeView} onViewChange={setActiveView}>
-      <div className="space-y-4">
+    <DashboardShell
+      activeView={activeView}
+      onViewChange={setActiveView}
+      warehouseName={warehouseQuery.data?.name}
+    >
+      <div className="space-y-5">
         <PageHeading
-          apiUrl={process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3100"}
           subtitle={viewCopy[activeView].subtitle}
           title={viewCopy[activeView].title}
           warehouseName={warehouseQuery.data?.name ?? "Đang tải kho"}
@@ -246,25 +271,20 @@ export default function HomePage() {
 }
 
 function PageHeading({
-  apiUrl,
   subtitle,
   title,
   warehouseName,
 }: {
-  apiUrl: string;
   subtitle: string;
   title: string;
   warehouseName: string;
 }) {
   return (
-    <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+    <div className="border-b pb-5">
       <div>
-        <p className="text-sm font-medium text-[var(--text-muted)]">{warehouseName}</p>
-        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">{title}</h1>
-        <p className="mt-1 text-sm text-[var(--text-muted)]">{subtitle}</p>
-      </div>
-      <div className="rounded-md border bg-[var(--surface)] px-3 py-2 text-xs text-[var(--text-muted)]">
-        API: {apiUrl}
+        <p className="mb-1.5 text-sm font-semibold text-[var(--color-accent)]">{warehouseName}</p>
+        <h1 className="text-2xl font-semibold md:text-3xl">{title}</h1>
+        <p className="mt-2 max-w-3xl text-base text-[var(--text-muted)]">{subtitle}</p>
       </div>
     </div>
   );
@@ -274,11 +294,11 @@ function WarehouseError() {
   return (
     <section className="rounded-md border bg-[var(--surface)] p-5">
       <div className="flex items-center gap-2 text-sm font-semibold text-[var(--color-critical)]">
-        <AlertTriangle aria-hidden="true" size={18} strokeWidth={1.8} />
-        Không tải được kho đầu tiên
+        <ColorIcon name="warning" size={20} tone="red" />
+        Không tải được dữ liệu kho
       </div>
       <p className="mt-2 text-sm text-[var(--text-muted)]">
-        Kiểm tra backend, token đăng nhập hoặc seed dữ liệu mẫu.
+        Kết nối đến hệ thống dữ liệu đang gián đoạn. Vui lòng thử tải lại sau.
       </p>
     </section>
   );

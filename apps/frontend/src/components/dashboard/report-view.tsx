@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, FileSpreadsheet, Upload, XCircle } from "lucide-react";
+import { ColorIcon } from "@/components/shared/color-icon";
 import { useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-store";
 import {
@@ -11,8 +11,9 @@ import {
   uploadReport,
   type StockReport,
 } from "@/lib/report-api";
+import { Pagination, usePagination } from "@/components/shared/pagination";
 
-/** Báo cáo kiểm kê tháng: trưởng thôn upload Excel; admin xã duyệt → áp reconcile. */
+/** Báo cáo kiểm kê tháng: trưởng thôn gửi tệp, quản trị xã duyệt và cập nhật kho. */
 export function ReportView({ warehouseId }: { warehouseId: string }) {
   const role = useAuth((s) => s.user?.role);
   const scopeWarehouseId = useAuth((s) => s.user?.warehouseId);
@@ -41,17 +42,17 @@ function UploadCard({ warehouseId }: { warehouseId: string }) {
       if (fileRef.current) fileRef.current.value = "";
       qc.invalidateQueries({ queryKey: ["reports"] });
     },
-    onError: (e) => setMsg(e instanceof Error ? e.message : "Lỗi gửi báo cáo"),
+    onError: (e) => setMsg(e instanceof Error ? e.message : "Chưa thể gửi báo cáo. Vui lòng thử lại."),
   });
 
   return (
     <section className="rounded-md border bg-[var(--surface)] p-5">
       <div className="flex items-center gap-2 text-sm font-semibold text-[var(--color-accent)]">
-        <FileSpreadsheet size={18} strokeWidth={1.8} />
+        <ColorIcon name="report" size={20} tone="green" />
         <span>Gửi báo cáo kiểm kê tháng</span>
       </div>
       <p className="mt-1 text-sm text-[var(--text-muted)]">
-        Tải file Excel (7 cột: SKU · Tên vật tư · Số lượng · Đơn vị · Hạn dùng · Tình trạng · Ghi chú). Cơ quan xã duyệt rồi mới cập nhật kho.
+        Đính kèm bảng kiểm kê gồm 7 cột: mã vật tư, tên vật tư, số lượng, đơn vị, hạn dùng, tình trạng và ghi chú. Số liệu chỉ được cập nhật sau khi xã phê duyệt.
       </p>
 
       <div className="mt-4 flex flex-wrap items-end gap-3">
@@ -65,7 +66,7 @@ function UploadCard({ warehouseId }: { warehouseId: string }) {
           />
         </label>
         <label className="block flex-1">
-          <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">File Excel (.xlsx)</span>
+          <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Tệp Excel (.xlsx)</span>
           <input
             ref={fileRef}
             type="file"
@@ -80,7 +81,7 @@ function UploadCard({ warehouseId }: { warehouseId: string }) {
           disabled={!file || upload.isPending}
           className="inline-flex items-center gap-2 rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-fg)] transition hover:brightness-95 active:translate-y-px disabled:opacity-60"
         >
-          <Upload size={16} strokeWidth={2} />
+          <ColorIcon name="upload" size={18} tone="blue" />
           {upload.isPending ? "Đang gửi…" : "Gửi báo cáo"}
         </button>
       </div>
@@ -103,6 +104,7 @@ function ReportList({ isAdmin }: { isAdmin: boolean }) {
   });
 
   const reports = reportsQuery.data ?? [];
+  const pagination = usePagination(reports);
 
   return (
     <section className="rounded-md border bg-[var(--surface)] p-5">
@@ -111,11 +113,18 @@ function ReportList({ isAdmin }: { isAdmin: boolean }) {
         <p className="mt-3 text-sm text-[var(--text-muted)]">Chưa có báo cáo nào.</p>
       ) : (
         <ul className="mt-4 divide-y">
-          {reports.map((r) => (
+          {pagination.pageItems.map((r) => (
             <ReportRow key={r.id} report={r} isAdmin={isAdmin} busy={act.isPending} onAct={act.mutate} />
           ))}
         </ul>
       )}
+      <Pagination
+        onPageChange={pagination.setPage}
+        page={pagination.page}
+        pageSize={pagination.pageSize}
+        totalItems={reports.length}
+        totalPages={pagination.totalPages}
+      />
     </section>
   );
 }
@@ -164,7 +173,7 @@ function ReportRow({
               onClick={() => onAct(() => approveReport(report.id))}
               className="inline-flex items-center gap-1 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-fg)] transition hover:brightness-95 active:translate-y-px disabled:opacity-60"
             >
-              <CheckCircle2 size={14} /> Duyệt
+              <ColorIcon name="success" size={16} tone="green" /> Duyệt
             </button>
             <button
               type="button"
@@ -172,7 +181,7 @@ function ReportRow({
               onClick={() => onAct(() => rejectReport(report.id))}
               className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-xs font-semibold transition hover:bg-[var(--surface-2)] active:translate-y-px disabled:opacity-60"
             >
-              <XCircle size={14} /> Từ chối
+              <ColorIcon name="blocked" size={16} tone="red" /> Từ chối
             </button>
           </>
         )}

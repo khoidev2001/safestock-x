@@ -1,12 +1,77 @@
 "use client";
 
-import { RadioTower, Thermometer, WifiOff } from "lucide-react";
+import { ColorIcon } from "@/components/shared/color-icon";
 import type { SensorTimelineEvent, VirtualDevice } from "@/lib/dashboard-api";
 
 interface SimulatorPanelProps {
   devices: VirtualDevice[] | undefined;
   timeline: SensorTimelineEvent[] | undefined;
   isLoading: boolean;
+}
+
+const deviceTypeLabels: Record<string, string> = {
+  TEMPERATURE: "Nhiệt độ",
+  HUMIDITY: "Độ ẩm",
+  GATEWAY: "Bộ kết nối",
+  POWER: "Nguồn điện",
+  LOADCELL: "Cân tải",
+  DOOR: "Cửa kho",
+  RFID_GATEWAY: "Cổng RFID",
+  SMOKE: "Cảm biến khói",
+  CAMERA: "Camera",
+};
+
+const eventTypeLabels: Record<string, string> = {
+  TEMP_READING: "Ghi nhận nhiệt độ",
+  TEMPERATURE_HIGH: "Nhiệt độ vượt ngưỡng",
+  HUMID_READING: "Ghi nhận độ ẩm",
+  HUMIDITY_HIGH: "Độ ẩm vượt ngưỡng",
+  WEIGHT_CHANGED: "Khối lượng thay đổi",
+  SIGNAL_UNSTABLE: "Tín hiệu không ổn định",
+  DOOR_OPEN: "Cửa được mở",
+  DOOR_CLOSE: "Cửa đã đóng",
+  RFID_DETECTED: "Phát hiện vật tư qua cổng RFID",
+  GATEWAY_OFFLINE: "Bộ kết nối mất liên lạc",
+  GATEWAY_ONLINE: "Bộ kết nối hoạt động trở lại",
+  VISION_DETECTION: "Camera phát hiện thay đổi",
+  SMOKE_READING: "Ghi nhận nồng độ khói",
+  POWER_OFF: "Mất nguồn điện",
+  POWER_ON: "Nguồn điện hoạt động trở lại",
+};
+
+const deviceCodeLabels: Record<string, string> = {
+  temp: "Cảm biến nhiệt độ",
+  humid: "Cảm biến độ ẩm",
+  scale: "Cân tải kệ",
+  door: "Cảm biến cửa",
+  gateway: "Bộ kết nối",
+  power: "Nguồn điện",
+  smoke: "Cảm biến khói",
+  rfid: "Cổng RFID",
+  camera: "Camera",
+};
+
+function formatDeviceName(code: string, type: string): string {
+  const [prefix, ...suffixParts] = code.split("_");
+  const base = deviceCodeLabels[prefix.toLowerCase()] ?? deviceTypeLabels[type] ?? "Thiết bị";
+  const suffix = suffixParts.join(" ");
+  if (!suffix) return base;
+  return `${base} ${suffix.toLowerCase() === "main" ? "chính" : suffix.toUpperCase()}`;
+}
+
+function formatEventDetail(event: SensorTimelineEvent): string {
+  const deviceType = deviceTypeLabels[event.device.type] ?? "Thiết bị cảm biến";
+
+  if (event.eventType === "SIGNAL_UNSTABLE" || event.unit === "quality") {
+    const quality = event.value <= 1 ? event.value * 100 : event.value;
+    return `Chất lượng tín hiệu ${Math.round(quality)}% · ${deviceType}`;
+  }
+
+  if (["DOOR_OPEN", "DOOR_CLOSE", "GATEWAY_OFFLINE", "GATEWAY_ONLINE", "POWER_OFF", "POWER_ON"].includes(event.eventType)) {
+    return deviceType;
+  }
+
+  return `${event.value}${event.unit ? ` ${event.unit}` : ""} · ${deviceType}`;
 }
 
 export function SimulatorPanel({ devices, timeline, isLoading }: SimulatorPanelProps) {
@@ -21,11 +86,11 @@ export function SimulatorPanel({ devices, timeline, isLoading }: SimulatorPanelP
   return (
     <section className="rounded-md border bg-[var(--surface)] p-5">
       <div className="flex items-center gap-2">
-        <RadioTower aria-hidden="true" size={18} strokeWidth={1.8} />
+        <ColorIcon name="simulator" size={20} tone="amber" />
         <div>
-          <h2 className="text-sm font-semibold">Mô phỏng cảm biến</h2>
+          <h2 className="text-sm font-semibold">Dữ liệu cảm biến</h2>
           <p className="text-xs text-[var(--text-muted)]">
-            Dòng sự kiện gần nhất từ lớp thay thế IoT
+            Số liệu thử nghiệm gần nhất của kho
           </p>
         </div>
       </div>
@@ -34,27 +99,27 @@ export function SimulatorPanel({ devices, timeline, isLoading }: SimulatorPanelP
         {environmentDevices.slice(0, 4).map((device) => (
           <div key={device.id} className="rounded-md border bg-[var(--surface-2)] p-3">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-semibold">{device.code}</span>
-              {device.type === "GATEWAY" || device.type === "POWER" ? (
-                <WifiOff aria-hidden="true" size={14} strokeWidth={1.8} />
-              ) : (
-                <Thermometer aria-hidden="true" size={14} strokeWidth={1.8} />
-              )}
+              <span className="text-xs font-semibold">{formatDeviceName(device.code, device.type)}</span>
+                {device.type === "GATEWAY" || device.type === "POWER" ? (
+                  <ColorIcon name="wifiOff" size={16} tone="red" />
+                ) : (
+                  <ColorIcon name="temperature" size={16} tone="orange" />
+                )}
             </div>
             <p className="tabular mt-3 text-2xl font-semibold">
-              {device.currentValue ?? "N/A"}
+              {device.currentValue ?? "--"}
               <span className="ml-1 text-xs text-[var(--text-muted)]">{device.unit ?? ""}</span>
             </p>
-            <p className="mt-1 text-xs text-[var(--text-muted)]">{device.type}</p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">{deviceTypeLabels[device.type] ?? "Thiết bị cảm biến"}</p>
           </div>
         ))}
       </div>
 
       <div className="mt-5 border-t pt-4">
-        <h3 className="text-xs font-semibold text-[var(--text-muted)]">Timeline</h3>
+        <h3 className="text-xs font-semibold text-[var(--text-muted)]">Diễn biến gần đây</h3>
         {(timeline?.length ?? 0) === 0 ? (
           <p className="mt-3 text-sm text-[var(--text-muted)]">
-            Chưa có event. Chạy scenario hoặc kéo slider ở simulator backend.
+            Chưa ghi nhận dữ liệu thử nghiệm mới.
           </p>
         ) : (
           <ol className="mt-3 space-y-3">
@@ -68,10 +133,10 @@ export function SimulatorPanel({ devices, timeline, isLoading }: SimulatorPanelP
                 </time>
                 <div>
                   <p className="font-medium">
-                    {event.device.code} · {event.eventType}
+                    {formatDeviceName(event.device.code, event.device.type)} · {eventTypeLabels[event.eventType] ?? "Cập nhật cảm biến"}
                   </p>
                   <p className="tabular text-xs text-[var(--text-muted)]">
-                    {event.value} {event.unit ?? ""} · {event.device.type}
+                    {formatEventDetail(event)}
                   </p>
                 </div>
               </li>

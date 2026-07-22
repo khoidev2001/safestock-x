@@ -1,6 +1,16 @@
 import { useAuth } from "./auth-store";
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3100";
+function resolveApiBase(): string {
+  const configuredBase = process.env.NEXT_PUBLIC_API_URL;
+  if (typeof window === "undefined") return configuredBase ?? "";
+
+  if (window.location.protocol === "https:") return window.location.origin;
+  if (configuredBase && !configuredBase.includes("localhost")) return configuredBase;
+
+  return `${window.location.protocol}//${window.location.hostname}:3100`;
+}
+
+const BASE = resolveApiBase();
 
 class ApiError extends Error {
   constructor(

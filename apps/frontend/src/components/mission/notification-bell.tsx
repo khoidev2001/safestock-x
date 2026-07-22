@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell } from "lucide-react";
+import { ColorIcon } from "@/components/shared/color-icon";
 import { useEffect, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import { BASE } from "@/lib/api";
@@ -53,7 +53,7 @@ export function NotificationBell() {
         className="relative inline-flex h-9 w-9 items-center justify-center rounded-md border bg-[var(--surface)] transition hover:bg-[var(--surface-2)] active:translate-y-px"
         type="button"
       >
-        <Bell size={17} strokeWidth={1.8} />
+        <ColorIcon name="notification" size={19} tone="amber" />
         {unread > 0 && (
           <span
             className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
@@ -78,7 +78,8 @@ export function NotificationBell() {
                 items.map((n) => (
                   <div key={n.id} className="border-b px-4 py-3 last:border-0">
                     <p className="text-sm font-medium">{n.title}</p>
-                    <p className="mt-0.5 text-xs text-[var(--text-muted)]">{n.body}</p>
+                    {/* body có thể dài khi kèm giải thích AI → gói 3 dòng, tránh tràn dropdown. */}
+                    <p className="mt-0.5 line-clamp-3 text-xs text-[var(--text-muted)]">{n.body}</p>
                   </div>
                 ))
               )}

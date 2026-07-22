@@ -1,9 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
 import { IncidentState } from "@prisma/client";
 import { AiClientService } from "../ai/ai-client.service";
 import { WeatherService } from "../insights/weather";
 import { PrismaService } from "../prisma/prisma.service";
 import { ReadinessService } from "../readiness/readiness.service";
+import { resolveEmergencyAnswer } from "./assistant-emergency-answer";
 import {
   type AssistantSnapshot,
   isWeatherQuestion,
@@ -11,9 +12,8 @@ import {
 } from "./assistant-fast-answer";
 
 /**
- * Chatbot hỏi-đáp kho (BE-G4api): backend CHỤP snapshot JSON kho (tồn/readiness/sự cố)
- * → nhét vào LLM → trả lời ràng buộc CHỈ dựa trên snapshot, ngoài phạm vi → "không biết".
- * LLM không tự tra DB, không tự tính — chống bịa số. AI service lỗi → BadRequest rõ ràng.
+ * Trợ lý ứng phó: trả lời tức thời các tình huống cứu hộ phổ biến, đồng thời dùng snapshot
+ * kho cho câu hỏi tồn/readiness/sự cố. LLM không tự tra DB hoặc tự bịa số liệu.
  */
 @Injectable()
 export class AssistantService {
@@ -25,6 +25,9 @@ export class AssistantService {
   ) {}
 
   async ask(warehouseId: string, question: string): Promise<{ answer: string }> {
+    const emergencyAnswer = resolveEmergencyAnswer(question);
+    if (emergencyAnswer) return { answer: emergencyAnswer };
+
     const snapshot = await this.buildSnapshot(warehouseId, isWeatherQuestion(question));
     const fastAnswer = resolveAssistantFastAnswer(question, snapshot);
     if (fastAnswer) return { answer: fastAnswer };
@@ -33,7 +36,7 @@ export class AssistantService {
       const answer = await this.ai.assistantAsk(question, JSON.stringify(snapshot));
       return { answer };
     } catch {
-      throw new BadRequestException("Trợ lý AI tạm thời không phản hồi. Thử lại sau.");
+      throw new ServiceUnavailableException("Trợ lý AI tạm thời không phản hồi. Thử lại sau.");
     }
   }
 

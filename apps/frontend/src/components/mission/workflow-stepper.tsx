@@ -1,14 +1,14 @@
 "use client";
 
-import { Building2, Check, ClipboardList, LifeBuoy } from "lucide-react";
+import { ColorIcon, type ColorIconName, type ColorIconTone } from "@/components/shared/color-icon";
 import type { MissionStatus } from "@/lib/mission-api";
 
-/** 3 bước workflow liên role — trực quan ai đang chờ ai. */
+/** Ba bước phối hợp giữa bộ phận điều phối, cứu hộ và kho. */
 const STEPS = [
-  { key: "admin", label: "Cơ quan lập kế hoạch", role: "ADMIN", icon: ClipboardList },
-  { key: "rescue", label: "Cứu hộ xác nhận", role: "RESCUE", icon: LifeBuoy },
-  { key: "warehouse", label: "Kho chuẩn bị & giao", role: "WAREHOUSE", icon: Building2 },
-] as const;
+  { key: "admin", label: "Điều phối lập kế hoạch", role: "ADMIN", icon: "workflow", tone: "blue" },
+  { key: "rescue", label: "Cứu hộ xác nhận", role: "RESCUE", icon: "mission", tone: "orange" },
+  { key: "warehouse", label: "Kho chuẩn bị và giao", role: "WAREHOUSE", icon: "warehouse", tone: "green" },
+] satisfies { key: string; label: string; role: string; icon: ColorIconName; tone: ColorIconTone }[];
 
 /** Trạng thái mission → bước nào đã xong (index cuối cùng hoàn tất). */
 function completedIndex(status: MissionStatus): number {
@@ -34,25 +34,13 @@ export function WorkflowStepper({ status }: { status: MissionStatus }) {
   return (
     <div className="flex items-center">
       {STEPS.map((step, i) => {
-        const Icon = step.icon;
         const isDone = i <= done;
         const isActive = i === done + 1 || (i === done && status !== "READY" && status !== "COMPLETED");
         return (
           <div key={step.key} className="flex flex-1 items-center">
             <div className="flex flex-col items-center gap-1.5">
-              <div
-                className="flex h-10 w-10 items-center justify-center rounded-full border-2 transition"
-                style={{
-                  borderColor: isDone
-                    ? "var(--color-accent)"
-                    : isActive
-                      ? "var(--color-attention)"
-                      : "var(--border)",
-                  background: isDone ? "var(--color-accent)" : "var(--surface)",
-                  color: isDone ? "var(--color-accent-fg)" : "var(--text-muted)",
-                }}
-              >
-                {isDone ? <Check size={18} strokeWidth={2.5} /> : <Icon size={18} strokeWidth={1.8} />}
+              <div className={`flex h-10 w-10 items-center justify-center transition ${isActive ? "scale-110" : ""}`}>
+                <ColorIcon name={isDone ? "success" : step.icon} size={isDone ? 24 : 22} tone={isDone ? "green" : step.tone} />
               </div>
               <div className="text-center">
                 <p className="text-xs font-medium leading-tight">{step.label}</p>

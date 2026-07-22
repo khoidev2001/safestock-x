@@ -1,17 +1,7 @@
 "use client";
 
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Clock,
-  HelpCircle,
-  MapPin,
-  Package,
-  Sparkles,
-  Target,
-  TrendingUp,
-} from "lucide-react";
 import dynamic from "next/dynamic";
+import { ColorIcon } from "@/components/shared/color-icon";
 import type { ActionPlan, ClusterWarehouse } from "@/lib/mission-api";
 import type { LatLng } from "@/lib/geo";
 
@@ -34,12 +24,12 @@ export function ActionPlanView({ plan, incidentPoint }: { plan: ActionPlan; inci
 
   return (
     <div className="space-y-4">
-      {/* Nguồn sinh: AI hay template dự phòng */}
+      {/* Nêu rõ nguồn lập phương án để người dùng biết mức hỗ trợ tự động. */}
       <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-        <Sparkles size={14} strokeWidth={1.8} />
+        <ColorIcon name="magic" size={16} tone="amber" />
         {plan.generatedBy === "ai"
-          ? "Kế hoạch do AI lập, số liệu từ hệ thống kho"
-          : "Kế hoạch lập tự động (chế độ dự phòng, không cần mạng)"}
+          ? "Phương án được hỗ trợ tự động từ số liệu hiện có"
+          : "Phương án dự phòng được lập từ quy tắc nghiệp vụ"}
       </div>
 
       {/* 1. Đánh giá tình huống + mức khẩn cấp */}
@@ -48,7 +38,7 @@ export function ActionPlanView({ plan, incidentPoint }: { plan: ActionPlan; inci
         style={{ background: `color-mix(in oklch, ${sev.color} 8%, var(--surface))` }}
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <SectionTitle icon={<AlertTriangle size={17} />} title="Đánh giá tình huống" />
+          <SectionTitle icon={<ColorIcon name="warning" size={19} tone="red" />} title="Đánh giá tình huống" />
           <span
             className="rounded-md px-3 py-1 text-sm font-semibold"
             style={{ background: sev.color, color: "white" }}
@@ -75,7 +65,7 @@ export function ActionPlanView({ plan, incidentPoint }: { plan: ActionPlan; inci
       </section>
 
       {/* 2. Mục tiêu cứu hộ */}
-      <Panel icon={<Target size={17} />} title="Mục tiêu 6 giờ đầu">
+      <Panel icon={<ColorIcon name="target" size={19} tone="blue" />} title="Mục tiêu 6 giờ đầu">
         <ol className="space-y-2">
           {plan.narrative.objectives.map((o, i) => (
             <li key={i} className="flex gap-3 text-sm">
@@ -89,7 +79,7 @@ export function ActionPlanView({ plan, incidentPoint }: { plan: ActionPlan; inci
       </Panel>
 
       {/* 3. Phương án cấp phát vật tư */}
-      <Panel icon={<Package size={17} />} title="Phương án cấp phát">
+      <Panel icon={<ColorIcon name="inventory" size={19} tone="orange" />} title="Phương án cấp phát">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -125,7 +115,7 @@ export function ActionPlanView({ plan, incidentPoint }: { plan: ActionPlan; inci
 
       {/* 4. Điều phối kho (ETA) */}
       {plan.warehouses.length > 0 && (
-        <Panel icon={<MapPin size={17} />} title="Điều phối kho (thời gian tới điểm nạn)">
+        <Panel icon={<ColorIcon name="location" size={19} tone="blue" />} title="Điều phối kho (thời gian tới điểm nạn)">
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {plan.warehouses.map((w) => (
               <div key={w.name} className="rounded-md border bg-[var(--surface-2)] p-3">
@@ -154,18 +144,18 @@ export function ActionPlanView({ plan, incidentPoint }: { plan: ActionPlan; inci
       )}
 
       {/* 5. Phương án theo giai đoạn */}
-      <Panel icon={<Clock size={17} />} title="Phương án theo giai đoạn">
+      <Panel icon={<ColorIcon name="time" size={19} tone="amber" />} title="Phương án theo giai đoạn">
         <div className="space-y-3">
           {plan.narrative.phases.map((ph) => (
             <div key={ph.window} className="rounded-md border bg-[var(--surface-2)] p-3">
               <div className="mb-2 inline-flex items-center gap-2 rounded-md bg-[var(--color-accent)] px-2.5 py-1 text-xs font-semibold text-[var(--color-accent-fg)]">
-                <Clock size={13} strokeWidth={2} />
+                <ColorIcon name="time" size={15} tone="amber" />
                 {ph.window}
               </div>
               <ul className="space-y-1.5">
                 {ph.actions.map((a, i) => (
                   <li key={i} className="flex gap-2 text-sm">
-                    <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-[var(--color-accent)]" />
+                    <ColorIcon className="mt-0.5" name="success" size={17} tone="green" />
                     <span>{a}</span>
                   </li>
                 ))}
@@ -177,18 +167,18 @@ export function ActionPlanView({ plan, incidentPoint }: { plan: ActionPlan; inci
 
       {/* 6 + 7. Cảnh báo + Dự báo (2 cột) */}
       <div className="grid gap-4 md:grid-cols-2">
-        <Panel icon={<AlertTriangle size={17} />} title="Cảnh báo" tone="var(--color-degraded)">
+        <Panel icon={<ColorIcon name="warning" size={19} tone="red" />} title="Cảnh báo" tone="var(--color-degraded)">
           <ul className="space-y-2">
-            {plan.narrative.warnings.map((w, i) => (
-              <li key={i} className="flex gap-2 text-sm">
-                <span style={{ color: "var(--color-degraded)" }}>⚠</span>
-                <span>{w}</span>
-              </li>
+              {plan.narrative.warnings.map((w, i) => (
+                <li key={i} className="flex gap-2 text-sm">
+                  <ColorIcon className="mt-0.5" name="warning" size={16} tone="red" />
+                  <span>{w}</span>
+                </li>
             ))}
           </ul>
         </Panel>
 
-        <Panel icon={<TrendingUp size={17} />} title="Dự báo">
+        <Panel icon={<ColorIcon name="trendUp" size={19} tone="green" />} title="Dự báo">
           <div className="space-y-3">
             {plan.forecasts.map((f) => (
               <div key={f.label}>
@@ -213,12 +203,12 @@ export function ActionPlanView({ plan, incidentPoint }: { plan: ActionPlan; inci
       </div>
 
       {/* 8. Câu hỏi bổ sung */}
-      <Panel icon={<HelpCircle size={17} />} title="AI đề nghị bổ sung để tăng độ chính xác">
+      <Panel icon={<ColorIcon name="help" size={19} tone="blue" />} title="Thông tin cần bổ sung">
         <div className="flex flex-wrap gap-2">
           {plan.narrative.followUpQuestions.map((q, i) => (
             <span
               key={i}
-              className="rounded-full border bg-[var(--surface-2)] px-3 py-1.5 text-sm"
+              className="rounded-md border bg-[var(--surface-2)] px-3 py-1.5 text-sm"
             >
               {q}
             </span>
