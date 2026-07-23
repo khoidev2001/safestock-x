@@ -5,7 +5,13 @@ export interface ForecastItem {
   itemName: string;
   quantity: number;
   avgPerDay: number;
+  ewmaPerDay: number;
+  dailyStdDev: number;
   daysLeft: number | null;
+  daysLeftLow: number | null;
+  daysLeftHigh: number | null;
+  reorderPoint: number;
+  confidence: number;
   lowStock: boolean;
 }
 
