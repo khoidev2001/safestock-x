@@ -54,6 +54,7 @@ import {
   TrendingUp,
   Upload,
   User,
+  VoiceOne,
 } from "@icon-park/react";
 import type { ComponentType } from "react";
 
@@ -114,6 +115,7 @@ const icons = {
   wifiOff: CloseWifi,
   workflow: Clipboard,
   magic: Magic,
+  microphone: VoiceOne,
 } satisfies Record<string, IconParkComponent>;
 
 const palettes = {

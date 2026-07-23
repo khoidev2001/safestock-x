@@ -87,3 +87,59 @@ class AssistantRequest(BaseModel):
 
 class AssistantAnswer(BaseModel):
     answer: str
+
+
+class AssistantRagDraft(BaseModel):
+    """LLM chỉ chọn câu evidence; ai-service render nguyên văn + nguồn thật."""
+
+    model_config = ConfigDict(extra="forbid")
+    evidenceIds: list[str] = Field(default_factory=list, max_length=8)
+
+
+class AssistantPlainDraft(BaseModel):
+    """Luồng không có RAG: cờ ngoài phạm vi giúp bỏ văn model thừa một cách chắc chắn."""
+
+    answer: str = Field(min_length=1, max_length=4000)
+    outOfScope: bool
+
+
+class KnowledgeSearchRequest(BaseModel):
+    query: str = Field(min_length=2, max_length=500)
+    topK: int = Field(default=3, ge=1, le=5)
+
+
+class KnowledgeSourceAnswer(BaseModel):
+    title: str
+    locator: str
+    url: str
+    accessedAt: str
+
+
+class KnowledgeHitAnswer(BaseModel):
+    id: str
+    document: str
+    heading: str
+    score: float
+    preview: str
+    sources: list[KnowledgeSourceAnswer]
+
+
+class KnowledgeSearchAnswer(BaseModel):
+    available: bool
+    reason: str | None = None
+    indexVersion: int | None = None
+    model: str | None = None
+    hits: list[KnowledgeHitAnswer]
+
+
+# ===== Nhận dạng giọng nói (ASR) — PhoWhisper local, offline =====
+# Frontend ghi âm → mã hoá WAV 16kHz mono → base64 → gửi lên. ai-service giải mã +
+# chạy PhoWhisper (GPU nếu có). Text trả về để người dùng XEM LẠI & SỬA trước khi parse.
+
+class TranscribeRequest(BaseModel):
+    audioBase64: str = Field(min_length=16, max_length=20_000_000)  # ~15MB base64 ≈ vài chục giây audio
+    mimeType: str = Field(default="audio/wav", max_length=64)
+
+
+class TranscribeAnswer(BaseModel):
+    text: str

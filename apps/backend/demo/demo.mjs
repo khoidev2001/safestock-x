@@ -183,11 +183,18 @@ async function main() {
     .filter((f) => f.daysLeft != null)
     .sort((a, b) => a.daysLeft - b.daysLeft)
     .slice(0, 5);
-  console.log(`  ${C.dim}Dự báo cạn kho (tốc độ xuất TB 30 ngày):${C.reset}`);
+  console.log(`  ${C.dim}Dự báo thống kê cạn kho (EWMA + độ lệch chuẩn → khoảng tin cậy + điểm đặt hàng lại):${C.reset}`);
   for (const f of forecastShown) {
     const d = Math.floor(f.daysLeft);
-    const tag = f.lowStock ? `${C.red}${d <= 0 ? "ĐÃ CẠN" : `~${d}n (gấp!)`}${C.reset}` : `${C.green}~${d} ngày${C.reset}`;
-    console.log(`    ${f.itemName.padEnd(22)} tồn ${String(f.quantity).padStart(4)} · ${f.avgPerDay.toFixed(1)}/ngày → ${tag}`);
+    const lo = f.daysLeftLow != null ? Math.floor(f.daysLeftLow) : d;
+    const hi = f.daysLeftHigh != null ? Math.ceil(f.daysLeftHigh) : d;
+    const range = d <= 0 ? "ĐÃ CẠN" : hi > lo ? `~${lo}–${hi}n` : `~${d}n`;
+    const tag = f.lowStock ? `${C.red}${range} (gấp!)${C.reset}` : `${C.green}${range}${C.reset}`;
+    const conf = f.confidence >= 0.75 ? "tin cậy cao" : f.confidence >= 0.4 ? "tin cậy TB" : "dữ liệu chưa đủ";
+    console.log(
+      `    ${f.itemName.padEnd(22)} tồn ${String(f.quantity).padStart(4)} · ${f.ewmaPerDay.toFixed(1)}/ngày gần đây → ${tag} ` +
+        `${C.dim}[đặt lại khi ≤${Math.ceil(f.reorderPoint)}, ${conf}]${C.reset}`,
+    );
   }
 
   if (insights.expiryAlerts.length) {

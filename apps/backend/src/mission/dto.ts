@@ -8,6 +8,17 @@ export class ParseDto {
   description!: string;
 }
 
+/** Nhận dạng giọng nói: UI ghi âm WAV → base64 → PhoWhisper local trả text. */
+export class TranscribeDto {
+  @IsString()
+  @MinLength(16)
+  audioBase64!: string;
+
+  @IsOptional()
+  @IsString()
+  mimeType?: string;
+}
+
 /** Đội cứu hộ từ chối nhiệm vụ — bắt buộc nêu lý do (admin xem xét sau). */
 export class RejectMissionDto {
   @IsString()

@@ -81,14 +81,23 @@ function ForecastCard({ forecast }: { forecast: ForecastItem[] }) {
       ) : (
         <ul className="mt-4 divide-y">
           {sorted.slice(0, 8).map((f) => (
-            <li key={f.sku} className="flex items-center justify-between gap-3 py-2.5">
+            <li key={f.sku} className="flex items-start justify-between gap-3 py-2.5">
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{f.itemName}</p>
                 <p className="text-xs text-[var(--text-muted)]">
-                  Tồn {f.quantity} · {f.avgPerDay > 0 ? `${f.avgPerDay.toFixed(1)}/ngày` : "chưa xuất kỳ này"}
+                  Tồn {f.quantity} ·{" "}
+                  {f.ewmaPerDay > 0 ? `${f.ewmaPerDay.toFixed(1)}/ngày gần đây` : "chưa xuất kỳ này"}
                 </p>
+                {f.lowStock && f.reorderPoint > 0 && (
+                  <p className="mt-0.5 text-xs" style={{ color: "var(--color-critical)" }}>
+                    Nên nhập khi tồn ≤ {Math.ceil(f.reorderPoint)}
+                  </p>
+                )}
               </div>
-              <DaysLeftBadge item={f} />
+              <div className="flex shrink-0 flex-col items-end gap-1">
+                <DaysLeftBadge item={f} />
+                <ConfidenceChip value={f.confidence} hasRate={f.ewmaPerDay > 0} />
+              </div>
             </li>
           ))}
         </ul>
@@ -97,18 +106,40 @@ function ForecastCard({ forecast }: { forecast: ForecastItem[] }) {
   );
 }
 
+/** Dải "~X–Y ngày" (khoảng tin cậy ±1σ) thay cho một con số cứng. */
 function DaysLeftBadge({ item }: { item: ForecastItem }) {
   if (item.daysLeft == null) {
     return <span className="shrink-0 text-xs text-[var(--text-muted)]">—</span>;
   }
-  const days = Math.floor(item.daysLeft);
-  const tone = item.lowStock ? "var(--color-critical)" : days < 21 ? "var(--color-attention)" : "var(--color-ready)";
+  const center = Math.floor(item.daysLeft);
+  const tone = item.lowStock ? "var(--color-critical)" : center < 21 ? "var(--color-attention)" : "var(--color-ready)";
+
+  let label: string;
+  if (center <= 0) {
+    label = "Đã cạn";
+  } else {
+    const lo = item.daysLeftLow != null ? Math.floor(item.daysLeftLow) : center;
+    const hi = item.daysLeftHigh != null ? Math.ceil(item.daysLeftHigh) : center;
+    label = hi > lo ? `~${lo}–${hi} ngày` : `~${center} ngày`;
+  }
   return (
     <span
-      className="tabular shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold"
+      className="tabular rounded-md px-2.5 py-1 text-xs font-semibold"
       style={{ background: `color-mix(in oklch, ${tone} 14%, transparent)`, color: tone }}
     >
-      {days <= 0 ? "Đã cạn" : `~${days} ngày`}
+      {label}
+    </span>
+  );
+}
+
+/** Chip độ tin cậy Cao/TB/Thấp — nói thẳng khi dữ liệu chưa đủ. */
+function ConfidenceChip({ value, hasRate }: { value: number; hasRate: boolean }) {
+  if (!hasRate) return null;
+  const label = value >= 0.75 ? "Tin cậy cao" : value >= 0.4 ? "Tin cậy TB" : "Dữ liệu chưa đủ";
+  const tone = value >= 0.75 ? "var(--color-ready)" : value >= 0.4 ? "var(--color-attention)" : "var(--text-muted)";
+  return (
+    <span className="text-[11px] font-medium" style={{ color: tone }}>
+      {label}
     </span>
   );
 }

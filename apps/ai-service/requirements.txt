@@ -3,3 +3,14 @@ uvicorn[standard]==0.31.0
 pydantic==2.9.2
 httpx==0.27.2
 python-dotenv==1.0.1
+
+# ==== Nhận dạng giọng nói PhoWhisper (offline, tuỳ chọn) ====
+# Cài cho máy demo có GPU. Nếu KHÔNG dùng voice, có thể bỏ qua khối này —
+# endpoint /transcribe sẽ trả 503 và frontend degrade an toàn (vẫn gõ tay).
+#
+# torch: cài bản CUDA khớp driver (RTX 2060 → cu121). Chạy TRƯỚC lệnh dưới:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+# rồi mới: pip install -r requirements.txt
+transformers==4.44.2
+soundfile==0.12.1
+numpy==1.26.4
