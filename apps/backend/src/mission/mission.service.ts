@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { MissionStatus, NotificationKind, Prisma, UserRole } from "@prisma/client";
+import { DeliveryOutcome, MissionStatus, NotificationKind, Prisma, UserRole } from "@prisma/client";
 import { IncidentType } from "@safestock/shared-types";
 import { AiClientService } from "../ai/ai-client.service";
 import { GeoService } from "../geo/geo.service";
@@ -190,13 +190,17 @@ export class MissionService {
   }
 
   /**
-   * RESCUE từ chối nhiệm vụ (kèm lý do) → REJECTED, notify ADMIN.
-   * Lý do lưu vào mission.rejectionReason để admin xem xét (chỉnh nhân lực/vật tư
-   * hoặc duyệt trì hoãn rồi gửi lại — luồng đó ở web, ngoài phạm vi bước này).
+   * RESCUE từ chối / rút nhiệm vụ (kèm lý do) → REJECTED, notify ADMIN.
+   * Cho phép ở PENDING_RESCUE (chưa nhận) lẫn RESCUE_CONFIRMED/PENDING_WAREHOUSE
+   * (đã nhận nhưng gặp sự cố hiện trường). Nếu rút SAU khi đã xác nhận thì kho có
+   * thể đang chờ/chuẩn bị → báo thêm WAREHOUSE dừng lại, tránh xuất kho thừa.
    */
   async rejectByRescue(id: string, reason: string) {
     const mission = await this.requireMission(id);
     this.guardTransition(mission.status, MissionStatus.REJECTED);
+    const afterConfirm =
+      mission.status === MissionStatus.RESCUE_CONFIRMED ||
+      mission.status === MissionStatus.PENDING_WAREHOUSE;
     const updated = await this.prisma.mission.update({
       where: { id },
       data: { status: MissionStatus.REJECTED, rejectionReason: reason },
@@ -204,10 +208,20 @@ export class MissionService {
     await this.notifications.create({
       recipientRole: UserRole.ADMIN,
       kind: NotificationKind.MISSION_REJECTED,
-      title: "Đội cứu hộ từ chối nhiệm vụ",
+      title: afterConfirm ? "Đội cứu hộ báo không tiếp tục được" : "Đội cứu hộ từ chối nhiệm vụ",
       body: `${mission.incidentType} — ${mission.affectedPeople} người. Lý do: ${reason}`,
       missionId: id,
     });
+    // Đội rút khi kho đang chờ/chuẩn bị → báo kho dừng, chưa xuất thì khỏi xuất.
+    if (afterConfirm) {
+      await this.notifications.create({
+        recipientRole: UserRole.WAREHOUSE,
+        kind: NotificationKind.MISSION_REJECTED,
+        title: "Tạm dừng chuẩn bị — đội cứu hộ đã rút",
+        body: `${mission.incidentType} — ${mission.affectedPeople} người. Đội cứu hộ không tiếp tục được, chờ điều phối xử lý.`,
+        missionId: id,
+      });
+    }
     return updated;
   }
 
@@ -234,7 +248,9 @@ export class MissionService {
 
   /**
    * ADMIN gửi lại nhiệm vụ tạm hoãn cho đội cứu hộ (DEFERRED → PENDING_RESCUE),
-   * kèm ghi chú phản hồi. Đội cứu hộ xác nhận / từ chối lại như bình thường.
+   * kèm ghi chú phản hồi. GIỮ NGUYÊN phương án phân bổ hiện tại — nếu cần đổi
+   * nhân lực/vật tư (đội từ chối vì thiếu) thì admin lập phương án MỚI, không
+   * dùng resend. Đội cứu hộ xác nhận / từ chối lại như bình thường.
    */
   async resendByAdmin(id: string, note?: string) {
     const mission = await this.requireMission(id);
@@ -254,12 +270,17 @@ export class MissionService {
   }
 
   /**
-   * ADMIN huỷ nhiệm vụ (REJECTED|DEFERRED → CANCELLED), kèm lý do gửi đội cứu hộ.
-   * Kết thúc luồng — không gửi lại được nữa.
+   * ADMIN huỷ nhiệm vụ, kèm lý do gửi đội cứu hộ. Huỷ được ở mọi bước TRƯỚC khi
+   * kho xuất vật tư (DRAFT/PENDING_RESCUE/RESCUE_CONFIRMED/PENDING_WAREHOUSE) và
+   * từ REJECTED/DEFERRED. Kết thúc luồng — không gửi lại được nữa. Nếu đang chờ
+   * kho chuẩn bị thì báo thêm WAREHOUSE dừng; đội cứu hộ luôn được báo.
    */
   async cancelByAdmin(id: string, note?: string) {
     const mission = await this.requireMission(id);
     this.guardTransition(mission.status, MissionStatus.CANCELLED);
+    const warehouseWasWaiting =
+      mission.status === MissionStatus.RESCUE_CONFIRMED ||
+      mission.status === MissionStatus.PENDING_WAREHOUSE;
     const updated = await this.prisma.mission.update({
       where: { id },
       data: { status: MissionStatus.CANCELLED, adminNote: note ?? null },
@@ -271,6 +292,78 @@ export class MissionService {
       body: `${mission.incidentType} — ${mission.affectedPeople} người. Nhiệm vụ đã huỷ.${note ? ` Lý do: ${note}` : ""}`,
       missionId: id,
     });
+    if (warehouseWasWaiting) {
+      await this.notifications.create({
+        recipientRole: UserRole.WAREHOUSE,
+        kind: NotificationKind.MISSION_CANCELLED,
+        title: "Nhiệm vụ đã huỷ — dừng chuẩn bị",
+        body: `${mission.incidentType} — ${mission.affectedPeople} người. Điều phối đã huỷ, không cần xuất kho.${note ? ` Lý do: ${note}` : ""}`,
+        missionId: id,
+      });
+    }
+    return updated;
+  }
+
+  /**
+   * RESCUE xác nhận kết quả giao hiện trường (READY → COMPLETED). Ghi nhận
+   * outcome + ghi chú, XỬ LÝ TỒN KHO theo kết quả, báo ADMIN và WAREHOUSE.
+   * Bước DUY NHẤT đưa mission về COMPLETED.
+   *
+   * Hoàn kho:
+   * - DELIVERED (giao đủ): không đụng kho — hàng đã giao hết theo phương án.
+   * - FAILED (không giao được): tự nhập lại 100% phần đã xuất về đúng lô cũ.
+   * - PARTIAL (giao một phần): KHÔNG tự đoán số — gắn cảnh báo kho đối soát nhập lại.
+   *
+   * Update mission + hoàn kho gói trong CÙNG một transaction: guard COMPLETED→*
+   * chặn bấm 2 lần, nên không hoàn kho trùng (retry-safe).
+   */
+  async completeByRescue(id: string, outcome: DeliveryOutcome, userId: string, note?: string) {
+    const mission = await this.prisma.mission.findUnique({
+      where: { id },
+      include: { requirements: true },
+    });
+    if (!mission) throw new NotFoundException("Không tìm thấy nhiệm vụ");
+    this.guardTransition(mission.status, MissionStatus.COMPLETED);
+
+    const restockItems =
+      outcome === DeliveryOutcome.FAILED ? collectMissionBatches(mission.requirements) : [];
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (restockItems.length > 0) {
+        await this.inventory.bulkImportInTx(tx, userId, restockItems, `Hoàn kho: nhiệm vụ ${id} giao thất bại`);
+      }
+      return tx.mission.update({
+        where: { id },
+        data: {
+          status: MissionStatus.COMPLETED,
+          deliveryOutcome: outcome,
+          deliveryNote: note ?? null,
+          completedAt: new Date(),
+        },
+      });
+    });
+    // Recalc readiness sau commit (không nằm trong tx để không giữ lock lâu).
+    if (restockItems.length > 0) {
+      await this.inventory.recalcBatches(restockItems.map((item) => item.batchId));
+    }
+
+    const label = DELIVERY_OUTCOME_LABEL[outcome];
+    // Ghi chú kho tuỳ kết quả: FAILED đã tự hoàn; PARTIAL cần người đối soát.
+    const stockNote =
+      outcome === DeliveryOutcome.FAILED
+        ? " Vật tư đã được tự động hoàn về kho."
+        : outcome === DeliveryOutcome.PARTIAL
+          ? " Cần đối soát và nhập lại phần chưa giao khi nhận hàng về."
+          : "";
+    for (const role of [UserRole.ADMIN, UserRole.WAREHOUSE]) {
+      await this.notifications.create({
+        recipientRole: role,
+        kind: NotificationKind.MISSION_COMPLETED,
+        title: `Đội cứu hộ đã giao — ${label}`,
+        body: `${mission.incidentType} — ${mission.affectedPeople} người. Kết quả: ${label}.${note ? ` Ghi chú: ${note}` : ""}${stockNote}`,
+        missionId: id,
+      });
+    }
     return updated;
   }
 
@@ -296,13 +389,8 @@ export class MissionService {
     if (!mission) throw new NotFoundException("Không tìm thấy nhiệm vụ");
     this.guardTransition(mission.status, MissionStatus.READY);
 
-    // Gom lô cần xuất từ allocations JSON.
-    const items = mission.requirements.flatMap((r) =>
-      ((r.allocations as { batchId: string; qty: number }[]) ?? []).map((a) => ({
-        batchId: a.batchId,
-        quantity: a.qty,
-      })),
-    );
+    // Gom lô cần xuất từ allocations JSON (phần đã cấp, bỏ phần thiếu).
+    const items = collectMissionBatches(mission.requirements);
     if (items.length > 0) {
       await this.inventory.bulkExport(userId, items, `Nhiệm vụ ${id}`);
     }
@@ -593,6 +681,29 @@ export class MissionService {
     }
     return suggestions.sort((a, b) => a.distanceKm - b.distanceKm);
   }
+}
+
+/** Nhãn tiếng Việt cho kết quả giao — dùng trong nội dung thông báo. */
+const DELIVERY_OUTCOME_LABEL: Record<DeliveryOutcome, string> = {
+  [DeliveryOutcome.DELIVERED]: "Đã giao đủ",
+  [DeliveryOutcome.PARTIAL]: "Giao một phần",
+  [DeliveryOutcome.FAILED]: "Không giao được",
+};
+
+/**
+ * Gom danh sách lô (batchId + quantity) từ allocations JSON của các requirement —
+ * chính là phần vật tư ĐÃ CẤP. Dùng chung cho `prepare` (xuất kho) và `complete`
+ * (hoàn kho khi giao thất bại) để 2 chiều luôn khớp đúng số lô.
+ */
+function collectMissionBatches(
+  requirements: { allocations: Prisma.JsonValue }[],
+): { batchId: string; quantity: number }[] {
+  return requirements.flatMap((r) =>
+    ((r.allocations as { batchId: string; qty: number }[]) ?? []).map((a) => ({
+      batchId: a.batchId,
+      quantity: a.qty,
+    })),
+  );
 }
 
 function addUnavailableReason(reasonsBySku: Map<string, string[]>, sku: string, reason: string) {

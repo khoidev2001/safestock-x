@@ -63,8 +63,12 @@ export interface MissionDetail {
   status: string;
   fulfillment: number;
   rejectionReason?: string | null;
+  deliveryOutcome?: DeliveryOutcome | null;
+  deliveryNote?: string | null;
   requirements: MissionRequirement[];
 }
+
+export type DeliveryOutcome = "DELIVERED" | "PARTIAL" | "FAILED";
 
 const authHeader = (token: string) => ({ Authorization: `Bearer ${token}` });
 
@@ -88,7 +92,10 @@ export async function confirmMission(token: string, id: string): Promise<Mission
   return res.json();
 }
 
-/** Từ chối nhiệm vụ kèm lý do (PENDING_RESCUE → REJECTED, báo admin). */
+/**
+ * Từ chối / rút nhiệm vụ kèm lý do. PENDING_RESCUE = từ chối trước khi nhận;
+ * RESCUE_CONFIRMED/PENDING_WAREHOUSE = báo không tiếp tục được sau khi đã nhận.
+ */
 export async function rejectMission(token: string, id: string, reason: string): Promise<MissionDetail> {
   const res = await fetch(`${API_BASE}/api/missions/${id}/reject`, {
     method: "POST",
@@ -98,6 +105,25 @@ export async function rejectMission(token: string, id: string, reason: string): 
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.message ?? "Không từ chối được nhiệm vụ");
+  }
+  return res.json();
+}
+
+/** Xác nhận đã giao tới hiện trường + kết quả (READY → COMPLETED, báo admin + kho). */
+export async function completeMission(
+  token: string,
+  id: string,
+  outcome: DeliveryOutcome,
+  note?: string,
+): Promise<MissionDetail> {
+  const res = await fetch(`${API_BASE}/api/missions/${id}/complete`, {
+    method: "POST",
+    headers: { ...authHeader(token), "Content-Type": "application/json" },
+    body: JSON.stringify({ outcome, note }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message ?? "Không xác nhận được kết quả giao");
   }
   return res.json();
 }

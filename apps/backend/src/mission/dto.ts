@@ -1,4 +1,5 @@
-import { IsInt, IsNumber, IsOptional, IsString, Min, MinLength } from "class-validator";
+import { IsIn, IsInt, IsNumber, IsOptional, IsString, Min, MinLength } from "class-validator";
+import { DeliveryOutcome } from "@prisma/client";
 
 /** Nhập tình huống bằng text (voice ở UI → text → gọi endpoint này). */
 export class ParseDto {
@@ -16,6 +17,16 @@ export class RejectMissionDto {
 
 /** Admin xử lý đơn từ chối (tạm hoãn / gửi lại / huỷ) — ghi chú không bắt buộc. */
 export class AdminNoteDto {
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
+/** Đội cứu hộ xác nhận kết quả giao (READY → COMPLETED) — kèm ghi chú tuỳ chọn. */
+export class CompleteMissionDto {
+  @IsIn(Object.values(DeliveryOutcome))
+  outcome!: DeliveryOutcome;
+
   @IsOptional()
   @IsString()
   note?: string;
