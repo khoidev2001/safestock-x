@@ -134,6 +134,45 @@ export class InventoryService {
     return result;
   }
 
+  /**
+   * Nhập lại nhiều lô TRONG một transaction có sẵn — để service khác (vd hoàn kho
+   * khi nhiệm vụ giao thất bại) gộp chung atomic với thao tác của nó. Bỏ qua dòng
+   * qty <= 0. KHÔNG tự recalc readiness (gọi {@link recalcBatches} sau khi commit).
+   */
+  async bulkImportInTx(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    items: { batchId: string; quantity: number }[],
+    note?: string,
+  ) {
+    const results = [] as Awaited<ReturnType<typeof this.incrementInTx>>[];
+    for (const item of items) {
+      if (item.quantity <= 0) continue;
+      results.push(
+        await this.incrementInTx(tx, userId, item.batchId, item.quantity, note, TransactionSource.BULK),
+      );
+    }
+    return results;
+  }
+
+  /**
+   * Nhập lô 1 chạm — đối xứng {@link bulkExport}. Dùng khi HOÀN KHO: đội cứu hộ
+   * giao thất bại → nhập lại phần đã xuất về đúng lô cũ. Nhiều batch trong 1
+   * transaction; thất bại 1 batch → rollback tất cả. Bỏ qua dòng qty <= 0.
+   */
+  async bulkImport(userId: string, items: { batchId: string; quantity: number }[], note?: string) {
+    const valid = items.filter((item) => item.quantity > 0);
+    if (valid.length === 0) return { count: 0, batches: [] };
+    const results = await this.prisma.$transaction((tx) => this.bulkImportInTx(tx, userId, valid, note));
+    await this.recalcBatches(valid.map((item) => item.batchId));
+    return { count: results.length, batches: results };
+  }
+
+  /** Tính lại readiness cho các kho chứa những lô này (sau khi commit tx gộp bên ngoài). */
+  async recalcBatches(batchIds: string[]) {
+    await Promise.all([...new Set(batchIds)].map((id) => this.recalcAfterTxn(id)));
+  }
+
   async transfer(userId: string, batchId: string, toShelfId: string, quantity: number, note?: string) {
     const shelf = await this.prisma.shelf.findUnique({ where: { id: toShelfId } });
     if (!shelf) throw new NotFoundException("Kệ đích không tồn tại");

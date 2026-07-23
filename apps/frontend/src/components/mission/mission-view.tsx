@@ -10,6 +10,7 @@ import type { LatLng } from "@/lib/geo";
 import { ApiError } from "@/lib/api";
 import {
   cancelMission,
+  completeMission,
   confirmMission,
   deferMission,
   dispatchMission,
@@ -19,6 +20,7 @@ import {
   getMission,
   prepareMission,
   resendMission,
+  type DeliveryOutcome,
   type GenerateInput,
   type Mission,
 } from "@/lib/mission-api";
@@ -233,6 +235,7 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
                   onDefer={() => step.mutate(deferMission)}
                   onResend={(note) => step.mutate((id) => resendMission(id, note))}
                   onCancel={(note) => step.mutate((id) => cancelMission(id, note))}
+                  onComplete={(outcome, note) => step.mutate((id) => completeMission(id, outcome, note))}
                   busy={genActionPlan.isPending || step.isPending}
                 />
               </div>
@@ -268,6 +271,7 @@ function RoleActions({
   onDefer,
   onResend,
   onCancel,
+  onComplete,
   busy,
 }: {
   mission: Mission;
@@ -279,11 +283,15 @@ function RoleActions({
   onDefer: () => void;
   onResend: (note: string) => void;
   onCancel: (note: string) => void;
+  onComplete: (outcome: DeliveryOutcome, note: string) => void;
   busy: boolean;
 }) {
   const isAdmin = role === "ADMIN";
   const showReason =
     (mission.status === "REJECTED" || mission.status === "DEFERRED") && mission.rejectionReason;
+  // Admin huỷ được khi nhiệm vụ đang chạy nhưng kho CHƯA xuất vật tư.
+  const adminCanCancelActive =
+    isAdmin && ["PENDING_RESCUE", "RESCUE_CONFIRMED", "PENDING_WAREHOUSE"].includes(mission.status);
 
   return (
     <div className="space-y-4">
@@ -292,6 +300,10 @@ function RoleActions({
           <p className="text-xs font-semibold text-[var(--color-critical)]">Lý do đội cứu hộ từ chối</p>
           <p className="mt-1 text-sm">{mission.rejectionReason}</p>
         </div>
+      )}
+
+      {mission.status === "COMPLETED" && mission.deliveryOutcome && (
+        <DeliveryResultBanner outcome={mission.deliveryOutcome} note={mission.deliveryNote} />
       )}
 
       <div className="flex flex-wrap gap-2">
@@ -328,6 +340,14 @@ function RoleActions({
           </button>
         )}
 
+        {/* RESCUE xác nhận đã giao tới hiện trường + kết quả (READY → COMPLETED) */}
+        {role === "RESCUE" && mission.status === "READY" && (
+          <RescueCompleteActions onComplete={onComplete} busy={busy} />
+        )}
+
+        {/* ADMIN huỷ nhiệm vụ khi đang chạy (kho chưa xuất vật tư) */}
+        {adminCanCancelActive && <AdminCancelActive onCancel={onCancel} busy={busy} />}
+
         {/* ADMIN xử lý đơn từ chối: tiếp nhận (tạm hoãn) hoặc huỷ */}
         {isAdmin && mission.status === "REJECTED" && (
           <AdminRejectionActions onDefer={onDefer} onCancel={onCancel} busy={busy} />
@@ -348,8 +368,9 @@ function RoleActions({
 
 /** Có nút hành động cho role ở trạng thái này không (để quyết định hiện hint). */
 function actionableFor(status: string, role: string | undefined): boolean {
-  if (role === "ADMIN") return ["DRAFT", "REJECTED", "DEFERRED"].includes(status);
-  if (role === "RESCUE") return status === "PENDING_RESCUE";
+  if (role === "ADMIN")
+    return ["DRAFT", "PENDING_RESCUE", "RESCUE_CONFIRMED", "PENDING_WAREHOUSE", "REJECTED", "DEFERRED"].includes(status);
+  if (role === "RESCUE") return ["PENDING_RESCUE", "READY"].includes(status);
   if (role === "WAREHOUSE") return status === "PENDING_WAREHOUSE";
   return false;
 }
@@ -448,6 +469,120 @@ function AdminDeferredActions({
   );
 }
 
+const OUTCOME_META: Record<DeliveryOutcome, { label: string; tone: string }> = {
+  DELIVERED: { label: "Đã giao đủ", tone: "var(--color-ready)" },
+  PARTIAL: { label: "Giao một phần", tone: "var(--color-attention)" },
+  FAILED: { label: "Không giao được", tone: "var(--color-critical)" },
+};
+
+/** Băng kết quả giao khi nhiệm vụ đã COMPLETED. */
+function DeliveryResultBanner({ outcome, note }: { outcome: DeliveryOutcome; note?: string | null }) {
+  const meta = OUTCOME_META[outcome];
+  return (
+    <div className="rounded-md border p-3" style={{ borderColor: meta.tone }}>
+      <div className="flex items-center gap-2">
+        <ColorIcon name="success" size={18} tone="green" />
+        <p className="text-sm font-semibold" style={{ color: meta.tone }}>
+          Kết quả giao: {meta.label}
+        </p>
+      </div>
+      {note && <p className="mt-1 text-sm text-[var(--text-muted)]">{note}</p>}
+    </div>
+  );
+}
+
+/** READY + RESCUE: chọn kết quả giao (đủ/một phần/thất bại) + ghi chú → hoàn thành. */
+function RescueCompleteActions({
+  onComplete,
+  busy,
+}: {
+  onComplete: (outcome: DeliveryOutcome, note: string) => void;
+  busy: boolean;
+}) {
+  const [outcome, setOutcome] = useState<DeliveryOutcome>("DELIVERED");
+  const [note, setNote] = useState("");
+  const [confirming, setConfirming] = useState(false);
+
+  if (!confirming) {
+    return (
+      <button className={actionBtn} style={primaryStyle} onClick={() => setConfirming(true)} disabled={busy}>
+        <ColorIcon name="success" size={18} tone="green" /> Xác nhận đã giao
+      </button>
+    );
+  }
+
+  return (
+    <div className="w-full space-y-2">
+      <div className="flex flex-wrap gap-2">
+        {(Object.keys(OUTCOME_META) as DeliveryOutcome[]).map((o) => (
+          <button
+            key={o}
+            type="button"
+            onClick={() => setOutcome(o)}
+            className="rounded-full border px-3 py-1.5 text-xs font-medium transition"
+            style={outcome === o ? { borderColor: OUTCOME_META[o].tone, color: OUTCOME_META[o].tone } : undefined}
+          >
+            {OUTCOME_META[o].label}
+          </button>
+        ))}
+      </div>
+      <textarea
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        rows={2}
+        placeholder="Ghi chú kết quả giao (vd: thiếu 20 áo phao, giao tại điểm tập kết xã)"
+        className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+      />
+      <div className="flex gap-2">
+        <button className={actionBtn} style={primaryStyle} onClick={() => onComplete(outcome, note)} disabled={busy}>
+          Hoàn thành nhiệm vụ
+        </button>
+        <button className={`${actionBtn} border`} onClick={() => setConfirming(false)} disabled={busy}>
+          Quay lại
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** ADMIN huỷ nhiệm vụ đang chạy (kho chưa xuất) — bấm huỷ rồi nhập lý do xác nhận. */
+function AdminCancelActive({ onCancel, busy }: { onCancel: (note: string) => void; busy: boolean }) {
+  const [cancelling, setCancelling] = useState(false);
+  const [note, setNote] = useState("");
+
+  if (!cancelling) {
+    return (
+      <button
+        className={`${actionBtn} border border-[var(--color-critical)] text-[var(--color-critical)]`}
+        onClick={() => setCancelling(true)}
+        disabled={busy}
+      >
+        Huỷ nhiệm vụ
+      </button>
+    );
+  }
+
+  return (
+    <div className="w-full space-y-2">
+      <textarea
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        rows={2}
+        placeholder="Lý do huỷ nhiệm vụ (gửi cho đội cứu hộ và kho)"
+        className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+      />
+      <div className="flex gap-2">
+        <button className={actionBtn} style={{ background: "var(--color-critical)", color: "#fff" }} onClick={() => onCancel(note)} disabled={busy}>
+          Xác nhận huỷ
+        </button>
+        <button className={`${actionBtn} border`} onClick={() => setCancelling(false)} disabled={busy}>
+          Quay lại
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function statusHint(status: string, role: string | undefined): string {
   if (status === "READY") return "Kho đã chuẩn bị xong và sẵn sàng giao vật tư cho đội cứu hộ.";
   if (status === "PENDING_RESCUE") return "Đang chờ đội cứu hộ xác nhận.";
@@ -456,6 +591,7 @@ function statusHint(status: string, role: string | undefined): string {
   if (status === "REJECTED") return "Đội cứu hộ đã từ chối. Chờ bộ phận điều phối xử lý.";
   if (status === "DEFERRED") return "Nhiệm vụ đang tạm hoãn, chờ bộ phận điều phối cập nhật và gửi lại.";
   if (status === "CANCELLED") return "Nhiệm vụ đã huỷ.";
+  if (status === "COMPLETED") return "Nhiệm vụ đã hoàn thành. Xem kết quả giao ở trên.";
   return "Không có hành động cho vai trò của bạn ở bước này.";
 }
 

@@ -8,10 +8,25 @@ import { MissionStatus } from "@prisma/client";
 
 /** Chuyển tiếp hợp lệ: từ trạng thái → các trạng thái đích cho phép. */
 const TRANSITIONS: Record<string, MissionStatus[]> = {
-  [MissionStatus.DRAFT]: [MissionStatus.PENDING_RESCUE, MissionStatus.REJECTED],
-  [MissionStatus.PENDING_RESCUE]: [MissionStatus.RESCUE_CONFIRMED, MissionStatus.REJECTED],
-  [MissionStatus.RESCUE_CONFIRMED]: [MissionStatus.PENDING_WAREHOUSE],
-  [MissionStatus.PENDING_WAREHOUSE]: [MissionStatus.READY, MissionStatus.REJECTED],
+  // Admin có thể huỷ bất kỳ lúc nào TRƯỚC khi kho xuất vật tư (chưa động tồn kho).
+  [MissionStatus.DRAFT]: [MissionStatus.PENDING_RESCUE, MissionStatus.REJECTED, MissionStatus.CANCELLED],
+  [MissionStatus.PENDING_RESCUE]: [
+    MissionStatus.RESCUE_CONFIRMED,
+    MissionStatus.REJECTED,
+    MissionStatus.CANCELLED,
+  ],
+  // Đội đã nhận nhưng gặp sự cố → rút (REJECTED); admin cũng có thể huỷ.
+  [MissionStatus.RESCUE_CONFIRMED]: [
+    MissionStatus.PENDING_WAREHOUSE,
+    MissionStatus.REJECTED,
+    MissionStatus.CANCELLED,
+  ],
+  [MissionStatus.PENDING_WAREHOUSE]: [
+    MissionStatus.READY,
+    MissionStatus.REJECTED,
+    MissionStatus.CANCELLED,
+  ],
+  // Kho đã xuất vật tư → chỉ còn hoàn thành (huỷ lúc này cần hoàn kho — ngoài phạm vi).
   [MissionStatus.READY]: [MissionStatus.COMPLETED],
   // Admin xử lý đơn từ chối của đội cứu hộ: tiếp nhận (tạm hoãn) hoặc huỷ.
   [MissionStatus.REJECTED]: [MissionStatus.DEFERRED, MissionStatus.CANCELLED],

@@ -444,6 +444,13 @@ enum MissionStatus {
   CANCELLED // admin huỷ nhiệm vụ (kèm lý do) — kết thúc luồng
 }
 
+// Kết quả giao vật tư tới hiện trường — đội cứu hộ xác nhận khi hoàn tất.
+enum DeliveryOutcome {
+  DELIVERED // giao đủ theo phương án
+  PARTIAL // giao được một phần (thiếu/hỏng/không tiếp cận hết)
+  FAILED // không giao được (đường tắc, điểm nạn di dời…)
+}
+
 // Nhiệm vụ cứu hộ — sinh từ tình huống, gồm nhu cầu + phương án phân bổ.
 model Mission {
   id                  String               @id @default(cuid())
@@ -460,6 +467,9 @@ model Mission {
   explanation         String? // giải thích AI (tiếng Việt)
   rejectionReason     String? // lý do đội cứu hộ từ chối (thiếu nhân lực/vật tư/xin trì hoãn) — admin đọc sau
   adminNote           String? // ghi chú admin khi tạm hoãn/gửi lại/huỷ — đội cứu hộ đọc
+  deliveryOutcome     DeliveryOutcome? // kết quả giao hiện trường (đội cứu hộ xác nhận khi hoàn tất)
+  deliveryNote        String? // ghi chú kết quả giao (vd: thiếu 20 áo phao, đường tắc phải giao điểm khác)
+  completedAt         DateTime? // thời điểm đội cứu hộ xác nhận đã giao
   actionPlan          Json? // Incident Action Plan (8 mục, ActionPlanResponse từ AI)
   incidentLat         Float? // toạ độ điểm nạn (ghim tay) — tính khoảng cách kho gần nhất
   incidentLng         Float?
@@ -573,6 +583,7 @@ enum NotificationKind {
   MISSION_REJECTED // đội cứu hộ từ chối nhiệm vụ (kèm lý do) → báo admin
   MISSION_DEFERRED // admin tiếp nhận đơn → tạm hoãn, báo đội cứu hộ
   MISSION_CANCELLED // admin huỷ nhiệm vụ (kèm lý do) → báo đội cứu hộ
+  MISSION_COMPLETED // đội cứu hộ xác nhận đã giao (kèm kết quả) → báo admin + kho
 }
 
 model Notification {

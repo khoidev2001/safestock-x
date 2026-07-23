@@ -6,7 +6,7 @@ import { JwtAuthGuard } from "../auth/guards";
 import { PermissionGuard } from "../rbac/permission.guard";
 import { RequirePermission } from "../rbac/permissions.decorator";
 import { AiClientService } from "../ai/ai-client.service";
-import { AdminNoteDto, GeneratePlanDto, ParseDto, RejectMissionDto } from "./dto";
+import { AdminNoteDto, CompleteMissionDto, GeneratePlanDto, ParseDto, RejectMissionDto } from "./dto";
 import { IncidentInput } from "./mission.compute";
 import { MissionService } from "./mission.service";
 
@@ -139,6 +139,13 @@ export class MissionController {
   @Post(":id/prepare")
   prepare(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
     return this.missions.prepareByWarehouse(id, req.user.userId);
+  }
+
+  /** RESCUE xác nhận đã giao hiện trường + kết quả (READY → COMPLETED). */
+  @RequirePermission(Permission.MISSION_CONFIRM)
+  @Post(":id/complete")
+  complete(@Request() req: AuthenticatedRequest, @Param("id") id: string, @Body() dto: CompleteMissionDto) {
+    return this.missions.completeByRescue(id, dto.outcome, req.user.userId, dto.note);
   }
 
   // ---- helpers ----

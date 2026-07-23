@@ -22,6 +22,8 @@ export interface MissionRequirement {
   neighborSuggestion: { name: string; distanceKm: number; available: number }[] | null;
 }
 
+export type DeliveryOutcome = "DELIVERED" | "PARTIAL" | "FAILED";
+
 export type MissionReadinessStatus = "READY" | "NEEDS_ACTION" | "NOT_DISPATCHABLE";
 
 export interface MissionReadinessAssessment {
@@ -55,6 +57,9 @@ export interface Mission {
   requirements: MissionRequirement[];
   rejectionReason?: string | null;
   adminNote?: string | null;
+  deliveryOutcome?: DeliveryOutcome | null;
+  deliveryNote?: string | null;
+  completedAt?: string | null;
 }
 
 export interface ActionPlan {
@@ -139,6 +144,13 @@ export const confirmMission = (id: string) =>
   apiFetch<Mission>(`/api/missions/${id}/confirm`, { method: "POST" });
 export const prepareMission = (id: string) =>
   apiFetch<Mission>(`/api/missions/${id}/prepare`, { method: "POST" });
+
+// RESCUE xác nhận kết quả giao hiện trường (READY → COMPLETED)
+export const completeMission = (id: string, outcome: DeliveryOutcome, note?: string) =>
+  apiFetch<Mission>(`/api/missions/${id}/complete`, {
+    method: "POST",
+    body: JSON.stringify({ outcome, note }),
+  });
 
 // Admin xử lý đơn từ chối của đội cứu hộ
 export const deferMission = (id: string, note?: string) =>

@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import {
+  completeMission,
   confirmMission,
   fetchMission,
   rejectMission,
+  type DeliveryOutcome,
   type MissionDetail,
 } from "./api";
 import { c, styles } from "./styles";
@@ -25,9 +27,20 @@ const STATUS_LABEL: Record<string, string> = {
   READY: "Kho đã sẵn sàng",
   COMPLETED: "Hoàn thành",
   REJECTED: "Đã từ chối",
+  DEFERRED: "Tạm hoãn",
+  CANCELLED: "Đã huỷ",
 };
 
 const REASON_SUGGESTIONS = ["Thiếu nhân lực", "Thiếu vật tư", "Xin trì hoãn", "Khác"];
+
+/** Trạng thái đội đã nhận nhưng chưa xong → cho phép "báo không tiếp tục được". */
+const AFTER_CONFIRM_STATES = ["RESCUE_CONFIRMED", "PENDING_WAREHOUSE"];
+
+const OUTCOME_OPTIONS: { key: DeliveryOutcome; label: string }[] = [
+  { key: "DELIVERED", label: "Đã giao đủ" },
+  { key: "PARTIAL", label: "Giao một phần" },
+  { key: "FAILED", label: "Không giao được" },
+];
 
 /** Màn chi tiết nhiệm vụ + hành động Chấp nhận / Từ chối (kèm lý do). */
 export function MissionDetailScreen({
@@ -48,6 +61,9 @@ export function MissionDetailScreen({
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
   const [selectedChip, setSelectedChip] = useState<string | null>(null);
+  const [completing, setCompleting] = useState(false);
+  const [outcome, setOutcome] = useState<DeliveryOutcome>("DELIVERED");
+  const [deliveryNote, setDeliveryNote] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -89,6 +105,18 @@ export function MissionDetailScreen({
       onResolved();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không từ chối được");
+      setBusy(false);
+    }
+  }
+
+  async function submitComplete() {
+    setBusy(true);
+    setError(null);
+    try {
+      await completeMission(token, missionId, outcome, deliveryNote.trim() || undefined);
+      onResolved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không xác nhận được kết quả giao");
       setBusy(false);
     }
   }
@@ -148,91 +176,177 @@ export function MissionDetailScreen({
 
           {error ? <Text style={[styles.errorText, { marginTop: 12 }]}>{error}</Text> : null}
 
-          {mission.status === "PENDING_RESCUE" ? (
-            rejecting ? (
-              <View style={styles.reasonBox}>
-                <Text style={styles.reasonTitle}>Lý do từ chối</Text>
-                <View style={styles.chipRow}>
-                  {REASON_SUGGESTIONS.map((s) => {
-                    const isOther = s === "Khác";
-                    const active = selectedChip === s;
-                    return (
-                      <Pressable
-                        key={s}
-                        onPress={() => {
-                          setSelectedChip(s);
-                          // "Khác": xoá ô để nhập tự do; chip gợi ý: điền sẵn text.
-                          setReason(isOther ? "" : s);
-                        }}
-                        style={[styles.reasonChip, active && styles.reasonChipActive]}
-                        accessibilityRole="button"
-                      >
-                        <Text style={active ? styles.reasonChipTextActive : styles.reasonChipText}>{s}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                <TextInput
-                  style={styles.reasonInput}
-                  value={reason}
-                  onChangeText={(t) => {
-                    setReason(t);
-                    // Người dùng gõ tự do → coi như đang chọn "Khác".
-                    if (t !== selectedChip) setSelectedChip("Khác");
-                  }}
-                  placeholder={
-                    selectedChip === "Khác"
-                      ? "Nhập lý do khác (vd: đường ngập sâu, cầu bị cuốn…)"
-                      : "Mô tả chi tiết lý do (vd: cần thêm 5 người, thiếu áo phao…)"
-                  }
-                  placeholderTextColor={c.muted}
-                  multiline
-                  aria-label="Lý do từ chối"
-                />
-                <View style={styles.actionRow}>
-                  <Pressable
-                    style={[styles.btnReject, busy && { opacity: 0.6 }]}
-                    onPress={() => setRejecting(false)}
-                    disabled={busy}
-                    accessibilityRole="button"
-                  >
-                    <Text style={styles.btnRejectText}>Huỷ</Text>
-                  </Pressable>
-                  <Pressable
-                    style={[styles.btnAccept, { backgroundColor: c.red }, busy && { opacity: 0.6 }]}
-                    onPress={submitReject}
-                    disabled={busy}
-                    accessibilityRole="button"
-                  >
-                    <Text style={[styles.btnAcceptText, { color: "#450a0a" }]}>
-                      {busy ? "Đang gửi…" : "Xác nhận từ chối"}
-                    </Text>
-                  </Pressable>
-                </View>
+          {rejecting ? (
+            <View style={styles.reasonBox}>
+              <Text style={styles.reasonTitle}>
+                {mission.status === "PENDING_RESCUE" ? "Lý do từ chối" : "Lý do không tiếp tục được"}
+              </Text>
+              <View style={styles.chipRow}>
+                {REASON_SUGGESTIONS.map((s) => {
+                  const isOther = s === "Khác";
+                  const active = selectedChip === s;
+                  return (
+                    <Pressable
+                      key={s}
+                      onPress={() => {
+                        setSelectedChip(s);
+                        // "Khác": xoá ô để nhập tự do; chip gợi ý: điền sẵn text.
+                        setReason(isOther ? "" : s);
+                      }}
+                      style={[styles.reasonChip, active && styles.reasonChipActive]}
+                      accessibilityRole="button"
+                    >
+                      <Text style={active ? styles.reasonChipTextActive : styles.reasonChipText}>{s}</Text>
+                    </Pressable>
+                  );
+                })}
               </View>
-            ) : (
+              <TextInput
+                style={styles.reasonInput}
+                value={reason}
+                onChangeText={(t) => {
+                  setReason(t);
+                  // Người dùng gõ tự do → coi như đang chọn "Khác".
+                  if (t !== selectedChip) setSelectedChip("Khác");
+                }}
+                placeholder={
+                  selectedChip === "Khác"
+                    ? "Nhập lý do khác (vd: đường ngập sâu, cầu bị cuốn…)"
+                    : "Mô tả chi tiết lý do (vd: cần thêm 5 người, thiếu áo phao…)"
+                }
+                placeholderTextColor={c.muted}
+                multiline
+                aria-label="Lý do không tiếp tục"
+              />
               <View style={styles.actionRow}>
                 <Pressable
-                  style={[styles.btnAccept, busy && { opacity: 0.6 }]}
-                  onPress={accept}
+                  style={[styles.btnReject, busy && { opacity: 0.6 }]}
+                  onPress={() => setRejecting(false)}
                   disabled={busy}
                   accessibilityRole="button"
                 >
-                  <Text style={styles.btnAcceptText}>{busy ? "Đang gửi…" : "Chấp nhận"}</Text>
+                  <Text style={styles.btnRejectText}>Huỷ</Text>
                 </Pressable>
                 <Pressable
-                  style={[styles.btnReject, busy && { opacity: 0.6 }]}
-                  onPress={() => {
-                    setError(null);
-                    setRejecting(true);
-                  }}
+                  style={[styles.btnAccept, { backgroundColor: c.red }, busy && { opacity: 0.6 }]}
+                  onPress={submitReject}
                   disabled={busy}
                   accessibilityRole="button"
                 >
-                  <Text style={styles.btnRejectText}>Từ chối</Text>
+                  <Text style={[styles.btnAcceptText, { color: "#450a0a" }]}>
+                    {busy ? "Đang gửi…" : "Xác nhận"}
+                  </Text>
                 </Pressable>
               </View>
-            )
+            </View>
+          ) : completing ? (
+            <View style={styles.reasonBox}>
+              <Text style={styles.reasonTitle}>Kết quả giao tới hiện trường</Text>
+              <View style={styles.chipRow}>
+                {OUTCOME_OPTIONS.map((o) => {
+                  const active = outcome === o.key;
+                  return (
+                    <Pressable
+                      key={o.key}
+                      onPress={() => setOutcome(o.key)}
+                      style={[styles.reasonChip, active && styles.reasonChipActive]}
+                      accessibilityRole="button"
+                    >
+                      <Text style={active ? styles.reasonChipTextActive : styles.reasonChipText}>{o.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <TextInput
+                style={styles.reasonInput}
+                value={deliveryNote}
+                onChangeText={setDeliveryNote}
+                placeholder="Ghi chú (vd: thiếu 20 áo phao, giao tại điểm tập kết xã)"
+                placeholderTextColor={c.muted}
+                multiline
+                aria-label="Ghi chú kết quả giao"
+              />
+              <View style={styles.actionRow}>
+                <Pressable
+                  style={[styles.btnReject, busy && { opacity: 0.6 }]}
+                  onPress={() => setCompleting(false)}
+                  disabled={busy}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.btnRejectText}>Huỷ</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.btnAccept, busy && { opacity: 0.6 }]}
+                  onPress={submitComplete}
+                  disabled={busy}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.btnAcceptText}>{busy ? "Đang gửi…" : "Xác nhận đã giao"}</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : mission.status === "PENDING_RESCUE" ? (
+            <View style={styles.actionRow}>
+              <Pressable
+                style={[styles.btnAccept, busy && { opacity: 0.6 }]}
+                onPress={accept}
+                disabled={busy}
+                accessibilityRole="button"
+              >
+                <Text style={styles.btnAcceptText}>{busy ? "Đang gửi…" : "Chấp nhận"}</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.btnReject, busy && { opacity: 0.6 }]}
+                onPress={() => {
+                  setError(null);
+                  setRejecting(true);
+                }}
+                disabled={busy}
+                accessibilityRole="button"
+              >
+                <Text style={styles.btnRejectText}>Từ chối</Text>
+              </Pressable>
+            </View>
+          ) : AFTER_CONFIRM_STATES.includes(mission.status) ? (
+            <View style={{ marginTop: 20 }}>
+              <View style={[styles.statusBadge, { backgroundColor: c.surfaceAlt }]}>
+                <Text style={[styles.statusText, { color: c.text }]}>
+                  {STATUS_LABEL[mission.status] ?? mission.status}
+                </Text>
+              </View>
+              <Pressable
+                style={[styles.btnReject, { marginTop: 12 }, busy && { opacity: 0.6 }]}
+                onPress={() => {
+                  setError(null);
+                  setReason("");
+                  setSelectedChip(null);
+                  setRejecting(true);
+                }}
+                disabled={busy}
+                accessibilityRole="button"
+              >
+                <Text style={styles.btnRejectText}>Không tiếp tục được</Text>
+              </Pressable>
+            </View>
+          ) : mission.status === "READY" ? (
+            <View style={{ marginTop: 20 }}>
+              <View style={[styles.statusBadge, { backgroundColor: c.surfaceAlt }]}>
+                <Text style={[styles.statusText, { color: c.text }]}>
+                  {STATUS_LABEL[mission.status] ?? mission.status}
+                </Text>
+              </View>
+              <Pressable
+                style={[styles.btnAccept, { marginTop: 12 }, busy && { opacity: 0.6 }]}
+                onPress={() => {
+                  setError(null);
+                  setCompleting(true);
+                }}
+                disabled={busy}
+                accessibilityRole="button"
+              >
+                <Text style={styles.btnAcceptText}>Xác nhận đã giao</Text>
+              </Pressable>
+            </View>
           ) : (
             <View style={{ marginTop: 20 }}>
               <View style={[styles.statusBadge, { backgroundColor: c.surfaceAlt }]}>
@@ -243,6 +357,11 @@ export function MissionDetailScreen({
               {mission.status === "REJECTED" && mission.rejectionReason ? (
                 <Text style={[styles.emptyText, { marginTop: 10, textAlign: "left" }]}>
                   Lý do: {mission.rejectionReason}
+                </Text>
+              ) : null}
+              {mission.status === "COMPLETED" && mission.deliveryNote ? (
+                <Text style={[styles.emptyText, { marginTop: 10, textAlign: "left" }]}>
+                  Ghi chú giao: {mission.deliveryNote}
                 </Text>
               ) : null}
             </View>
