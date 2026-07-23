@@ -22,10 +22,11 @@ _Lập ngày: 2026-07-23 · Rút ra từ [bao-cao-review-toan-du-an.md](bao-cao-
   - [ ] Tách batch transactionally theo `quantity` (thay vì `update shelfId` cả lô) (`inventory.service.ts:176-208`)
   - [ ] `assertBatchInScope` cho source + kiểm `toShelfId` thuộc kho hợp lệ (chặn IDOR)
   - [ ] Test: chuyển một phần → 2 lô đúng số; chuyển sang kho ngoài scope → 403
-- [ ] **P0-4 · Mission prepare atomic + scope**
-  - [ ] Gộp `bulkExport` + `update(READY)` vào 1 `$transaction` (`mission.service.ts:384-412`)
-  - [ ] Truyền `scopeWarehouseId` vào `bulkExport` từ `prepareByWarehouse`
-  - [ ] Test: kill giữa transaction → không double-export khi retry
+- [x] **P0-4 · Mission prepare atomic + scope** ✅ 2026-07-23
+  - [x] Gộp conditional claim `READY` + `bulkExportInTx` vào một `$transaction`; retry/concurrent idempotent
+  - [x] Truyền `scopeWarehouseId` từ JWT và kiểm scope mission/batch trong transaction
+  - [x] Verify: focused 34/34; backend 215/215; PostgreSQL E2E 8/8; backend build + `git diff --check` pass
+  - [x] Fixture E2E `missions/requirements/batches` 0/0/0 → 0/0/0; không seed/reset
 - [ ] **P0-5 · Report approve toàn bộ lô + atomic**
   - [ ] Xử lý MỌI batch của SKU (phân bổ số đếm), bỏ `findFirst` 1 lô (`report.service.ts:65-97`)
   - [ ] Bọc vòng reconcile + `update(APPROVED)` trong 1 transaction
@@ -111,7 +112,7 @@ Plan 2 hướng đã chốt: [plan-tang-mat-do-ai-rag-va-nl-plan.md](plan-tang-m
 
 ---
 
-## Đang chờ quyết định của người dùng
+## Quyết định của người dùng (1 mục còn chờ)
 
-- [ ] **Commit forecast thống kê** (A2 đã xong code+test, 202 test pass, CHƯA commit — chờ chốt)
+- [x] **Commit forecast thống kê** — đã commit `46233b0` (`feat(insights): add statistical inventory forecast`)
 - [ ] Chốt thứ tự triển khai AI: Phần B trước hay Phần A trước
