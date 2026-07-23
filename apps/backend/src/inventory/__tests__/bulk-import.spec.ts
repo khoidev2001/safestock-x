@@ -7,6 +7,7 @@ import { InventoryService } from "../inventory.service";
 function fakePrisma(initial: Record<string, number>) {
   const qty = { ...initial };
   const txns: { batchId: string; type: string; quantity: number }[] = [];
+  const audits: { before: number; after: number }[] = [];
   const tx = {
     itemBatch: {
       findUnique: async ({ where }: { where: { id: string } }) =>
@@ -22,12 +23,17 @@ function fakePrisma(initial: Record<string, number>) {
         return data;
       },
     },
-    auditLog: { create: async () => ({}) },
+    auditLog: {
+      create: async ({ data }: { data: { metadata: { before: number; after: number } } }) => {
+        audits.push(data.metadata);
+        return data;
+      },
+    },
   };
   const prisma = {
     $transaction: async (fn: (t: typeof tx) => unknown) => fn(tx),
   } as never;
-  return { prisma, qty, txns };
+  return { prisma, qty, txns, audits };
 }
 
 /** Readiness giả — bulkImport gọi recalcAfterTxn (không chặn nếu lỗi). */
@@ -40,7 +46,7 @@ function fakeService(prisma: unknown) {
 
 describe("InventoryService.bulkImport (hoàn kho khi giao thất bại)", () => {
   it("nhập lại đúng số vào từng lô", async () => {
-    const { prisma, qty, txns } = fakePrisma({ b1: 10, b2: 5 });
+    const { prisma, qty, txns, audits } = fakePrisma({ b1: 10, b2: 5 });
     const svc = fakeService(prisma);
 
     const result = await svc.bulkImport("user-1", [
@@ -54,6 +60,10 @@ describe("InventoryService.bulkImport (hoàn kho khi giao thất bại)", () => 
     expect(txns).toEqual([
       { batchId: "b1", type: "IMPORT", quantity: 7 },
       { batchId: "b2", type: "IMPORT", quantity: 3 },
+    ]);
+    expect(audits).toEqual([
+      expect.objectContaining({ before: 10, after: 17 }),
+      expect.objectContaining({ before: 5, after: 8 }),
     ]);
   });
 

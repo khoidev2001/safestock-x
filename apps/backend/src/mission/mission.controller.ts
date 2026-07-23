@@ -152,7 +152,7 @@ export class MissionController {
   @RequirePermission(Permission.MISSION_FULFILL)
   @Post(":id/prepare")
   prepare(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
-    return this.missions.prepareByWarehouse(id, req.user.userId);
+    return this.missions.prepareByWarehouse(id, req.user.userId, req.user.warehouseId);
   }
 
   /** RESCUE xác nhận đã giao hiện trường + kết quả (READY → COMPLETED). */

@@ -92,7 +92,15 @@ export class InventoryService {
     scopeWarehouseId?: string | null,
   ) {
     await assertBatchInScope(this.prisma, scopeWarehouseId, batchId);
-    const result = await this.applyTxn(userId, batchId, TransactionType.EXPORT, quantity, note, source);
+    const result = await this.applyTxn(
+      userId,
+      batchId,
+      TransactionType.EXPORT,
+      quantity,
+      note,
+      source,
+      scopeWarehouseId,
+    );
     await this.recalcAfterTxn(batchId);
     return result;
   }
@@ -107,31 +115,48 @@ export class InventoryService {
     note?: string,
     scopeWarehouseId?: string | null,
   ) {
+    const result = await this.prisma.$transaction((tx) =>
+      this.bulkExportInTx(tx, userId, items, note, scopeWarehouseId),
+    );
+    await Promise.all(items.map((item) => this.recalcAfterTxn(item.batchId)));
+    return result;
+  }
+
+  /**
+   * Xuất nhiều lô trong transaction do caller sở hữu. Scope và mutation dùng
+   * cùng `tx` để không tạo cửa sổ TOCTOU. Không recalc readiness trước commit.
+   */
+  async bulkExportInTx(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    items: { batchId: string; quantity: number }[],
+    note?: string,
+    scopeWarehouseId?: string | null,
+  ) {
     if (items.length === 0) {
       throw new BadRequestException("Danh sách xuất lô rỗng");
     }
-    for (const item of items) {
-      await assertBatchInScope(this.prisma, scopeWarehouseId, item.batchId);
+    const orderedItems = items
+      .map((item, index) => ({ item, index }))
+      .sort((a, b) => a.item.batchId.localeCompare(b.item.batchId));
+    for (const { item } of orderedItems) {
+      await assertBatchInScope(tx, scopeWarehouseId, item.batchId);
     }
-    const result = await this.prisma.$transaction(async (tx) => {
-      const results = [] as Awaited<ReturnType<typeof this.decrementInTx>>[];
-      for (const item of items) {
-        results.push(
-          await this.decrementInTx(
-            tx,
-            userId,
-            item.batchId,
-            item.quantity,
-            TransactionType.EXPORT,
-            TransactionSource.BULK,
-            note,
-          ),
-        );
-      }
-      return { count: results.length, batches: results };
-    });
-    await Promise.all(items.map((item) => this.recalcAfterTxn(item.batchId)));
-    return result;
+
+    const results = new Array<Awaited<ReturnType<typeof this.decrementInTx>>>(items.length);
+    for (const { item, index } of orderedItems) {
+      results[index] = await this.decrementInTx(
+        tx,
+        userId,
+        item.batchId,
+        item.quantity,
+        TransactionType.EXPORT,
+        TransactionSource.BULK,
+        note,
+        scopeWarehouseId,
+      );
+    }
+    return { count: results.length, batches: results };
   }
 
   /**
@@ -145,14 +170,22 @@ export class InventoryService {
     items: { batchId: string; quantity: number }[],
     note?: string,
   ) {
-    const results = [] as Awaited<ReturnType<typeof this.incrementInTx>>[];
-    for (const item of items) {
+    const orderedItems = items
+      .map((item, index) => ({ item, index }))
+      .sort((a, b) => a.item.batchId.localeCompare(b.item.batchId));
+    const results = new Array<Awaited<ReturnType<typeof this.incrementInTx>>>(items.length);
+    for (const { item, index } of orderedItems) {
       if (item.quantity <= 0) continue;
-      results.push(
-        await this.incrementInTx(tx, userId, item.batchId, item.quantity, note, TransactionSource.BULK),
+      results[index] = await this.incrementInTx(
+        tx,
+        userId,
+        item.batchId,
+        item.quantity,
+        note,
+        TransactionSource.BULK,
       );
     }
-    return results;
+    return results.filter((result) => result !== undefined);
   }
 
   /**
@@ -215,12 +248,22 @@ export class InventoryService {
     quantity: number,
     note?: string,
     source: TransactionSource = TransactionSource.SCAN,
+    scopeWarehouseId?: string | null,
   ) {
     return this.prisma.$transaction(async (tx) => {
       if (type === TransactionType.IMPORT) {
         return this.incrementInTx(tx, userId, batchId, quantity, note, source);
       }
-      return this.decrementInTx(tx, userId, batchId, quantity, type, source, note);
+      return this.decrementInTx(
+        tx,
+        userId,
+        batchId,
+        quantity,
+        type,
+        source,
+        note,
+        scopeWarehouseId,
+      );
     });
   }
 
@@ -237,19 +280,32 @@ export class InventoryService {
     type: TransactionType,
     source: TransactionSource,
     note?: string,
+    scopeWarehouseId?: string | null,
   ) {
     const before = await tx.itemBatch.findUnique({ where: { id: batchId } });
     if (!before) throw new NotFoundException("Không tìm thấy lô vật tư");
 
     const result = await tx.itemBatch.updateMany({
-      where: { id: batchId, quantity: { gte: quantity } },
+      where: {
+        id: batchId,
+        quantity: { gte: quantity },
+        ...(scopeWarehouseId
+          ? { shelf: { zone: { warehouseId: scopeWarehouseId } } }
+          : {}),
+      },
       data: { quantity: { decrement: quantity } },
     });
     if (result.count === 0) {
+      // Phân biệt batch vừa bị chuyển khỏi scope với thiếu tồn; không trả lỗi 400
+      // che mất vi phạm quyền khi shelfId đổi giữa scope check và update.
+      await assertBatchInScope(tx, scopeWarehouseId, batchId);
       throw new BadRequestException(
         `Không đủ tồn: hiện ${before.quantity}, yêu cầu xuất ${quantity}`,
       );
     }
+
+    const afterBatch = await tx.itemBatch.findUnique({ where: { id: batchId } });
+    if (!afterBatch) throw new NotFoundException("Không tìm thấy lô vật tư");
 
     return this.recordTxn(tx, {
       userId,
@@ -258,8 +314,8 @@ export class InventoryService {
       source,
       quantity,
       note,
-      before: before.quantity,
-      after: before.quantity - quantity,
+      before: afterBatch.quantity + quantity,
+      after: afterBatch.quantity,
     });
   }
 
@@ -279,6 +335,8 @@ export class InventoryService {
       where: { id: batchId },
       data: { quantity: { increment: quantity } },
     });
+    const afterBatch = await tx.itemBatch.findUnique({ where: { id: batchId } });
+    if (!afterBatch) throw new NotFoundException("Không tìm thấy lô vật tư");
     return this.recordTxn(tx, {
       userId,
       batchId,
@@ -286,8 +344,8 @@ export class InventoryService {
       source,
       quantity,
       note,
-      before: before.quantity,
-      after: before.quantity + quantity,
+      before: afterBatch.quantity - quantity,
+      after: afterBatch.quantity,
     });
   }
 
@@ -321,7 +379,13 @@ export class InventoryService {
         action: `INVENTORY_${p.type}`,
         entity: "ItemBatch",
         entityId: p.batchId,
-        metadata: { quantity: p.quantity, before: p.before, after: p.after, source: p.source },
+        metadata: {
+          quantity: p.quantity,
+          before: p.before,
+          after: p.after,
+          source: p.source,
+          note: p.note ?? null,
+        },
       },
     });
     const batch = await tx.itemBatch.findUnique({ where: { id: p.batchId } });
