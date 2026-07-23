@@ -1,0 +1,117 @@
+# Checklist công việc còn lại — SafeStock-X
+
+_Lập ngày: 2026-07-23 · Rút ra từ [bao-cao-review-toan-du-an.md](bao-cao-review-toan-du-an.md)._
+
+> Đánh dấu `[x]` khi làm xong + verify (build sạch, test pass), KHÔNG chỉ code xong.
+> Mỗi mục có file gốc để định vị. P0 = chặn/nguy hiểm, làm trước.
+
+---
+
+## P0 — Bảo mật & an toàn giao dịch (ưu tiên tuyệt đối)
+
+- [ ] **P0-1 · WebSocket auth + room server-side**
+  - [ ] Xác thực JWT ở handshake (`simulation.gateway.ts:13-31`, `notification.gateway.ts:14-32`)
+  - [ ] Bỏ nhận room từ client (`join {warehouseId}`, `join-role {role}`); server suy room từ JWT
+  - [ ] Test: socket không token → reject; user kho A không nhận event kho B
+- [ ] **P0-2 · Cô lập simulator**
+  - [ ] Env-flag tắt mutation ở production (`simulation.controller.ts`, `simulation.service.ts`)
+  - [ ] Thêm permission `simulation:*` + PermissionGuard (hiện chỉ JwtAuthGuard)
+  - [ ] Scope `warehouseId` theo actor (không nhận tự do)
+  - [ ] Tài khoản SYSTEM riêng cho loadcell (thay `findFirst ADMIN`)
+- [ ] **P0-3 · Transfer tách lô + authorize**
+  - [ ] Tách batch transactionally theo `quantity` (thay vì `update shelfId` cả lô) (`inventory.service.ts:176-208`)
+  - [ ] `assertBatchInScope` cho source + kiểm `toShelfId` thuộc kho hợp lệ (chặn IDOR)
+  - [ ] Test: chuyển một phần → 2 lô đúng số; chuyển sang kho ngoài scope → 403
+- [ ] **P0-4 · Mission prepare atomic + scope**
+  - [ ] Gộp `bulkExport` + `update(READY)` vào 1 `$transaction` (`mission.service.ts:384-412`)
+  - [ ] Truyền `scopeWarehouseId` vào `bulkExport` từ `prepareByWarehouse`
+  - [ ] Test: kill giữa transaction → không double-export khi retry
+- [ ] **P0-5 · Report approve toàn bộ lô + atomic**
+  - [ ] Xử lý MỌI batch của SKU (phân bổ số đếm), bỏ `findFirst` 1 lô (`report.service.ts:65-97`)
+  - [ ] Bọc vòng reconcile + `update(APPROVED)` trong 1 transaction
+  - [ ] Test: SKU 2 lô → đối soát đúng cả hai
+
+---
+
+## P1 — Chất lượng nền tảng
+
+- [ ] **CI** — thêm `.github/workflows/`: lint + `jest` + `build` cho backend, `tsc` frontend, chặn merge khi đỏ
+- [ ] **Concurrency test** — 2 request `prepare`/`transfer`/`export` song song (`Promise.all`): kiểm không âm tồn, không lost-update, không double-export
+- [ ] **Prisma migrations** — chuyển từ `db push` sang migration history (`prisma migrate`) để review/rollback schema
+- [ ] **ESLint config** — thêm `eslint.config.js` (flat config) cho toàn repo; thay `next lint` deprecated
+- [ ] **Test 8 module trống** — admin, loan, notification, report, backup, health, ai, prisma (ít nhất controller RBAC/scope)
+
+---
+
+## P1 — Frontend web (luồng nghiệp vụ)
+
+- [ ] **Mission ID bền vững** — bỏ `useState` cho missionId (F5 mất); dùng URL param / query cache
+- [ ] **Hộp thư nhiệm vụ** — danh sách mission theo trạng thái cho RESCUE/warehouse
+- [ ] **Route-guard theo role** — chặn truy cập trang không đúng quyền
+- [ ] **RESCUE reject từ web** — hiện chỉ mobile làm được
+- [ ] **UI ghi kho** — nhập/xuất/điều chuyển/bulk (backend đã có, UI thiếu)
+- [ ] **Không nuốt lỗi** — lỗi API hiện hiện thành empty state "khỏe"; phân biệt lỗi vs rỗng thật
+
+---
+
+## AI — hạng mục đã làm & đang làm
+
+Roadmap gốc: [plan-tang-ham-luong-ai-di-thi.md](plan-tang-ham-luong-ai-di-thi.md) (B1–B7 + Track A/C) ·
+Plan 2 hướng đã chốt: [plan-tang-mat-do-ai-rag-va-nl-plan.md](plan-tang-mat-do-ai-rag-va-nl-plan.md)
+
+### ✅ AI đã làm chắc (giữ, đừng phá — chỉ để đối chiếu)
+
+- [x] **Parse tình huống tiếng Việt → JSON** (LLM thật) — `ai-service/main.py` `_PARSE_SYSTEM`, có cache + retry + schema
+- [x] **Sinh diễn giải Incident Action Plan** (LLM) — có `_find_unsupported_numbers` chống bịa số
+- [x] **Trợ lý hỏi-đáp kho** (LLM + snapshot kho) — `assistant.service.ts`; ngoài phạm vi nói "không biết"
+- [x] **AI cảnh báo tự động đa kênh** — sự cố mới → LLM giải thích → 4 kênh (desktop/chuông/chat/email); có fallback rule-based
+- [x] **Forecast dự báo thống kê** — EWMA+std→khoảng tin cậy+reorder point+confidence (KHÔNG phóng đại thành ML)
+- [x] **Guard chống lộ danh tính model** — `_IDENTITY_GUARD` + `_redact_identity` mọi câu trả lời
+- [x] **Chạy offline bằng Ollama** (Qwen 3.5 4B) — điểm cộng thật, ít đội làm được
+
+> Ghi chú trung thực: Readiness / Mission-to-Kit / Incident-fusion là **expert system + thống kê**,
+> KHÔNG phải ML. Gọi đúng tên khi demo (xem Track A).
+
+### 🔜 AI chưa làm (theo roadmap, thứ tự ưu tiên)
+
+- [x] **B-NL→plan · Nối UI nhập tình huống bằng lời** (backend SẴN, chỉ thiếu UI — rủi ro thấp, wow nhanh) ✅ 2026-07-23
+  - [x] `mission-api.ts`: thêm `parseIncident(description)` + type `ParsedIncident`
+  - [x] `mission-view.tsx`: textarea "Mô tả tình huống" + nút "Phân tích bằng AI" → điền form cho admin sửa (con người xác nhận)
+  - [x] Nhập giọng nói vi-VN offline bằng **PhoWhisper local** (thay Web Speech cloud) — nút mic ghi âm → WAV 16kHz → `/transcribe` → điền ô mô tả để người đọc lại
+  - _Verify: frontend tsc exit 0. Degrade: mic/torch/ai-service không sẵn → báo lỗi nhẹ + vẫn nhập tay được._
+- [x] **B1 · RAG trợ lý** ✅ 2026-07-23 — offline, có nguồn deterministic; hạ tầng embedding dùng chung cho B5/B7 ⭐
+  - [x] Corpus `docs/knowledge/*.md`: 11 chunk, Sphere 2018 + IFRC 2020 + PCTT Việt Nam; mỗi mục có title + locator/trang + URL; sửa mâu thuẫn roadmap `3–4L` → đúng Sphere `2,5–3L` (uống/ăn), `7,5–15L` tổng cơ bản, `15L` uống+vệ sinh sinh hoạt
+  - [x] Embedding provider riêng `nomic-embed-text` (batch `/api/embed`, fallback legacy chỉ 404/405); chat Gemini vẫn retrieval qua Ollama local
+  - [x] `scripts/build_knowledge_index.py` → `knowledge_index.json` schema v2/fingerprint (11 chunks, 768 chiều, ~117KB); có corpus hash + text hash + model digest; `--check` pass
+  - [x] `knowledge.py`: lazy-load, cosine + lexical answerability guard + rerank; reason code degrade, không sập `/assistant`
+  - [x] `/assistant`: extractive RAG — LLM chỉ chọn sentence evidence IDs `K1S1...`, schema cấm field answer; hệ thống trả nguyên văn evidence + nguồn thật; không thể đổi claim/số/đơn vị
+  - [x] Kiểm chứng: 59/59 pytest, 202/202 backend, backend+frontend tsc exit 0; live calibration 8/8 positive + 11/11 negative (gồm quantity cross-topic exploits); live HTTP 13 ca đúng nghĩa (validator thời tiết chấp nhận 72 giờ/ba ngày)
+- [ ] **B4 · Dự báo nhu cầu theo thời tiết** (hợp chủ đề thi nhất, rủi ro thấp) — nối `forecast.ts` × `weather.ts`: mưa lớn → nhân hệ số nhu cầu WASH/RESCUE/FOOD → so tồn khả dụng → cảnh báo "kho X thiếu áo phao trước lũ"
+- [ ] **B5 · Semantic search vật tư** (tái dùng embedding B1) — "đồ giữ ấm cho trẻ" → ra chăn/màn dù không trùng từ khoá
+- [ ] **B6 · Bản tin AI đầu ngày** (Daily briefing) — LLM tóm tắt readiness+forecast+incident+thời tiết thành 1 đoạn cho lãnh đạo xã (chỉ diễn giải số đã tính)
+- [ ] **B7 · Chuẩn hoá nhập liệu bằng embedding** — tên tự do → gợi ý SKU chuẩn. ⚠️ Chỉ làm SAU khi inventory/transfer ổn định (phụ thuộc P0-3); chỉ gợi ý cho người xác nhận, không tự ghi
+- [x] **B3 · Voice input vi-VN → parse** ✅ 2026-07-23 — **PhoWhisper-medium local/offline** (VinAI), ghi âm trình duyệt → WAV 16kHz base64 → `/transcribe` → điền ô mô tả → nối `/parse`. Lazy-load (thiếu torch/model → 503, không sập LLM khác). Test: `tests/test_transcribe.py` 5/5 pass. Con người đọc lại & sửa trước khi lập phương án.
+
+### 📣 Track A — Đóng gói câu chuyện AI (chi phí thấp, làm khi gần thi)
+
+- [x] Cập nhật [docs/qa/tong-quan.md](qa/tong-quan.md): gọi đúng tên LLM/RAG/PhoWhisper/rule engine/thống kê; không phóng đại
+- [x] Định vị hệ thống là **Decision Support System dùng AI có trách nhiệm** — số kho từ backend, kiến thức từ corpus có nguồn, con người quyết định; offline local không khoe "model to"
+- [x] Chuẩn bị demo RAG: `scripts/evaluate_ollama.py` có ca định mức 15L + phân biệt 2,5–3L/7,5–15L + ngoài corpus; live 13/13 pass
+
+---
+
+## P2 — Mobile & polish
+
+- [ ] **SecureStore** — token đang lưu không an toàn
+- [ ] Màn kho/readiness trên mobile
+- [ ] QR scan, inventory ops trên mobile
+- [ ] Offline cache
+- [ ] Build APK
+- [ ] Bỏ URL backend hard-code (mobile) + creds admin hard-code (desktop simulator)
+
+---
+
+## Đang chờ quyết định của người dùng
+
+- [ ] **Commit forecast thống kê** (A2 đã xong code+test, 202 test pass, CHƯA commit — chờ chốt)
+- [ ] Chốt thứ tự triển khai AI: Phần B trước hay Phần A trước
