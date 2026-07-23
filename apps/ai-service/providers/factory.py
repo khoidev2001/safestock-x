@@ -2,8 +2,10 @@
 import os
 
 from .base import LLMProvider
+from .embedding import EmbeddingProvider
 from .gemini import GeminiProvider
 from .ollama import OllamaProvider
+from .ollama_embedding import OllamaEmbeddingProvider
 
 
 def build_provider() -> LLMProvider:
@@ -24,3 +26,14 @@ def build_provider() -> LLMProvider:
         raise NotImplementedError("Claude provider chưa triển khai — dùng gemini/ollama")
 
     raise ValueError(f"AI_PROVIDER không hợp lệ: {provider}")
+
+
+def build_embedding_provider() -> EmbeddingProvider:
+    """Chọn embedding độc lập với chat provider (Gemini vẫn RAG qua Ollama local)."""
+    provider = os.getenv("EMBEDDING_PROVIDER", "ollama").lower()
+    if provider == "ollama":
+        return OllamaEmbeddingProvider(
+            base_url=os.getenv("OLLAMA_URL", "http://localhost:11434"),
+            model=os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text"),
+        )
+    raise ValueError(f"EMBEDDING_PROVIDER không hợp lệ: {provider}")

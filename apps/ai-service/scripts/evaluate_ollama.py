@@ -1,5 +1,6 @@
-"""Chạy 10 ca đánh giá Ollama/Qwen qua API thật của ai-service."""
+"""Đánh giá live Ollama/Qwen + RAG qua API thật của ai-service."""
 import json
+import os
 import re
 import sys
 import time
@@ -7,7 +8,7 @@ import urllib.error
 import urllib.request
 
 
-BASE_URL = "http://localhost:8000"
+BASE_URL = os.getenv("AI_SERVICE_URL", "http://localhost:8000")
 SNAPSHOT = {
     "warehouse": {"name": "Kho thôn Phú Xuân", "commune": "xã Hòa An"},
     "readiness": {"score": 73, "zone": "ATTENTION"},
@@ -78,8 +79,10 @@ def validate(case_id: int, response: dict) -> tuple[bool, str]:
         return ok, "đúng readiness 73"
     if case_id == 5:
         answer = response["answer"]
-        ok = ("1.6" in answer or "1,6" in answer) and "72" in answer
-        return ok, "đúng dự báo thời tiết trong snapshot"
+        lowered = answer.lower()
+        period_ok = "72" in answer or "ba ngày" in lowered or "3 ngày" in lowered
+        ok = ("1.6" in answer or "1,6" in answer) and period_ok
+        return ok, "đúng lượng mưa + kỳ dự báo 72 giờ/ba ngày trong snapshot"
     if case_id == 6:
         ok = "chỉ hỗ trợ" in response["answer"].lower()
         return ok, "từ chối câu ngoài phạm vi"
@@ -118,7 +121,7 @@ def validate(case_id: int, response: dict) -> tuple[bool, str]:
             "critical",
             "flood",
         ]
-        allowed_numbers = set(re.findall(r"(?<!\w)\d+(?:[.,]\d+)?", CASES[-1][3]["context"]))
+        allowed_numbers = set(re.findall(r"(?<!\w)\d+(?:[.,]\d+)?", CASES[9][3]["context"]))
         allowed_numbers.update({"0", "2", "6", "24"})
         generated_numbers = set(re.findall(r"(?<!\w)\d+(?:[.,]\d+)?", serialized))
         ok = (
@@ -130,6 +133,27 @@ def validate(case_id: int, response: dict) -> tuple[bool, str]:
             and generated_numbers <= allowed_numbers
         )
         return ok, "đúng schema, không bịa số và không lẫn tiếng Anh"
+    if case_id == 11:
+        answer = response.get("answer", "")
+        ok = (
+            "15" in answer
+            and "sphere" in answer.lower()
+            and "spherestandards.org" in answer
+            and "**" not in answer
+        )
+        return ok, "RAG nước: đúng số, nguồn deterministic, không Markdown"
+    if case_id == 12:
+        ok = response.get("available") is True and response.get("hits") == []
+        return ok, "retrieval ngoài corpus không gắn nguồn sai"
+    if case_id == 13:
+        answer = response.get("answer", "")
+        normalized = answer.replace(",", ".")
+        ok = (
+            contains_all(normalized, ["2.5", "3", "2", "6"])
+            and "spherestandards.org" in answer
+            and "**" not in answer
+        )
+        return ok, "phân biệt nước sống còn và vệ sinh đúng nguồn"
     return False, "không có validator"
 
 
@@ -170,6 +194,24 @@ CASES = [
         "Action Plan",
         "/action-plan",
         {"context": "Tình huống FLOOD tại thôn Phú Xuân, 180 người, kéo dài 48 giờ, 25 trẻ em, 15 người già, 5 ca y tế. Mức nghiêm trọng CRITICAL 92/100. Mức đáp ứng 72%. Dự báo cô lập trên 24 giờ 85%, thiếu vật tư 28%, cần sơ tán 70%. Kho Phú Xuân cách 4 km, ETA 18 phút. Thiếu 300 chai nước và 50 áo phao."},
+    ),
+    (
+        11,
+        "RAG định mức nước",
+        "/assistant",
+        assistant_payload("Một người cần bao nhiêu nước mỗi ngày trong tình huống khẩn cấp?"),
+    ),
+    (
+        12,
+        "RAG ngoài corpus",
+        "/knowledge/search",
+        {"query": "Cách trồng cà phê năng suất cao?", "topK": 3},
+    ),
+    (
+        13,
+        "RAG phân biệt nhu cầu nước",
+        "/assistant",
+        assistant_payload("Nước để uống khác tổng nước vệ sinh như thế nào?"),
     ),
 ]
 

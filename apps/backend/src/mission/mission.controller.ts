@@ -6,7 +6,14 @@ import { JwtAuthGuard } from "../auth/guards";
 import { PermissionGuard } from "../rbac/permission.guard";
 import { RequirePermission } from "../rbac/permissions.decorator";
 import { AiClientService } from "../ai/ai-client.service";
-import { AdminNoteDto, CompleteMissionDto, GeneratePlanDto, ParseDto, RejectMissionDto } from "./dto";
+import {
+  AdminNoteDto,
+  CompleteMissionDto,
+  GeneratePlanDto,
+  ParseDto,
+  RejectMissionDto,
+  TranscribeDto,
+} from "./dto";
 import { IncidentInput } from "./mission.compute";
 import { MissionService } from "./mission.service";
 
@@ -23,6 +30,13 @@ export class MissionController {
   @Post("parse")
   parse(@Body() dto: ParseDto) {
     return this.ai.parse(dto.description);
+  }
+
+  /** Giọng nói (WAV base64) → text tiếng Việt bằng PhoWhisper local (proxy AI). */
+  @RequirePermission(Permission.MISSION_CREATE)
+  @Post("transcribe")
+  transcribe(@Body() dto: TranscribeDto) {
+    return this.ai.transcribe(dto.audioBase64, dto.mimeType ?? "audio/wav");
   }
 
   /**

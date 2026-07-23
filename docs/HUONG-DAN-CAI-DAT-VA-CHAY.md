@@ -11,7 +11,7 @@ Cài các công cụ sau trước khi clone:
 - pnpm 10 trở lên.
 - Docker Desktop, dùng Linux containers.
 - Python 3.11 trở lên.
-- Ollama và model `qwen3.5:4b` nếu cần dùng trợ lý AI local.
+- Ollama cùng hai model `qwen3.5:4b` (sinh câu trả lời) và `nomic-embed-text` (RAG/truy hồi tri thức) nếu dùng AI local.
 
 Kiểm tra nhanh:
 
@@ -56,7 +56,7 @@ Các giá trị bắt buộc và mô tả nằm trong [`.env.example`](../.env.e
 - Đổi `POSTGRES_PASSWORD` và cập nhật cùng mật khẩu trong `DATABASE_URL`.
 - Thay `JWT_ACCESS_SECRET` và `JWT_REFRESH_SECRET` bằng hai chuỗi ngẫu nhiên dài, khác nhau.
 - Giữ `AI_PROVIDER=ollama` nếu AI phải chạy local.
-- Giữ `OLLAMA_MODEL=qwen3.5:4b` nếu đã tải model này.
+- Giữ `OLLAMA_MODEL=qwen3.5:4b` và `OLLAMA_EMBED_MODEL=nomic-embed-text` nếu đã tải hai model này.
 
 Không commit `.env`, `apps/backend/.env`, API key hoặc tunnel credentials vào Git.
 
@@ -130,16 +130,21 @@ Tải model một lần:
 
 ```powershell
 ollama pull qwen3.5:4b
+ollama pull nomic-embed-text
 ollama list
 ```
 
-Tạo Python virtual environment và cài dependency:
+`knowledge_index.json` đã có sẵn trong repo nên không cần vector hóa lại corpus khi cài máy mới. Tuy nhiên,
+`nomic-embed-text` vẫn bắt buộc ở runtime để vector hóa **câu hỏi**.
+
+Tạo Python virtual environment, cài dependency và kiểm index/corpus không bị stale:
 
 ```powershell
 cd apps/ai-service
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe scripts\build_knowledge_index.py --check
 cd ..\..
 ```
 

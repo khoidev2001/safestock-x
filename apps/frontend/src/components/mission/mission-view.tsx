@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ColorIcon } from "@/components/shared/color-icon";
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-store";
 import { useMissionFocus } from "@/lib/mission-focus-store";
 import type { LatLng } from "@/lib/geo";
@@ -18,12 +18,16 @@ import {
   generatePlan,
   getClusterWarehouses,
   getMission,
+  parseIncident,
   prepareMission,
   resendMission,
+  transcribeAudio,
   type DeliveryOutcome,
   type GenerateInput,
   type Mission,
+  type ParsedIncident,
 } from "@/lib/mission-api";
+import { blobToWavBase64 } from "@/lib/audio-wav";
 import { ActionPlanView } from "./action-plan-view";
 import { MissionReadinessPanel } from "./mission-readiness-panel";
 import { WorkflowStepper } from "./workflow-stepper";
@@ -57,6 +61,9 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
   const [incidentPoint, setIncidentPoint] = useState<LatLng | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
+  const [description, setDescription] = useState("");
+  const [parseError, setParseError] = useState<string | null>(null);
+  const [parsedOk, setParsedOk] = useState(false);
 
   // Mở đúng nhiệm vụ khi bấm thông báo (chuông) — kể cả mission đã REJECTED/DEFERRED.
   const focusMissionId = useMissionFocus((s) => s.focusMissionId);
@@ -95,6 +102,27 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
     onError: (err) => setPlanError(err instanceof ApiError ? err.message : "Chưa thể lập phương án. Vui lòng thử lại."),
   });
 
+  // AI trích xuất tình huống từ lời kể → điền vào form số để ADMIN xem lại & sửa (con người là trọng tài).
+  const parse = useMutation({
+    mutationFn: () => parseIncident(description),
+    onSuccess: (p: ParsedIncident) => {
+      setForm({
+        incidentType: p.incidentType,
+        affectedPeople: p.affectedPeople,
+        durationHours: p.durationHours,
+        children: p.children,
+        elderly: p.elderly,
+        medicalSupportCases: p.medicalSupportCases,
+      });
+      setParseError(null);
+      setParsedOk(true);
+    },
+    onError: (err) => {
+      setParsedOk(false);
+      setParseError(err instanceof ApiError ? err.message : "Chưa phân tích được mô tả. Thử diễn đạt rõ hơn hoặc nhập tay bên dưới.");
+    },
+  });
+
   const genActionPlan = useMutation({
     mutationFn: () => generateActionPlan(missionId as string),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["mission", missionId] }),
@@ -129,6 +157,18 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
             <p className="mt-1 text-sm text-[var(--text-muted)]">
               Nhập quy mô ảnh hưởng để hệ thống tính nhu cầu vật tư ban đầu.
             </p>
+
+            <DescribeIncidentBlock
+              value={description}
+              onChange={(v) => {
+                setDescription(v);
+                setParsedOk(false);
+              }}
+              onAnalyze={() => parse.mutate()}
+              analyzing={parse.isPending}
+              error={parseError}
+              parsedOk={parsedOk}
+            />
 
             <div className="mt-4 flex flex-wrap gap-2">
               {SAMPLES.map((s) => (
@@ -607,6 +647,171 @@ function EmptyState({ isAdmin }: { isAdmin: boolean }) {
       </p>
     </div>
   );
+}
+
+/**
+ * Nhập tình huống bằng lời → AI trích xuất. Nút mic ghi âm rồi PhoWhisper local
+ * nhận dạng (offline, giọng Việt). Người dùng đọc lại & sửa trước khi phân tích —
+ * AI chỉ hỗ trợ nhập, con người quyết. Không hỗ trợ mic → ẩn nút, gõ tay vẫn chạy.
+ */
+function DescribeIncidentBlock({
+  value,
+  onChange,
+  onAnalyze,
+  analyzing,
+  error,
+  parsedOk,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onAnalyze: () => void;
+  analyzing: boolean;
+  error: string | null;
+  parsedOk: boolean;
+}) {
+  // Ghi thêm vào cuối phần đã có (nối tiếp nhiều lần nói), gọn ghẽ khoảng trắng.
+  const { supported, status, voiceError, toggle } = useAudioRecorder((text) =>
+    onChange([value.trim(), text.trim()].filter(Boolean).join(" ")),
+  );
+  const recording = status === "recording";
+  const transcribing = status === "transcribing";
+
+  return (
+    <div className="mt-4 rounded-md border border-dashed bg-[var(--surface-2)] p-3">
+      <div className="flex items-center gap-2">
+        <ColorIcon name="magic" size={16} tone="amber" />
+        <span className="text-xs font-semibold">Mô tả tình huống bằng lời (AI trích xuất)</span>
+      </div>
+      <div className="relative mt-2">
+        <textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          rows={3}
+          placeholder='Vd: "Lũ quét xã Đồng Xuân, khoảng 200 người mắc kẹt, nhiều trẻ em, 3 ngày chưa có nước sạch"'
+          className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 pr-10 text-sm"
+        />
+        {supported && (
+          <button
+            type="button"
+            onClick={toggle}
+            disabled={transcribing}
+            title={recording ? "Dừng và nhận dạng" : "Nói để nhập (tiếng Việt, offline)"}
+            aria-label={recording ? "Dừng ghi âm" : "Nhập bằng giọng nói"}
+            className="absolute right-2 top-2 rounded-full border p-1.5 transition active:translate-y-px disabled:opacity-60"
+            style={recording ? { borderColor: "var(--color-critical)", background: "color-mix(in oklch, var(--color-critical) 12%, transparent)" } : undefined}
+          >
+            <ColorIcon name="microphone" size={16} tone={recording ? "red" : "blue"} />
+          </button>
+        )}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={onAnalyze}
+          disabled={analyzing || value.trim().length < 5}
+          className="inline-flex items-center gap-2 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-fg)] transition hover:brightness-95 active:translate-y-px disabled:opacity-60"
+        >
+          <ColorIcon name="magic" size={15} tone="amber" />
+          {analyzing ? "Đang phân tích…" : "Phân tích bằng AI"}
+        </button>
+        {recording && <span className="text-xs text-[var(--color-critical)]">● Đang ghi âm… bấm mic để dừng</span>}
+        {transcribing && <span className="text-xs text-[var(--text-muted)]">Đang nhận dạng giọng nói…</span>}
+        {parsedOk && !analyzing && (
+          <span className="text-xs text-[var(--color-ready)]">✓ Đã điền form bên dưới — hãy kiểm tra & sửa nếu cần</span>
+        )}
+      </div>
+      {voiceError && <p className="mt-1.5 text-xs text-[var(--color-attention)]">{voiceError}</p>}
+      {error && <p className="mt-1.5 text-xs text-[var(--color-critical)]">{error}</p>}
+    </div>
+  );
+}
+
+type RecorderStatus = "idle" | "recording" | "transcribing";
+
+/**
+ * Ghi âm mic → WAV 16kHz → PhoWhisper local (offline) trả text tiếng Việt.
+ * Trả {supported, status, voiceError, toggle}. Thiếu getUserMedia/AudioContext → supported=false.
+ * Lỗi micro/nhận dạng (vd ai-service tắt, 503) → voiceError, KHÔNG chặn luồng gõ tay.
+ */
+function useAudioRecorder(onText: (text: string) => void) {
+  const [supported, setSupported] = useState(false);
+  const [status, setStatus] = useState<RecorderStatus>("idle");
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setSupported(
+      Boolean(navigator.mediaDevices?.getUserMedia) &&
+        typeof MediaRecorder !== "undefined" &&
+        Boolean(window.AudioContext ?? (window as unknown as { webkitAudioContext?: unknown }).webkitAudioContext),
+    );
+    return () => {
+      recorderRef.current?.stop();
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
+  const stopStream = () => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+  };
+
+  const startRecording = async () => {
+    setVoiceError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      chunksRef.current = [];
+      const recorder = new MediaRecorder(stream);
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      recorder.onstop = async () => {
+        stopStream();
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        if (blob.size === 0) {
+          setStatus("idle");
+          return;
+        }
+        setStatus("transcribing");
+        try {
+          const base64 = await blobToWavBase64(blob);
+          const { text } = await transcribeAudio(base64);
+          if (text.trim()) onText(text);
+          else setVoiceError("Chưa nghe rõ nội dung. Vui lòng nói lại hoặc gõ tay.");
+        } catch (err) {
+          setVoiceError(
+            err instanceof ApiError
+              ? "Nhận dạng giọng nói chưa sẵn sàng — vui lòng gõ tay."
+              : "Không xử lý được âm thanh. Vui lòng gõ tay.",
+          );
+        } finally {
+          setStatus("idle");
+        }
+      };
+      recorder.start();
+      recorderRef.current = recorder;
+      setStatus("recording");
+    } catch {
+      stopStream();
+      setStatus("idle");
+      setVoiceError("Không truy cập được micro. Kiểm tra quyền trình duyệt hoặc gõ tay.");
+    }
+  };
+
+  const toggle = () => {
+    if (status === "recording") {
+      recorderRef.current?.stop();
+      recorderRef.current = null;
+      return;
+    }
+    if (status === "idle") void startRecording();
+  };
+
+  return { supported, status, voiceError, toggle };
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

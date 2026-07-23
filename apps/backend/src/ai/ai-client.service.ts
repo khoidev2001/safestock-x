@@ -42,6 +42,12 @@ export class AiClientService {
     return result.answer;
   }
 
+  /** Nhận dạng giọng nói (WAV base64) → text tiếng Việt bằng PhoWhisper local. Không cache (audio khác nhau mỗi lần). */
+  async transcribe(audioBase64: string, mimeType: string): Promise<string> {
+    const result = await this.post<{ text: string }>("/transcribe", { audioBase64, mimeType });
+    return result.text;
+  }
+
   /**
    * Sinh phần diễn giải Action Plan (mục tiêu/giai đoạn/cảnh báo/câu hỏi).
    * Context là số ĐÃ TÍNH (severity/forecasts/vật tư/kho/ETA). Có cache theo context.

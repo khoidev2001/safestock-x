@@ -126,6 +126,33 @@ export const generatePlan = (input: GenerateInput) =>
     body: JSON.stringify(input),
   });
 
+/** Tình huống do AI trích xuất từ mô tả bằng lời (khớp form nhập tay). */
+export interface ParsedIncident {
+  incidentType: string;
+  affectedPeople: number;
+  durationHours: number;
+  children: number;
+  elderly: number;
+  medicalSupportCases: number;
+}
+
+/** Gửi mô tả bằng lời → AI trích xuất tình huống có cấu trúc (người xác nhận trước khi lập phương án). */
+export const parseIncident = (description: string) =>
+  apiFetch<ParsedIncident>("/api/missions/parse", {
+    method: "POST",
+    body: JSON.stringify({ description }),
+  });
+
+/**
+ * Ghi âm (WAV 16kHz base64) → PhoWhisper local nhận dạng thành text tiếng Việt.
+ * Người dùng đọc lại & sửa trước khi bấm phân tích — AI chỉ hỗ trợ nhập, không tự quyết.
+ */
+export const transcribeAudio = (audioBase64: string, mimeType = "audio/wav") =>
+  apiFetch<{ text: string }>("/api/missions/transcribe", {
+    method: "POST",
+    body: JSON.stringify({ audioBase64, mimeType }),
+  });
+
 export const getMission = (id: string) => apiFetch<Mission>(`/api/missions/${id}`);
 
 export const listMissions = (statuses?: MissionStatus[]) =>
