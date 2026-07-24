@@ -1,9 +1,4 @@
-import {
-  Permission,
-  roleHasPermission,
-  ROLE_PERMISSIONS,
-  UserRole,
-} from "@safestock/shared-types";
+import { Permission, roleHasPermission, ROLE_PERMISSIONS, UserRole } from "@safestock/shared-types";
 
 describe("RBAC role permissions", () => {
   it("should give WAREHOUSE full inventory operations + fulfill (chuẩn bị kho)", () => {
@@ -13,6 +8,8 @@ describe("RBAC role permissions", () => {
     // Workflow mới: WAREHOUSE chuẩn bị/xuất (fulfill), KHÔNG lập/duyệt kế hoạch.
     expect(roleHasPermission(UserRole.WAREHOUSE, Permission.MISSION_FULFILL)).toBe(true);
     expect(roleHasPermission(UserRole.WAREHOUSE, Permission.MISSION_CREATE)).toBe(false);
+    expect(roleHasPermission(UserRole.WAREHOUSE, Permission.SIMULATION_VIEW)).toBe(true);
+    expect(roleHasPermission(UserRole.WAREHOUSE, Permission.SIMULATION_MUTATE)).toBe(false);
   });
 
   it("should NOT let WAREHOUSE view audit or manage users (admin-only)", () => {
@@ -25,6 +22,8 @@ describe("RBAC role permissions", () => {
     expect(roleHasPermission(UserRole.RESCUE, Permission.MISSION_REQUEST)).toBe(true);
     expect(roleHasPermission(UserRole.RESCUE, Permission.MISSION_CONFIRM)).toBe(true);
     expect(roleHasPermission(UserRole.RESCUE, Permission.LOAN_MANAGE)).toBe(true);
+    expect(roleHasPermission(UserRole.RESCUE, Permission.SIMULATION_VIEW)).toBe(true);
+    expect(roleHasPermission(UserRole.RESCUE, Permission.SIMULATION_MUTATE)).toBe(false);
   });
 
   it("should NOT let RESCUE touch warehouse operations", () => {

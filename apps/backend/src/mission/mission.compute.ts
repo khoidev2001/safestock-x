@@ -69,13 +69,8 @@ export function computeRequirements(incident: IncidentInput): Requirement[] {
  * Sort lô theo hạn dùng (gần hết hạn trước, không hạn cuối), lấy dần tới đủ.
  * KHÔNG vượt tồn. Trả về số cấp được + thiếu + chi tiết theo lô.
  */
-export function allocateGreedy(
-  requirement: Requirement,
-  batches: AvailableBatch[],
-): Allocation {
-  const pool = batches
-    .filter((b) => b.sku === requirement.sku)
-    .sort(byNearestThenFefo);
+export function allocateGreedy(requirement: Requirement, batches: AvailableBatch[]): Allocation {
+  const pool = batches.filter((b) => b.sku === requirement.sku).sort(byNearestThenFefo);
 
   let remaining = requirement.required;
   const picked: Allocation["batches"] = [];
@@ -112,9 +107,7 @@ export function allocateGreedy(
  * Loại required=0 bỏ qua (không kéo xuống).
  */
 export function overallFulfillment(allocations: Allocation[]): number {
-  const ratios = allocations
-    .filter((a) => a.required > 0)
-    .map((a) => a.allocated / a.required);
+  const ratios = allocations.filter((a) => a.required > 0).map((a) => a.allocated / a.required);
   if (ratios.length === 0) return 100;
   return Math.round(Math.min(...ratios) * 100);
 }

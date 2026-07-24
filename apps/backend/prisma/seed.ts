@@ -1,5 +1,6 @@
 import { config } from "dotenv";
-config();
+const explicitEnvFile = process.env.SAFESTOCK_ENV_FILE?.trim();
+config(explicitEnvFile ? { path: explicitEnvFile } : undefined);
 
 import {
   ItemCondition,
@@ -121,13 +122,11 @@ async function main() {
 
   const { zones, shelves } = await createCentralStorage(centralWarehouse.id);
   const itemBySku = await createCatalog();
-  const centralBatchRefs = await createCentralBatches(
-    centralWarehouse.id,
+  const centralBatchRefs = await createCentralBatches(centralWarehouse.id, itemBySku, shelves);
+  const { warehouses: hamletWarehouses, batchRefs: hamletBatchRefs } = await createHamletWarehouses(
+    organization.id,
     itemBySku,
-    shelves,
   );
-  const { warehouses: hamletWarehouses, batchRefs: hamletBatchRefs } =
-    await createHamletWarehouses(organization.id, itemBySku);
   const hamletLeaderIds = await createHamletLeaders(
     organization.id,
     hamletWarehouses,
@@ -270,9 +269,7 @@ async function createCentralBatches(
         circulation: definition.circulation ?? "IN_STOCK",
         expiryDate: dateFromOffset(definition.expiryOffsetDays),
         inspectedAt: dateFromOffset(
-          definition.inspectedOffsetDays == null
-            ? null
-            : -definition.inspectedOffsetDays,
+          definition.inspectedOffsetDays == null ? null : -definition.inspectedOffsetDays,
         ),
       },
     });
@@ -287,10 +284,7 @@ async function createCentralBatches(
   return refs;
 }
 
-async function createHamletWarehouses(
-  organizationId: string,
-  itemBySku: Map<string, string>,
-) {
+async function createHamletWarehouses(organizationId: string, itemBySku: Map<string, string>) {
   const warehouses: Warehouse[] = [];
   const batchRefs: SeedBatchRef[] = [];
   for (let index = 0; index < HAMLET_WAREHOUSES.length; index++) {

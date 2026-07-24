@@ -5,10 +5,12 @@ build/
 .expo/
 *.log
 .env
+.env.demo
 .env.local
 .env.*.local
 **/.env
 !.env.example
+!.env.demo.example
 coverage/
 .turbo/
 __pycache__/

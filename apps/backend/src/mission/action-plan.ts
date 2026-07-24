@@ -99,14 +99,12 @@ export function scoreSeverity(
  * Dự báo % bằng rule (KHÔNG để LLM bịa). Ước lượng định tính có căn cứ:
  * cô lập kéo dài, thiếu vật tư, cần sơ tán.
  */
-export function computeForecasts(
-  incident: IncidentInput,
-  fulfillment: number,
-): Forecast[] {
+export function computeForecasts(incident: IncidentInput, fulfillment: number): Forecast[] {
   const forecasts: Forecast[] = [];
 
   // Cô lập > 24h: tăng theo thời gian + loại lũ/sạt lở.
-  const isolationBase = incident.incidentType === "FLOOD" || incident.incidentType === "LANDSLIDE" ? 45 : 25;
+  const isolationBase =
+    incident.incidentType === "FLOOD" || incident.incidentType === "LANDSLIDE" ? 45 : 25;
   const isolationProb = clamp(isolationBase + Math.min(30, incident.durationHours), 0, 95);
   forecasts.push({ label: "Cô lập > 24 giờ", probability: isolationProb });
 
@@ -115,11 +113,7 @@ export function computeForecasts(
 
   // Cần sơ tán: theo số người + nhóm dễ tổn thương.
   const vulnerable = incident.children + incident.elderly + incident.medicalSupportCases;
-  const evacProb = clamp(
-    Math.round(incident.affectedPeople / 5) + vulnerable * 2,
-    5,
-    90,
-  );
+  const evacProb = clamp(Math.round(incident.affectedPeople / 5) + vulnerable * 2, 5, 90);
   forecasts.push({ label: "Cần sơ tán", probability: evacProb });
 
   return forecasts;
@@ -173,7 +167,9 @@ export function buildTemplateNarrative(
       shortages.length > 0
         ? `Thiếu: ${shortages.join(", ")} — cần bổ sung từ kho khác.`
         : "Đủ vật tư thiết yếu ở thời điểm hiện tại.",
-      incident.durationHours >= 24 ? "Nguy cơ cô lập kéo dài trên 24 giờ." : "Theo dõi diễn biến sát.",
+      incident.durationHours >= 24
+        ? "Nguy cơ cô lập kéo dài trên 24 giờ."
+        : "Theo dõi diễn biến sát.",
     ],
     followUpQuestions: [
       "Có trẻ em hoặc người bệnh tại chỗ không?",

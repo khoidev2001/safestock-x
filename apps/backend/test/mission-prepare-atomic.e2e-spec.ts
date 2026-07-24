@@ -176,10 +176,10 @@ describe("Mission prepare atomic (E2E PostgreSQL)", () => {
   async function cleanupFixture(fixture: Fixture) {
     await prisma.$transaction(async (tx) => {
       for (const [batchId, quantity] of fixture.originalQuantities) {
-          await tx.itemBatch.update({
-            where: { id: batchId },
-            data: { quantity },
-          });
+        await tx.itemBatch.update({
+          where: { id: batchId },
+          data: { quantity },
+        });
       }
       await tx.notification.deleteMany({ where: { missionId: fixture.missionId } });
       const notes = [

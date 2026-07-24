@@ -9,10 +9,7 @@ const comp = (
 
 describe("buildRecommendations", () => {
   it("should return no recommendation when all components are healthy", () => {
-    const result = buildRecommendations([
-      comp("expiry", 100),
-      comp("itemCondition", 90),
-    ]);
+    const result = buildRecommendations([comp("expiry", 100), comp("itemCondition", 90)]);
     expect(result).toHaveLength(0);
   });
 

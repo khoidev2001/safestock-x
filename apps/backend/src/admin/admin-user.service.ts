@@ -1,7 +1,13 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import * as bcrypt from "bcryptjs";
 import { UserRole } from "@safestock/shared-types";
 import { PrismaService } from "../prisma/prisma.service";
+import { isSimulationSystemActorEmail } from "../simulation/simulation-system-actor-identity";
 
 interface CreateUserInput {
   email: string;
@@ -21,12 +27,22 @@ export class AdminUserService {
 
   list() {
     return this.prisma.user.findMany({
-      select: { id: true, email: true, fullName: true, role: true, warehouseId: true, createdAt: true },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        role: true,
+        warehouseId: true,
+        createdAt: true,
+      },
       orderBy: { createdAt: "asc" },
     });
   }
 
   async create(input: CreateUserInput) {
+    if (isSimulationSystemActorEmail(input.email)) {
+      throw new BadRequestException("Email được dành riêng cho actor hệ thống");
+    }
     const exists = await this.prisma.user.findUnique({ where: { email: input.email } });
     if (exists) throw new BadRequestException("Email đã tồn tại");
 
@@ -53,6 +69,9 @@ export class AdminUserService {
   async update(id: string, patch: Partial<CreateUserInput>) {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException("Không tìm thấy user");
+    if (isSimulationSystemActorEmail(user.email)) {
+      throw new ForbiddenException("Không được sửa actor hệ thống");
+    }
 
     const role = (patch.role ?? user.role) as UserRole;
     if (patch.warehouseId !== undefined || patch.role !== undefined) {
@@ -79,6 +98,9 @@ export class AdminUserService {
   async remove(id: string) {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException("Không tìm thấy user");
+    if (isSimulationSystemActorEmail(user.email)) {
+      throw new ForbiddenException("Không được xóa actor hệ thống");
+    }
     await this.prisma.user.delete({ where: { id } });
     return { deleted: true };
   }

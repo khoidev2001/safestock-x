@@ -12,7 +12,13 @@ function fakePrisma(initial: Record<string, number>) {
     itemBatch: {
       findUnique: async ({ where }: { where: { id: string } }) =>
         where.id in qty ? { id: where.id, quantity: qty[where.id] } : null,
-      update: async ({ where, data }: { where: { id: string }; data: { quantity: { increment: number } } }) => {
+      update: async ({
+        where,
+        data,
+      }: {
+        where: { id: string };
+        data: { quantity: { increment: number } };
+      }) => {
         qty[where.id] += data.quantity.increment;
         return { id: where.id, quantity: qty[where.id] };
       },
@@ -38,7 +44,10 @@ function fakePrisma(initial: Record<string, number>) {
 
 /** Readiness giả — bulkImport gọi recalcAfterTxn (không chặn nếu lỗi). */
 function fakeService(prisma: unknown) {
-  const svc = new InventoryService(prisma as never, { recalculateWarehouse: async () => {} } as never);
+  const svc = new InventoryService(
+    prisma as never,
+    { recalculateWarehouse: async () => {} } as never,
+  );
   // recalcAfterTxn đọc shelf.zone.warehouseId; test hoàn kho không cần → stub no-op.
   (svc as unknown as { recalcAfterTxn: () => Promise<void> }).recalcAfterTxn = async () => {};
   return svc;
@@ -49,10 +58,14 @@ describe("InventoryService.bulkImport (hoàn kho khi giao thất bại)", () => 
     const { prisma, qty, txns, audits } = fakePrisma({ b1: 10, b2: 5 });
     const svc = fakeService(prisma);
 
-    const result = await svc.bulkImport("user-1", [
-      { batchId: "b1", quantity: 7 },
-      { batchId: "b2", quantity: 3 },
-    ], "Hoàn kho: nhiệm vụ m1 giao thất bại");
+    const result = await svc.bulkImport(
+      "user-1",
+      [
+        { batchId: "b1", quantity: 7 },
+        { batchId: "b2", quantity: 3 },
+      ],
+      "Hoàn kho: nhiệm vụ m1 giao thất bại",
+    );
 
     expect(qty.b1).toBe(17);
     expect(qty.b2).toBe(8);

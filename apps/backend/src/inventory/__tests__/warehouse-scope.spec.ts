@@ -6,9 +6,7 @@ function fakePrisma(batchWarehouseId: string | null) {
   return {
     itemBatch: {
       findUnique: async () =>
-        batchWarehouseId
-          ? { shelf: { zone: { warehouseId: batchWarehouseId } } }
-          : null,
+        batchWarehouseId ? { shelf: { zone: { warehouseId: batchWarehouseId } } } : null,
     },
   } as never;
 }

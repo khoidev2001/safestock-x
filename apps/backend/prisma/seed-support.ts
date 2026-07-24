@@ -1,9 +1,4 @@
-import {
-  PrismaClient,
-  type Shelf,
-  type Warehouse,
-  type WarehouseZone,
-} from "@prisma/client";
+import { PrismaClient, type Shelf, type Warehouse, type WarehouseZone } from "@prisma/client";
 import type { SeedBatchDefinition } from "./seed-data";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -36,7 +31,9 @@ export async function seedDevices(
   };
 
   for (const shelf of context.centralShelves.values()) {
-    const zone = [...context.centralZones.values()].find((candidate) => candidate.id === shelf.zoneId);
+    const zone = [...context.centralZones.values()].find(
+      (candidate) => candidate.id === shelf.zoneId,
+    );
     await register({
       warehouseId: context.centralWarehouse.id,
       zoneId: shelf.zoneId,
@@ -67,17 +64,59 @@ export async function seedDevices(
       currentValue: zone.code === "A" ? 62 : 60,
     });
   }
-  await register({ warehouseId: context.centralWarehouse.id, type: "DOOR", code: "door_main", unit: "bool", currentValue: 0 });
-  await register({ warehouseId: context.centralWarehouse.id, type: "GATEWAY", code: "gateway_01", unit: "bool", currentValue: 1 });
-  await register({ warehouseId: context.centralWarehouse.id, type: "SMOKE", code: "smoke_main", unit: "ppm", currentValue: 0 });
-  await register({ warehouseId: context.centralWarehouse.id, type: "POWER", code: "power_main", unit: "bool", currentValue: 1 });
+  await register({
+    warehouseId: context.centralWarehouse.id,
+    type: "DOOR",
+    code: "door_main",
+    unit: "bool",
+    currentValue: 0,
+  });
+  await register({
+    warehouseId: context.centralWarehouse.id,
+    type: "GATEWAY",
+    code: "gateway_01",
+    unit: "bool",
+    currentValue: 1,
+  });
+  await register({
+    warehouseId: context.centralWarehouse.id,
+    type: "SMOKE",
+    code: "smoke_main",
+    unit: "ppm",
+    currentValue: 0,
+  });
+  await register({
+    warehouseId: context.centralWarehouse.id,
+    type: "POWER",
+    code: "power_main",
+    unit: "bool",
+    currentValue: 1,
+  });
 
   for (let index = 0; index < context.hamletWarehouses.length; index++) {
     const warehouse = context.hamletWarehouses[index];
     const key = `hamlet_${index + 1}`;
-    await register({ warehouseId: warehouse.id, type: "TEMPERATURE", code: `temp_${key}`, unit: "°C", currentValue: 27 + (index % 4) * 0.5 });
-    await register({ warehouseId: warehouse.id, type: "HUMIDITY", code: `humid_${key}`, unit: "%", currentValue: 58 + (index % 5) });
-    await register({ warehouseId: warehouse.id, type: "GATEWAY", code: `gateway_${key}`, unit: "bool", currentValue: 1 });
+    await register({
+      warehouseId: warehouse.id,
+      type: "TEMPERATURE",
+      code: `temp_${key}`,
+      unit: "°C",
+      currentValue: 27 + (index % 4) * 0.5,
+    });
+    await register({
+      warehouseId: warehouse.id,
+      type: "HUMIDITY",
+      code: `humid_${key}`,
+      unit: "%",
+      currentValue: 58 + (index % 5),
+    });
+    await register({
+      warehouseId: warehouse.id,
+      type: "GATEWAY",
+      code: `gateway_${key}`,
+      unit: "bool",
+      currentValue: 1,
+    });
   }
   return deviceByCode;
 }
@@ -130,12 +169,8 @@ export async function seedOperationalRecords(
     await prisma.inventoryCount.create({
       data: {
         batchId: ref.batchId,
-        countedQty: Math.max(
-          0,
-          ref.quantity - onLoan + (ref.definition.countedDelta ?? 0),
-        ),
-        userId:
-          context.hamletLeaderIds.get(ref.warehouseId) ?? context.warehouseUserId,
+        countedQty: Math.max(0, ref.quantity - onLoan + (ref.definition.countedDelta ?? 0)),
+        userId: context.hamletLeaderIds.get(ref.warehouseId) ?? context.warehouseUserId,
         note: onLoan > 0 ? "Đã đối chiếu phần đang cấp cho đội cứu hộ" : "Kiểm kê định kỳ",
         countedAt: dateFromOffset(-(ref.definition.countedOffsetDays ?? 7))!,
       },
@@ -254,9 +289,7 @@ async function seedMonthlyReport(
     hamletLeaderIds: Map<string, string>;
   },
 ) {
-  const longHa = context.hamletWarehouses.find((warehouse) =>
-    warehouse.name.endsWith("Long Hà"),
-  );
+  const longHa = context.hamletWarehouses.find((warehouse) => warehouse.name.endsWith("Long Hà"));
   if (!longHa) return;
   const leaderId = context.hamletLeaderIds.get(longHa.id);
   if (!leaderId) return;
@@ -288,7 +321,11 @@ export async function seedTransactionHistory(
     { sku: "BATT-01", perExport: 2, active: (day: number) => day < 30 || day % 3 === 0 },
     { sku: "FIRSTAID-01", perExport: 1, active: (day: number) => day % 3 === 0 },
     { sku: "TORCH-01", perExport: 1, active: (day: number) => day > 30 && day % 4 === 0 },
-    { sku: "LIFE-ADULT", perExport: 4, active: (day: number) => (day >= 43 && day <= 47) || (day >= 8 && day <= 12) },
+    {
+      sku: "LIFE-ADULT",
+      perExport: 4,
+      active: (day: number) => (day >= 43 && day <= 47) || (day >= 8 && day <= 12),
+    },
     { sku: "RICE-01", perExport: 10, active: (day: number) => day % 2 === 0 },
     { sku: "HYGIENE-KIT-01", perExport: 3, active: (day: number) => day % 4 === 0 },
   ];

@@ -1,14 +1,14 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: safestock_postgres
+    container_name: ${STACK_NAME:-safestock}_postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-safestock}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-safestock_dev}
       POSTGRES_DB: ${POSTGRES_DB:-safestock}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${BIND_ADDRESS:-0.0.0.0}:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -19,10 +19,10 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: safestock_redis
+    container_name: ${STACK_NAME:-safestock}_redis
     restart: unless-stopped
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "${BIND_ADDRESS:-0.0.0.0}:${REDIS_PORT:-6379}:6379"
     volumes:
       - redisdata:/data
     healthcheck:

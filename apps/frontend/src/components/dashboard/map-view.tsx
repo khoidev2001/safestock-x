@@ -5,7 +5,11 @@ import { ColorIcon } from "@/components/shared/color-icon";
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-store";
-import { listAllWarehouses, updateWarehouseLocation, type AdminWarehouse } from "@/lib/warehouse-api";
+import {
+  listAllWarehouses,
+  updateWarehouseLocation,
+  type AdminWarehouse,
+} from "@/lib/warehouse-api";
 
 const MapCanvas = dynamic(() => import("./map-canvas").then((m) => m.MapCanvas), {
   ssr: false,
@@ -94,7 +98,9 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
               {devMode ? "Đang cập nhật vị trí" : "Cập nhật vị trí kho"}
             </button>
           ) : (
-            <p className="mt-2 text-xs text-[var(--text-muted)]">Chỉ quản trị xã ghim được toạ độ kho.</p>
+            <p className="mt-2 text-xs text-[var(--text-muted)]">
+              Chỉ quản trị xã ghim được toạ độ kho.
+            </p>
           )}
         </section>
 
@@ -102,7 +108,8 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
           <section className="rounded-md border bg-[var(--surface)] p-4">
             <h4 className="text-sm font-semibold">Ghim toạ độ</h4>
             <p className="mt-1 text-xs text-[var(--text-muted)]">
-              Kéo dấu ghim, hoặc chọn một kho rồi bấm vào vị trí tương ứng trên bản đồ. Sau đó chọn Lưu.
+              Kéo dấu ghim, hoặc chọn một kho rồi bấm vào vị trí tương ứng trên bản đồ. Sau đó chọn
+              Lưu.
             </p>
             <ul className="mt-3 space-y-2">
               {warehouses.map((w) => {
@@ -124,7 +131,9 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
                           type="button"
                           onClick={() => setPickingId(picking ? null : w.id)}
                           className={`rounded-md px-2 py-1 text-xs font-medium transition ${
-                            picking ? "bg-[var(--color-accent)] text-[var(--color-accent-fg)]" : "border"
+                            picking
+                              ? "bg-[var(--color-accent)] text-[var(--color-accent-fg)]"
+                              : "border"
                           }`}
                           title="Chọn vị trí trên bản đồ"
                         >
@@ -151,13 +160,19 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
 
         {!devMode && unlocated.length > 0 && (
           <section className="rounded-md border bg-[var(--surface)] p-4">
-            <h4 className="text-sm font-semibold text-[var(--color-attention)]">Chưa ghim toạ độ ({unlocated.length})</h4>
+            <h4 className="text-sm font-semibold text-[var(--color-attention)]">
+              Chưa ghim toạ độ ({unlocated.length})
+            </h4>
             <ul className="mt-2 space-y-1 text-sm text-[var(--text-muted)]">
               {unlocated.map((w) => (
                 <li key={w.id}>• {w.name}</li>
               ))}
             </ul>
-            {isAdmin && <p className="mt-2 text-xs text-[var(--text-muted)]">Bật chế độ ghim để đặt vị trí.</p>}
+            {isAdmin && (
+              <p className="mt-2 text-xs text-[var(--text-muted)]">
+                Bật chế độ ghim để đặt vị trí.
+              </p>
+            )}
           </section>
         )}
       </aside>

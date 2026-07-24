@@ -90,9 +90,21 @@ function LoanCard({ loan, warehouseId }: { loan: LoanRecord; warehouseId: string
       {open && (
         <div className="mt-4 border-t pt-4">
           <div className="grid grid-cols-3 gap-3">
-            <ReturnField label="Còn sử dụng tốt" value={form.returnedOk} onChange={(v) => setForm({ ...form, returnedOk: v })} />
-            <ReturnField label="Bị hư hỏng" value={form.returnedDamaged} onChange={(v) => setForm({ ...form, returnedDamaged: v })} />
-            <ReturnField label="Thất lạc" value={form.lost} onChange={(v) => setForm({ ...form, lost: v })} />
+            <ReturnField
+              label="Còn sử dụng tốt"
+              value={form.returnedOk}
+              onChange={(v) => setForm({ ...form, returnedOk: v })}
+            />
+            <ReturnField
+              label="Bị hư hỏng"
+              value={form.returnedDamaged}
+              onChange={(v) => setForm({ ...form, returnedDamaged: v })}
+            />
+            <ReturnField
+              label="Thất lạc"
+              value={form.lost}
+              onChange={(v) => setForm({ ...form, lost: v })}
+            />
           </div>
           <div className="mt-3 flex items-center justify-between">
             <span className="text-xs text-[var(--text-muted)]">
@@ -116,7 +128,15 @@ function LoanCard({ loan, warehouseId }: { loan: LoanRecord; warehouseId: string
   );
 }
 
-function ReturnField({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+function ReturnField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+}) {
   return (
     <label className="block">
       <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">{label}</span>

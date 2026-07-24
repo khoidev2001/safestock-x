@@ -51,6 +51,25 @@ pnpm ai:dev
 - AI health: `http://localhost:8000/health`
 - Simulator legacy: `http://localhost:3100/sim.html`
 
+## Chạy simulator demo cô lập
+
+Simulator ghi dữ liệu chỉ được chạy bằng runtime demo riêng để tránh seed/reset hoặc sự kiện cảm biến chạm database vận hành. Không sửa `.env` vận hành cho luồng này; giữ `SIMULATION_MUTATION_ENABLED=false` tại đó. Runbook đầy đủ nằm trong [Hướng dẫn cài đặt và chạy](docs/HUONG-DAN-CAI-DAT-VA-CHAY.md#71-chạy-simulator-demo-cô-lập).
+
+```powershell
+Copy-Item .env.demo.example .env.demo
+notepad .env.demo
+pnpm demo:validate
+pnpm demo:compose:verify
+pnpm demo:infra:up
+pnpm demo:db:reset -- --confirm-demo-reset
+pnpm --filter @safestock/backend build
+pnpm demo:backend
+```
+
+Mở `http://localhost:3110/sim.html`; app desktop cũng phải trỏ backend tới `http://localhost:3110`. Khi xong, `pnpm demo:infra:down` dừng stack demo nhưng giữ dữ liệu trong volume.
+
+Nguồn thực thi là [`.env.demo.example`](.env.demo.example), [`package.json`](package.json), [`infrastructure/docker-compose.yml`](infrastructure/docker-compose.yml) và [`infrastructure/demo/`](infrastructure/demo/). Hỗ trợ cấu hình cô lập đã hoàn tất; chưa tuyên bố nghiệm thu pilot chạy đồng thời stack vận hành và demo trên máy thật.
+
 Sau khi pull code mới trên database đã có dữ liệu, đồng bộ Prisma schema trước khi chạy backend:
 
 ```powershell
@@ -66,6 +85,11 @@ Kiểm tra SQL do `be:schema:diff` in ra trước; dừng lại nếu có lệnh
 |---|---|
 | `pnpm infra:up` | Khởi động PostgreSQL và Redis |
 | `pnpm infra:down` | Dừng hạ tầng local |
+| `pnpm demo:validate` | Kiểm tra file `.env.demo` trước khi chạy |
+| `pnpm demo:compose:verify` | Kiểm tra template Compose vận hành/demo cô lập tài nguyên |
+| `pnpm demo:infra:up` / `pnpm demo:infra:down` | Khởi động/dừng hạ tầng demo; lệnh down giữ dữ liệu |
+| `pnpm demo:db:reset -- --confirm-demo-reset` | Reset và seed riêng database demo sau xác nhận rõ ràng |
+| `pnpm demo:backend` | Chạy backend demo đã build bằng `.env.demo` trên cổng 3110 |
 | `pnpm be:generate` | Generate Prisma Client; trên Windows cần dừng backend để tránh khóa DLL |
 | `pnpm be:schema:diff` | In SQL chênh lệch giữa database hiện tại và Prisma schema để duyệt trước |
 | `pnpm be:schema` | Đồng bộ database schema, không generate/seed/reset dữ liệu |

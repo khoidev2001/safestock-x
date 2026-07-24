@@ -60,7 +60,12 @@ function ClickPicker({ onPick }: { onPick: (point: LatLng) => void }) {
   return null;
 }
 
-export function IncidentMap({ warehouses, incidentPoint, onPickPoint, officialDistances }: IncidentMapProps) {
+export function IncidentMap({
+  warehouses,
+  incidentPoint,
+  onPickPoint,
+  officialDistances,
+}: IncidentMapProps) {
   const centralIcon = useMemo(() => pinIcon("var(--color-accent, #2f9e6e)"), []);
   const hamletIcon = useMemo(() => pinIcon("var(--text-muted, #8a8f98)", 26), []);
   const incidentIcon = useMemo(() => pinIcon("var(--color-critical, #d64545)", 34), []);
@@ -83,14 +88,23 @@ export function IncidentMap({ warehouses, incidentPoint, onPickPoint, officialDi
   return (
     <div className="space-y-2">
       <div className="h-[320px] overflow-hidden rounded-md border">
-        <MapContainer center={[center.lat, center.lng]} zoom={13} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
+        <MapContainer
+          center={[center.lat, center.lng]}
+          zoom={13}
+          scrollWheelZoom
+          style={{ height: "100%", width: "100%" }}
+        >
           <TileLayer url={TILE_LIGHT} attribution={TILE_ATTRIBUTION} />
           <FitBounds points={boundsPoints} />
           {onPickPoint ? <ClickPicker onPick={onPickPoint} /> : null}
           {warehouses.map((w) => {
             const { km, official } = distanceFor(w);
             return (
-              <Marker key={w.id} position={[w.lat, w.lng]} icon={w.kind === "CENTRAL" ? centralIcon : hamletIcon}>
+              <Marker
+                key={w.id}
+                position={[w.lat, w.lng]}
+                icon={w.kind === "CENTRAL" ? centralIcon : hamletIcon}
+              >
                 <Popup>
                   <strong>{w.name}</strong>
                   <br />

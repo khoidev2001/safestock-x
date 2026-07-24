@@ -12,7 +12,8 @@ export function AssistantView({ warehouseId }: { warehouseId: string }) {
           <span>Tra cứu bằng câu hỏi</span>
         </div>
         <p className="mt-1 text-sm text-[var(--text-muted)]">
-          Nhập câu hỏi bằng tiếng Việt để tìm số lượng, hạn dùng, sự cố hoặc khả năng đáp ứng của kho.
+          Nhập câu hỏi bằng tiếng Việt để tìm số lượng, hạn dùng, sự cố hoặc khả năng đáp ứng của
+          kho.
         </p>
       </div>
 

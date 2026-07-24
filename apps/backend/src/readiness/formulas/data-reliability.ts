@@ -41,9 +41,7 @@ export function scoreDataReliability(
     reasons.push("Cảm biến môi trường không cập nhật gần đây");
   }
 
-  const score = Math.round(
-    countScore * config.countWeight + sensorScore * config.sensorWeight,
-  );
+  const score = Math.round(countScore * config.countWeight + sensorScore * config.sensorWeight);
 
   return { key: "dataReliability", score, reasons };
 }

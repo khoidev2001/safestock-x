@@ -10,10 +10,7 @@ interface FloatingAssistantProps {
   isHidden?: boolean;
 }
 
-export function FloatingAssistant({
-  warehouseId,
-  isHidden = false,
-}: FloatingAssistantProps) {
+export function FloatingAssistant({ warehouseId, isHidden = false }: FloatingAssistantProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -85,7 +82,9 @@ export function FloatingAssistant({
             ? "bottom-1/2 right-1/2 h-[calc(100dvh-1.5rem)] w-[calc(100vw-1.5rem)] translate-x-1/2 translate-y-1/2 sm:h-[min(720px,calc(100dvh-3rem))] sm:w-[min(760px,calc(100vw-3rem))]"
             : "bottom-20 right-3 h-[min(560px,calc(100dvh-7rem))] w-[min(380px,calc(100vw-1.5rem))] translate-x-0 translate-y-0 sm:bottom-24 sm:right-6"
         } ${
-          isOpen ? "visible scale-100 opacity-100" : "invisible pointer-events-none scale-95 opacity-0"
+          isOpen
+            ? "visible scale-100 opacity-100"
+            : "invisible pointer-events-none scale-95 opacity-0"
         }`}
         role="dialog"
       >
@@ -98,7 +97,9 @@ export function FloatingAssistant({
               <h2 className="truncate text-sm font-semibold" id="floating-assistant-title">
                 Trợ lý ứng phó nhanh
               </h2>
-              <p className="truncate text-xs text-[var(--text-muted)]">Phân tích tình huống và dữ liệu kho</p>
+              <p className="truncate text-xs text-[var(--text-muted)]">
+                Phân tích tình huống và dữ liệu kho
+              </p>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -151,7 +152,11 @@ export function FloatingAssistant({
         tabIndex={isExpanded ? -1 : 0}
         type="button"
       >
-        {isOpen ? <ColorIcon name="close" size={22} tone="red" /> : <ColorIcon name="message" size={24} tone="blue" />}
+        {isOpen ? (
+          <ColorIcon name="close" size={22} tone="red" />
+        ) : (
+          <ColorIcon name="message" size={24} tone="blue" />
+        )}
       </button>
     </div>
   );

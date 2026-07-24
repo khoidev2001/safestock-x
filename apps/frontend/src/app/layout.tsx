@@ -10,7 +10,11 @@ const sans = Be_Vietnam_Pro({
   variable: "--font-sans-loaded",
   display: "swap",
 });
-const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono-loaded", display: "swap" });
+const mono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono-loaded",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Ứng phó nhanh",
@@ -26,7 +30,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="vi" className={`${sans.variable} ${mono.variable}`}>
       <head>
-        {/* Material Symbols — icon font (ngoại lệ hợp lý cho icon, giữ đúng design mockup) */}
+        {/* Material Symbols là icon font biến thiên — next/font/google không nạp được; display=block cố ý cho icon. */}
+        {/* eslint-disable-next-line @next/next/no-page-custom-font, @next/next/google-font-display */}
         <link
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block"

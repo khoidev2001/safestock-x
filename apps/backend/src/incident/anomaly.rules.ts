@@ -9,7 +9,12 @@
  * Z_SCORE_THRESHOLD=3 (chuẩn thống kê, ~99.7% dữ liệu bình thường nằm trong ngưỡng).
  */
 
-import { RULES, type DetectedIncident, type EvidenceItem, type SensorSignal } from "./incident.rules";
+import {
+  RULES,
+  type DetectedIncident,
+  type EvidenceItem,
+  type SensorSignal,
+} from "./incident.rules";
 
 export const CONTINUOUS_DEVICE_TYPES = ["TEMPERATURE", "HUMIDITY", "LOADCELL", "SMOKE"];
 
@@ -36,7 +41,10 @@ function stddev(xs: number[], mean: number): number {
 }
 
 /** Least-squares đơn giản: x = phút trôi qua kể từ điểm đầu, y = value. Trả về {slope, intercept} (đơn vị: value/phút). */
-function linearRegression(points: { x: number; y: number }[]): { slope: number; intercept: number } {
+function linearRegression(points: { x: number; y: number }[]): {
+  slope: number;
+  intercept: number;
+} {
   const n = points.length;
   const sx = points.reduce((s, p) => s + p.x, 0);
   const sy = points.reduce((s, p) => s + p.y, 0);
@@ -57,12 +65,18 @@ function groupByDevice(signals: SensorSignal[]): Map<string, SensorSignal[]> {
     list.push(s);
     map.set(s.deviceCode, list);
   }
-  for (const list of map.values()) list.sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
+  for (const list of map.values())
+    list.sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
   return map;
 }
 
 function toEvidence(s: SensorSignal): Omit<EvidenceItem, "weight" | "note"> {
-  return { deviceCode: s.deviceCode, eventType: s.eventType, value: s.value, occurredAt: s.occurredAt };
+  return {
+    deviceCode: s.deviceCode,
+    eventType: s.eventType,
+    value: s.value,
+    occurredAt: s.occurredAt,
+  };
 }
 
 /** Phát hiện bất thường: điểm mới nhất lệch xa baseline lịch sử (z-score), dù chưa vượt ngưỡng tuyệt đối. */
@@ -117,9 +131,11 @@ export function detectPredictiveWarning(history: SensorSignal[]): DetectedIncide
 
     const nowX = fitted[fitted.length - 1].x;
     const minutesToThreshold = (threshold - intercept) / slope - nowX;
-    if (minutesToThreshold < 0 || minutesToThreshold > ANOMALY_RULES.predictLeadHours * 60) continue;
+    if (minutesToThreshold < 0 || minutesToThreshold > ANOMALY_RULES.predictLeadHours * 60)
+      continue;
 
-    const severity = minutesToThreshold <= 30 ? "CRITICAL" : minutesToThreshold <= 60 ? "HIGH" : "MEDIUM";
+    const severity =
+      minutesToThreshold <= 30 ? "CRITICAL" : minutesToThreshold <= 60 ? "HIGH" : "MEDIUM";
     incidents.push({
       kind: "PREDICTIVE_WARNING",
       severity,

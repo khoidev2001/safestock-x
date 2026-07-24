@@ -39,7 +39,13 @@ export class ReportController {
     @Body("warehouseId") warehouseId: string,
     @Body("period") period: string,
   ) {
-    return this.reports.submit(req.user.userId, warehouseId, period, file.buffer, req.user.warehouseId);
+    return this.reports.submit(
+      req.user.userId,
+      warehouseId,
+      period,
+      file.buffer,
+      req.user.warehouseId,
+    );
   }
 
   @RequirePermission(Permission.REPORT_APPROVE)
@@ -63,7 +69,11 @@ export class ReportController {
 
   @RequirePermission(Permission.REPORT_APPROVE)
   @Post(":id/reject")
-  reject(@Request() req: AuthenticatedRequest, @Param("id") id: string, @Body("note") note?: string) {
+  reject(
+    @Request() req: AuthenticatedRequest,
+    @Param("id") id: string,
+    @Body("note") note?: string,
+  ) {
     return this.reports.reject(id, req.user.userId, note);
   }
 }

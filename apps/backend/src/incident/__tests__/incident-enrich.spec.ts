@@ -13,7 +13,9 @@ describe("IncidentService — enrichNewIncident (AI tự giải thích + đa kê
     severity: "MEDIUM",
     confidence: 0.6,
     warehouseId: "wh-1",
-    evidence: [{ note: "Độ ẩm 90% vượt ngưỡng 85%", occurredAt: new Date("2026-07-22T10:00:00+07:00") }],
+    evidence: [
+      { note: "Độ ẩm 90% vượt ngưỡng 85%", occurredAt: new Date("2026-07-22T10:00:00+07:00") },
+    ],
     actions: [],
   };
 
@@ -81,11 +83,7 @@ describe("IncidentService — enrichNewIncident (AI tự giải thích + đa kê
       where: {
         organizationId: "org-1",
         notificationEmail: { not: null },
-        OR: [
-          { role: "ADMIN" },
-          { role: "RESCUE" },
-          { role: "WAREHOUSE", warehouseId: "wh-1" },
-        ],
+        OR: [{ role: "ADMIN" }, { role: "RESCUE" }, { role: "WAREHOUSE", warehouseId: "wh-1" }],
       },
       select: { notificationEmail: true },
     });

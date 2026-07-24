@@ -1,32 +1,40 @@
 import { OnModuleInit } from "@nestjs/common";
 import {
-  ConnectedSocket,
-  MessageBody,
-  SubscribeMessage,
+  OnGatewayConnection,
+  OnGatewayInit,
   WebSocketGateway,
   WebSocketServer,
 } from "@nestjs/websockets";
 import { UserRole } from "@prisma/client";
 import { Server, Socket } from "socket.io";
+import { WebSocketAuthService } from "../auth/websocket-auth.service";
 import { NotificationService } from "./notification.service";
 
-/** Room theo role: client join `role:RESCUE` để chỉ nhận thông báo của role mình. */
 @WebSocketGateway({ cors: { origin: "*" } })
-export class NotificationGateway implements OnModuleInit {
+export class NotificationGateway implements OnModuleInit, OnGatewayInit, OnGatewayConnection {
   @WebSocketServer() server!: Server;
 
-  constructor(private notifications: NotificationService) {}
+  constructor(
+    private notifications: NotificationService,
+    private webSocketAuth: WebSocketAuthService,
+  ) {}
+
+  afterInit(server: Server) {
+    this.webSocketAuth.install(server);
+  }
+
+  handleConnection(client: Socket) {
+    const principal = this.webSocketAuth.getPrincipal(client);
+    if (!principal) {
+      client.disconnect(true);
+      return;
+    }
+    void client.join(`role:${principal.role}`);
+  }
 
   onModuleInit() {
-    // Service tạo notification → đẩy vào room role tương ứng.
     this.notifications.push = (role: UserRole, notification: unknown) => {
       this.server.to(`role:${role}`).emit("notification", notification);
     };
-  }
-
-  @SubscribeMessage("join-role")
-  joinRole(@ConnectedSocket() client: Socket, @MessageBody() data: { role: UserRole }) {
-    client.join(`role:${data.role}`);
-    return { joined: data.role };
   }
 }

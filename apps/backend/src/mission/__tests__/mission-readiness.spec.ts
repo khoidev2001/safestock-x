@@ -1,11 +1,7 @@
 import { Allocation } from "../mission.compute";
 import { assessMissionReadiness } from "../mission-readiness";
 
-function allocation(
-  sku: string,
-  required: number,
-  allocated: number,
-): Allocation {
+function allocation(sku: string, required: number, allocated: number): Allocation {
   return {
     sku,
     itemName: sku,
@@ -45,16 +41,12 @@ describe("assessMissionReadiness", () => {
   it("blocks dispatch when an essential item has no eligible stock", () => {
     const result = assessMissionReadiness(
       [allocation("LIFEJACKET-ADULT", 20, 0)],
-      new Map([
-        ["LIFEJACKET-ADULT", ["Lô hiện có nằm trên kệ bị khóa", "Lô khác đã hết hạn"]],
-      ]),
+      new Map([["LIFEJACKET-ADULT", ["Lô hiện có nằm trên kệ bị khóa", "Lô khác đã hết hạn"]]]),
     );
 
     expect(result.status).toBe("NOT_DISPATCHABLE");
     expect(result.fulfillment).toBe(0);
-    expect(result.blockers[0]).toEqual(
-      expect.objectContaining({ sku: "LIFEJACKET-ADULT" }),
-    );
+    expect(result.blockers[0]).toEqual(expect.objectContaining({ sku: "LIFEJACKET-ADULT" }));
     expect(result.blockers[0].reasons).toContain("Lô hiện có nằm trên kệ bị khóa");
   });
 });

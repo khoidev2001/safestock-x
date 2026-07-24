@@ -71,7 +71,10 @@ export class AssistantService {
       score = await this.readiness.getWarehouseScore(warehouseId);
     }
 
-    const stockBySku = new Map<string, { itemName: string; unit: string; quantity: number; expiryDate: Date | null }>();
+    const stockBySku = new Map<
+      string,
+      { itemName: string; unit: string; quantity: number; expiryDate: Date | null }
+    >();
     for (const b of batches) {
       const onLoan = b.loans.reduce(
         (sum, l) => sum + (l.quantity - l.returnedOk - l.returnedDamaged - l.lost),
@@ -116,9 +119,7 @@ export class AssistantService {
           nearestExpiry: s.expiryDate ? s.expiryDate.toISOString().slice(0, 10) : null,
         }))
         .sort((left, right) =>
-          (left.nearestExpiry ?? "9999-12-31").localeCompare(
-            right.nearestExpiry ?? "9999-12-31",
-          ),
+          (left.nearestExpiry ?? "9999-12-31").localeCompare(right.nearestExpiry ?? "9999-12-31"),
         ),
       openIncidents: incidents,
     };

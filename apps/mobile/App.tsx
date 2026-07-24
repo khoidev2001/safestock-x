@@ -1,14 +1,6 @@
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  SafeAreaView,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { FlatList, Pressable, SafeAreaView, Text, TextInput, View } from "react-native";
 import { io, type Socket } from "socket.io-client";
 import { fetchNotifications, login, type AuthUser, type Notification } from "./api";
 import { MissionDetailScreen } from "./MissionDetail";
@@ -130,16 +122,19 @@ function NotificationsScreen({
     load();
   }, [load]);
 
-  // WebSocket: join room theo role, nhận notification đẩy tức thì.
+  // The backend derives the realtime room from the authenticated user.
   useEffect(() => {
-    const socket = io(API_BASE, { transports: ["websocket"] });
+    const socket = io(API_BASE, {
+      transports: ["websocket"],
+      auth: { token },
+    });
     socketRef.current = socket;
 
     socket.on("connect", () => {
       setConnected(true);
-      socket.emit("join-role", { role: user.role });
     });
     socket.on("disconnect", () => setConnected(false));
+    socket.on("connect_error", () => setConnected(false));
     socket.on("notification", (n: Notification) => {
       // Đưa lên đầu, đánh dấu MỚI, chống trùng nếu cùng id (updateAndPush).
       setItems((prev) => [n, ...prev.filter((x) => x.id !== n.id)]);
@@ -150,7 +145,7 @@ function NotificationsScreen({
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [user.role]);
+  }, [token]);
 
   if (selectedMissionId) {
     return (
@@ -171,7 +166,9 @@ function NotificationsScreen({
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Thông báo điều phối</Text>
-          <Text style={styles.subtitle}>{user.fullName ?? user.email} · {user.role}</Text>
+          <Text style={styles.subtitle}>
+            {user.fullName ?? user.email} · {user.role}
+          </Text>
         </View>
         <View style={{ alignItems: "flex-end", gap: 8 }}>
           <View style={styles.pill}>
@@ -239,7 +236,11 @@ function Card({
       onPress={onPress}
       disabled={!onPress}
       accessibilityRole={onPress ? "button" : undefined}
-      style={({ pressed }) => [styles.card, isNew && styles.cardNew, pressed && onPress && { opacity: 0.7 }]}
+      style={({ pressed }) => [
+        styles.card,
+        isNew && styles.cardNew,
+        pressed && onPress && { opacity: 0.7 },
+      ]}
     >
       <View style={styles.cardTop}>
         <Text style={styles.cardTitle}>{item.title}</Text>

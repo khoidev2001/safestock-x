@@ -14,7 +14,9 @@ describe("computeRebalanceSuggestions", () => {
   });
 
   it("không đề xuất khi chỉ 1 kho có SKU", () => {
-    const stocks: WarehouseStock[] = [{ warehouseId: "w1", warehouseName: "Kho 1", sku: "A", quantity: 100 }];
+    const stocks: WarehouseStock[] = [
+      { warehouseId: "w1", warehouseName: "Kho 1", sku: "A", quantity: 100 },
+    ];
     expect(computeRebalanceSuggestions(stocks)).toEqual([]);
   });
 

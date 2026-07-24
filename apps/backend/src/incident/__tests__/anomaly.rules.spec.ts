@@ -26,7 +26,9 @@ describe("detectStatisticalAnomaly", () => {
   });
 
   it("should flag anomaly when latest point deviates sharply from stable baseline", () => {
-    const baseline = Array.from({ length: 10 }, (_, i) => sig({ value: 28 + (i % 2 === 0 ? 0.1 : -0.1), occurredAt: at(i * 5) }));
+    const baseline = Array.from({ length: 10 }, (_, i) =>
+      sig({ value: 28 + (i % 2 === 0 ? 0.1 : -0.1), occurredAt: at(i * 5) }),
+    );
     const spike = sig({ value: 40, occurredAt: at(55) });
     const incidents = detectStatisticalAnomaly([...baseline, spike]);
     const anomaly = incidents.find((i) => i.kind === "STAT_ANOMALY");
@@ -35,7 +37,9 @@ describe("detectStatisticalAnomaly", () => {
   });
 
   it("should NOT compute baseline with fewer than MIN_SAMPLES points", () => {
-    const signals: SensorSignal[] = Array.from({ length: 9 }, (_, i) => sig({ value: 28, occurredAt: at(i * 5) }));
+    const signals: SensorSignal[] = Array.from({ length: 9 }, (_, i) =>
+      sig({ value: 28, occurredAt: at(i * 5) }),
+    );
     signals.push(sig({ value: 40, occurredAt: at(50) }));
     expect(detectStatisticalAnomaly(signals)).toHaveLength(0);
   });
@@ -63,7 +67,9 @@ describe("detectPredictiveWarning", () => {
       sig({ value: 36, occurredAt: at(120) }),
       sig({ value: RULES.temperatureHigh + 1, occurredAt: at(180) }),
     ];
-    expect(detectPredictiveWarning(signals).find((i) => i.kind === "PREDICTIVE_WARNING")).toBeUndefined();
+    expect(
+      detectPredictiveWarning(signals).find((i) => i.kind === "PREDICTIVE_WARNING"),
+    ).toBeUndefined();
   });
 
   it("should NOT flag when trend is flat or decreasing", () => {

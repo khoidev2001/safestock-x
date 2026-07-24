@@ -38,7 +38,13 @@ export const styles = StyleSheet.create({
 
   // Login
   logo: { color: c.amber, fontSize: 28, fontWeight: "800", marginBottom: 4 },
-  label: { color: c.muted, fontSize: 13, fontWeight: "600", marginBottom: 6, alignSelf: "flex-start" },
+  label: {
+    color: c.muted,
+    fontSize: 13,
+    fontWeight: "600",
+    marginBottom: 6,
+    alignSelf: "flex-start",
+  },
   input: {
     width: "100%",
     backgroundColor: c.surface,
@@ -87,7 +93,13 @@ export const styles = StyleSheet.create({
   newBadgeText: { color: "#0f172a", fontSize: 10, fontWeight: "800" },
 
   // States
-  skeleton: { height: 74, backgroundColor: c.surface, borderRadius: 12, marginBottom: 10, opacity: 0.6 },
+  skeleton: {
+    height: 74,
+    backgroundColor: c.surface,
+    borderRadius: 12,
+    marginBottom: 10,
+    opacity: 0.6,
+  },
   emptyIcon: { fontSize: 40, marginBottom: 12 },
   emptyTitle: { color: c.text, fontSize: 16, fontWeight: "700", marginBottom: 4 },
   emptyText: { color: c.muted, fontSize: 14, textAlign: "center" },
@@ -132,16 +144,42 @@ export const styles = StyleSheet.create({
 
   // Action buttons
   actionRow: { flexDirection: "row", gap: 12, marginTop: 20 },
-  btnAccept: { flex: 1, backgroundColor: c.green, borderRadius: 10, paddingVertical: 14, alignItems: "center" },
-  btnReject: { flex: 1, backgroundColor: "transparent", borderWidth: 1.5, borderColor: c.red, borderRadius: 10, paddingVertical: 14, alignItems: "center" },
+  btnAccept: {
+    flex: 1,
+    backgroundColor: c.green,
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  btnReject: {
+    flex: 1,
+    backgroundColor: "transparent",
+    borderWidth: 1.5,
+    borderColor: c.red,
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
   btnAcceptText: { color: "#052e16", fontSize: 15, fontWeight: "800" },
   btnRejectText: { color: c.red, fontSize: 15, fontWeight: "800" },
 
   // Reason input block
-  reasonBox: { marginTop: 20, backgroundColor: c.surface, borderRadius: 12, borderWidth: 1, borderColor: c.red, padding: 14 },
+  reasonBox: {
+    marginTop: 20,
+    backgroundColor: c.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.red,
+    padding: 14,
+  },
   reasonTitle: { color: c.text, fontSize: 15, fontWeight: "700", marginBottom: 10 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
-  reasonChip: { backgroundColor: c.surfaceAlt, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 },
+  reasonChip: {
+    backgroundColor: c.surfaceAlt,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
   reasonChipActive: { backgroundColor: c.amber },
   reasonChipText: { color: c.text, fontSize: 13, fontWeight: "600" },
   reasonChipTextActive: { color: "#0f172a", fontSize: 13, fontWeight: "700" },

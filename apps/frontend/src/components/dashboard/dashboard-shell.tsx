@@ -47,8 +47,21 @@ const navItems: {
   { id: "incident", label: "Sự cố", icon: "incident", tone: "red", group: "Nghiệp vụ kho" },
   { id: "report", label: "Báo cáo tháng", icon: "report", tone: "green", group: "Nghiệp vụ kho" },
   { id: "map", label: "Bản đồ kho", icon: "map", tone: "blue", group: "Nghiệp vụ kho" },
-  { id: "simulator", label: "Cảm biến thử nghiệm", icon: "simulator", tone: "amber", group: "Quản trị" },
-  { id: "users", label: "Tài khoản", icon: "users", tone: "blue", group: "Quản trị", adminOnly: true },
+  {
+    id: "simulator",
+    label: "Cảm biến thử nghiệm",
+    icon: "simulator",
+    tone: "amber",
+    group: "Quản trị",
+  },
+  {
+    id: "users",
+    label: "Tài khoản",
+    icon: "users",
+    tone: "blue",
+    group: "Quản trị",
+    adminOnly: true,
+  },
   { id: "audit", label: "Nhật ký", icon: "audit", tone: "amber", group: "Quản trị" },
 ];
 
@@ -60,7 +73,12 @@ const roleLabels: Record<string, string> = {
   RESCUE: "Đội cứu hộ",
 };
 
-export function DashboardShell({ activeView, children, onViewChange, warehouseName }: DashboardShellProps) {
+export function DashboardShell({
+  activeView,
+  children,
+  onViewChange,
+  warehouseName,
+}: DashboardShellProps) {
   const router = useRouter();
   const { user, clear } = useAuth();
   const visibleNav = navItems.filter((item) => !item.adminOnly || user?.role === "ADMIN");
@@ -72,7 +90,9 @@ export function DashboardShell({ activeView, children, onViewChange, warehouseNa
 
   return (
     <div className="min-h-[100dvh] bg-[var(--bg)] text-[var(--text)]">
-      <a className="skip-link" href="#noi-dung-chinh">Chuyển đến nội dung chính</a>
+      <a className="skip-link" href="#noi-dung-chinh">
+        Chuyển đến nội dung chính
+      </a>
       <div className="grid min-h-[100dvh] lg:grid-cols-[272px_1fr]">
         <aside className="hidden border-r bg-[var(--surface)] px-5 py-6 lg:sticky lg:top-0 lg:block lg:h-[100dvh] lg:overflow-y-auto">
           <div className="px-2 pb-5">
@@ -93,7 +113,9 @@ export function DashboardShell({ activeView, children, onViewChange, warehouseNa
               if (items.length === 0) return null;
               return (
                 <div className="mb-5" key={group}>
-                  <p className="mb-1.5 px-3 text-xs font-semibold text-[var(--text-muted)]">{group}</p>
+                  <p className="mb-1.5 px-3 text-xs font-semibold text-[var(--text-muted)]">
+                    {group}
+                  </p>
                   <div className="space-y-0.5">
                     {items.map((item) => (
                       <NavButton
@@ -108,7 +130,6 @@ export function DashboardShell({ activeView, children, onViewChange, warehouseNa
               );
             })}
           </nav>
-
         </aside>
 
         <section className="min-w-0">
@@ -121,7 +142,8 @@ export function DashboardShell({ activeView, children, onViewChange, warehouseNa
                     {warehouseName || user?.warehouseName || user?.unitName || "Đang tải đơn vị"}
                   </p>
                   <p className="truncate text-xs text-[var(--text-muted)]">
-                    {user?.fullName || user?.email || "Chưa xác định"} · {roleLabels[user?.role ?? ""] ?? "Chưa xác định vai trò"}
+                    {user?.fullName || user?.email || "Chưa xác định"} ·{" "}
+                    {roleLabels[user?.role ?? ""] ?? "Chưa xác định vai trò"}
                   </p>
                 </div>
               </div>
@@ -147,7 +169,9 @@ export function DashboardShell({ activeView, children, onViewChange, warehouseNa
             </nav>
           </header>
 
-          <main className="mx-auto max-w-[1500px] px-4 py-7 md:px-7 md:py-8" id="noi-dung-chinh">{children}</main>
+          <main className="mx-auto max-w-[1500px] px-4 py-7 md:px-7 md:py-8" id="noi-dung-chinh">
+            {children}
+          </main>
         </section>
       </div>
     </div>
@@ -169,7 +193,9 @@ function NavButton({
     <button
       aria-current={isActive ? "page" : undefined}
       className={`flex items-center rounded-md text-sm transition active:translate-y-px ${
-        compact ? "w-auto shrink-0 justify-center gap-2 px-3 py-2.5 text-xs" : "w-full gap-3 px-3 py-2.5 text-left"
+        compact
+          ? "w-auto shrink-0 justify-center gap-2 px-3 py-2.5 text-xs"
+          : "w-full gap-3 px-3 py-2.5 text-left"
       }`}
       onClick={onClick}
       style={{
@@ -178,7 +204,9 @@ function NavButton({
       }}
       type="button"
     >
-      <span className={`inline-flex shrink-0 items-center justify-center ${compact ? "h-7 w-7" : "h-8 w-8"}`}>
+      <span
+        className={`inline-flex shrink-0 items-center justify-center ${compact ? "h-7 w-7" : "h-8 w-8"}`}
+      >
         <ColorIcon name={item.icon} size={compact ? 17 : 20} tone={item.tone} />
       </span>
       <span className={`truncate ${isActive ? "font-semibold" : "font-medium"}`}>{item.label}</span>

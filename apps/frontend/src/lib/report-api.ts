@@ -26,7 +26,11 @@ export interface ReportRow {
 }
 
 /** Upload Excel kiểm kê (multipart) — không dùng apiFetch vì cần FormData, tự gắn token. */
-export async function uploadReport(warehouseId: string, period: string, file: File): Promise<StockReport> {
+export async function uploadReport(
+  warehouseId: string,
+  period: string,
+  file: File,
+): Promise<StockReport> {
   const form = new FormData();
   form.append("file", file);
   form.append("warehouseId", warehouseId);

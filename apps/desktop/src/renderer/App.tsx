@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Socket } from "socket.io-client";
 import {
+  getAccessToken,
   getBase,
-  getUser,
+  getSessionVersion,
   login,
   logout,
+  refreshAccessToken,
   setBase,
   type AuthUser,
 } from "./lib/api";
@@ -115,7 +117,7 @@ export function App() {
       setSliderValues(initValues);
 
       await refreshReactions(wh.id);
-      openSocket(wh.id, u.role);
+      openSocket(wh.id);
     } catch (err) {
       setLoginError((err as Error).message);
     } finally {
@@ -123,35 +125,45 @@ export function App() {
     }
   }
 
-  function openSocket(warehouseId: string, role: string) {
+  function openSocket(warehouseId: string) {
     socketRef.current?.disconnect();
-    socketRef.current = connectSocket(getBase(), warehouseId, role, {
-      onConnect: () => {
-        setWsConnected(true);
-        pushLog("WebSocket đã kết nối — nghe realtime.");
+    socketRef.current = connectSocket(
+      getBase(),
+      getAccessToken,
+      getSessionVersion,
+      refreshAccessToken,
+      {
+        onConnect: () => {
+          setWsConnected(true);
+          pushLog("WebSocket đã kết nối — nghe realtime.");
+        },
+        onDisconnect: () => setWsConnected(false),
+        onConnectError: (message) => {
+          setWsConnected(false);
+          pushLog(`WebSocket rejected: ${message}`, "alert");
+        },
+        onSensorEvent: (p) => {
+          pushLog(
+            `[scenario] ${p.deviceCode ?? "?"} = ${p.value ?? "?"}${p.unit ?? ""} (${p.eventType ?? ""})`,
+            "sensor",
+          );
+          // Kịch bản đổi cảm biến → readiness/incident có thể đổi → refetch (debounce nhẹ).
+          scheduleReactionRefresh(warehouseId);
+        },
+        onNotification: (p) => {
+          // Backend đẩy 2 lần cùng 1 cảnh báo: bản rule-based (nổ ngay) rồi bản enrich
+          // (body thêm " — <giải thích AI>"). Tách để dòng AI hiện rõ là tin nhắn AI.
+          const body = p.body ?? "";
+          const sep = body.indexOf(" — ");
+          if (sep >= 0) {
+            pushLog(`🤖 AI cảnh báo: ${p.title ?? ""} — ${body.slice(sep + 3)}`, "alert");
+          } else {
+            pushLog(`⚠️ CẢNH BÁO: ${p.title ?? ""} — ${body}`, "alert");
+          }
+          scheduleReactionRefresh(warehouseId);
+        },
       },
-      onDisconnect: () => setWsConnected(false),
-      onSensorEvent: (p) => {
-        pushLog(
-          `[scenario] ${p.deviceCode ?? "?"} = ${p.value ?? "?"}${p.unit ?? ""} (${p.eventType ?? ""})`,
-          "sensor",
-        );
-        // Kịch bản đổi cảm biến → readiness/incident có thể đổi → refetch (debounce nhẹ).
-        scheduleReactionRefresh(warehouseId);
-      },
-      onNotification: (p) => {
-        // Backend đẩy 2 lần cùng 1 cảnh báo: bản rule-based (nổ ngay) rồi bản enrich
-        // (body thêm " — <giải thích AI>"). Tách để dòng AI hiện rõ là tin nhắn AI.
-        const body = p.body ?? "";
-        const sep = body.indexOf(" — ");
-        if (sep >= 0) {
-          pushLog(`🤖 AI cảnh báo: ${p.title ?? ""} — ${body.slice(sep + 3)}`, "alert");
-        } else {
-          pushLog(`⚠️ CẢNH BÁO: ${p.title ?? ""} — ${body}`, "alert");
-        }
-        scheduleReactionRefresh(warehouseId);
-      },
-    });
+    );
   }
 
   // Gộp nhiều tín hiệu realtime thành 1 lần refetch (tránh gọi API dồn dập).
@@ -164,12 +176,13 @@ export function App() {
     [refreshReactions],
   );
 
-  useEffect(() => {
-    return () => {
+  useEffect(
+    () => () => {
       socketRef.current?.disconnect();
       if (reactionTimer.current) clearTimeout(reactionTimer.current);
-    };
-  }, []);
+    },
+    [],
+  );
 
   // ---- Gửi 1 event từ slider ----
   async function sendSlider(device: VirtualDevice, value: number) {
@@ -265,7 +278,9 @@ export function App() {
               placeholder="localhost:3100 hoặc 192.168.1.x"
             />
           </label>
-          <p className="hint">Đăng nhập tài khoản admin ({ADMIN_EMAIL}) — app chỉ dùng để demo/test.</p>
+          <p className="hint">
+            Đăng nhập tài khoản admin ({ADMIN_EMAIL}) — app chỉ dùng để demo/test.
+          </p>
           {loginError && <p className="error">{loginError}</p>}
           <button className="btn primary" onClick={handleLogin} disabled={busy}>
             {busy ? "Đang kết nối…" : "Đăng nhập admin"}
@@ -305,7 +320,9 @@ export function App() {
                         onChange={(e) =>
                           setSliderValues((prev) => ({ ...prev, [d.code]: Number(e.target.value) }))
                         }
-                        onMouseUp={(e) => sendSlider(d, Number((e.target as HTMLInputElement).value))}
+                        onMouseUp={(e) =>
+                          sendSlider(d, Number((e.target as HTMLInputElement).value))
+                        }
                         onKeyUp={(e) => sendSlider(d, Number((e.target as HTMLInputElement).value))}
                       />
                       {cfg.hint && <span className="slider-hint">{cfg.hint}</span>}
@@ -367,15 +384,13 @@ export function App() {
               <div className="readiness-meta">
                 {readiness?.operationalStatus && (
                   <span className="badge">
-                    {operationalStatusLabels[readiness.operationalStatus] ?? readiness.operationalStatus}
+                    {operationalStatusLabels[readiness.operationalStatus] ??
+                      readiness.operationalStatus}
                   </span>
                 )}
                 {readiness?.zone && <span className="muted">Vùng: {readiness.zone}</span>}
                 {warehouse && (
-                  <button
-                    className="btn tiny"
-                    onClick={() => refreshReactions(warehouse.id)}
-                  >
+                  <button className="btn tiny" onClick={() => refreshReactions(warehouse.id)}>
                     Làm mới
                   </button>
                 )}
@@ -385,7 +400,9 @@ export function App() {
             <div className="incidents">
               <h3>Cảnh báo sự cố ({incidents.length})</h3>
               {incidents.length === 0 ? (
-                <p className="muted">Chưa có cảnh báo. Kéo độ ẩm &gt; 85% hoặc nhiệt &gt; 35°C để thử.</p>
+                <p className="muted">
+                  Chưa có cảnh báo. Kéo độ ẩm &gt; 85% hoặc nhiệt &gt; 35°C để thử.
+                </p>
               ) : (
                 <ul>
                   {incidents.slice(0, 6).map((inc) => {

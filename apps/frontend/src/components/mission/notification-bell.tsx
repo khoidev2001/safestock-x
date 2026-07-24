@@ -11,6 +11,7 @@ import { useMissionFocus } from "@/lib/mission-focus-store";
 
 export function NotificationBell({ onOpenMission }: { onOpenMission?: () => void }) {
   const role = useAuth((s) => s.user?.role);
+  const token = useAuth((s) => s.token);
   const focusMission = useMissionFocus((s) => s.focusMission);
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -28,18 +29,20 @@ export function NotificationBell({ onOpenMission }: { onOpenMission?: () => void
     refetchInterval: 15000, // fallback nếu WebSocket rớt
   });
 
-  // Realtime: join room theo role, nhận notification đẩy tức thì.
+  // Realtime: backend derives the role room from the authenticated user.
   useEffect(() => {
-    if (!role) return;
-    const socket: Socket = io(BASE, { transports: ["websocket"] });
-    socket.on("connect", () => socket.emit("join-role", { role }));
+    if (!token) return;
+    const socket: Socket = io(BASE, {
+      transports: ["websocket"],
+      auth: { token },
+    });
     socket.on("notification", () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
     });
     return () => {
       socket.disconnect();
     };
-  }, [role, queryClient]);
+  }, [token, queryClient]);
 
   const items = notifQuery.data ?? [];
   const unread = items.filter((n) => !n.read).length;
@@ -92,14 +95,20 @@ export function NotificationBell({ onOpenMission }: { onOpenMission?: () => void
                       className="block w-full border-b px-4 py-3 text-left transition last:border-0 hover:bg-[var(--surface-2)]"
                     >
                       <p className="text-sm font-medium">{n.title}</p>
-                      <p className="mt-0.5 line-clamp-3 text-xs text-[var(--text-muted)]">{n.body}</p>
-                      <p className="mt-1 text-[11px] font-semibold text-[var(--color-accent)]">Xem nhiệm vụ →</p>
+                      <p className="mt-0.5 line-clamp-3 text-xs text-[var(--text-muted)]">
+                        {n.body}
+                      </p>
+                      <p className="mt-1 text-[11px] font-semibold text-[var(--color-accent)]">
+                        Xem nhiệm vụ →
+                      </p>
                     </button>
                   ) : (
                     <div key={n.id} className="border-b px-4 py-3 last:border-0">
                       <p className="text-sm font-medium">{n.title}</p>
                       {/* body có thể dài khi kèm giải thích AI → gói 3 dòng, tránh tràn dropdown. */}
-                      <p className="mt-0.5 line-clamp-3 text-xs text-[var(--text-muted)]">{n.body}</p>
+                      <p className="mt-0.5 line-clamp-3 text-xs text-[var(--text-muted)]">
+                        {n.body}
+                      </p>
                     </div>
                   ),
                 )

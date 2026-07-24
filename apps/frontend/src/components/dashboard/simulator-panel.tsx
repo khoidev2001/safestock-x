@@ -67,7 +67,16 @@ function formatEventDetail(event: SensorTimelineEvent): string {
     return `Chất lượng tín hiệu ${Math.round(quality)}% · ${deviceType}`;
   }
 
-  if (["DOOR_OPEN", "DOOR_CLOSE", "GATEWAY_OFFLINE", "GATEWAY_ONLINE", "POWER_OFF", "POWER_ON"].includes(event.eventType)) {
+  if (
+    [
+      "DOOR_OPEN",
+      "DOOR_CLOSE",
+      "GATEWAY_OFFLINE",
+      "GATEWAY_ONLINE",
+      "POWER_OFF",
+      "POWER_ON",
+    ].includes(event.eventType)
+  ) {
     return deviceType;
   }
 
@@ -89,9 +98,7 @@ export function SimulatorPanel({ devices, timeline, isLoading }: SimulatorPanelP
         <ColorIcon name="simulator" size={20} tone="amber" />
         <div>
           <h2 className="text-sm font-semibold">Dữ liệu cảm biến</h2>
-          <p className="text-xs text-[var(--text-muted)]">
-            Số liệu thử nghiệm gần nhất của kho
-          </p>
+          <p className="text-xs text-[var(--text-muted)]">Số liệu thử nghiệm gần nhất của kho</p>
         </div>
       </div>
 
@@ -99,18 +106,22 @@ export function SimulatorPanel({ devices, timeline, isLoading }: SimulatorPanelP
         {environmentDevices.slice(0, 4).map((device) => (
           <div key={device.id} className="rounded-md border bg-[var(--surface-2)] p-3">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-semibold">{formatDeviceName(device.code, device.type)}</span>
-                {device.type === "GATEWAY" || device.type === "POWER" ? (
-                  <ColorIcon name="wifiOff" size={16} tone="red" />
-                ) : (
-                  <ColorIcon name="temperature" size={16} tone="orange" />
-                )}
+              <span className="text-xs font-semibold">
+                {formatDeviceName(device.code, device.type)}
+              </span>
+              {device.type === "GATEWAY" || device.type === "POWER" ? (
+                <ColorIcon name="wifiOff" size={16} tone="red" />
+              ) : (
+                <ColorIcon name="temperature" size={16} tone="orange" />
+              )}
             </div>
             <p className="tabular mt-3 text-2xl font-semibold">
               {device.currentValue ?? "--"}
               <span className="ml-1 text-xs text-[var(--text-muted)]">{device.unit ?? ""}</span>
             </p>
-            <p className="mt-1 text-xs text-[var(--text-muted)]">{deviceTypeLabels[device.type] ?? "Thiết bị cảm biến"}</p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              {deviceTypeLabels[device.type] ?? "Thiết bị cảm biến"}
+            </p>
           </div>
         ))}
       </div>
@@ -133,7 +144,8 @@ export function SimulatorPanel({ devices, timeline, isLoading }: SimulatorPanelP
                 </time>
                 <div>
                   <p className="font-medium">
-                    {formatDeviceName(event.device.code, event.device.type)} · {eventTypeLabels[event.eventType] ?? "Cập nhật cảm biến"}
+                    {formatDeviceName(event.device.code, event.device.type)} ·{" "}
+                    {eventTypeLabels[event.eventType] ?? "Cập nhật cảm biến"}
                   </p>
                   <p className="tabular text-xs text-[var(--text-muted)]">
                     {formatEventDetail(event)}

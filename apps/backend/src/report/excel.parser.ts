@@ -37,7 +37,9 @@ export async function parseReportExcel(buffer: Buffer): Promise<ReportRow[]> {
 
     const qty = Number(cellStr(row.getCell(3)));
     if (!Number.isFinite(qty) || qty < 0) {
-      throw new BadRequestException(`Dòng ${rowNumber}: số lượng không hợp lệ (${cellStr(row.getCell(3))})`);
+      throw new BadRequestException(
+        `Dòng ${rowNumber}: số lượng không hợp lệ (${cellStr(row.getCell(3))})`,
+      );
     }
 
     rows.push({

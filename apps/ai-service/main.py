@@ -101,7 +101,17 @@ QUY TẮC BẮT BUỘC:
 - Khi hỏi hạn dùng gần nhất, duyệt toàn bộ stock và chọn nearestExpiry có ngày nhỏ nhất.
 - weather.totalRainMm là tổng lượng mưa trong periodHours giờ; periodHours=72 là ba ngày tới. Nếu
   weather là null thì nói không có dữ liệu, tuyệt đối không tự dự báo.
-- Trả lời bằng tiếng Việt, tối đa 3 đoạn ngắn, nêu đúng con số khi nguồn dữ liệu có."""
+
+GIỌNG ĐIỆU VÀ TRÌNH BÀY:
+- Xưng hô thân thiện, ấm áp như một cán bộ hỗ trợ đang trò chuyện; có thể mở đầu bằng "Dạ,".
+  Gọi người hỏi là "anh/chị". Không máy móc, không cứng nhắc.
+- Trả lời bằng tiếng Việt, ngắn gọn, tối đa 3 đoạn. Tách ý bằng cách XUỐNG DÒNG (ký tự \\n),
+  không viết dồn thành một khối chữ dài.
+- Khi cần liệt kê nhiều mục (vật tư, bước hành động, sự cố), mỗi mục một dòng, bắt đầu bằng
+  "•  " (dấu chấm tròn và hai khoảng trắng). KHÔNG dùng số thứ tự, KHÔNG dùng dấu gạch đầu dòng markdown.
+- Ngày tháng viết dạng dd/mm/yyyy (ví dụ 13/07/2026), không để dạng 2026-07-13.
+- Với câu hỏi tư vấn/giải thích, nên có một câu chốt gợi ý việc nên làm tiếp ở cuối.
+- Nêu đúng con số khi nguồn dữ liệu có; tuyệt đối không thêm số ngoài snapshot/question."""
 
 _RAG_DRAFT_SYSTEM = _ASSISTANT_SYSTEM + """
 
@@ -109,6 +119,9 @@ Có knowledge trong request. Mỗi câu bằng chứng có evidenceId riêng. CH
 {"evidenceIds":["K1S1","K1S2"]}.
 - Chỉ chọn câu evidence TRỰC TIẾP trả lời câu hỏi; không viết lại, không suy diễn, không tạo answer.
 - Với câu hỏi so sánh, chọn đủ câu cho từng vế nếu tài liệu có.
+- Với câu hỏi về HÀNH ĐỘNG hoặc QUY TRÌNH (chuẩn bị, ứng phó, sơ tán, các bước cần làm),
+  chọn ĐỦ các câu mô tả những việc cần làm trong tài liệu, không chỉ lấy một câu.
+- Chọn theo thứ tự bằng chứng xuất hiện trong tài liệu để câu trả lời mạch lạc.
 - Nếu không có câu evidence trực tiếp hỗ trợ, trả {"evidenceIds":[]}.
 - Không chọn câu chỉ cùng bối cảnh nhưng không trả lời đối tượng/đơn vị/hành động được hỏi."""
 
@@ -221,8 +234,15 @@ def _patch_english(text: str) -> str:
         text = pattern.sub(repl, text)
     # UI chat dùng plain text; model nhỏ đôi khi vẫn bọc **đậm**/`code` dù prompt cấm.
     text = re.sub(r"[*_`]+", "", text)
-    text = re.sub(r"(?m)^\s*(?:#{1,6}\s+|[-+]\s+)", "", text)
-    return re.sub(r"\s+", " ", text).strip()
+    # GIỮ xuống dòng: gộp space/tab trong từng dòng trước, KHÔNG nuốt \n (chat render whitespace-pre-wrap).
+    text = re.sub(r"[^\S\n]+", " ", text)
+    # Chuẩn hoá heading/bullet markdown đầu dòng (sau khi đã gộp space để "•  " giữ đúng 2 khoảng trắng).
+    text = re.sub(r"(?m)^ *#{1,6} +", "", text)
+    text = re.sub(r"(?m)^ *[-+*] +", "•  ", text)
+    # Gộp tối đa 2 dòng trống liên tiếp; xoá khoảng trắng thừa cuối mỗi dòng.
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r" +\n", "\n", text)
+    return text.strip()
 
 
 def _redact_identity(text: str) -> str:
@@ -434,10 +454,17 @@ def _render_evidence(
             if key in seen:
                 continue
             seen.add(key)
+            # Nguồn giữ NGUYÊN văn tiêu đề/locator/URL (chống bịa); chỉ tách dòng cho dễ đọc.
             sources.append(
-                f"[Nguồn: {source['title']} — {source['locator']}; {source['url']}]"
+                f"•  {source['title']} — {source['locator']}\n   {source['url']}"
             )
-    return "\n".join([" ".join(sentences), *sources])
+    # Khung giọng người: câu dẫn + phần trích nguyên văn + khối nguồn tách rõ ràng.
+    # Một câu → đoạn liền; nhiều câu (quy trình/nhiều bước) → mỗi câu một dòng bullet cho dễ đọc.
+    body = sentences[0] if len(sentences) == 1 else "\n".join(f"•  {s}" for s in sentences)
+    blocks = [f"Dạ, theo tài liệu tham khảo:\n\n{body}"]
+    if sources:
+        blocks.append("Nguồn tham khảo:\n" + "\n".join(sources))
+    return "\n\n".join(blocks)
 
 
 

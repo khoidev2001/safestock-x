@@ -1,10 +1,7 @@
 import { BadRequestException, ForbiddenException } from "@nestjs/common";
 import { InventoryService } from "../inventory.service";
 
-function fakePrisma(
-  initial: Record<string, number>,
-  warehouses: Record<string, string> = {},
-) {
+function fakePrisma(initial: Record<string, number>, warehouses: Record<string, string> = {}) {
   const quantities = { ...initial };
   const transactions: { batchId: string; type: string; source: string; quantity: number }[] = [];
   const audits: { entityId: string; metadata: { before: number; after: number } }[] = [];
@@ -88,8 +85,22 @@ describe("InventoryService.bulkExport", () => {
     expect(result.count).toBe(2);
     expect(state.quantities).toEqual({ b1: 7, b2: 6 });
     expect(state.transactions).toEqual([
-      { batchId: "b1", userId: "user-1", type: "EXPORT", source: "BULK", quantity: 3, note: undefined },
-      { batchId: "b2", userId: "user-1", type: "EXPORT", source: "BULK", quantity: 2, note: undefined },
+      {
+        batchId: "b1",
+        userId: "user-1",
+        type: "EXPORT",
+        source: "BULK",
+        quantity: 3,
+        note: undefined,
+      },
+      {
+        batchId: "b2",
+        userId: "user-1",
+        type: "EXPORT",
+        source: "BULK",
+        quantity: 2,
+        note: undefined,
+      },
     ]);
     expect(state.audits.map((audit) => audit.metadata)).toEqual([
       expect.objectContaining({ before: 10, after: 7 }),

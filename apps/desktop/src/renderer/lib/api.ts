@@ -15,6 +15,7 @@ interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
   user: AuthUser | null;
+  sessionVersion: number;
 }
 
 const auth: AuthState = {
@@ -22,10 +23,23 @@ const auth: AuthState = {
   accessToken: null,
   refreshToken: null,
   user: null,
+  sessionVersion: 0,
 };
 
 export function getBase(): string {
   return auth.base;
+}
+
+export function getAccessToken(): string | null {
+  return auth.accessToken;
+}
+
+export function getSessionVersion(): number {
+  return auth.sessionVersion;
+}
+
+export function refreshAccessToken(): Promise<boolean> {
+  return tryRefresh();
 }
 
 /** Chuẩn hoá host người dùng nhập ("192.168.1.5", "localhost:3100", "http://x") → URL đầy đủ. */
@@ -62,6 +76,7 @@ export async function login(email: string, password: string): Promise<AuthUser> 
   });
   const data = await parseBody(res);
   if (!res.ok) throw new ApiError(res.status, data?.message ?? `Đăng nhập lỗi ${res.status}`);
+  auth.sessionVersion += 1;
   auth.accessToken = data.accessToken;
   auth.refreshToken = data.refreshToken;
   auth.user = data.user;
@@ -69,6 +84,7 @@ export async function login(email: string, password: string): Promise<AuthUser> 
 }
 
 export function logout(): void {
+  auth.sessionVersion += 1;
   auth.accessToken = null;
   auth.refreshToken = null;
   auth.user = null;
@@ -109,15 +125,22 @@ async function parseBody(res: Response) {
 }
 
 async function tryRefresh(): Promise<boolean> {
-  if (!auth.refreshToken) return false;
+  const accessToken = auth.accessToken;
+  const refreshToken = auth.refreshToken;
+  const sessionVersion = auth.sessionVersion;
+  if (!refreshToken) return false;
   try {
     const res = await fetch(`${auth.base}/api/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken: auth.refreshToken }),
+      body: JSON.stringify({ refreshToken }),
     });
     if (!res.ok) return false;
     const data = await res.json();
+    if (auth.sessionVersion !== sessionVersion) return false;
+    if (auth.refreshToken !== refreshToken) {
+      return Boolean(auth.accessToken && auth.accessToken !== accessToken);
+    }
     auth.accessToken = data.accessToken;
     auth.refreshToken = data.refreshToken;
     auth.user = data.user;

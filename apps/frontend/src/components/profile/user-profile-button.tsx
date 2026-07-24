@@ -44,5 +44,10 @@ export function UserProfileButton({ onLogout }: { onLogout: () => void }) {
 
 function getInitials(value: string): string {
   const words = value.trim().split(/\s+/).filter(Boolean);
-  return words.slice(-2).map((word) => word[0]?.toUpperCase()).join("") || "HS";
+  return (
+    words
+      .slice(-2)
+      .map((word) => word[0]?.toUpperCase())
+      .join("") || "HS"
+  );
 }

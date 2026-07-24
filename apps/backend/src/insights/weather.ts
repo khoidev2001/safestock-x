@@ -22,7 +22,10 @@ export class WeatherService {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const data = (await response.json()) as { daily?: { precipitation_sum?: number[] } };
-      const totalRainMm = (data.daily?.precipitation_sum ?? []).reduce((sum, v) => sum + (v ?? 0), 0);
+      const totalRainMm = (data.daily?.precipitation_sum ?? []).reduce(
+        (sum, v) => sum + (v ?? 0),
+        0,
+      );
       return { totalRainMm, alert: totalRainMm >= RAIN_ALERT_MM_72H };
     } catch (error) {
       this.log.warn(`Open-Meteo lỗi: ${(error as Error).message}`);

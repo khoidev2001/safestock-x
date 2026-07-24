@@ -1,12 +1,23 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
-import { IncidentSeverity, IncidentState, NotificationKind, UserRole, VirtualDeviceType } from "@prisma/client";
+import {
+  IncidentSeverity,
+  IncidentState,
+  NotificationKind,
+  UserRole,
+  VirtualDeviceType,
+} from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { NotificationService } from "../notification/notification.service";
 import { AiClientService } from "../ai/ai-client.service";
 import { AlertMailService } from "../mail/alert-mail.service";
+import { assertWarehouseInScope } from "../inventory/warehouse-scope";
 import { buildIncidentContext } from "./incident.context";
 import { detectIncidents, DetectedIncident, SensorSignal } from "./incident.rules";
-import { detectStatisticalAnomaly, detectPredictiveWarning, CONTINUOUS_DEVICE_TYPES } from "./anomaly.rules";
+import {
+  detectStatisticalAnomaly,
+  detectPredictiveWarning,
+  CONTINUOUS_DEVICE_TYPES,
+} from "./anomaly.rules";
 
 const SEVERITY_LABEL: Record<string, string> = {
   LOW: "Thấp",
@@ -51,20 +62,21 @@ export class IncidentService {
     // Anomaly/predictive cần baseline lịch sử dài hơn cửa sổ scan thường (60ph) —
     // query riêng, giới hạn 300 điểm/loại liên tục để chặn phình query theo thời gian.
     const historyEvents = await this.prisma.sensorEvent.findMany({
-      where: { warehouseId, device: { type: { in: CONTINUOUS_DEVICE_TYPES as VirtualDeviceType[] } } },
+      where: {
+        warehouseId,
+        device: { type: { in: CONTINUOUS_DEVICE_TYPES as VirtualDeviceType[] } },
+      },
       include: { device: true },
       orderBy: { createdAt: "desc" },
       take: 300,
     });
-    const history: SensorSignal[] = historyEvents
-      .reverse()
-      .map((e) => ({
-        deviceCode: e.device.code,
-        deviceType: e.device.type,
-        eventType: e.eventType,
-        value: e.value,
-        occurredAt: e.createdAt,
-      }));
+    const history: SensorSignal[] = historyEvents.reverse().map((e) => ({
+      deviceCode: e.device.code,
+      deviceType: e.device.type,
+      eventType: e.eventType,
+      value: e.value,
+      occurredAt: e.createdAt,
+    }));
     detected.push(...detectStatisticalAnomaly(history));
     detected.push(...detectPredictiveWarning(history));
 
@@ -79,7 +91,9 @@ export class IncidentService {
 
     const created = [] as Awaited<ReturnType<typeof this.persist>>[];
     for (const incident of detected) {
-      const isDuplicate = incident.evidence.some((e) => openKeys.has(`${incident.kind}|${e.deviceCode}`));
+      const isDuplicate = incident.evidence.some((e) =>
+        openKeys.has(`${incident.kind}|${e.deviceCode}`),
+      );
       if (isDuplicate) continue;
 
       const saved = await this.persist(warehouseId, incident);
@@ -123,7 +137,13 @@ export class IncidentService {
     }
     const recipients = await this.resolveEmailRecipients(incident.warehouseId);
     await this.mail.sendIncidentAlert(
-      { title: incident.title, severity: incident.severity, confidence: incident.confidence, kind: incident.kind, evidence: incident.evidence },
+      {
+        title: incident.title,
+        severity: incident.severity,
+        confidence: incident.confidence,
+        kind: incident.kind,
+        evidence: incident.evidence,
+      },
       explanation,
       recipients,
     );
@@ -159,8 +179,12 @@ export class IncidentService {
     });
   }
 
-  /** Chi tiết sự cố + timeline bằng chứng (theo thời gian). */
-  async getWithTimeline(id: string) {
+  /**
+   * Chi tiết sự cố + timeline bằng chứng (theo thời gian).
+   * scopeWarehouseId: truyền từ JWT khi gọi từ controller — trưởng thôn chỉ xem
+   * được sự cố kho mình (chặn IDOR). undefined = caller nội bộ (enrich) không giới hạn.
+   */
+  async getWithTimeline(id: string, scopeWarehouseId?: string | null) {
     const incident = await this.prisma.incident.findUnique({
       where: { id },
       include: {
@@ -169,6 +193,7 @@ export class IncidentService {
       },
     });
     if (!incident) throw new NotFoundException("Không tìm thấy sự cố");
+    assertWarehouseInScope(scopeWarehouseId, incident.warehouseId);
     return incident;
   }
 
@@ -178,7 +203,13 @@ export class IncidentService {
   }
 
   /** Chuyển trạng thái xử lý + ghi hành động. */
-  async transition(id: string, action: "acknowledge" | "assign" | "resolve", actorId: string, note?: string) {
+  async transition(
+    id: string,
+    action: "acknowledge" | "assign" | "resolve",
+    actorId: string,
+    note?: string,
+    scopeWarehouseId?: string | null,
+  ) {
     const nextState: Record<string, IncidentState> = {
       acknowledge: IncidentState.ACKNOWLEDGED,
       assign: IncidentState.ASSIGNED,
@@ -186,6 +217,8 @@ export class IncidentService {
     };
     const incident = await this.prisma.incident.findUnique({ where: { id } });
     if (!incident) throw new NotFoundException("Không tìm thấy sự cố");
+    // Chặn IDOR: trưởng thôn chỉ chuyển trạng thái sự cố thuộc kho mình.
+    assertWarehouseInScope(scopeWarehouseId, incident.warehouseId);
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.incident.update({

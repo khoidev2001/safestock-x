@@ -19,7 +19,11 @@ export interface TrendResult {
  * So tổng xuất `periodDays` gần nhất với `periodDays` liền trước đó, theo SKU.
  * previousTotal=0 & currentTotal>0 → changePercent null (không chia 0, coi là "mới xuất hiện").
  */
-export function computeTrends(exports: ExportTxnTrend[], periodDays: number, now: Date): TrendResult[] {
+export function computeTrends(
+  exports: ExportTxnTrend[],
+  periodDays: number,
+  now: Date,
+): TrendResult[] {
   const msPerDay = 24 * 60 * 60 * 1000;
   const currentStart = now.getTime() - periodDays * msPerDay;
   const previousStart = currentStart - periodDays * msPerDay;
@@ -43,7 +47,8 @@ export function computeTrends(exports: ExportTxnTrend[], periodDays: number, now
     const currentTotal = current.get(sku)?.total ?? 0;
     const previousTotal = previous.get(sku) ?? 0;
     const itemName = current.get(sku)?.itemName ?? sku;
-    const changePercent = previousTotal > 0 ? ((currentTotal - previousTotal) / previousTotal) * 100 : null;
+    const changePercent =
+      previousTotal > 0 ? ((currentTotal - previousTotal) / previousTotal) * 100 : null;
     return { sku, itemName, currentTotal, previousTotal, changePercent };
   });
 }

@@ -95,7 +95,8 @@ const SCENARIOS: Scenario[] = [
   {
     key: "sensor_fault",
     name: "Lỗi cảm biến",
-    description: "Loadcell giảm bất thường nhưng cửa không mở + RFID không đổi + camera không phát hiện.",
+    description:
+      "Loadcell giảm bất thường nhưng cửa không mở + RFID không đổi + camera không phát hiện.",
     durationMs: 20000,
     events: [
       { offsetMs: 4000, deviceCode: "scale_B1", eventType: "WEIGHT_CHANGED", value: 30 }, // giảm mạnh vô lý
@@ -128,14 +129,13 @@ const SCENARIOS: Scenario[] = [
     name: "Vật tư sai vị trí",
     description: "Camera AI phát hiện vật tư ở sai khu (expected A, detected C).",
     durationMs: 15000,
-    events: [
-      { offsetMs: 5000, deviceCode: "scale_A2", eventType: "VISION_DETECTION", value: 1 },
-    ],
+    events: [{ offsetMs: 5000, deviceCode: "scale_A2", eventType: "VISION_DETECTION", value: 1 }],
   },
   {
     key: "fire",
     name: "Nghi cháy",
-    description: "Khói tăng đột biến + nhiệt độ tăng nhanh trong ~10s, không kèm hoạt động cửa/RFID.",
+    description:
+      "Khói tăng đột biến + nhiệt độ tăng nhanh trong ~10s, không kèm hoạt động cửa/RFID.",
     durationMs: 15000,
     events: [
       { offsetMs: 2000, deviceCode: "smoke_B", eventType: "SMOKE_READING", value: 0 },
@@ -149,7 +149,8 @@ const SCENARIOS: Scenario[] = [
   {
     key: "heat_drift",
     name: "Nhiệt tăng dần (cảnh báo sớm)",
-    description: "Nhiệt độ tăng đều, CHƯA chạm ngưỡng 35°C — minh hoạ cảnh báo sớm dự đoán báo TRƯỚC khi rule ngưỡng cũ kịp phát hiện.",
+    description:
+      "Nhiệt độ tăng đều, CHƯA chạm ngưỡng 35°C — minh hoạ cảnh báo sớm dự đoán báo TRƯỚC khi rule ngưỡng cũ kịp phát hiện.",
     durationMs: 20000,
     events: [
       { offsetMs: 2000, deviceCode: "temp_B", eventType: "TEMP_READING", value: 28 },

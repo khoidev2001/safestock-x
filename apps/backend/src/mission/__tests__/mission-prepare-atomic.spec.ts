@@ -178,10 +178,6 @@ describe("MissionController.prepare", () => {
       "mission-1",
     );
 
-    expect(missions.prepareByWarehouse).toHaveBeenCalledWith(
-      "mission-1",
-      "user-1",
-      "warehouse-a",
-    );
+    expect(missions.prepareByWarehouse).toHaveBeenCalledWith("mission-1", "user-1", "warehouse-a");
   });
 });

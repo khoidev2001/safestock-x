@@ -42,7 +42,8 @@ function UploadCard({ warehouseId }: { warehouseId: string }) {
       if (fileRef.current) fileRef.current.value = "";
       qc.invalidateQueries({ queryKey: ["reports"] });
     },
-    onError: (e) => setMsg(e instanceof Error ? e.message : "Chưa thể gửi báo cáo. Vui lòng thử lại."),
+    onError: (e) =>
+      setMsg(e instanceof Error ? e.message : "Chưa thể gửi báo cáo. Vui lòng thử lại."),
   });
 
   return (
@@ -52,12 +53,15 @@ function UploadCard({ warehouseId }: { warehouseId: string }) {
         <span>Gửi báo cáo kiểm kê tháng</span>
       </div>
       <p className="mt-1 text-sm text-[var(--text-muted)]">
-        Đính kèm bảng kiểm kê gồm 7 cột: mã vật tư, tên vật tư, số lượng, đơn vị, hạn dùng, tình trạng và ghi chú. Số liệu chỉ được cập nhật sau khi xã phê duyệt.
+        Đính kèm bảng kiểm kê gồm 7 cột: mã vật tư, tên vật tư, số lượng, đơn vị, hạn dùng, tình
+        trạng và ghi chú. Số liệu chỉ được cập nhật sau khi xã phê duyệt.
       </p>
 
       <div className="mt-4 flex flex-wrap items-end gap-3">
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Kỳ báo cáo</span>
+          <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">
+            Kỳ báo cáo
+          </span>
           <input
             type="month"
             value={period}
@@ -66,7 +70,9 @@ function UploadCard({ warehouseId }: { warehouseId: string }) {
           />
         </label>
         <label className="block flex-1">
-          <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Tệp Excel (.xlsx)</span>
+          <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">
+            Tệp Excel (.xlsx)
+          </span>
           <input
             ref={fileRef}
             type="file"
@@ -108,13 +114,21 @@ function ReportList({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <section className="rounded-md border bg-[var(--surface)] p-5">
-      <h3 className="text-sm font-semibold">{isAdmin ? "Báo cáo thôn chờ duyệt" : "Báo cáo đã gửi"}</h3>
+      <h3 className="text-sm font-semibold">
+        {isAdmin ? "Báo cáo thôn chờ duyệt" : "Báo cáo đã gửi"}
+      </h3>
       {reports.length === 0 ? (
         <p className="mt-3 text-sm text-[var(--text-muted)]">Chưa có báo cáo nào.</p>
       ) : (
         <ul className="mt-4 divide-y">
           {pagination.pageItems.map((r) => (
-            <ReportRow key={r.id} report={r} isAdmin={isAdmin} busy={act.isPending} onAct={act.mutate} />
+            <ReportRow
+              key={r.id}
+              report={r}
+              isAdmin={isAdmin}
+              busy={act.isPending}
+              onAct={act.mutate}
+            />
           ))}
         </ul>
       )}
@@ -146,7 +160,12 @@ function ReportRow({
       : report.status === "REJECTED"
         ? "var(--color-critical)"
         : "var(--color-attention)";
-  const label = report.status === "APPROVED" ? "Đã duyệt" : report.status === "REJECTED" ? "Từ chối" : "Chờ duyệt";
+  const label =
+    report.status === "APPROVED"
+      ? "Đã duyệt"
+      : report.status === "REJECTED"
+        ? "Từ chối"
+        : "Chờ duyệt";
 
   return (
     <li className="flex items-center justify-between gap-3 py-3">
@@ -155,7 +174,8 @@ function ReportRow({
           {report.warehouse?.name ?? report.warehouseId} · kỳ {report.period}
         </p>
         <p className="text-xs text-[var(--text-muted)]">
-          {report.submittedBy?.fullName ?? "—"} · {new Date(report.createdAt).toLocaleDateString("vi-VN")}
+          {report.submittedBy?.fullName ?? "—"} ·{" "}
+          {new Date(report.createdAt).toLocaleDateString("vi-VN")}
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-2">

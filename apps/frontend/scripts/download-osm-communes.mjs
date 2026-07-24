@@ -6,11 +6,41 @@ import path from "node:path";
 const OUTPUT = "public/geo/communes.geojson";
 const USER_AGENT = "UngPhoNhanh-GIS/1.0 (offline boundary builder)";
 const COMMUNES = [
-  { relationId: 19392118, name: "Đồng Xuân", fullName: "Xã Đồng Xuân", code: "22081", areaKm2: 206.26 },
-  { relationId: 19392094, name: "Xuân Lãnh", fullName: "Xã Xuân Lãnh", code: "22090", areaKm2: 174.65 },
-  { relationId: 19392092, name: "Xuân Phước", fullName: "Xã Xuân Phước", code: "22111", areaKm2: 102.81 },
-  { relationId: 19392091, name: "Xuân Thọ", fullName: "Xã Xuân Thọ", code: "22075", areaKm2: 192.12 },
-  { relationId: 19392095, name: "Xuân Đài", fullName: "Phường Xuân Đài", code: "22076", areaKm2: 13.4 },
+  {
+    relationId: 19392118,
+    name: "Đồng Xuân",
+    fullName: "Xã Đồng Xuân",
+    code: "22081",
+    areaKm2: 206.26,
+  },
+  {
+    relationId: 19392094,
+    name: "Xuân Lãnh",
+    fullName: "Xã Xuân Lãnh",
+    code: "22090",
+    areaKm2: 174.65,
+  },
+  {
+    relationId: 19392092,
+    name: "Xuân Phước",
+    fullName: "Xã Xuân Phước",
+    code: "22111",
+    areaKm2: 102.81,
+  },
+  {
+    relationId: 19392091,
+    name: "Xuân Thọ",
+    fullName: "Xã Xuân Thọ",
+    code: "22075",
+    areaKm2: 192.12,
+  },
+  {
+    relationId: 19392095,
+    name: "Xuân Đài",
+    fullName: "Phường Xuân Đài",
+    code: "22076",
+    areaKm2: 13.4,
+  },
 ];
 
 const features = [];

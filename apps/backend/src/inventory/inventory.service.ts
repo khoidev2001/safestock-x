@@ -1,13 +1,9 @@
-import {
-  BadRequestException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from "@nestjs/common";
+import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { Prisma, TransactionSource } from "@prisma/client";
 import { TransactionType } from "@safestock/shared-types";
 import { PrismaService } from "../prisma/prisma.service";
 import { ReadinessService } from "../readiness/readiness.service";
+import { transferInventoryInTx } from "./inventory-transfer";
 import { assertBatchInScope } from "./warehouse-scope";
 
 @Injectable()
@@ -78,7 +74,15 @@ export class InventoryService {
     scopeWarehouseId?: string | null,
   ) {
     await assertBatchInScope(this.prisma, scopeWarehouseId, batchId);
-    const result = await this.applyTxn(userId, batchId, TransactionType.IMPORT, quantity, note, source);
+    const result = await this.applyTxn(
+      userId,
+      batchId,
+      TransactionType.IMPORT,
+      quantity,
+      note,
+      source,
+      scopeWarehouseId,
+    );
     await this.recalcAfterTxn(batchId);
     return result;
   }
@@ -196,7 +200,9 @@ export class InventoryService {
   async bulkImport(userId: string, items: { batchId: string; quantity: number }[], note?: string) {
     const valid = items.filter((item) => item.quantity > 0);
     if (valid.length === 0) return { count: 0, batches: [] };
-    const results = await this.prisma.$transaction((tx) => this.bulkImportInTx(tx, userId, valid, note));
+    const results = await this.prisma.$transaction((tx) =>
+      this.bulkImportInTx(tx, userId, valid, note),
+    );
     await this.recalcBatches(valid.map((item) => item.batchId));
     return { count: results.length, batches: results };
   }
@@ -206,38 +212,38 @@ export class InventoryService {
     await Promise.all([...new Set(batchIds)].map((id) => this.recalcAfterTxn(id)));
   }
 
-  async transfer(userId: string, batchId: string, toShelfId: string, quantity: number, note?: string) {
-    const shelf = await this.prisma.shelf.findUnique({ where: { id: toShelfId } });
-    if (!shelf) throw new NotFoundException("Kệ đích không tồn tại");
-    // Transfer không đổi số lượng tổng, chỉ đổi vị trí — ghi giao dịch + di chuyển batch.
-    return this.prisma.$transaction(async (tx) => {
-      const batch = await tx.itemBatch.findUnique({ where: { id: batchId } });
-      if (!batch) throw new NotFoundException("Không tìm thấy lô vật tư");
-      const updated = await tx.itemBatch.update({
-        where: { id: batchId },
-        data: { shelfId: toShelfId },
-      });
-      const txn = await tx.inventoryTransaction.create({
-        data: {
-          batchId,
-          userId,
-          type: TransactionType.TRANSFER,
-          source: TransactionSource.SCAN,
-          quantity,
-          note,
-        },
-      });
-      await tx.auditLog.create({
-        data: {
-          actorId: userId,
-          action: "INVENTORY_TRANSFER",
-          entity: "ItemBatch",
-          entityId: batchId,
-          metadata: { toShelfId, quantity },
-        },
-      });
-      return { batch: updated, transaction: txn };
-    });
+  async transfer(
+    userId: string,
+    batchId: string,
+    toShelfId: string,
+    quantity: number,
+    note?: string,
+    scopeWarehouseId?: string | null,
+  ) {
+    const transfer = await this.prisma.$transaction((tx) =>
+      transferInventoryInTx(tx, {
+        userId,
+        batchId,
+        toShelfId,
+        quantity,
+        note,
+        scopeWarehouseId,
+      }),
+    );
+    await this.recalcWarehouses(transfer.warehouseIds);
+    return transfer.result;
+  }
+
+  private async recalcWarehouses(warehouseIds: string[]): Promise<void> {
+    await Promise.all(
+      [...new Set(warehouseIds)].map((warehouseId) =>
+        this.readiness.recalculateWarehouse(warehouseId).catch((error) => {
+          this.log.warn(
+            `Recalc readiness sau điều chuyển lỗi (kho ${warehouseId}): ${error.message}`,
+          );
+        }),
+      ),
+    );
   }
 
   // Import/Export: cập nhật số lượng atomically + audit. Không cho xuất quá tồn (PRD NFR-05).
@@ -252,7 +258,7 @@ export class InventoryService {
   ) {
     return this.prisma.$transaction(async (tx) => {
       if (type === TransactionType.IMPORT) {
-        return this.incrementInTx(tx, userId, batchId, quantity, note, source);
+        return this.incrementInTx(tx, userId, batchId, quantity, note, source, scopeWarehouseId);
       }
       return this.decrementInTx(
         tx,
@@ -289,9 +295,7 @@ export class InventoryService {
       where: {
         id: batchId,
         quantity: { gte: quantity },
-        ...(scopeWarehouseId
-          ? { shelf: { zone: { warehouseId: scopeWarehouseId } } }
-          : {}),
+        ...(scopeWarehouseId ? { shelf: { zone: { warehouseId: scopeWarehouseId } } } : {}),
       },
       data: { quantity: { decrement: quantity } },
     });
@@ -327,14 +331,29 @@ export class InventoryService {
     quantity: number,
     note: string | undefined,
     source: TransactionSource,
+    scopeWarehouseId?: string | null,
   ) {
     const before = await tx.itemBatch.findUnique({ where: { id: batchId } });
     if (!before) throw new NotFoundException("Không tìm thấy lô vật tư");
 
-    await tx.itemBatch.update({
-      where: { id: batchId },
-      data: { quantity: { increment: quantity } },
-    });
+    if (scopeWarehouseId) {
+      const result = await tx.itemBatch.updateMany({
+        where: {
+          id: batchId,
+          shelf: { zone: { warehouseId: scopeWarehouseId } },
+        },
+        data: { quantity: { increment: quantity } },
+      });
+      if (result.count === 0) {
+        await assertBatchInScope(tx, scopeWarehouseId, batchId);
+        throw new NotFoundException("Không tìm thấy lô vật tư");
+      }
+    } else {
+      await tx.itemBatch.update({
+        where: { id: batchId },
+        data: { quantity: { increment: quantity } },
+      });
+    }
     const afterBatch = await tx.itemBatch.findUnique({ where: { id: batchId } });
     if (!afterBatch) throw new NotFoundException("Không tìm thấy lô vật tư");
     return this.recordTxn(tx, {
@@ -347,6 +366,39 @@ export class InventoryService {
       before: afterBatch.quantity - quantity,
       after: afterBatch.quantity,
     });
+  }
+
+  importInTx(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    batchId: string,
+    quantity: number,
+    note: string | undefined,
+    source: TransactionSource,
+    scopeWarehouseId?: string | null,
+  ) {
+    return this.incrementInTx(tx, userId, batchId, quantity, note, source, scopeWarehouseId);
+  }
+
+  exportInTx(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    batchId: string,
+    quantity: number,
+    note: string | undefined,
+    source: TransactionSource,
+    scopeWarehouseId?: string | null,
+  ) {
+    return this.decrementInTx(
+      tx,
+      userId,
+      batchId,
+      quantity,
+      TransactionType.EXPORT,
+      source,
+      note,
+      scopeWarehouseId,
+    );
   }
 
   /** Ghi giao dịch + audit before/after. Trả về batch đã cập nhật. */
@@ -391,5 +443,4 @@ export class InventoryService {
     const batch = await tx.itemBatch.findUnique({ where: { id: p.batchId } });
     return { batch, transaction: txn };
   }
-
 }

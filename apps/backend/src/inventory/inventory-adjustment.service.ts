@@ -1,15 +1,24 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
 } from "@nestjs/common";
-import { LoanStatus, Prisma, TransactionSource } from "@prisma/client";
+import { CirculationStatus, LoanStatus, Prisma, TransactionSource } from "@prisma/client";
 import { TransactionType } from "@safestock/shared-types";
 import { PrismaService } from "../prisma/prisma.service";
 import { ReadinessService } from "../readiness/readiness.service";
 import { sumOutstanding } from "./loan-math";
 import { assertBatchInScope } from "./warehouse-scope";
+
+type ReconcileInTxOptions = {
+  requireStableSnapshot?: boolean;
+  expectedBatch?: {
+    quantity: number;
+    circulation: CirculationStatus;
+  };
+};
 
 /** Thao tác chỉnh tay + đối chiếu kiểm kê (Bp2) — tách khỏi giao dịch thường vì đều nhạy cảm, hậu kiểm. */
 @Injectable()
@@ -38,7 +47,13 @@ export class InventoryAdjustmentService {
    * Điều chỉnh thủ công số lượng — thao tác nhạy cảm, lý do BẮT BUỘC.
    * Ghi audit 5W. Đặt số lượng tuyệt đối (không phải delta).
    */
-  async adjust(userId: string, batchId: string, newQuantity: number, reason: string, scopeWarehouseId?: string | null) {
+  async adjust(
+    userId: string,
+    batchId: string,
+    newQuantity: number,
+    reason: string,
+    scopeWarehouseId?: string | null,
+  ) {
     if (newQuantity < 0) {
       throw new BadRequestException("Số lượng không được âm");
     }
@@ -90,43 +105,91 @@ export class InventoryAdjustmentService {
     scopeWarehouseId?: string | null,
   ) {
     if (countedQty < 0) throw new BadRequestException("Số kiểm kê không được âm");
-    await assertBatchInScope(this.prisma, scopeWarehouseId, batchId);
-
-    const result = await this.prisma.$transaction(async (tx) => {
-      const batch = await tx.itemBatch.findUnique({ where: { id: batchId } });
-      if (!batch) throw new NotFoundException("Không tìm thấy lô vật tư");
-
-      const onLoan = await this.sumOnLoan(tx, batchId);
-      const expectedInStock = batch.quantity - onLoan;
-      const discrepancy = countedQty - expectedInStock;
-      const willApply = applyOverride && discrepancy !== 0;
-
-      await tx.inventoryCount.create({
-        data: { batchId, countedQty, userId, note },
-      });
-
-      if (willApply) {
-        // Ghi đè tồn = số đếm + phần đang mượn (kiểm kê chỉ đếm phần trong kho).
-        const newSystemQty = countedQty + onLoan;
-        await tx.itemBatch.update({
-          where: { id: batchId },
-          data: { quantity: newSystemQty },
-        });
-        await tx.auditLog.create({
-          data: {
-            actorId: userId,
-            action: "INVENTORY_RECONCILE",
-            entity: "ItemBatch",
-            entityId: batchId,
-            metadata: { before: batch.quantity, after: newSystemQty, countedQty, onLoan, discrepancy },
-          },
-        });
-      }
-
-      return { batchId, expectedInStock, countedQty, onLoan, discrepancy, applied: willApply };
-    });
+    const result = await this.prisma.$transaction((tx) =>
+      this.reconcileInTx(tx, userId, batchId, countedQty, applyOverride, note, scopeWarehouseId),
+    );
     if (result.applied) await this.recalcAfterTxn(batchId);
     return result;
+  }
+
+  async reconcileInTx(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    batchId: string,
+    countedQty: number,
+    applyOverride: boolean,
+    note?: string,
+    scopeWarehouseId?: string | null,
+    options: ReconcileInTxOptions = {},
+  ) {
+    if (countedQty < 0) throw new BadRequestException("Số kiểm kê không được âm");
+    await assertBatchInScope(tx, scopeWarehouseId, batchId);
+
+    const batch = await tx.itemBatch.findUnique({ where: { id: batchId } });
+    if (!batch) throw new NotFoundException("Không tìm thấy lô vật tư");
+
+    const onLoan = await this.sumOnLoan(tx, batchId);
+    const snapshotQuantity = options.expectedBatch?.quantity ?? batch.quantity;
+    const snapshotCirculation = options.expectedBatch?.circulation ?? batch.circulation;
+    const expectedInStock = snapshotQuantity - onLoan;
+    const discrepancy = countedQty - expectedInStock;
+    const willApply = applyOverride && discrepancy !== 0;
+    const newSystemQty = willApply ? countedQty + onLoan : snapshotQuantity;
+    const scopeWhere = scopeWarehouseId
+      ? { shelf: { zone: { warehouseId: scopeWarehouseId } } }
+      : {};
+
+    if (willApply || options.requireStableSnapshot) {
+      const claim = await tx.itemBatch.updateMany({
+        where: {
+          id: batchId,
+          quantity: snapshotQuantity,
+          circulation: snapshotCirculation,
+          ...scopeWhere,
+        },
+        data: { quantity: newSystemQty },
+      });
+      if (claim.count === 0) {
+        throw new ConflictException("Lô vật tư vừa được cập nhật; hãy tải lại trước khi đối chiếu");
+      }
+    }
+
+    await tx.inventoryCount.create({
+      data: { batchId, countedQty, userId, note },
+    });
+
+    if (willApply) {
+      await tx.auditLog.create({
+        data: {
+          actorId: userId,
+          action: "INVENTORY_RECONCILE",
+          entity: "ItemBatch",
+          entityId: batchId,
+          metadata: {
+            before: snapshotQuantity,
+            after: newSystemQty,
+            countedQty,
+            onLoan,
+            discrepancy,
+            note: note ?? null,
+          },
+        },
+      });
+    }
+
+    return { batchId, expectedInStock, countedQty, onLoan, discrepancy, applied: willApply };
+  }
+
+  async recalculateWarehousesAfterCommit(warehouseIds: string[]): Promise<void> {
+    await Promise.all(
+      [...new Set(warehouseIds)].map((warehouseId) =>
+        this.readiness.recalculateWarehouse(warehouseId).catch((error) => {
+          this.log.warn(
+            `Recalc readiness sau đối chiếu lỗi (kho ${warehouseId}): ${error.message}`,
+          );
+        }),
+      ),
+    );
   }
 
   /** Tổng số đang mượn của 1 lô (LoanRecord chưa đóng). */

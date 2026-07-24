@@ -35,19 +35,40 @@ export class InventoryController {
   @RequirePermission(Permission.INVENTORY_IMPORT)
   @Post("import")
   import(@Request() req: AuthenticatedRequest, @Body() dto: TransactionDto) {
-    return this.inv.import(req.user.userId, dto.batchId, dto.quantity, dto.note, undefined, req.user.warehouseId);
+    return this.inv.import(
+      req.user.userId,
+      dto.batchId,
+      dto.quantity,
+      dto.note,
+      undefined,
+      req.user.warehouseId,
+    );
   }
 
   @RequirePermission(Permission.INVENTORY_EXPORT)
   @Post("export")
   export(@Request() req: AuthenticatedRequest, @Body() dto: TransactionDto) {
-    return this.inv.export(req.user.userId, dto.batchId, dto.quantity, dto.note, undefined, req.user.warehouseId);
+    return this.inv.export(
+      req.user.userId,
+      dto.batchId,
+      dto.quantity,
+      dto.note,
+      undefined,
+      req.user.warehouseId,
+    );
   }
 
   @RequirePermission(Permission.INVENTORY_EXPORT)
   @Post("transfer")
   transfer(@Request() req: AuthenticatedRequest, @Body() dto: TransferDto) {
-    return this.inv.transfer(req.user.userId, dto.batchId, dto.toShelfId, dto.quantity, dto.note);
+    return this.inv.transfer(
+      req.user.userId,
+      dto.batchId,
+      dto.toShelfId,
+      dto.quantity,
+      dto.note,
+      req.user.warehouseId,
+    );
   }
 
   // Xuất lô 1 chạm — chế độ khẩn cấp (Bp0). Thao tác nhạy cảm.
@@ -61,7 +82,13 @@ export class InventoryController {
   @RequirePermission(Permission.INVENTORY_ADJUST)
   @Post("adjust")
   adjust(@Request() req: AuthenticatedRequest, @Body() dto: AdjustDto) {
-    return this.adjustment.adjust(req.user.userId, dto.batchId, dto.newQuantity, dto.reason, req.user.warehouseId);
+    return this.adjustment.adjust(
+      req.user.userId,
+      dto.batchId,
+      dto.newQuantity,
+      dto.reason,
+      req.user.warehouseId,
+    );
   }
 
   // Đối chiếu kiểm kê (Bp2). Chỉ đếm IN_STOCK, trừ ON_LOAN.

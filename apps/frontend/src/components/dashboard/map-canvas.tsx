@@ -15,7 +15,8 @@ import {
 import type { AdminWarehouse } from "@/lib/warehouse-api";
 
 // Các lớp nền bản đồ — mặc định Địa hình (Topo) như yêu cầu.
-const OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>';
+const OSM_ATTR =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>';
 const BASE_LAYERS = [
   {
     id: "offline",
@@ -63,7 +64,13 @@ const DEFAULT_CENTER: [number, number] = [13.38, 109.05];
 
 function pinIcon(color: string, size = 30): L.DivIcon {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="${color}" stroke="white" stroke-width="1.5"><path d="M12 21s-7-6.5-7-11.5A7 7 0 0 1 19 9.5C19 14.5 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5" fill="white"/></svg>`;
-  return L.divIcon({ html: svg, className: "", iconSize: [size, size], iconAnchor: [size / 2, size], popupAnchor: [0, -size] });
+  return L.divIcon({
+    html: svg,
+    className: "",
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size],
+    popupAnchor: [0, -size],
+  });
 }
 
 interface GeoData {
@@ -79,7 +86,13 @@ export interface MapCanvasProps {
   onPickOnMap: (lat: number, lng: number) => void;
 }
 
-export function MapCanvas({ warehouses, devMode, pickingId, onMarkerMove, onPickOnMap }: MapCanvasProps) {
+export function MapCanvas({
+  warehouses,
+  devMode,
+  pickingId,
+  onMarkerMove,
+  onPickOnMap,
+}: MapCanvasProps) {
   const [geo, setGeo] = useState<GeoData | null>(null);
   const [preferredBaseLayer, setPreferredBaseLayer] = useState<"offline" | "osm">(() =>
     typeof navigator !== "undefined" && navigator.onLine ? "osm" : "offline",
@@ -111,10 +124,19 @@ export function MapCanvas({ warehouses, devMode, pickingId, onMarkerMove, onPick
 
   return (
     <div className="h-[calc(100dvh-190px)] min-h-[520px] overflow-hidden rounded-md border">
-      <MapContainer center={DEFAULT_CENTER} zoom={12} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
+      <MapContainer
+        center={DEFAULT_CENTER}
+        zoom={12}
+        scrollWheelZoom
+        style={{ height: "100%", width: "100%" }}
+      >
         <LayersControl position="topright">
           {BASE_LAYERS.map((layer) => (
-            <LayersControl.BaseLayer key={layer.id} name={layer.name} checked={layer.id === preferredBaseLayer}>
+            <LayersControl.BaseLayer
+              key={layer.id}
+              name={layer.name}
+              checked={layer.id === preferredBaseLayer}
+            >
               <TileLayer
                 url={layer.url}
                 attribution={layer.attribution}
@@ -164,7 +186,12 @@ export function MapCanvas({ warehouses, devMode, pickingId, onMarkerMove, onPick
               <span className="tabular">
                 {(w.lat as number).toFixed(5)}, {(w.lng as number).toFixed(5)}
               </span>
-              {devMode ? <><br /><em>Kéo marker để đổi vị trí</em></> : null}
+              {devMode ? (
+                <>
+                  <br />
+                  <em>Kéo marker để đổi vị trí</em>
+                </>
+              ) : null}
             </Popup>
           </Marker>
         ))}
@@ -182,7 +209,10 @@ function FitBounds({ points }: { points: { lat: number; lng: number }[] }) {
       map.setView([points[0].lat, points[0].lng], 14);
       return;
     }
-    map.fitBounds(L.latLngBounds(points.map((p) => [p.lat, p.lng])), { padding: [30, 30], maxZoom: 14 });
+    map.fitBounds(L.latLngBounds(points.map((p) => [p.lat, p.lng])), {
+      padding: [30, 30],
+      maxZoom: 14,
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   return null;

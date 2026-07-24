@@ -1,10 +1,4 @@
-export type ReliefGroup =
-  | "WASH"
-  | "FOOD"
-  | "RESCUE"
-  | "SHELTER"
-  | "HEALTH"
-  | "COMMUNICATION";
+export type ReliefGroup = "WASH" | "FOOD" | "RESCUE" | "SHELTER" | "HEALTH" | "COMMUNICATION";
 
 export interface SeedItemDefinition {
   group: ReliefGroup;
@@ -37,23 +31,159 @@ export interface SeedShelfDefinition {
 }
 
 export const STANDARD_ITEMS: SeedItemDefinition[] = [
-  { group: "WASH", category: "Nước uống", unit: "lít", name: "Nước uống đóng chai", sku: "WATER-01", consumable: true, unitWeightKg: 1 },
-  { group: "WASH", category: "Dụng cụ chứa nước", unit: "chiếc", name: "Can nước 20 lít", sku: "WATER-CAN-20L", consumable: false, unitWeightKg: 0.9 },
-  { group: "WASH", category: "Vệ sinh gia đình", unit: "bộ", name: "Bộ vệ sinh gia đình", sku: "HYGIENE-KIT-01", consumable: true, unitWeightKg: 2.5 },
-  { group: "FOOD", category: "Lương thực", unit: "kg", name: "Gạo cứu trợ", sku: "RICE-01", consumable: true, unitWeightKg: 1 },
-  { group: "FOOD", category: "Lương thực", unit: "kg", name: "Lương khô cứu trợ", sku: "FOOD-RATION-01", consumable: true, unitWeightKg: 1 },
-  { group: "RESCUE", category: "Thiết bị cứu sinh", unit: "chiếc", name: "Áo phao người lớn", sku: "LIFE-ADULT", consumable: false, unitWeightKg: 0.8 },
-  { group: "RESCUE", category: "Thiết bị cứu sinh", unit: "chiếc", name: "Áo phao trẻ em", sku: "LIFE-CHILD", consumable: false, unitWeightKg: 0.5 },
-  { group: "RESCUE", category: "Thiết bị cứu sinh", unit: "chiếc", name: "Xuồng cứu hộ", sku: "BOAT-01", consumable: false, unitWeightKg: 25 },
-  { group: "RESCUE", category: "Dây cứu hộ", unit: "cuộn", name: "Dây cứu hộ 30 mét", sku: "ROPE-01", consumable: false, unitWeightKg: 3 },
-  { group: "SHELTER", category: "Che chắn khẩn cấp", unit: "tấm", name: "Bạt che chống thấm", sku: "CANVAS-01", consumable: false, unitWeightKg: 2 },
-  { group: "SHELTER", category: "Che chắn khẩn cấp", unit: "tấm", name: "Chăn cứu trợ", sku: "BLANKET-01", consumable: false, unitWeightKg: 1.4 },
-  { group: "SHELTER", category: "Màn chống muỗi", unit: "chiếc", name: "Màn chống muỗi", sku: "MOSQUITO-NET-01", consumable: false, unitWeightKg: 0.6 },
-  { group: "HEALTH", category: "Y tế sơ cấp", unit: "bộ", name: "Bộ sơ cứu", sku: "FIRSTAID-01", consumable: true, unitWeightKg: 1.2 },
-  { group: "COMMUNICATION", category: "Chiếu sáng", unit: "chiếc", name: "Đèn pin", sku: "TORCH-01", consumable: false, unitWeightKg: 0.3 },
-  { group: "COMMUNICATION", category: "Pin dùng một lần", unit: "bộ", name: "Bộ pin", sku: "BATT-01", consumable: true, unitWeightKg: 0.1 },
-  { group: "COMMUNICATION", category: "Thông tin liên lạc", unit: "chiếc", name: "Bộ đàm cầm tay", sku: "RADIO-01", consumable: false, unitWeightKg: 0.4 },
-  { group: "COMMUNICATION", category: "Nguồn điện dự phòng", unit: "chiếc", name: "Pin sạc dự phòng", sku: "POWERBANK-01", consumable: false, unitWeightKg: 0.35 },
+  {
+    group: "WASH",
+    category: "Nước uống",
+    unit: "lít",
+    name: "Nước uống đóng chai",
+    sku: "WATER-01",
+    consumable: true,
+    unitWeightKg: 1,
+  },
+  {
+    group: "WASH",
+    category: "Dụng cụ chứa nước",
+    unit: "chiếc",
+    name: "Can nước 20 lít",
+    sku: "WATER-CAN-20L",
+    consumable: false,
+    unitWeightKg: 0.9,
+  },
+  {
+    group: "WASH",
+    category: "Vệ sinh gia đình",
+    unit: "bộ",
+    name: "Bộ vệ sinh gia đình",
+    sku: "HYGIENE-KIT-01",
+    consumable: true,
+    unitWeightKg: 2.5,
+  },
+  {
+    group: "FOOD",
+    category: "Lương thực",
+    unit: "kg",
+    name: "Gạo cứu trợ",
+    sku: "RICE-01",
+    consumable: true,
+    unitWeightKg: 1,
+  },
+  {
+    group: "FOOD",
+    category: "Lương thực",
+    unit: "kg",
+    name: "Lương khô cứu trợ",
+    sku: "FOOD-RATION-01",
+    consumable: true,
+    unitWeightKg: 1,
+  },
+  {
+    group: "RESCUE",
+    category: "Thiết bị cứu sinh",
+    unit: "chiếc",
+    name: "Áo phao người lớn",
+    sku: "LIFE-ADULT",
+    consumable: false,
+    unitWeightKg: 0.8,
+  },
+  {
+    group: "RESCUE",
+    category: "Thiết bị cứu sinh",
+    unit: "chiếc",
+    name: "Áo phao trẻ em",
+    sku: "LIFE-CHILD",
+    consumable: false,
+    unitWeightKg: 0.5,
+  },
+  {
+    group: "RESCUE",
+    category: "Thiết bị cứu sinh",
+    unit: "chiếc",
+    name: "Xuồng cứu hộ",
+    sku: "BOAT-01",
+    consumable: false,
+    unitWeightKg: 25,
+  },
+  {
+    group: "RESCUE",
+    category: "Dây cứu hộ",
+    unit: "cuộn",
+    name: "Dây cứu hộ 30 mét",
+    sku: "ROPE-01",
+    consumable: false,
+    unitWeightKg: 3,
+  },
+  {
+    group: "SHELTER",
+    category: "Che chắn khẩn cấp",
+    unit: "tấm",
+    name: "Bạt che chống thấm",
+    sku: "CANVAS-01",
+    consumable: false,
+    unitWeightKg: 2,
+  },
+  {
+    group: "SHELTER",
+    category: "Che chắn khẩn cấp",
+    unit: "tấm",
+    name: "Chăn cứu trợ",
+    sku: "BLANKET-01",
+    consumable: false,
+    unitWeightKg: 1.4,
+  },
+  {
+    group: "SHELTER",
+    category: "Màn chống muỗi",
+    unit: "chiếc",
+    name: "Màn chống muỗi",
+    sku: "MOSQUITO-NET-01",
+    consumable: false,
+    unitWeightKg: 0.6,
+  },
+  {
+    group: "HEALTH",
+    category: "Y tế sơ cấp",
+    unit: "bộ",
+    name: "Bộ sơ cứu",
+    sku: "FIRSTAID-01",
+    consumable: true,
+    unitWeightKg: 1.2,
+  },
+  {
+    group: "COMMUNICATION",
+    category: "Chiếu sáng",
+    unit: "chiếc",
+    name: "Đèn pin",
+    sku: "TORCH-01",
+    consumable: false,
+    unitWeightKg: 0.3,
+  },
+  {
+    group: "COMMUNICATION",
+    category: "Pin dùng một lần",
+    unit: "bộ",
+    name: "Bộ pin",
+    sku: "BATT-01",
+    consumable: true,
+    unitWeightKg: 0.1,
+  },
+  {
+    group: "COMMUNICATION",
+    category: "Thông tin liên lạc",
+    unit: "chiếc",
+    name: "Bộ đàm cầm tay",
+    sku: "RADIO-01",
+    consumable: false,
+    unitWeightKg: 0.4,
+  },
+  {
+    group: "COMMUNICATION",
+    category: "Nguồn điện dự phòng",
+    unit: "chiếc",
+    name: "Pin sạc dự phòng",
+    sku: "POWERBANK-01",
+    consumable: false,
+    unitWeightKg: 0.35,
+  },
 ];
 
 export const CENTRAL_SHELVES: SeedShelfDefinition[] = [
@@ -143,7 +273,8 @@ export function validateSeedDataset(): string[] {
   const shelfCodes = new Set(CENTRAL_SHELVES.map((shelf) => shelf.code));
   for (const batch of CENTRAL_BATCHES) {
     if (!skus.has(batch.sku)) errors.push(`Lô ${batch.batchCode} dùng SKU không tồn tại`);
-    if (!shelfCodes.has(batch.shelfCode)) errors.push(`Lô ${batch.batchCode} dùng kệ không tồn tại`);
+    if (!shelfCodes.has(batch.shelfCode))
+      errors.push(`Lô ${batch.batchCode} dùng kệ không tồn tại`);
     if (batch.quantity < 0) errors.push(`Lô ${batch.batchCode} có số lượng âm`);
   }
   for (const warehouse of HAMLET_WAREHOUSES) {
@@ -151,7 +282,8 @@ export function validateSeedDataset(): string[] {
       errors.push(`${warehouse.name} thiếu một phần tọa độ`);
     }
     for (const stock of warehouse.stock) {
-      if (!skus.has(stock.sku)) errors.push(`${warehouse.name} dùng SKU không tồn tại: ${stock.sku}`);
+      if (!skus.has(stock.sku))
+        errors.push(`${warehouse.name} dùng SKU không tồn tại: ${stock.sku}`);
       if (stock.quantity < 0) errors.push(`${warehouse.name} có số lượng âm: ${stock.sku}`);
     }
   }

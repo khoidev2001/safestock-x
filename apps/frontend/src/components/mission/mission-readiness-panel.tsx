@@ -13,10 +13,16 @@ export function MissionReadinessPanel({ assessment }: { assessment: MissionReadi
     <section className="overflow-hidden rounded-md border bg-[var(--surface)]">
       <div className="flex items-start justify-between gap-4 border-b px-5 py-4">
         <div className="flex items-start gap-3">
-          <span className="mt-0.5" style={{ color: meta.color }}><StatusIcon status={assessment.status} /></span>
+          <span className="mt-0.5" style={{ color: meta.color }}>
+            <StatusIcon status={assessment.status} />
+          </span>
           <div>
-            <p className="text-xs font-medium text-[var(--text-muted)]">Khả năng đáp ứng nhiệm vụ</p>
-            <h3 className="mt-1 font-semibold" style={{ color: meta.color }}>{meta.label}</h3>
+            <p className="text-xs font-medium text-[var(--text-muted)]">
+              Khả năng đáp ứng nhiệm vụ
+            </p>
+            <h3 className="mt-1 font-semibold" style={{ color: meta.color }}>
+              {meta.label}
+            </h3>
           </div>
         </div>
         <span className="tabular shrink-0 text-sm font-semibold">{assessment.fulfillment}%</span>
@@ -42,7 +48,10 @@ export function MissionReadinessPanel({ assessment }: { assessment: MissionReadi
                 Cấp {item.allocated}/{item.required}, thiếu {item.shortage}
               </p>
             </div>
-            <span className="self-center text-xs font-semibold" style={{ color: STATUS_META[item.status].color }}>
+            <span
+              className="self-center text-xs font-semibold"
+              style={{ color: STATUS_META[item.status].color }}
+            >
               {STATUS_META[item.status].label}
             </span>
           </div>

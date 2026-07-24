@@ -6,6 +6,8 @@ import { SimulationService } from "../simulation.service";
  */
 describe("SimulationService — debounce quét sự cố", () => {
   const prisma = {
+    $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(prisma)),
+    $queryRaw: jest.fn(),
     virtualDevice: {
       findUnique: jest.fn(),
       update: jest.fn(),
@@ -14,6 +16,7 @@ describe("SimulationService — debounce quét sự cố", () => {
       create: jest.fn(),
     },
   };
+  const access = { assertMutationAccess: jest.fn().mockResolvedValue({}) };
   // SMOKE: không thuộc ENV_DEVICE_TYPES và không phải LOADCELL → chỉ kích incident scan,
   // cô lập hành vi debounce khỏi readiness recalc/giao dịch loadcell.
   const smokeDevice = {
@@ -30,11 +33,16 @@ describe("SimulationService — debounce quét sự cố", () => {
     {} as never,
     {} as never,
     incidents as never,
+    access as never,
+    {} as never,
   );
 
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
+    prisma.$transaction.mockImplementation((callback: (tx: unknown) => unknown) =>
+      callback(prisma),
+    );
     prisma.virtualDevice.findUnique.mockResolvedValue(smokeDevice);
     prisma.virtualDevice.update.mockResolvedValue(smokeDevice);
     prisma.sensorEvent.create.mockResolvedValue({ id: "event-1" });
@@ -44,7 +52,7 @@ describe("SimulationService — debounce quét sự cố", () => {
 
   it("gộp 3 event liên tiếp thành 1 lần scanWarehouse", async () => {
     for (let i = 0; i < 3; i++) {
-      await service.emit({
+      await service.emit("admin-1", {
         warehouseId: "warehouse-central",
         deviceCode: "smoke_main",
         eventType: "SMOKE_READING",
@@ -64,7 +72,7 @@ describe("SimulationService — debounce quét sự cố", () => {
   it("không quét khi event bị lọc vì delta nhỏ (dưới ngưỡng)", async () => {
     // SMOKE delta ngưỡng = 5; đổi từ 0 → 3 là không đáng kể → không lưu, không scan.
     prisma.virtualDevice.findUnique.mockResolvedValue({ ...smokeDevice, currentValue: 0 });
-    await service.emit({
+    await service.emit("admin-1", {
       warehouseId: "warehouse-central",
       deviceCode: "smoke_main",
       eventType: "SMOKE_READING",

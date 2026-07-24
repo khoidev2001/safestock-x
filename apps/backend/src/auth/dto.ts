@@ -31,7 +31,9 @@ export class UpdateProfileDto {
   phone?: string | null;
 
   @IsOptional()
-  @Transform(({ value }) => (typeof value === "string" ? value.trim().toLowerCase() || null : value))
+  @Transform(({ value }) =>
+    typeof value === "string" ? value.trim().toLowerCase() || null : value,
+  )
   @IsEmail()
   @MaxLength(254)
   notificationEmail?: string | null;

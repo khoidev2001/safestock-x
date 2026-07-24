@@ -20,10 +20,15 @@ import { BackupModule } from "./backup/backup.module";
 import { AdminModule } from "./admin/admin.module";
 import { ReportModule } from "./report/report.module";
 import { validateEnv } from "./config/env.validation";
+import { resolveEnvFilePaths } from "./config/env-file-path";
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, envFilePath: ["../../.env", ".env"], validate: validateEnv }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: resolveEnvFilePaths(),
+      validate: validateEnv,
+    }),
     // Serve UI tối thiểu B3 tại /sim.html — public ở apps/backend/public (dist/src → ../../public)
     ServeStaticModule.forRoot({ rootPath: join(__dirname, "..", "..", "public") }),
     PrismaModule,

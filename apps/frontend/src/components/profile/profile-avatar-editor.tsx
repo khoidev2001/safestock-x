@@ -42,14 +42,22 @@ export function ProfileAvatarEditor({
     <div className="flex items-center gap-4">
       <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[var(--surface-2)] ring-1 ring-[var(--border)]">
         {value ? (
-          <img alt={`Ảnh đại diện của ${fullName || "người dùng"}`} className="h-full w-full object-cover" src={value} />
+          // value là data URL base64 vừa upload — next/image không hỗ trợ data URL động.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            alt={`Ảnh đại diện của ${fullName || "người dùng"}`}
+            className="h-full w-full object-cover"
+            src={value}
+          />
         ) : (
           <ColorIcon name="user" size={42} tone="blue" />
         )}
       </div>
       <div className="min-w-0 space-y-2">
         <p className="text-sm font-semibold">Ảnh đại diện</p>
-        <p className="text-xs text-[var(--text-muted)]">Ảnh vuông, tối đa 5 MB. Hệ thống tự thu nhỏ khi lưu.</p>
+        <p className="text-xs text-[var(--text-muted)]">
+          Ảnh vuông, tối đa 5 MB. Hệ thống tự thu nhỏ khi lưu.
+        </p>
         <div className="flex flex-wrap gap-2">
           <label className="inline-flex min-h-10 items-center justify-center rounded-md border px-3 text-xs font-semibold transition hover:bg-[var(--surface-2)] active:translate-y-px">
             Chọn ảnh

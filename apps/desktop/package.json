@@ -9,6 +9,8 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "package": "electron-vite build && electron-builder --win portable"
   },
   "dependencies": {
@@ -30,9 +32,15 @@
   "build": {
     "appId": "vn.safestock.desktop",
     "productName": "SafeStock Simulator",
-    "directories": { "output": "release" },
-    "files": ["out/**/*"],
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*"
+    ],
     "npmRebuild": false,
-    "win": { "target": "portable" }
+    "win": {
+      "target": "portable"
+    }
   }
 }

@@ -55,6 +55,7 @@ Các giá trị bắt buộc và mô tả nằm trong [`.env.example`](../.env.e
 
 - Đổi `POSTGRES_PASSWORD` và cập nhật cùng mật khẩu trong `DATABASE_URL`.
 - Thay `JWT_ACCESS_SECRET` và `JWT_REFRESH_SECRET` bằng hai chuỗi ngẫu nhiên dài, khác nhau.
+- Giữ `SIMULATION_MUTATION_ENABLED=false` cho môi trường vận hành/production. Chỉ đặt `true` khi chạy simulator trên database demo đã cô lập, rồi restart backend.
 - Giữ `AI_PROVIDER=ollama` nếu AI phải chạy local.
 - Giữ `OLLAMA_MODEL=qwen3.5:4b` và `OLLAMA_EMBED_MODEL=nomic-embed-text` nếu đã tải hai model này.
 
@@ -182,6 +183,60 @@ pnpm ai:dev
 | Ollama | <http://localhost:11434> |
 
 Backend health hợp lệ phải trả `status: "ok"`. AI health phải trả `status: "ok"` và provider `ollama`.
+
+### 7.1. Chạy simulator demo cô lập
+
+Luồng này tạo runtime demo trên cùng máy nhưng tách PostgreSQL, Redis, Docker volumes, credentials và cổng backend khỏi runtime vận hành. Mục đích là cho phép simulator ghi/reset dữ liệu demo mà không đổi cấu hình hoặc dữ liệu vận hành. File `.env` vận hành phải tiếp tục giữ `SIMULATION_MUTATION_ENABLED=false`.
+
+Nguồn cấu hình và lệnh thực thi:
+
+- [`.env.demo.example`](../.env.demo.example): mẫu cấu hình operator sao chép thành `.env.demo`.
+- [`package.json`](../package.json): các lệnh `demo:*` được hỗ trợ.
+- [`infrastructure/docker-compose.yml`](../infrastructure/docker-compose.yml): manifest dùng chung cho hai stack.
+- [`infrastructure/demo/manage-demo-environment.mjs`](../infrastructure/demo/manage-demo-environment.mjs): owner của validate/lifecycle/schema/reset/backend demo.
+- [`infrastructure/demo/verify-demo-compose.mjs`](../infrastructure/demo/verify-demo-compose.mjs): owner của kiểm tra cấu hình Compose cô lập.
+- [`apps/backend/src/config/env.validation.ts`](../apps/backend/src/config/env.validation.ts): boundary startup của runtime simulator.
+
+Tạo cấu hình local riêng; thay toàn bộ placeholder secret/password trong `.env.demo`, nhưng không copy các giá trị vận hành sang file này:
+
+```powershell
+Copy-Item .env.demo.example .env.demo
+notepad .env.demo
+pnpm demo:validate
+pnpm demo:compose:verify
+```
+
+`demo:validate` kiểm tra `.env.demo` vừa chỉnh. `demo:compose:verify` kiểm tra các template được commit vẫn resolve thành hai tập tài nguyên Compose riêng. Cả hai phải pass trước khi khởi động.
+
+Khởi động hạ tầng demo. Nếu cần bộ dữ liệu seed ở trạng thái biết trước, chạy reset có xác nhận rõ ràng:
+
+```powershell
+pnpm demo:infra:up
+pnpm demo:db:reset -- --confirm-demo-reset
+```
+
+> **Cảnh báo:** reset xóa và seed lại dữ liệu trong database demo. Guard `--confirm-demo-reset` là bắt buộc; không thay lệnh này bằng `pnpm be:db`, và không bật mutation trong `.env` vận hành.
+
+Build rồi chạy backend demo trong một terminal riêng:
+
+```powershell
+pnpm --filter @safestock/backend build
+pnpm demo:backend
+```
+
+Kiểm tra và sử dụng:
+
+- Backend demo: <http://localhost:3110/api/health>
+- Simulator do backend phục vụ: <http://localhost:3110/sim.html>
+- App desktop: chạy `pnpm desktop:dev`, rồi đặt backend host thành `http://localhost:3110`.
+
+Khi kết thúc:
+
+```powershell
+pnpm demo:infra:down
+```
+
+Lệnh `down` dừng container demo nhưng giữ dữ liệu trong Docker volumes; lần chạy sau không cần reset nếu muốn tiếp tục dữ liệu cũ. Hỗ trợ cấu hình cô lập đã hoàn tất, nhưng runbook này chưa phải bằng chứng nghiệm thu live chạy đồng thời stack vận hành và demo; bước smoke đó còn thuộc deployment/hardening pilot.
 
 ## 8. Dừng development
 

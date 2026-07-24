@@ -22,8 +22,14 @@ export function InsightsView({ warehouseId }: { warehouseId: string }) {
   if (insightsQuery.isError || !insightsQuery.data) {
     return (
       <Panel>
-        <Header icon={<ColorIcon name="warning" size={20} tone="red" />} tone="var(--color-critical)" title="Không tải được dữ liệu theo dõi" />
-        <p className="mt-2 text-sm text-[var(--text-muted)]">Kết nối dữ liệu đang gián đoạn. Vui lòng thử lại sau.</p>
+        <Header
+          icon={<ColorIcon name="warning" size={20} tone="red" />}
+          tone="var(--color-critical)"
+          title="Không tải được dữ liệu theo dõi"
+        />
+        <p className="mt-2 text-sm text-[var(--text-muted)]">
+          Kết nối dữ liệu đang gián đoạn. Vui lòng thử lại sau.
+        </p>
       </Panel>
     );
   }
@@ -50,7 +56,10 @@ function WeatherBanner({ rainMm }: { rainMm: number }) {
   return (
     <div
       className="flex items-center gap-3 rounded-md border p-4"
-      style={{ background: "color-mix(in oklch, var(--color-critical) 8%, transparent)", borderColor: "var(--color-critical)" }}
+      style={{
+        background: "color-mix(in oklch, var(--color-critical) 8%, transparent)",
+        borderColor: "var(--color-critical)",
+      }}
     >
       <ColorIcon name="weather" size={24} tone="red" />
       <div>
@@ -58,7 +67,8 @@ function WeatherBanner({ rainMm }: { rainMm: number }) {
           Dự báo mưa lớn trong 72 giờ tới
         </p>
         <p className="text-sm text-[var(--text-muted)]">
-          Tổng lượng mưa có thể đạt <b className="tabular">{Math.round(rainMm)} mm</b>. Cần rà soát vật tư chống lũ và khả năng tiếp cận kho.
+          Tổng lượng mưa có thể đạt <b className="tabular">{Math.round(rainMm)} mm</b>. Cần rà soát
+          vật tư chống lũ và khả năng tiếp cận kho.
         </p>
       </div>
     </div>
@@ -72,9 +82,18 @@ function ForecastCard({ forecast }: { forecast: ForecastItem[] }) {
 
   return (
     <Panel>
-      <Header icon={<ColorIcon name="inventory" size={20} tone="orange" />} tone="var(--color-accent)" title="Nguy cơ thiếu hàng" />
+      <Header
+        icon={<ColorIcon name="inventory" size={20} tone="orange" />}
+        tone="var(--color-accent)"
+        title="Nguy cơ thiếu hàng"
+      />
       <p className="mt-1 text-sm text-[var(--text-muted)]">
-        Ước tính từ lượng xuất trong 30 ngày gần nhất. {critical.length > 0 && <b style={{ color: "var(--color-critical)" }}>{critical.length} mặt hàng cần bổ sung sớm.</b>}
+        Ước tính từ lượng xuất trong 30 ngày gần nhất.{" "}
+        {critical.length > 0 && (
+          <b style={{ color: "var(--color-critical)" }}>
+            {critical.length} mặt hàng cần bổ sung sớm.
+          </b>
+        )}
       </p>
       {sorted.length === 0 ? (
         <Empty text="Chưa đủ dữ liệu xuất kho để ước tính." />
@@ -86,7 +105,9 @@ function ForecastCard({ forecast }: { forecast: ForecastItem[] }) {
                 <p className="truncate text-sm font-medium">{f.itemName}</p>
                 <p className="text-xs text-[var(--text-muted)]">
                   Tồn {f.quantity} ·{" "}
-                  {f.ewmaPerDay > 0 ? `${f.ewmaPerDay.toFixed(1)}/ngày gần đây` : "chưa xuất kỳ này"}
+                  {f.ewmaPerDay > 0
+                    ? `${f.ewmaPerDay.toFixed(1)}/ngày gần đây`
+                    : "chưa xuất kỳ này"}
                 </p>
                 {f.lowStock && f.reorderPoint > 0 && (
                   <p className="mt-0.5 text-xs" style={{ color: "var(--color-critical)" }}>
@@ -112,7 +133,11 @@ function DaysLeftBadge({ item }: { item: ForecastItem }) {
     return <span className="shrink-0 text-xs text-[var(--text-muted)]">—</span>;
   }
   const center = Math.floor(item.daysLeft);
-  const tone = item.lowStock ? "var(--color-critical)" : center < 21 ? "var(--color-attention)" : "var(--color-ready)";
+  const tone = item.lowStock
+    ? "var(--color-critical)"
+    : center < 21
+      ? "var(--color-attention)"
+      : "var(--color-ready)";
 
   let label: string;
   if (center <= 0) {
@@ -136,7 +161,12 @@ function DaysLeftBadge({ item }: { item: ForecastItem }) {
 function ConfidenceChip({ value, hasRate }: { value: number; hasRate: boolean }) {
   if (!hasRate) return null;
   const label = value >= 0.75 ? "Tin cậy cao" : value >= 0.4 ? "Tin cậy TB" : "Dữ liệu chưa đủ";
-  const tone = value >= 0.75 ? "var(--color-ready)" : value >= 0.4 ? "var(--color-attention)" : "var(--text-muted)";
+  const tone =
+    value >= 0.75
+      ? "var(--color-ready)"
+      : value >= 0.4
+        ? "var(--color-attention)"
+        : "var(--text-muted)";
   return (
     <span className="text-[11px] font-medium" style={{ color: tone }}>
       {label}
@@ -148,24 +178,39 @@ function ExpiryCard({ data }: { data: WarehouseInsights }) {
   const alerts = data.expiryAlerts;
   return (
     <Panel>
-      <Header icon={<ColorIcon name="time" size={20} tone="amber" />} tone="var(--color-accent)" title="Hạn dùng trong 30 ngày tới" />
-      <p className="mt-1 text-sm text-[var(--text-muted)]">Ưu tiên các lô đã quá hạn hoặc gần đến hạn sử dụng.</p>
+      <Header
+        icon={<ColorIcon name="time" size={20} tone="amber" />}
+        tone="var(--color-accent)"
+        title="Hạn dùng trong 30 ngày tới"
+      />
+      <p className="mt-1 text-sm text-[var(--text-muted)]">
+        Ưu tiên các lô đã quá hạn hoặc gần đến hạn sử dụng.
+      </p>
       {alerts.length === 0 ? (
         <Empty text="Không có lô nào sắp hết hạn trong 30 ngày." />
       ) : (
         <ul className="mt-4 divide-y">
           {alerts.slice(0, 8).map((a) => {
             const expired = a.daysUntilExpiry < 0;
-            const tone = expired ? "var(--color-critical)" : a.daysUntilExpiry <= 7 ? "var(--color-critical)" : "var(--color-attention)";
+            const tone = expired
+              ? "var(--color-critical)"
+              : a.daysUntilExpiry <= 7
+                ? "var(--color-critical)"
+                : "var(--color-attention)";
             return (
               <li key={a.batchId} className="flex items-center justify-between gap-3 py-2.5">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{a.itemName}</p>
-                  <p className="text-xs text-[var(--text-muted)]">SL {a.quantity} · {a.sku}</p>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    SL {a.quantity} · {a.sku}
+                  </p>
                 </div>
                 <span
                   className="tabular shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold"
-                  style={{ background: `color-mix(in oklch, ${tone} 14%, transparent)`, color: tone }}
+                  style={{
+                    background: `color-mix(in oklch, ${tone} 14%, transparent)`,
+                    color: tone,
+                  }}
                 >
                   {expired ? `Quá hạn ${-a.daysUntilExpiry}n` : `Còn ${a.daysUntilExpiry}n`}
                 </span>
@@ -182,14 +227,23 @@ function RebalanceCard({ data }: { data: WarehouseInsights }) {
   const items = data.rebalance;
   return (
     <Panel>
-      <Header icon={<ColorIcon name="transfer" size={20} tone="blue" />} tone="var(--color-accent)" title="Đề xuất điều chuyển" />
-      <p className="mt-1 text-sm text-[var(--text-muted)]">Đối chiếu cùng một mặt hàng giữa các kho. Người phụ trách quyết định việc điều chuyển.</p>
+      <Header
+        icon={<ColorIcon name="transfer" size={20} tone="blue" />}
+        tone="var(--color-accent)"
+        title="Đề xuất điều chuyển"
+      />
+      <p className="mt-1 text-sm text-[var(--text-muted)]">
+        Đối chiếu cùng một mặt hàng giữa các kho. Người phụ trách quyết định việc điều chuyển.
+      </p>
       {items.length === 0 ? (
         <Empty text="Tồn kho giữa các kho trong xã đang cân bằng." />
       ) : (
         <ul className="mt-4 space-y-2">
           {items.slice(0, 8).map((r, i) => (
-            <li key={`${r.sku}-${i}`} className="rounded-md border bg-[var(--surface-2)] px-3 py-2.5">
+            <li
+              key={`${r.sku}-${i}`}
+              className="rounded-md border bg-[var(--surface-2)] px-3 py-2.5"
+            >
               <div className="flex items-center gap-2 text-sm">
                 <span className="truncate font-medium">{r.fromWarehouseName}</span>
                 <ColorIcon name="arrowRight" size={16} tone="blue" />
@@ -214,7 +268,11 @@ function MonthlyReportCard({ warehouseId }: { warehouseId: string }) {
   return (
     <Panel>
       <div className="flex items-center justify-between gap-3">
-        <Header icon={<ColorIcon name="report" size={20} tone="green" />} tone="var(--color-accent)" title="Nhận xét tháng" />
+        <Header
+          icon={<ColorIcon name="report" size={20} tone="green" />}
+          tone="var(--color-accent)"
+          title="Nhận xét tháng"
+        />
         <button
           type="button"
           onClick={() => report.mutate()}
@@ -232,11 +290,15 @@ function MonthlyReportCard({ warehouseId }: { warehouseId: string }) {
         </p>
       )}
       {report.isError && (
-        <p className="mt-3 text-sm text-[var(--color-critical)]">Chưa thể tổng hợp nhận xét. Vui lòng thử lại.</p>
+        <p className="mt-3 text-sm text-[var(--color-critical)]">
+          Chưa thể tổng hợp nhận xét. Vui lòng thử lại.
+        </p>
       )}
       {report.data && (
         <>
-          <p className="mt-3 whitespace-pre-line text-sm leading-relaxed">{report.data.narrative}</p>
+          <p className="mt-3 whitespace-pre-line text-sm leading-relaxed">
+            {report.data.narrative}
+          </p>
           {report.data.trends.length > 0 && (
             <ul className="mt-4 divide-y border-t pt-2">
               {report.data.trends.slice(0, 6).map((t) => (
@@ -263,12 +325,19 @@ function TrendRow({ trend }: { trend: TrendItem }) {
           {trend.previousTotal} → {trend.currentTotal}
         </p>
       </div>
-      <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold" style={{ color: tone }}>
+      <span
+        className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold"
+        style={{ color: tone }}
+      >
         {isNew ? (
           "Mới"
         ) : (
           <>
-            {up ? <ColorIcon name="trendUp" size={16} tone="green" /> : <ColorIcon name="trendDown" size={16} tone="red" />}
+            {up ? (
+              <ColorIcon name="trendUp" size={16} tone="green" />
+            ) : (
+              <ColorIcon name="trendDown" size={16} tone="red" />
+            )}
             <span className="tabular">{Math.abs(pct ?? 0).toFixed(0)}%</span>
           </>
         )}

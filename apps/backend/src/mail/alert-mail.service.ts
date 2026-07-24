@@ -55,7 +55,9 @@ export class AlertMailService {
   ): Promise<void> {
     const recipientList = this.resolveRecipients(recipients);
     if (!this.isConfigured(recipientList)) {
-      this.log.warn("Email cảnh báo chưa bật (ALERT_EMAIL_ENABLED/SMTP_* thiếu) — bỏ qua gửi mail.");
+      this.log.warn(
+        "Email cảnh báo chưa bật (ALERT_EMAIL_ENABLED/SMTP_* thiếu) — bỏ qua gửi mail.",
+      );
       return;
     }
     try {
@@ -72,7 +74,9 @@ export class AlertMailService {
           ? [{ filename: "ung-pho-nhanh-mark-email.png", path: logoPath, cid: LOGO_CID }]
           : [],
       });
-      this.log.log(`Đã gửi email cảnh báo "${incident.title}" tới ${recipientList.length} người nhận.`);
+      this.log.log(
+        `Đã gửi email cảnh báo "${incident.title}" tới ${recipientList.length} người nhận.`,
+      );
     } catch (error) {
       // Nuốt lỗi: SMTP sai/mạng hỏng không được phá luồng sự cố.
       this.log.warn(`Gửi email cảnh báo lỗi: ${(error as Error).message}`);
@@ -80,7 +84,11 @@ export class AlertMailService {
   }
 
   /** Bản HTML có thương hiệu (logo + tên app + badge mức độ). Layout table cho tương thích email client. */
-  private buildHtml(incident: IncidentAlertInput, explanation: string | null, hasLogo: boolean): string {
+  private buildHtml(
+    incident: IncidentAlertInput,
+    explanation: string | null,
+    hasLogo: boolean,
+  ): string {
     const sev = SEVERITY_LABEL[incident.severity] ?? incident.severity;
     const sevColor = SEVERITY_COLOR[incident.severity] ?? "#6b7280";
     // Logo email dùng nền trong suốt để nền header luôn liền mạch khi client tự đổi dark mode.
@@ -242,9 +250,9 @@ export class AlertMailService {
     if (!this.parseBool(this.config.get("ALERT_EMAIL_ENABLED"))) return false;
     return Boolean(
       this.config.get("SMTP_HOST") &&
-        this.config.get("SMTP_USER") &&
-        this.config.get("SMTP_PASS") &&
-        recipients.length > 0,
+      this.config.get("SMTP_USER") &&
+      this.config.get("SMTP_PASS") &&
+      recipients.length > 0,
     );
   }
 

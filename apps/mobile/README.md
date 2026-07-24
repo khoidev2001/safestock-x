@@ -18,7 +18,7 @@ Dashboard (admin) ──POST /api/missions/:id/dispatch──▶ Backend
 Backend WebSocket đã có sẵn ([notification.gateway.ts](../backend/src/notification/notification.gateway.ts)). App này chỉ:
 1. Đăng nhập lấy JWT (`POST /api/auth/login`).
 2. Tải danh sách ban đầu (`GET /api/notifications`).
-3. Mở Socket.IO tới backend, `emit("join-role", { role: "RESCUE" })`, nghe event `notification`.
+3. Mở Socket.IO với `auth: { token }`; backend tự cấp room theo tài khoản và app nghe event `notification`.
 
 Bấm vào 1 thông báo (có `missionId`) → mở **màn chi tiết**: loại tình huống, số người, thời gian, mức đáp ứng, danh sách vật tư (cần/cấp/thiếu). Khi nhiệm vụ đang `PENDING_RESCUE`, có 2 nút:
 - **Chấp nhận** → `POST /api/missions/:id/confirm` (chuyển sang chờ kho chuẩn bị).

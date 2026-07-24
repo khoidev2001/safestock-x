@@ -22,7 +22,9 @@ export class BackupService implements OnModuleInit {
 
   async onModuleInit(): Promise<void> {
     if (!this.isConfigured()) {
-      this.log.warn("Backup Supabase chưa cấu hình (SUPABASE_URL/SUPABASE_SERVICE_KEY) — bỏ qua lịch backup.");
+      this.log.warn(
+        "Backup Supabase chưa cấu hình (SUPABASE_URL/SUPABASE_SERVICE_KEY) — bỏ qua lịch backup.",
+      );
       return;
     }
     // Repeatable cron 17:00 hằng ngày. BullMQ tự dedupe theo repeat key → không nhân đôi khi restart.

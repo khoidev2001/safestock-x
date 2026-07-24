@@ -36,9 +36,13 @@ export function IncidentView({ warehouseId }: { warehouseId: string }) {
     refetchInterval: 10000,
   });
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["incidents-all", warehouseId] });
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ["incidents-all", warehouseId] });
   const ack = useMutation({ mutationFn: acknowledgeIncident, onSuccess: invalidate });
-  const resolve = useMutation({ mutationFn: (id: string) => resolveIncident(id), onSuccess: invalidate });
+  const resolve = useMutation({
+    mutationFn: (id: string) => resolveIncident(id),
+    onSuccess: invalidate,
+  });
 
   const incidents = query.data ?? [];
   const pagination = usePagination(incidents);
@@ -119,7 +123,10 @@ function IncidentCard({
         <div className="flex items-center gap-2">
           <span
             className="rounded-md px-2.5 py-1 text-xs font-semibold"
-            style={{ background: `color-mix(in oklch, ${sev.color} 15%, transparent)`, color: sev.color }}
+            style={{
+              background: `color-mix(in oklch, ${sev.color} 15%, transparent)`,
+              color: sev.color,
+            }}
           >
             {sev.label}
           </span>
@@ -157,7 +164,10 @@ function IncidentCard({
       {explanation && (
         <div
           className="mt-3 flex items-start gap-2 rounded-md p-3"
-          style={{ background: "color-mix(in oklch, #7c3aed 10%, transparent)", border: "1px solid color-mix(in oklch, #7c3aed 35%, transparent)" }}
+          style={{
+            background: "color-mix(in oklch, #7c3aed 10%, transparent)",
+            border: "1px solid color-mix(in oklch, #7c3aed 35%, transparent)",
+          }}
         >
           <span
             className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide text-white"

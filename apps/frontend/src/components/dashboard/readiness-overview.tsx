@@ -55,9 +55,7 @@ export function ReadinessOverview(props: ReadinessOverviewProps) {
                 <StatusIcon status={readiness.operationalStatus} />
               </span>
               <div className="min-w-0">
-                <p className="text-xs font-medium text-[var(--text-muted)]">
-                  Kết luận hiện tại
-                </p>
+                <p className="text-xs font-medium text-[var(--text-muted)]">Kết luận hiện tại</p>
                 <h2 className="mt-1 text-xl font-semibold" style={{ color: tone }}>
                   {getOperationalStatusLabel(readiness.operationalStatus)}
                 </h2>
@@ -125,7 +123,10 @@ export function ReadinessOverview(props: ReadinessOverviewProps) {
         </div>
         <div className="divide-y">
           {readiness.dimensions.map((dimension) => (
-            <div className="grid gap-2 px-5 py-3 md:grid-cols-[180px_150px_1fr]" key={dimension.key}>
+            <div
+              className="grid gap-2 px-5 py-3 md:grid-cols-[180px_150px_1fr]"
+              key={dimension.key}
+            >
               <div>
                 <p className="text-sm font-medium">{getComponentLabel(dimension.key)}</p>
                 <p className="mt-0.5 text-xs text-[var(--text-muted)]">
@@ -153,30 +154,64 @@ function StatusIcon({ status }: { status: OperationalStatus }) {
 function StatusBadge({ status }: { status: OperationalStatus }) {
   const tone = getOperationalStatusColor(status);
   return (
-    <span className="h-fit w-fit rounded-md px-2 py-1 text-xs font-semibold" style={{ color: tone, background: `color-mix(in oklch, ${tone} 12%, transparent)` }}>
+    <span
+      className="h-fit w-fit rounded-md px-2 py-1 text-xs font-semibold"
+      style={{ color: tone, background: `color-mix(in oklch, ${tone} 12%, transparent)` }}
+    >
       {getOperationalStatusLabel(status)}
     </span>
   );
 }
 
-function StatePanel({ icon, title, detail, onRefresh, isRefreshing }: {
-  icon: React.ReactNode; title: string; detail: string; onRefresh: () => void; isRefreshing: boolean;
+function StatePanel({
+  icon,
+  title,
+  detail,
+  onRefresh,
+  isRefreshing,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  detail: string;
+  onRefresh: () => void;
+  isRefreshing: boolean;
 }) {
   return (
     <section className="rounded-md border bg-[var(--surface)] p-5">
-      <div className="flex items-center gap-2 text-sm font-semibold">{icon}{title}</div>
+      <div className="flex items-center gap-2 text-sm font-semibold">
+        {icon}
+        {title}
+      </div>
       <p className="mt-2 text-sm text-[var(--text-muted)]">{detail}</p>
-      <div className="mt-4"><RefreshButton isRefreshing={isRefreshing} onRefresh={onRefresh} /></div>
+      <div className="mt-4">
+        <RefreshButton isRefreshing={isRefreshing} onRefresh={onRefresh} />
+      </div>
     </section>
   );
 }
 
-function RefreshButton({ compact = false, isRefreshing, onRefresh }: {
-  compact?: boolean; isRefreshing: boolean; onRefresh: () => void;
+function RefreshButton({
+  compact = false,
+  isRefreshing,
+  onRefresh,
+}: {
+  compact?: boolean;
+  isRefreshing: boolean;
+  onRefresh: () => void;
 }) {
   return (
-    <button className="inline-flex items-center gap-2 rounded-md border bg-[var(--surface)] px-3 py-2 text-sm font-medium hover:bg-[var(--surface-2)] disabled:opacity-60" disabled={isRefreshing} onClick={onRefresh} type="button">
-      <ColorIcon className={isRefreshing ? "animate-spin" : ""} name="refresh" size={compact ? 16 : 18} tone="blue" />
+    <button
+      className="inline-flex items-center gap-2 rounded-md border bg-[var(--surface)] px-3 py-2 text-sm font-medium hover:bg-[var(--surface-2)] disabled:opacity-60"
+      disabled={isRefreshing}
+      onClick={onRefresh}
+      type="button"
+    >
+      <ColorIcon
+        className={isRefreshing ? "animate-spin" : ""}
+        name="refresh"
+        size={compact ? 16 : 18}
+        tone="blue"
+      />
       {compact ? "Cập nhật" : isRefreshing ? "Đang kiểm tra" : "Kiểm tra lại"}
     </button>
   );
@@ -187,5 +222,10 @@ function formatUpdatedAt(value: string): string {
 }
 
 function ReadinessSkeleton() {
-  return <section className="h-[430px] animate-pulse rounded-md border bg-[var(--surface)]" aria-busy="true" />;
+  return (
+    <section
+      className="h-[430px] animate-pulse rounded-md border bg-[var(--surface)]"
+      aria-busy="true"
+    />
+  );
 }
