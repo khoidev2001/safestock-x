@@ -46,16 +46,11 @@ export function WarehouseMap({ tree, isLoading }: WarehouseMapProps) {
 
             <div className="mt-3 grid grid-cols-2 gap-2">
               {zone.shelves.map((shelf) => (
-                <div
-                  key={shelf.id}
-                  className="min-h-20 rounded-md border bg-[var(--surface)] p-2"
-                >
+                <div key={shelf.id} className="min-h-20 rounded-md border bg-[var(--surface)] p-2">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-semibold">{shelf.code}</span>
                   </div>
-                  <p className="mt-2 line-clamp-2 text-xs text-[var(--text-muted)]">
-                    {shelf.name}
-                  </p>
+                  <p className="mt-2 line-clamp-2 text-xs text-[var(--text-muted)]">{shelf.name}</p>
                   <p className="tabular mt-2 text-xs font-medium">
                     {shelf._count?.batches ?? 0} lô
                   </p>

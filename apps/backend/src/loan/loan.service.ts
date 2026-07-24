@@ -1,39 +1,55 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from "@nestjs/common";
+import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { CirculationStatus, ItemCondition, LoanStatus, Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { ReadinessService } from "../readiness/readiness.service";
 import { sumOutstanding } from "../inventory/loan-math";
+import { lockLoanTableForMutation } from "./loan-table-lock";
 
 @Injectable()
 export class LoanService {
-  constructor(private prisma: PrismaService) {}
+  private readonly log = new Logger(LoanService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private readiness: ReadinessService,
+  ) {}
+
+  /**
+   * Tính lại Readiness của kho chứa lô sau khi mượn/hoàn (gap C). Mượn/hoàn đổi
+   * onLoanQty → "khả dụng ngay" đổi → điểm phải cập nhật. Chạy SAU transaction để
+   * đọc dữ liệu đã commit; lỗi chỉ log, không chặn response.
+   */
+  private async recalcAfterLoanTxn(batchId: string): Promise<void> {
+    const batch = await this.prisma.itemBatch.findUnique({
+      where: { id: batchId },
+      select: { shelf: { select: { zone: { select: { warehouseId: true } } } } },
+    });
+    const warehouseId = batch?.shelf?.zone.warehouseId;
+    if (!warehouseId) return;
+    await this.readiness.recalculateWarehouse(warehouseId).catch((error) => {
+      this.log.warn(
+        `Recalc readiness sau giao dịch mượn/hoàn lỗi (lô ${batchId}): ${error.message}`,
+      );
+    });
+  }
 
   /**
    * Mượn vật tư (Bp4). Chỉ vật tư consumable=false (tái sử dụng) mới mượn được;
    * consumable=true (nước/pin) xuất là tiêu hao thẳng, không tạo phiếu.
    * Tạo LoanRecord ON_LOAN, đánh dấu lô đang lưu hành. KHÔNG trừ tổng kho.
    */
-  async borrow(
-    userId: string,
-    batchId: string,
-    quantity: number,
-    missionId?: string,
-  ) {
+  async borrow(userId: string, batchId: string, quantity: number, missionId?: string) {
     if (quantity <= 0) throw new BadRequestException("Số lượng mượn phải > 0");
 
-    return this.prisma.$transaction(async (tx) => {
+    const loan = await this.prisma.$transaction(async (tx) => {
+      await lockLoanTableForMutation(tx);
       const batch = await tx.itemBatch.findUnique({
         where: { id: batchId },
         include: { item: true },
       });
       if (!batch) throw new NotFoundException("Không tìm thấy lô vật tư");
       if (batch.item.consumable) {
-        throw new BadRequestException(
-          "Vật tư tiêu hao không mượn được — dùng xuất kho",
-        );
+        throw new BadRequestException("Vật tư tiêu hao không mượn được — dùng xuất kho");
       }
 
       const alreadyOnLoan = await this.sumOnLoan(tx, batchId);
@@ -63,6 +79,9 @@ export class LoanService {
       });
       return loan;
     });
+
+    await this.recalcAfterLoanTxn(batchId);
+    return loan;
   }
 
   /**
@@ -72,32 +91,24 @@ export class LoanService {
    * - lost → trừ tổng kho (mất thật)
    * Phiếu đóng khi hoàn hết.
    */
-  async returnItems(
-    userId: string,
-    loanId: string,
-    ok: number,
-    damaged: number,
-    lost: number,
-  ) {
+  async returnItems(userId: string, loanId: string, ok: number, damaged: number, lost: number) {
     if (ok < 0 || damaged < 0 || lost < 0) {
       throw new BadRequestException("Số hoàn không được âm");
     }
     const returning = ok + damaged + lost;
     if (returning <= 0) throw new BadRequestException("Chưa nhập số hoàn");
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
+      await lockLoanTableForMutation(tx);
       const loan = await tx.loanRecord.findUnique({ where: { id: loanId } });
       if (!loan) throw new NotFoundException("Không tìm thấy phiếu mượn");
       if (loan.status === LoanStatus.CLOSED) {
         throw new BadRequestException("Phiếu mượn đã đóng");
       }
 
-      const outstanding =
-        loan.quantity - loan.returnedOk - loan.returnedDamaged - loan.lost;
+      const outstanding = loan.quantity - loan.returnedOk - loan.returnedDamaged - loan.lost;
       if (returning > outstanding) {
-        throw new BadRequestException(
-          `Hoàn quá số nợ: còn nợ ${outstanding}, hoàn ${returning}`,
-        );
+        throw new BadRequestException(`Hoàn quá số nợ: còn nợ ${outstanding}, hoàn ${returning}`);
       }
 
       const newOk = loan.returnedOk + ok;
@@ -136,8 +147,19 @@ export class LoanService {
         },
       });
 
-      return { loanId, ok: newOk, damaged: newDamaged, lost: newLost, closed };
+      return {
+        loanId,
+        batchId: loan.batchId,
+        ok: newOk,
+        damaged: newDamaged,
+        lost: newLost,
+        closed,
+      };
     });
+
+    await this.recalcAfterLoanTxn(result.batchId);
+    const { batchId: _batchId, ...response } = result;
+    return response;
   }
 
   /** Danh sách phiếu mượn đang mở của 1 kho. */

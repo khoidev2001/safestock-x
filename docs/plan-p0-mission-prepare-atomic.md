@@ -1,12 +1,20 @@
 # Kế hoạch P0 — Mission prepare atomic và chống xuất kho trùng
 
-_Lập ngày: 2026-07-23 · Chưa triển khai_
+_Lập ngày: 2026-07-23 · Hoàn tất: 2026-07-23_
 
-## Bối cảnh
+## Trạng thái hoàn tất
 
-`MissionService.prepareByWarehouse()` hiện đọc mission và kiểm tra state, gọi `InventoryService.bulkExport()` trong một transaction riêng, rồi cập nhật mission sang `READY` bằng câu lệnh khác. Nếu xuất kho thành công nhưng update mission lỗi, tồn đã bị trừ trong khi mission còn `PENDING_WAREHOUSE`; retry có thể xuất lần hai. Hai request đồng thời cũng có thể cùng đọc state cũ và cùng trừ kho.
+- [x] Atomic prepare, idempotent retry/concurrency và warehouse scope đã triển khai; không có schema/migration.
+- [x] Focused Jest: **34/34**; toàn bộ backend Jest: **215/215**.
+- [x] PostgreSQL E2E: **8/8** tại `apps/backend/test/mission-prepare-atomic.e2e-spec.ts`.
+- [x] Backend build và `git diff --check` pass.
+- [x] Fixture E2E `missions/requirements/batches`: **0/0/0 → 0/0/0**; không chạy seed/reset.
 
-Controller hiện chỉ truyền `userId`, chưa truyền `req.user.warehouseId`, nên luồng prepare chưa áp dụng scope kho giống các endpoint inventory.
+## Bối cảnh trước triển khai
+
+`MissionService.prepareByWarehouse()` từng đọc mission và kiểm tra state, gọi `InventoryService.bulkExport()` trong một transaction riêng, rồi cập nhật mission sang `READY` bằng câu lệnh khác. Nếu xuất kho thành công nhưng update mission lỗi, tồn có thể bị trừ trong khi mission còn `PENDING_WAREHOUSE`; retry có thể xuất lần hai. Hai request đồng thời cũng có thể cùng đọc state cũ và cùng trừ kho.
+
+Controller trước đó chỉ truyền `userId`, chưa truyền `req.user.warehouseId`, nên luồng prepare chưa áp dụng scope kho giống các endpoint inventory.
 
 ## Kết quả mong muốn
 
@@ -43,72 +51,72 @@ Transaction-safe inventory helper
   → regression + review
 ```
 
-## Task 1 — Tách bulk export dùng transaction có sẵn
+## Task 1 — Tách bulk export dùng transaction có sẵn ✅
 
 **Mô tả:** Thêm helper xuất nhiều batch trong `Prisma.TransactionClient`; wrapper hiện tại tái sử dụng helper và giữ hành vi/API cũ.
 
 **Acceptance criteria:**
 
-- Một batch thiếu tồn làm helper ném lỗi và caller transaction có thể rollback toàn bộ.
-- Mỗi batch thành công vẫn tạo `inventoryTransaction` + `auditLog` đúng `TransactionSource.BULK`.
-- Helper không tự recalc readiness trước commit.
+- [x] Một batch thiếu tồn làm helper ném lỗi và caller transaction rollback toàn bộ.
+- [x] Mỗi batch thành công tạo `inventoryTransaction` + `auditLog` đúng `TransactionSource.BULK`.
+- [x] Helper không tự recalc readiness trước commit.
 
 **Verification:**
 
-- Jest tập trung cho bulk export nhiều batch, batch thiếu tồn và danh sách rỗng.
-- TypeScript build không phát sinh cast không an toàn quanh `TransactionClient`.
+- [x] Jest tập trung bao phủ bulk export nhiều batch, batch thiếu tồn và danh sách rỗng.
+- [x] Backend build pass với `Prisma.TransactionClient`.
 
 **Dependencies:** Không có.
 
-**Files dự kiến:**
+**Files thực hiện:**
 
 - `apps/backend/src/inventory/inventory.service.ts`
-- `apps/backend/src/inventory/__tests__/bulk-export.spec.ts` (mới, nếu chưa có test phù hợp)
+- `apps/backend/src/inventory/__tests__/bulk-export.spec.ts` (mới)
 
 **Phạm vi:** Nhỏ–trung bình.
 
-## Task 2 — Đưa scope check vào transaction path
+## Task 2 — Đưa scope check vào transaction path ✅
 
 **Mô tả:** Cho `assertBatchInScope()` nhận client tối thiểu có `itemBatch.findUnique`, dùng được với cả `PrismaService` và `Prisma.TransactionClient`.
 
 **Acceptance criteria:**
 
-- Batch ngoài `scopeWarehouseId` trả `403` trước khi trừ tồn.
-- `scopeWarehouseId=null` giữ quyền toàn xã như hiện tại.
-- Các caller inventory cũ không đổi hành vi.
+- [x] Batch ngoài `scopeWarehouseId` trả `403` trước khi trừ tồn.
+- [x] `scopeWarehouseId=null` giữ quyền toàn xã như hiện tại.
+- [x] Các caller inventory cũ không đổi hành vi.
 
 **Verification:**
 
-- Unit test scope hiện có pass.
-- Thêm test helper với transaction client giả hoặc compile-time contract rõ ràng.
+- [x] Unit test scope hiện có pass.
+- [x] Contract helper dùng được với transaction client; focused suite pass.
 
 **Dependencies:** Task 1.
 
-**Files dự kiến:**
+**Files thực hiện:**
 
 - `apps/backend/src/inventory/warehouse-scope.ts`
 - `apps/backend/src/inventory/__tests__/warehouse-scope.spec.ts`
 
 **Phạm vi:** Nhỏ.
 
-## Task 3 — Refactor prepare thành một transaction idempotent
+## Task 3 — Refactor prepare thành một transaction idempotent ✅
 
 **Mô tả:** Truyền scope từ controller; trong service, claim state có điều kiện, xuất kho bằng `bulkExportInTx()` và trả mission `READY` trong cùng transaction.
 
 **Acceptance criteria:**
 
-- Không có trạng thái quan sát được trong đó kho đã trừ nhưng mission vẫn `PENDING_WAREHOUSE` sau rollback.
-- Hai request đồng thời chỉ một request tạo giao dịch xuất; cả hai có thể nhận mission `READY` theo contract idempotent.
-- Retry sau thành công không trừ thêm tồn, không tạo audit/notification mới.
+- [x] Rollback không để kho đã trừ khi mission còn `PENDING_WAREHOUSE`.
+- [x] Hai request đồng thời chỉ một request tạo giao dịch xuất; cả hai nhận mission `READY` theo contract idempotent.
+- [x] Retry sau thành công không trừ thêm tồn, không tạo audit/notification mới.
 
 **Verification:**
 
-- Unit test service cho state không hợp lệ, `READY` idempotent và notification chỉ chạy ở request thắng.
-- Controller test xác nhận truyền `req.user.warehouseId`.
+- [x] Unit test service bao phủ state không hợp lệ, `READY` idempotent và hậu xử lý chỉ chạy ở request thắng.
+- [x] Controller test xác nhận truyền `req.user.warehouseId`.
 
 **Dependencies:** Task 1–2.
 
-**Files dự kiến:**
+**Files thực hiện:**
 
 - `apps/backend/src/mission/mission.controller.ts`
 - `apps/backend/src/mission/mission.service.ts`
@@ -116,54 +124,54 @@ Transaction-safe inventory helper
 
 **Phạm vi:** Trung bình.
 
-## Checkpoint — Atomic path
+## Checkpoint — Atomic path ✅
 
-- Focused Jest pass.
-- Backend build pass.
-- Review diff xác nhận mọi stock mutation và state claim cùng dùng một `tx`.
+- [x] Focused Jest **34/34**.
+- [x] Backend build pass.
+- [x] Diff xác nhận stock mutation và state claim dùng cùng một `tx`.
 
-## Task 4 — Postgres E2E cho rollback, concurrency và IDOR
+## Task 4 — Postgres E2E cho rollback, concurrency và IDOR ✅
 
-**Mô tả:** Mở rộng E2E thật để chứng minh transaction semantics mà mock không thể bảo đảm.
+**Mô tả:** Thêm E2E thật để chứng minh transaction semantics mà mock không thể bảo đảm.
 
 **Acceptance criteria:**
 
-- **Rollback:** làm batch cuối không đủ tồn; prepare fail; batch đã xử lý trước đó, audit và mission đều giữ nguyên.
-- **Concurrency/double-click:** `Promise.all` hai request prepare; tồn chỉ giảm đúng một lần và số audit EXPORT không tăng gấp đôi.
-- **Scope:** token kho A prepare mission dùng batch kho B trả `403`; tồn và state không đổi.
+- [x] **Rollback:** batch cuối thiếu tồn làm prepare fail; batch trước, audit và mission giữ nguyên.
+- [x] **Concurrency/double-click:** hai request prepare và retry chỉ giảm tồn, ghi audit và notify một lần.
+- [x] **Scope:** token kho A prepare mission/batch ngoài scope trả `403`; tồn và state không đổi.
 
 **Verification:**
 
-- `pnpm --filter @safestock/backend test:e2e -- --runInBand` pass trên PostgreSQL test/dev đã chuẩn bị.
-- Fixture tạo dữ liệu riêng hoặc hoàn nguyên trong `finally`; không phụ thuộc reseed và không làm bẩn baseline vận hành.
+- [x] PostgreSQL E2E `mission-prepare-atomic.e2e-spec.ts`: **8/8**.
+- [x] Fixture tự tạo và cleanup: `missions/requirements/batches` **0/0/0 → 0/0/0**; không seed/reset.
 
 **Dependencies:** Task 3.
 
-**Files dự kiến:**
+**Files thực hiện:**
 
-- `apps/backend/test/mission-workflow.e2e-spec.ts`
+- `apps/backend/test/mission-prepare-atomic.e2e-spec.ts`
 
 **Phạm vi:** Trung bình.
 
-## Task 5 — Regression và review an toàn
+## Task 5 — Regression và review an toàn ✅
 
 **Mô tả:** Chạy quality gates và tự review các failure mode sau khi code xong.
 
 **Acceptance criteria:**
 
-- Mission happy path, hoàn kho FAILED/PARTIAL và state machine không regression.
-- Inventory không âm khi request concurrent; audit before/after phản ánh đúng giá trị đã commit.
-- Notification/recalc lỗi sau commit không làm client hiểu nhầm rằng stock transaction đã rollback.
+- [x] Mission happy path, hoàn kho FAILED/PARTIAL và state machine không regression.
+- [x] Inventory không âm khi request concurrent; audit before/after phản ánh giá trị đã commit.
+- [x] Notification/recalc lỗi sau commit không làm client hiểu nhầm stock transaction đã rollback.
 
 **Verification:**
 
-- Focused mission/inventory Jest.
-- Toàn bộ backend Jest, backend TypeScript/build và `git diff --check`.
-- Review thủ công: idempotency, duplicate request, rollback, scope/IDOR, notification partial failure và readiness degrade.
+- [x] Focused mission/inventory Jest: **34/34**.
+- [x] Toàn bộ backend Jest: **215/215**; backend build và `git diff --check` pass.
+- [x] Review idempotency, duplicate request, rollback, scope/IDOR, notification partial failure và readiness degrade hoàn tất.
 
 **Dependencies:** Task 4.
 
-**Files dự kiến:** Chỉ các file đã nêu; cập nhật checklist/docs khi có bằng chứng pass.
+**Files thực hiện:** Các file ở Task 1–4; cập nhật plan/checklist sau khi đủ bằng chứng.
 
 **Phạm vi:** Nhỏ.
 
@@ -195,13 +203,13 @@ Transaction-safe inventory helper
 - Revert riêng refactor prepare và helper `bulkExportInTx`; không có migration/schema để rollback.
 - Nếu E2E concurrency không ổn định, dừng release và giữ P0 chưa hoàn tất; không hạ tiêu chí test hoặc bỏ conditional claim.
 
-## Definition of Done
+## Definition of Done ✅
 
-- Atomic rollback, concurrency, retry và scope đều có test Postgres thật.
-- Không còn đường gọi `prepareByWarehouse()` dùng `bulkExport()` transaction riêng.
-- Không âm tồn, không double-export, không mission `PENDING_WAREHOUSE` sau khi transaction xuất đã commit.
-- Backend test/build sạch; review security/degrade/idempotency không còn blocker.
-- Checklist P0-4 chỉ được tick sau khi có bằng chứng trên.
+- [x] Atomic rollback, concurrency, retry và scope có test PostgreSQL thật.
+- [x] `prepareByWarehouse()` dùng `bulkExportInTx()` trong transaction do mission sở hữu.
+- [x] Không âm tồn, không double-export, không để mission `PENDING_WAREHOUSE` sau transaction xuất đã commit.
+- [x] Backend test/build sạch; review security/degrade/idempotency không còn blocker.
+- [x] Checklist P0-4 được tick sau khi có đủ bằng chứng trên.
 
 ## Câu hỏi chưa giải quyết
 

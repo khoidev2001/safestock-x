@@ -107,8 +107,22 @@ describe("allocateGreedy (K1 — kho gần điểm nạn trước)", () => {
 
   it("lấy kho thôn GẦN trước, tràn sang kho tổng xa", () => {
     const batches: AvailableBatch[] = [
-      { batchId: "central", sku: "WATER-01", quantity: 500, expiryDate: null, warehouseName: "Kho tổng", distanceKm: 12 },
-      { batchId: "hamlet", sku: "WATER-01", quantity: 60, expiryDate: null, warehouseName: "Kho thôn A", distanceKm: 2 },
+      {
+        batchId: "central",
+        sku: "WATER-01",
+        quantity: 500,
+        expiryDate: null,
+        warehouseName: "Kho tổng",
+        distanceKm: 12,
+      },
+      {
+        batchId: "hamlet",
+        sku: "WATER-01",
+        quantity: 60,
+        expiryDate: null,
+        warehouseName: "Kho thôn A",
+        distanceKm: 2,
+      },
     ];
     const result = allocateGreedy(req, batches);
     // Kho thôn gần (2km) lấy trước hết 60, còn 40 lấy kho tổng (12km).
@@ -122,8 +136,20 @@ describe("allocateGreedy (K1 — kho gần điểm nạn trước)", () => {
   it("khoảng cách ưu tiên hơn FEFO giữa các kho", () => {
     const batches: AvailableBatch[] = [
       // Kho xa có hạn gần hơn, nhưng kho gần vẫn được lấy trước.
-      { batchId: "far-soon", sku: "WATER-01", quantity: 50, expiryDate: new Date("2026-08-01"), distanceKm: 10 },
-      { batchId: "near-late", sku: "WATER-01", quantity: 50, expiryDate: new Date("2027-01-01"), distanceKm: 1 },
+      {
+        batchId: "far-soon",
+        sku: "WATER-01",
+        quantity: 50,
+        expiryDate: new Date("2026-08-01"),
+        distanceKm: 10,
+      },
+      {
+        batchId: "near-late",
+        sku: "WATER-01",
+        quantity: 50,
+        expiryDate: new Date("2027-01-01"),
+        distanceKm: 1,
+      },
     ];
     const result = allocateGreedy({ ...req, required: 50 }, batches);
     expect(result.batches[0].batchId).toBe("near-late"); // gần thắng
@@ -132,8 +158,13 @@ describe("allocateGreedy (K1 — kho gần điểm nạn trước)", () => {
 
 describe("overallFulfillment (min = weakest link)", () => {
   const alloc = (sku: string, required: number, allocated: number) => ({
-    sku, itemName: sku, unit: "x", required, allocated,
-    shortage: Math.max(0, required - allocated), batches: [],
+    sku,
+    itemName: sku,
+    unit: "x",
+    required,
+    allocated,
+    shortage: Math.max(0, required - allocated),
+    batches: [],
   });
 
   it("should return the minimum ratio, not average", () => {

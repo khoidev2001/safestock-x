@@ -90,10 +90,7 @@ export function AssistantChat({
     const normalizedQuestion = question.trim();
     if (!normalizedQuestion || ask.isPending) return;
 
-    setTurns((currentTurns) => [
-      ...currentTurns,
-      { role: "user", text: normalizedQuestion },
-    ]);
+    setTurns((currentTurns) => [...currentTurns, { role: "user", text: normalizedQuestion }]);
     setInput("");
     scrollToLatest();
     ask.mutate(normalizedQuestion);
@@ -114,9 +111,7 @@ export function AssistantChat({
         {turns.length === 0 ? (
           <EmptyChat compact={compact} onSuggestion={submit} />
         ) : (
-          turns.map((turn, index) => (
-            <ChatBubble key={`${turn.role}-${index}`} turn={turn} />
-          ))
+          turns.map((turn, index) => <ChatBubble key={`${turn.role}-${index}`} turn={turn} />)
         )}
 
         {ask.isPending ? (
@@ -128,7 +123,11 @@ export function AssistantChat({
       </div>
 
       <form
-        className={compact ? "flex items-center gap-2 border-t bg-[var(--surface)] p-3" : "flex items-center gap-2"}
+        className={
+          compact
+            ? "flex items-center gap-2 border-t bg-[var(--surface)] p-3"
+            : "flex items-center gap-2"
+        }
         onSubmit={(event) => {
           event.preventDefault();
           submit(input);
@@ -185,7 +184,9 @@ function EmptyChat({
       <ColorIcon name="assistant" size={compact ? 30 : 34} tone="blue" />
       <div>
         <p className="text-sm font-semibold">Trợ lý ứng phó nhanh</p>
-        <p className="mt-1 text-xs text-[var(--text-muted)]">Mô tả tình huống cứu hộ hoặc hỏi về dữ liệu kho.</p>
+        <p className="mt-1 text-xs text-[var(--text-muted)]">
+          Mô tả tình huống cứu hộ hoặc hỏi về dữ liệu kho.
+        </p>
       </div>
       <div className={`flex flex-wrap justify-center gap-2 ${compact ? "max-w-xs" : ""}`}>
         {SUGGESTIONS.map((suggestion) => (
@@ -238,7 +239,9 @@ function ChatBubble({ turn }: { turn: ChatTurn }) {
               ? "color-mix(in oklch, var(--color-critical) 10%, transparent)"
               : "var(--surface)",
           color: isUser ? "var(--color-accent-fg)" : "var(--text)",
-          border: isAlert ? "1px solid color-mix(in oklch, var(--color-critical) 35%, transparent)" : undefined,
+          border: isAlert
+            ? "1px solid color-mix(in oklch, var(--color-critical) 35%, transparent)"
+            : undefined,
         }}
       >
         {turn.text}

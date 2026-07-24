@@ -43,12 +43,14 @@ export function getZoneColor(zone: ReadinessZone): string {
 }
 
 export function getComponentLabel(key: string): string {
-  return {
-    quantityAvailability: "Số lượng khả dụng",
-    itemCondition: "Tình trạng vật tư",
-    expiry: "Thời hạn",
-    accessibility: "Tiếp cận",
-    environment: "Môi trường",
-    dataReliability: "Độ tin cậy dữ liệu",
-  }[key] ?? key;
+  return (
+    {
+      quantityAvailability: "Số lượng khả dụng",
+      itemCondition: "Tình trạng vật tư",
+      expiry: "Thời hạn",
+      accessibility: "Tiếp cận",
+      environment: "Môi trường",
+      dataReliability: "Độ tin cậy dữ liệu",
+    }[key] ?? key
+  );
 }

@@ -30,10 +30,7 @@ export interface BatchWithContext {
  *
  * @param now mốc thời gian server (#31) — truyền vào để deterministic.
  */
-export function toBatchReadinessInput(
-  ctx: BatchWithContext,
-  now: Date,
-): BatchReadinessInput {
+export function toBatchReadinessInput(ctx: BatchWithContext, now: Date): BatchReadinessInput {
   const { batch, env } = ctx;
   return {
     batchId: batch.id,

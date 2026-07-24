@@ -17,13 +17,17 @@ describe("computeTrends", () => {
   });
 
   it("previousTotal=0 & currentTotal>0 → changePercent null", () => {
-    const exports: ExportTxnTrend[] = [{ sku: "A", itemName: "Item A", quantity: 5, createdAt: daysAgo(1) }];
+    const exports: ExportTxnTrend[] = [
+      { sku: "A", itemName: "Item A", quantity: 5, createdAt: daysAgo(1) },
+    ];
     const result = computeTrends(exports, 10, NOW);
     expect(result[0].changePercent).toBeNull();
   });
 
   it("bỏ qua giao dịch ngoài 2 kỳ", () => {
-    const exports: ExportTxnTrend[] = [{ sku: "A", itemName: "Item A", quantity: 999, createdAt: daysAgo(100) }];
+    const exports: ExportTxnTrend[] = [
+      { sku: "A", itemName: "Item A", quantity: 999, createdAt: daysAgo(100) },
+    ];
     const result = computeTrends(exports, 10, NOW);
     expect(result).toEqual([]);
   });

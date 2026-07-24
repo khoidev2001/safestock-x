@@ -14,10 +14,7 @@ export interface BatchEligibility {
 }
 
 /** Xác định lô có thực sự lấy được ngay cho một nhiệm vụ hay không. */
-export function assessBatchEligibility(
-  input: BatchEligibilityInput,
-  now: Date,
-): BatchEligibility {
+export function assessBatchEligibility(input: BatchEligibilityInput, now: Date): BatchEligibility {
   const reasons: string[] = [];
   const availableQuantity = Math.max(0, input.quantity - input.onLoanQuantity);
 

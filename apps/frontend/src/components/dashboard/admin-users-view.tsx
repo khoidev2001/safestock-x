@@ -30,7 +30,13 @@ export function AdminUsersView({ warehouseId }: { warehouseId: string }) {
     queryFn: () => getClusterWarehouses(warehouseId),
   });
 
-  const [form, setForm] = useState({ email: "", password: "", fullName: "", role: "WAREHOUSE", warehouseId: "" });
+  const [form, setForm] = useState({
+    email: "",
+    password: "",
+    fullName: "",
+    role: "WAREHOUSE",
+    warehouseId: "",
+  });
   const [err, setErr] = useState<string | null>(null);
   const [passwordEdit, setPasswordEdit] = useState({ userId: "", password: "" });
 
@@ -48,7 +54,8 @@ export function AdminUsersView({ warehouseId }: { warehouseId: string }) {
       setErr(null);
       qc.invalidateQueries({ queryKey: ["admin-users"] });
     },
-    onError: (e) => setErr(e instanceof Error ? e.message : "Chưa thể tạo tài khoản. Vui lòng thử lại."),
+    onError: (e) =>
+      setErr(e instanceof Error ? e.message : "Chưa thể tạo tài khoản. Vui lòng thử lại."),
   });
 
   const remove = useMutation({
@@ -75,24 +82,49 @@ export function AdminUsersView({ warehouseId }: { warehouseId: string }) {
         </div>
         <div className="mt-4 space-y-3">
           <Field label="Họ tên">
-            <input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm" />
+            <input
+              value={form.fullName}
+              onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+              className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+            />
           </Field>
           <Field label="Email / tên đăng nhập">
-            <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm" />
+            <input
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+            />
           </Field>
           <Field label="Mật khẩu">
-            <input autoComplete="new-password" minLength={8} type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm" />
+            <input
+              autoComplete="new-password"
+              minLength={8}
+              type="password"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+            />
           </Field>
           <Field label="Vai trò">
-            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm">
+            <select
+              value={form.role}
+              onChange={(e) => setForm({ ...form, role: e.target.value })}
+              className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+            >
               {ROLES.map((r) => (
-                <option key={r.value} value={r.value}>{r.label}</option>
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
               ))}
             </select>
           </Field>
           {form.role === "WAREHOUSE" && (
             <Field label="Kho phụ trách (để trống = toàn xã)">
-              <select value={form.warehouseId} onChange={(e) => setForm({ ...form, warehouseId: e.target.value })} className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm">
+              <select
+                value={form.warehouseId}
+                onChange={(e) => setForm({ ...form, warehouseId: e.target.value })}
+                className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+              >
                 <option value="">— Toàn xã (kho tổng) —</option>
                 {warehouses.map((w) => (
                   <option key={w.id} value={w.id}>
@@ -124,10 +156,17 @@ export function AdminUsersView({ warehouseId }: { warehouseId: string }) {
             <li key={u.id} className="py-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{u.fullName} <span className="text-xs text-[var(--text-muted)]">· {u.email}</span></p>
+                  <p className="truncate text-sm font-medium">
+                    {u.fullName}{" "}
+                    <span className="text-xs text-[var(--text-muted)]">· {u.email}</span>
+                  </p>
                   <p className="text-xs text-[var(--text-muted)]">
                     {roleLabels.get(u.role) ?? u.role}
-                    {u.warehouseId ? ` · ${nameById.get(u.warehouseId) ?? "kho thôn"}` : u.role === "WAREHOUSE" ? " · toàn xã" : ""}
+                    {u.warehouseId
+                      ? ` · ${nameById.get(u.warehouseId) ?? "kho thôn"}`
+                      : u.role === "WAREHOUSE"
+                        ? " · toàn xã"
+                        : ""}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
@@ -158,7 +197,9 @@ export function AdminUsersView({ warehouseId }: { warehouseId: string }) {
                     autoComplete="new-password"
                     className="min-w-56 flex-1 rounded-md border bg-[var(--surface)] px-3 text-sm"
                     minLength={8}
-                    onChange={(event) => setPasswordEdit({ ...passwordEdit, password: event.target.value })}
+                    onChange={(event) =>
+                      setPasswordEdit({ ...passwordEdit, password: event.target.value })
+                    }
                     placeholder="Mật khẩu mới, ít nhất 8 ký tự"
                     type="password"
                     value={passwordEdit.password}

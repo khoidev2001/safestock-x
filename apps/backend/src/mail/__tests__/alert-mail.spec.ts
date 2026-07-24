@@ -12,7 +12,9 @@ const incident = {
   severity: "MEDIUM",
   confidence: 0.6,
   kind: "BAD_STORAGE",
-  evidence: [{ note: "Độ ẩm 90% vượt ngưỡng 85%", occurredAt: new Date("2026-07-22T10:00:00+07:00") }],
+  evidence: [
+    { note: "Độ ẩm 90% vượt ngưỡng 85%", occurredAt: new Date("2026-07-22T10:00:00+07:00") },
+  ],
 };
 
 /** ConfigService giả: trả giá trị từ map. */
@@ -32,7 +34,12 @@ describe("AlertMailService", () => {
 
   it("thiếu SMTP_HOST dù đã enable → skip êm, không gửi", async () => {
     const service = new AlertMailService(
-      makeConfig({ ALERT_EMAIL_ENABLED: "true", SMTP_USER: "a@gmail.com", SMTP_PASS: "x", ALERT_EMAIL_TO: "b@x.vn" }),
+      makeConfig({
+        ALERT_EMAIL_ENABLED: "true",
+        SMTP_USER: "a@gmail.com",
+        SMTP_PASS: "x",
+        ALERT_EMAIL_TO: "b@x.vn",
+      }),
     );
     await service.sendIncidentAlert(incident, "text AI");
     expect(sendMail).not.toHaveBeenCalled();

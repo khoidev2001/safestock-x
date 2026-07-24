@@ -27,7 +27,9 @@ describe("computeForecast (dự báo thống kê: EWMA + độ lệch chuẩn)",
   });
 
   it("EWMA NHẠY xu hướng gần: cùng tổng, xuất gần đây → tốc độ cao hơn, cạn nhanh hơn", () => {
-    const recent: ExportTxn[] = [{ sku: "R", itemName: "Recent", quantity: 20, createdAt: daysAgo(1) }];
+    const recent: ExportTxn[] = [
+      { sku: "R", itemName: "Recent", quantity: 20, createdAt: daysAgo(1) },
+    ];
     const old: ExportTxn[] = [{ sku: "O", itemName: "Old", quantity: 20, createdAt: daysAgo(8) }];
     const stock: StockLevel[] = [
       { sku: "R", itemName: "Recent", quantity: 60 },
@@ -60,7 +62,9 @@ describe("computeForecast (dự báo thống kê: EWMA + độ lệch chuẩn)",
   });
 
   it("ít ngày dữ liệu → confidence THẤP (UI nói 'chưa đủ dữ liệu')", () => {
-    const exports: ExportTxn[] = [{ sku: "A", itemName: "Item A", quantity: 12, createdAt: daysAgo(1) }];
+    const exports: ExportTxn[] = [
+      { sku: "A", itemName: "Item A", quantity: 12, createdAt: daysAgo(1) },
+    ];
     const stock: StockLevel[] = [{ sku: "A", itemName: "Item A", quantity: 40 }];
     const r = computeForecast(exports, stock, 30, NOW)[0];
     expect(r.confidence).toBeCloseTo(1 / 8, 6); // đúng 1 ngày có xuất
@@ -83,7 +87,9 @@ describe("computeForecast (dự báo thống kê: EWMA + độ lệch chuẩn)",
   });
 
   it("bỏ qua export ngoài windowDays", () => {
-    const exports: ExportTxn[] = [{ sku: "A", itemName: "Item A", quantity: 100, createdAt: daysAgo(20) }];
+    const exports: ExportTxn[] = [
+      { sku: "A", itemName: "Item A", quantity: 100, createdAt: daysAgo(20) },
+    ];
     const stock: StockLevel[] = [{ sku: "A", itemName: "Item A", quantity: 50 }];
     const r = computeForecast(exports, stock, 10, NOW)[0];
     expect(r.ewmaPerDay).toBe(0);
@@ -105,7 +111,9 @@ describe("computeForecast (dự báo thống kê: EWMA + độ lệch chuẩn)",
   });
 
   it("SKU có lịch sử xuất nhưng đã cạn sạch (không còn trong stock) → daysLeft 0, lowStock", () => {
-    const exports: ExportTxn[] = [{ sku: "C", itemName: "Item C", quantity: 20, createdAt: daysAgo(1) }];
+    const exports: ExportTxn[] = [
+      { sku: "C", itemName: "Item C", quantity: 20, createdAt: daysAgo(1) },
+    ];
     const result = computeForecast(exports, [], 10, NOW); // stock rỗng: SKU C hết batch
     const c = result.find((r) => r.sku === "C")!;
     expect(c.quantity).toBe(0);

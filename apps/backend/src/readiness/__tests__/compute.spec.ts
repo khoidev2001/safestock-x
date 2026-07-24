@@ -25,9 +25,7 @@ describe("computeBatchReadiness", () => {
   });
 
   it("should drop score when item is damaged", () => {
-    const result = computeBatchReadiness(
-      perfectBatch({ condition: { condition: "DAMAGED" } }),
-    );
+    const result = computeBatchReadiness(perfectBatch({ condition: { condition: "DAMAGED" } }));
     // condition 22% về 0 → 100 - 22 = 78
     expect(result.score).toBe(78);
   });

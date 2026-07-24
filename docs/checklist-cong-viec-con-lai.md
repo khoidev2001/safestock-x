@@ -9,27 +9,39 @@ _Lập ngày: 2026-07-23 · Rút ra từ [bao-cao-review-toan-du-an.md](bao-cao-
 
 ## P0 — Bảo mật & an toàn giao dịch (ưu tiên tuyệt đối)
 
-- [ ] **P0-1 · WebSocket auth + room server-side**
-  - [ ] Xác thực JWT ở handshake (`simulation.gateway.ts:13-31`, `notification.gateway.ts:14-32`)
-  - [ ] Bỏ nhận room từ client (`join {warehouseId}`, `join-role {role}`); server suy room từ JWT
-  - [ ] Test: socket không token → reject; user kho A không nhận event kho B
-- [ ] **P0-2 · Cô lập simulator**
-  - [ ] Env-flag tắt mutation ở production (`simulation.controller.ts`, `simulation.service.ts`)
-  - [ ] Thêm permission `simulation:*` + PermissionGuard (hiện chỉ JwtAuthGuard)
-  - [ ] Scope `warehouseId` theo actor (không nhận tự do)
-  - [ ] Tài khoản SYSTEM riêng cho loadcell (thay `findFirst ADMIN`)
-- [ ] **P0-3 · Transfer tách lô + authorize**
-  - [ ] Tách batch transactionally theo `quantity` (thay vì `update shelfId` cả lô) (`inventory.service.ts:176-208`)
-  - [ ] `assertBatchInScope` cho source + kiểm `toShelfId` thuộc kho hợp lệ (chặn IDOR)
-  - [ ] Test: chuyển một phần → 2 lô đúng số; chuyển sang kho ngoài scope → 403
-- [ ] **P0-4 · Mission prepare atomic + scope**
-  - [ ] Gộp `bulkExport` + `update(READY)` vào 1 `$transaction` (`mission.service.ts:384-412`)
-  - [ ] Truyền `scopeWarehouseId` vào `bulkExport` từ `prepareByWarehouse`
-  - [ ] Test: kill giữa transaction → không double-export khi retry
-- [ ] **P0-5 · Report approve toàn bộ lô + atomic**
-  - [ ] Xử lý MỌI batch của SKU (phân bổ số đếm), bỏ `findFirst` 1 lô (`report.service.ts:65-97`)
-  - [ ] Bọc vòng reconcile + `update(APPROVED)` trong 1 transaction
-  - [ ] Test: SKU 2 lô → đối soát đúng cả hai
+- [x] **P0-1 · WebSocket auth + room server-side** ✅ 2026-07-24
+  - [x] Xác thực access JWT ở Socket.IO middleware trước connection; tải role/organization/warehouse assignment hiện tại từ DB
+  - [x] Bỏ handlers `join`/`join-role`; server tự cấp `role:*` và các `wh:*` đúng scope, middleware cài idempotent cho hai gateway
+  - [x] Web, mobile, desktop, terminal demo và `sim.html` gửi token trong handshake; desktop refresh token rồi reconnect một lần khi bị `Unauthorized`
+  - [x] Test: thiếu/sai/hết hạn/deleted-user token → reject; claim role/kho cũ không được tin; kho A không nhận event kho B; legacy spoof inert
+  - [x] Verify: focused WebSocket **2 suites, 7/7**; backend **38 suites, 256/256**; PostgreSQL AppModule E2E **9/9**; backend/web/desktop build + mobile/desktop typecheck + diff check pass
+  - [x] Giới hạn đã ghi nhận: socket đang mở chưa revoke giữa phiên; notification vẫn role-wide trong mô hình một database/xã; không schema/seed/reset/migration
+- [x] **P0-2 · Cô lập simulator ở mức implementation/config** ✅ 2026-07-24
+  - [x] `SIMULATION_MUTATION_ENABLED=false` mặc định; invalid config fail startup; disabled path zero-write
+  - [x] Permission `simulation:view`/`simulation:mutate` + PermissionGuard; mutation chỉ ADMIN và recheck role hiện tại từ DB
+  - [x] Scope organization/kho/run theo actor DB; runner nền reauthorize, pause/reset không đua với event đang chạy
+  - [x] Actor nội bộ riêng từng kho cho loadcell; cấm login/admin mutation; không fallback human ADMIN
+  - [x] Loadcell inventory + device baseline + sensor event atomic trong transaction, row-lock device, import/export scope trong mutation
+  - [x] Verify: focused **59/59**; backend **44 suites, 298/298**; PostgreSQL E2E **4/4**; backend/shared/web/desktop build, desktop/mobile typecheck và diff check pass
+  - [x] PostgreSQL E2E chứng minh disabled/non-admin/foreign-org zero-write, actor đúng và rollback atomic; không schema/seed/reset
+  - [x] Runtime demo có `.env.demo`, PostgreSQL/Redis/volume/credentials/backend port riêng và launcher guard; owner tại `.env.demo.example`, `infrastructure/docker-compose.yml`, `infrastructure/demo/`, `package.json`
+  - [x] Runbook operator tại `docs/HUONG-DAN-CAI-DAT-VA-CHAY.md`; `.env` vận hành tiếp tục giữ `SIMULATION_MUTATION_ENABLED=false`
+- [x] **P0-3 · Transfer tách lô + authorize** ✅ 2026-07-24
+  - [x] Tách batch transactionally theo `quantity`; partial tạo child, full giữ batch ID (`inventory-transfer.ts`)
+  - [x] Kiểm scope nguồn + kệ đích trong transaction; scope null vẫn giới hạn theo organization/xã
+  - [x] Test: partial đúng 2 lô/số lượng; source hoặc destination ngoài scope → `403` và zero mutation
+  - [x] Verify: focused unit **14/14**, PostgreSQL E2E **13/13**, backend Jest **229/229**; build + `git diff --check` và review pass, fixture cleanup `0 → 0`, không seed/reset
+- [x] **P0-4 · Mission prepare atomic + scope** ✅ 2026-07-23
+  - [x] Gộp conditional claim `READY` + `bulkExportInTx` vào một `$transaction`; retry/concurrent idempotent
+  - [x] Truyền `scopeWarehouseId` từ JWT và kiểm scope mission/batch trong transaction
+  - [x] Verify: focused 34/34; backend 215/215; PostgreSQL E2E 8/8; backend build + `git diff --check` pass
+  - [x] Fixture E2E `missions/requirements/batches` 0/0/0 → 0/0/0; không seed/reset
+- [x] **P0-5 · Report approve toàn bộ lô + atomic** ✅ 2026-07-24
+  - [x] Phân bổ số đếm qua mọi batch theo thứ tự SKU + batch cố định; giữ lượng đang mượn ngoài tồn vật lý
+  - [x] Claim report, reconcile theo snapshot CAS, audit và chuyển `APPROVED` trong một transaction; retry idempotent
+  - [x] Phối hợp approve với borrow/return bằng `LoanRecord` `SHARE` + `ROW EXCLUSIVE`; public reconcile count-only vẫn no-op
+  - [x] Verify: focused unit 3 suites **20/20**; report PostgreSQL E2E **9/9**; transfer E2E **13/13**; backend **36 suites, 249/249**; build + diff/whitespace pass; 13 fixture categories sạch; review **9.5/10 PASS**, không blocker
+  - [x] Không seed/reset/schema/migration
 
 ---
 
@@ -40,6 +52,10 @@ _Lập ngày: 2026-07-23 · Rút ra từ [bao-cao-review-toan-du-an.md](bao-cao-
 - [ ] **Prisma migrations** — chuyển từ `db push` sang migration history (`prisma migrate`) để review/rollback schema
 - [ ] **ESLint config** — thêm `eslint.config.js` (flat config) cho toàn repo; thay `next lint` deprecated
 - [ ] **Test 8 module trống** — admin, loan, notification, report, backup, health, ai, prisma (ít nhất controller RBAC/scope)
+
+## P3 — Deployment/hardening acceptance
+
+- [ ] **Simulator dual-stack pilot smoke** — chạy runtime vận hành và demo đồng thời trên máy pilot; xác nhận demo ở cổng 3110, desktop trỏ 3110, tài nguyên/dữ liệu tách biệt, `demo:infra:down` giữ dữ liệu và runtime vận hành vẫn disable mutation
 
 ---
 
@@ -111,7 +127,7 @@ Plan 2 hướng đã chốt: [plan-tang-mat-do-ai-rag-va-nl-plan.md](plan-tang-m
 
 ---
 
-## Đang chờ quyết định của người dùng
+## Quyết định của người dùng (1 mục còn chờ)
 
-- [ ] **Commit forecast thống kê** (A2 đã xong code+test, 202 test pass, CHƯA commit — chờ chốt)
+- [x] **Commit forecast thống kê** — đã commit `46233b0` (`feat(insights): add statistical inventory forecast`)
 - [ ] Chốt thứ tự triển khai AI: Phần B trước hay Phần A trước

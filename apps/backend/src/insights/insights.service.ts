@@ -81,7 +81,11 @@ export class InsightsService {
         0,
       );
       const available = Math.max(0, b.quantity - onLoan);
-      const entry = bySku.get(b.item.sku) ?? { sku: b.item.sku, itemName: b.item.name, quantity: 0 };
+      const entry = bySku.get(b.item.sku) ?? {
+        sku: b.item.sku,
+        itemName: b.item.name,
+        quantity: 0,
+      };
       entry.quantity += available;
       bySku.set(b.item.sku, entry);
     }
@@ -108,7 +112,11 @@ export class InsightsService {
 
   private async expiringBatches(warehouseId: string, warehouseName: string) {
     const batches = await this.prisma.itemBatch.findMany({
-      where: { shelf: { zone: { warehouseId } }, expiryDate: { not: null }, circulation: "IN_STOCK" },
+      where: {
+        shelf: { zone: { warehouseId } },
+        expiryDate: { not: null },
+        circulation: "IN_STOCK",
+      },
       include: { item: true },
     });
     return batches.map((b) => ({
@@ -125,7 +133,10 @@ export class InsightsService {
   private async clusterStock(communeId: string): Promise<WarehouseStock[]> {
     const warehouses = await this.prisma.warehouse.findMany({ where: { communeId } });
     const batches = await this.prisma.itemBatch.findMany({
-      where: { shelf: { zone: { warehouseId: { in: warehouses.map((w) => w.id) } } }, circulation: "IN_STOCK" },
+      where: {
+        shelf: { zone: { warehouseId: { in: warehouses.map((w) => w.id) } } },
+        circulation: "IN_STOCK",
+      },
       include: {
         item: true,
         shelf: { include: { zone: true } },
@@ -156,13 +167,21 @@ export class InsightsService {
   }
 }
 
-function buildTrendsContext(warehouseName: string, trends: ReturnType<typeof computeTrends>): string {
+function buildTrendsContext(
+  warehouseName: string,
+  trends: ReturnType<typeof computeTrends>,
+): string {
   const lines = trends.map(
     (t) =>
       `- ${t.itemName}: kỳ này ${t.currentTotal}, kỳ trước ${t.previousTotal}` +
-      (t.changePercent != null ? ` (${t.changePercent >= 0 ? "+" : ""}${t.changePercent.toFixed(0)}%)` : " (mới)"),
+      (t.changePercent != null
+        ? ` (${t.changePercent >= 0 ? "+" : ""}${t.changePercent.toFixed(0)}%)`
+        : " (mới)"),
   );
-  return [`BÁO CÁO XU HƯỚNG XUẤT KHO — ${warehouseName}, ${TRENDS_PERIOD_DAYS} ngày gần nhất:`, ...lines].join("\n");
+  return [
+    `BÁO CÁO XU HƯỚNG XUẤT KHO — ${warehouseName}, ${TRENDS_PERIOD_DAYS} ngày gần nhất:`,
+    ...lines,
+  ].join("\n");
 }
 
 function buildTemplateSummary(trends: ReturnType<typeof computeTrends>): string {

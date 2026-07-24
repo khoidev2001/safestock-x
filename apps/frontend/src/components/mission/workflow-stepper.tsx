@@ -7,8 +7,20 @@ import type { MissionStatus } from "@/lib/mission-api";
 const STEPS = [
   { key: "admin", label: "Điều phối lập kế hoạch", role: "ADMIN", icon: "workflow", tone: "blue" },
   { key: "rescue", label: "Cứu hộ xác nhận", role: "RESCUE", icon: "mission", tone: "orange" },
-  { key: "warehouse", label: "Kho chuẩn bị và giao", role: "WAREHOUSE", icon: "warehouse", tone: "green" },
-] satisfies { key: string; label: string; role: string; icon: ColorIconName; tone: ColorIconTone }[];
+  {
+    key: "warehouse",
+    label: "Kho chuẩn bị và giao",
+    role: "WAREHOUSE",
+    icon: "warehouse",
+    tone: "green",
+  },
+] satisfies {
+  key: string;
+  label: string;
+  role: string;
+  icon: ColorIconName;
+  tone: ColorIconTone;
+}[];
 
 /** Trạng thái mission → bước nào đã xong (index cuối cùng hoàn tất). */
 function completedIndex(status: MissionStatus): number {
@@ -57,12 +69,19 @@ export function WorkflowStepper({ status }: { status: MissionStatus }) {
     <div className="flex items-center">
       {STEPS.map((step, i) => {
         const isDone = i <= done;
-        const isActive = i === done + 1 || (i === done && status !== "READY" && status !== "COMPLETED");
+        const isActive =
+          i === done + 1 || (i === done && status !== "READY" && status !== "COMPLETED");
         return (
           <div key={step.key} className="flex flex-1 items-center">
             <div className="flex flex-col items-center gap-1.5">
-              <div className={`flex h-10 w-10 items-center justify-center transition ${isActive ? "scale-110" : ""}`}>
-                <ColorIcon name={isDone ? "success" : step.icon} size={isDone ? 24 : 22} tone={isDone ? "green" : step.tone} />
+              <div
+                className={`flex h-10 w-10 items-center justify-center transition ${isActive ? "scale-110" : ""}`}
+              >
+                <ColorIcon
+                  name={isDone ? "success" : step.icon}
+                  size={isDone ? 24 : 22}
+                  tone={isDone ? "green" : step.tone}
+                />
               </div>
               <div className="text-center">
                 <p className="text-xs font-medium leading-tight">{step.label}</p>

@@ -6,6 +6,7 @@ import { UserRole } from "@safestock/shared-types";
 import { PrismaService } from "../prisma/prisma.service";
 import { JwtPayload } from "./jwt.strategy";
 import { UpdateProfileDto } from "./dto";
+import { isSimulationSystemActorEmail } from "../simulation/simulation-system-actor-identity";
 
 @Injectable()
 export class AuthService {
@@ -17,7 +18,11 @@ export class AuthService {
 
   async login(email: string, password: string) {
     const user = await this.prisma.user.findUnique({ where: { email } });
-    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+    if (
+      !user ||
+      isSimulationSystemActorEmail(user.email) ||
+      !(await bcrypt.compare(password, user.passwordHash))
+    ) {
       throw new UnauthorizedException("Email hoặc mật khẩu sai");
     }
     return this.issueTokens(user.id, user.email, user.role as UserRole, user.warehouseId);
@@ -33,7 +38,9 @@ export class AuthService {
       throw new UnauthorizedException("Refresh token không hợp lệ");
     }
     const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
-    if (!user) throw new UnauthorizedException("User không tồn tại");
+    if (!user || isSimulationSystemActorEmail(user.email)) {
+      throw new UnauthorizedException("User không tồn tại");
+    }
     return this.issueTokens(user.id, user.email, user.role as UserRole, user.warehouseId);
   }
 
@@ -84,14 +91,21 @@ export class AuthService {
         fullName,
         phone: input.phone === undefined ? undefined : input.phone?.trim() || null,
         notificationEmail:
-          input.notificationEmail === undefined ? undefined : input.notificationEmail?.trim().toLowerCase() || null,
+          input.notificationEmail === undefined
+            ? undefined
+            : input.notificationEmail?.trim().toLowerCase() || null,
         avatarUrl,
       },
     });
     return this.getProfile(userId);
   }
 
-  private async issueTokens(sub: string, email: string, role: UserRole, warehouseId?: string | null) {
+  private async issueTokens(
+    sub: string,
+    email: string,
+    role: UserRole,
+    warehouseId?: string | null,
+  ) {
     const payload: JwtPayload = { sub, email, role, warehouseId: warehouseId ?? null };
     const [accessToken, refreshToken] = await Promise.all([
       this.jwt.signAsync(payload, {

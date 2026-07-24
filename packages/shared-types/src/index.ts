@@ -80,6 +80,8 @@ export enum Permission {
   MISSION_FULFILL = "mission:fulfill", // WAREHOUSE chuẩn bị + xuất
   NOTIFICATION_VIEW = "notification:view",
   READINESS_VIEW = "readiness:view",
+  SIMULATION_VIEW = "simulation:view",
+  SIMULATION_MUTATE = "simulation:mutate",
   LOAN_MANAGE = "loan:manage",
   WAREHOUSE_MANAGE = "warehouse:manage",
   AUDIT_VIEW = "audit:view",
@@ -104,6 +106,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.MISSION_VIEW,
     Permission.MISSION_FULFILL, // chuẩn bị + xuất kho theo phương án
     Permission.READINESS_VIEW,
+    Permission.SIMULATION_VIEW,
     Permission.LOAN_MANAGE,
     Permission.WAREHOUSE_MANAGE,
     Permission.NOTIFICATION_VIEW,
@@ -116,6 +119,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.MISSION_REQUEST,
     Permission.MISSION_CONFIRM, // xác nhận lấy
     Permission.READINESS_VIEW,
+    Permission.SIMULATION_VIEW,
     Permission.LOAN_MANAGE,
     Permission.NOTIFICATION_VIEW,
   ],

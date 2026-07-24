@@ -26,9 +26,7 @@ const ACTION_BY_COMPONENT: Record<ReadinessComponentKey, string> = {
  * thể (từ reasons của thành phần) + hành động khắc phục. Sắp theo điểm tăng dần
  * (thành phần yếu nhất đề xuất trước).
  */
-export function buildRecommendations(
-  components: ComponentScore[],
-): Recommendation[] {
+export function buildRecommendations(components: ComponentScore[]): Recommendation[] {
   return components
     .filter((component) => component.score < RECOMMEND_BELOW)
     .sort((a, b) => a.score - b.score)

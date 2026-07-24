@@ -1,4 +1,4 @@
-import { IsIn, IsInt, IsNumber, IsOptional, IsString, Min, MinLength } from "class-validator";
+import { IsIn, IsNumber, IsOptional, IsString, MinLength } from "class-validator";
 import { DeliveryOutcome } from "@prisma/client";
 
 /** Nhập tình huống bằng text (voice ở UI → text → gọi endpoint này). */

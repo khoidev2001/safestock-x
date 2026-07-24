@@ -9,7 +9,11 @@ import { MissionStatus } from "@prisma/client";
 /** Chuyển tiếp hợp lệ: từ trạng thái → các trạng thái đích cho phép. */
 const TRANSITIONS: Record<string, MissionStatus[]> = {
   // Admin có thể huỷ bất kỳ lúc nào TRƯỚC khi kho xuất vật tư (chưa động tồn kho).
-  [MissionStatus.DRAFT]: [MissionStatus.PENDING_RESCUE, MissionStatus.REJECTED, MissionStatus.CANCELLED],
+  [MissionStatus.DRAFT]: [
+    MissionStatus.PENDING_RESCUE,
+    MissionStatus.REJECTED,
+    MissionStatus.CANCELLED,
+  ],
   [MissionStatus.PENDING_RESCUE]: [
     MissionStatus.RESCUE_CONFIRMED,
     MissionStatus.REJECTED,

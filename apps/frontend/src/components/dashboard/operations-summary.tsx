@@ -12,7 +12,8 @@ interface OperationsSummaryProps {
 
 export function OperationsSummary({ readiness, batches, incidents }: OperationsSummaryProps) {
   const lowQuantity = (batches ?? []).filter((batch) => batch.quantity <= 10).length;
-  const recommendation = readiness?.recommendedActions?.[0] ?? readiness?.recommendations?.[0]?.message;
+  const recommendation =
+    readiness?.recommendedActions?.[0] ?? readiness?.recommendations?.[0]?.message;
   const blocker = readiness?.blockers?.[0];
 
   return (

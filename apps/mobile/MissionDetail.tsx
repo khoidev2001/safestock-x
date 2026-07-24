@@ -149,7 +149,10 @@ export function MissionDetailScreen({
       ) : mission ? (
         <ScrollView contentContainerStyle={styles.detailScroll}>
           <View style={styles.statRow}>
-            <Stat label="Tình huống" value={INCIDENT_LABEL[mission.incidentType] ?? mission.incidentType} />
+            <Stat
+              label="Tình huống"
+              value={INCIDENT_LABEL[mission.incidentType] ?? mission.incidentType}
+            />
             <Stat label="Số người" value={String(mission.affectedPeople)} />
             <Stat label="Thời gian" value={`${mission.durationHours} giờ`} />
             <Stat label="Mức đáp ứng" value={`${mission.fulfillment}%`} />
@@ -167,7 +170,9 @@ export function MissionDetailScreen({
                     {r.allocated}/{r.required} {r.unit}
                   </Text>
                   {r.shortage > 0 ? (
-                    <Text style={styles.reqShortage}>Thiếu {r.shortage} {r.unit}</Text>
+                    <Text style={styles.reqShortage}>
+                      Thiếu {r.shortage} {r.unit}
+                    </Text>
                   ) : null}
                 </View>
               </View>
@@ -179,7 +184,9 @@ export function MissionDetailScreen({
           {rejecting ? (
             <View style={styles.reasonBox}>
               <Text style={styles.reasonTitle}>
-                {mission.status === "PENDING_RESCUE" ? "Lý do từ chối" : "Lý do không tiếp tục được"}
+                {mission.status === "PENDING_RESCUE"
+                  ? "Lý do từ chối"
+                  : "Lý do không tiếp tục được"}
               </Text>
               <View style={styles.chipRow}>
                 {REASON_SUGGESTIONS.map((s) => {
@@ -196,7 +203,9 @@ export function MissionDetailScreen({
                       style={[styles.reasonChip, active && styles.reasonChipActive]}
                       accessibilityRole="button"
                     >
-                      <Text style={active ? styles.reasonChipTextActive : styles.reasonChipText}>{s}</Text>
+                      <Text style={active ? styles.reasonChipTextActive : styles.reasonChipText}>
+                        {s}
+                      </Text>
                     </Pressable>
                   );
                 })}
@@ -252,7 +261,9 @@ export function MissionDetailScreen({
                       style={[styles.reasonChip, active && styles.reasonChipActive]}
                       accessibilityRole="button"
                     >
-                      <Text style={active ? styles.reasonChipTextActive : styles.reasonChipText}>{o.label}</Text>
+                      <Text style={active ? styles.reasonChipTextActive : styles.reasonChipText}>
+                        {o.label}
+                      </Text>
                     </Pressable>
                   );
                 })}
@@ -281,7 +292,9 @@ export function MissionDetailScreen({
                   disabled={busy}
                   accessibilityRole="button"
                 >
-                  <Text style={styles.btnAcceptText}>{busy ? "Đang gửi…" : "Xác nhận đã giao"}</Text>
+                  <Text style={styles.btnAcceptText}>
+                    {busy ? "Đang gửi…" : "Xác nhận đã giao"}
+                  </Text>
                 </Pressable>
               </View>
             </View>

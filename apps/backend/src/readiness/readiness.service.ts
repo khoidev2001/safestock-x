@@ -10,11 +10,7 @@ import {
 import { READINESS_WEIGHTS } from "@safestock/shared-types";
 import { NotificationService } from "../notification/notification.service";
 import { PrismaService } from "../prisma/prisma.service";
-import {
-  ActionThresholds,
-  DEFAULT_THRESHOLDS,
-  resolveActionZone,
-} from "./action-zone";
+import { ActionThresholds, DEFAULT_THRESHOLDS, resolveActionZone } from "./action-zone";
 import { computeBatchReadiness, rollupReadiness } from "./compute";
 import {
   BatchWithContext,
@@ -237,8 +233,7 @@ export class ReadinessService {
       const batches: BatchWithContext[] = shelf.batches.map((batch) => {
         const lastCount = batch.counts[0] ?? null;
         const onLoanQty = batch.loans.reduce(
-          (sum, loan) =>
-            sum + (loan.quantity - loan.returnedOk - loan.returnedDamaged - loan.lost),
+          (sum, loan) => sum + (loan.quantity - loan.returnedOk - loan.returnedDamaged - loan.lost),
           0,
         );
         return {
@@ -306,9 +301,7 @@ export class ReadinessService {
       ...[...zones].map(([zoneId, result]) =>
         this.upsertScore(warehouseId, "ZONE", zoneId, result),
       ),
-      ...shelves.map((shelf) =>
-        this.upsertScore(warehouseId, "SHELF", shelf.shelfId, shelf),
-      ),
+      ...shelves.map((shelf) => this.upsertScore(warehouseId, "SHELF", shelf.shelfId, shelf)),
     ];
     await this.prisma.$transaction(writes);
   }

@@ -22,6 +22,15 @@
     "infra:up": "docker compose --env-file .env -f infrastructure/docker-compose.yml up -d",
     "infra:down": "docker compose --env-file .env -f infrastructure/docker-compose.yml down",
     "infra:logs": "docker compose --env-file .env -f infrastructure/docker-compose.yml logs -f",
+    "demo:validate": "node infrastructure/demo/manage-demo-environment.mjs validate",
+    "demo:compose:verify": "node infrastructure/demo/verify-demo-compose.mjs",
+    "demo:infra:up": "node infrastructure/demo/manage-demo-environment.mjs up",
+    "demo:infra:down": "node infrastructure/demo/manage-demo-environment.mjs down",
+    "demo:infra:logs": "node infrastructure/demo/manage-demo-environment.mjs logs",
+    "demo:infra:status": "node infrastructure/demo/manage-demo-environment.mjs status",
+    "demo:db:schema": "node infrastructure/demo/manage-demo-environment.mjs schema",
+    "demo:db:reset": "node infrastructure/demo/manage-demo-environment.mjs reset",
+    "demo:backend": "node infrastructure/demo/manage-demo-environment.mjs backend",
     "be:dev": "pnpm --filter @safestock/backend start:dev",
     "be:generate": "pnpm --filter @safestock/backend prisma:generate",
     "be:schema:diff": "pnpm --filter @safestock/backend prisma:diff",
@@ -31,11 +40,24 @@
     "desktop:dev": "pnpm --filter @safestock/desktop dev",
     "mobile:dev": "pnpm --filter @safestock/mobile start",
     "ai:dev": "cd apps/ai-service && .\\.venv\\Scripts\\python.exe -m uvicorn main:app --port 8000",
-    "demo": "node apps/backend/demo/demo.mjs"
+    "demo": "node apps/backend/demo/demo.mjs",
+    "lint": "pnpm -r --if-present lint && eslint .",
+    "lint:fix": "pnpm -r --if-present lint:fix && eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.6",
+    "@eslint/js": "^9.39.5",
     "@types/react": "~19.2.4",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.7.0",
+    "prettier": "^3.9.6",
     "socket.io-client": "^4.8.3",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.65.0"
   }
 }

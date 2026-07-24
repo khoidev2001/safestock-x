@@ -84,21 +84,27 @@ export function detectIncidents(signals: SensorSignal[]): DetectedIncident[] {
  */
 function detectSuspectedLoss(signals: SensorSignal[]): DetectedIncident | null {
   const drop = signals.find(
-    (s) => s.deviceType === "LOADCELL" && s.eventType === "WEIGHT_CHANGED" && s.value <= 50 - RULES.loadcellDropKg,
+    (s) =>
+      s.deviceType === "LOADCELL" &&
+      s.eventType === "WEIGHT_CHANGED" &&
+      s.value <= 50 - RULES.loadcellDropKg,
   );
   if (!drop) return null;
 
   const near = (s: SensorSignal) =>
     Math.abs(s.occurredAt.getTime() - drop.occurredAt.getTime()) <= RULES.correlationWindowMs;
 
-  const doorOpen = signals.find((s) => s.deviceType === "DOOR" && s.eventType === "DOOR_OPEN" && near(s));
+  const doorOpen = signals.find(
+    (s) => s.deviceType === "DOOR" && s.eventType === "DOOR_OPEN" && near(s),
+  );
   const rfid = signals.find((s) => s.deviceType === "RFID_GATEWAY" && near(s));
 
   const evidence: EvidenceItem[] = [
     { ...toEvidence(drop), weight: 0.4, note: "Khối lượng kệ giảm bất thường" },
   ];
   if (doorOpen) evidence.push({ ...toEvidence(doorOpen), weight: 0.3, note: "Cửa kho mở" });
-  if (rfid) evidence.push({ ...toEvidence(rfid), weight: 0.3, note: "RFID ghi nhận vật tư qua cổng" });
+  if (rfid)
+    evidence.push({ ...toEvidence(rfid), weight: 0.3, note: "RFID ghi nhận vật tư qua cổng" });
 
   // Chỉ loadcell giảm mà không nguồn nào khác → có thể là lỗi cảm biến, không kết luận thất thoát.
   const sources = evidence.length;
@@ -120,13 +126,18 @@ function detectSuspectedLoss(signals: SensorSignal[]): DetectedIncident | null {
  */
 function detectSensorFault(signals: SensorSignal[]): DetectedIncident | null {
   const drop = signals.find(
-    (s) => s.deviceType === "LOADCELL" && s.eventType === "WEIGHT_CHANGED" && s.value <= 50 - RULES.loadcellDropKg,
+    (s) =>
+      s.deviceType === "LOADCELL" &&
+      s.eventType === "WEIGHT_CHANGED" &&
+      s.value <= 50 - RULES.loadcellDropKg,
   );
   if (!drop) return null;
 
   const near = (s: SensorSignal) =>
     Math.abs(s.occurredAt.getTime() - drop.occurredAt.getTime()) <= RULES.correlationWindowMs;
-  const hasDoor = signals.some((s) => s.deviceType === "DOOR" && s.eventType === "DOOR_OPEN" && near(s));
+  const hasDoor = signals.some(
+    (s) => s.deviceType === "DOOR" && s.eventType === "DOOR_OPEN" && near(s),
+  );
   const hasRfid = signals.some((s) => s.deviceType === "RFID_GATEWAY" && near(s));
 
   // Có nguồn khác → là thất thoát (đã bắt ở trên), không phải lỗi cảm biến.
@@ -138,29 +149,44 @@ function detectSensorFault(signals: SensorSignal[]): DetectedIncident | null {
     confidence: 0.6,
     title: "Nghi ngờ lỗi cảm biến",
     evidence: [
-      { ...toEvidence(drop), weight: 1, note: "Khối lượng giảm nhưng không có dấu hiệu vật tư rời kho" },
+      {
+        ...toEvidence(drop),
+        weight: 1,
+        note: "Khối lượng giảm nhưng không có dấu hiệu vật tư rời kho",
+      },
     ],
   };
 }
 
 /** Bảo quản xấu: độ ẩm hoặc nhiệt độ vượt ngưỡng. */
 function detectBadStorage(signals: SensorSignal[]): DetectedIncident | null {
-  const humid = signals.find(
-    (s) => s.deviceType === "HUMIDITY" && s.value > RULES.humidityHigh,
-  );
+  const humid = signals.find((s) => s.deviceType === "HUMIDITY" && s.value > RULES.humidityHigh);
   const temp = signals.find(
     (s) => s.deviceType === "TEMPERATURE" && s.value > RULES.temperatureHigh,
   );
   if (!humid && !temp) return null;
 
   const evidence: EvidenceItem[] = [];
-  if (humid) evidence.push({ ...toEvidence(humid), weight: 0.6, note: `Độ ẩm ${humid.value}% vượt ngưỡng ${RULES.humidityHigh}%` });
-  if (temp) evidence.push({ ...toEvidence(temp), weight: 0.6, note: `Nhiệt độ ${temp.value}°C vượt ngưỡng ${RULES.temperatureHigh}°C` });
+  if (humid)
+    evidence.push({
+      ...toEvidence(humid),
+      weight: 0.6,
+      note: `Độ ẩm ${humid.value}% vượt ngưỡng ${RULES.humidityHigh}%`,
+    });
+  if (temp)
+    evidence.push({
+      ...toEvidence(temp),
+      weight: 0.6,
+      note: `Nhiệt độ ${temp.value}°C vượt ngưỡng ${RULES.temperatureHigh}°C`,
+    });
 
   return {
     kind: "BAD_STORAGE",
     severity: humid && temp ? "HIGH" : "MEDIUM",
-    confidence: Math.min(1, evidence.reduce((s, e) => s + e.weight, 0)),
+    confidence: Math.min(
+      1,
+      evidence.reduce((s, e) => s + e.weight, 0),
+    ),
     title: "Điều kiện bảo quản không đạt",
     evidence,
   };
@@ -179,7 +205,8 @@ function detectFireRisk(signals: SensorSignal[]): DetectedIncident | null {
     .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
   if (temps.length < 2) return null;
 
-  const near = (s: SensorSignal) => Math.abs(s.occurredAt.getTime() - smoke.occurredAt.getTime()) <= RULES.correlationWindowMs;
+  const near = (s: SensorSignal) =>
+    Math.abs(s.occurredAt.getTime() - smoke.occurredAt.getTime()) <= RULES.correlationWindowMs;
   const nearTemps = temps.filter(near);
   if (nearTemps.length === 0) return null;
 
@@ -194,8 +221,16 @@ function detectFireRisk(signals: SensorSignal[]): DetectedIncident | null {
     confidence: 1,
     title: "Nghi ngờ hỏa hoạn",
     evidence: [
-      { ...toEvidence(smoke), weight: 0.5, note: `Khói ${smoke.value}ppm vượt ngưỡng ${RULES.smokeHigh}ppm` },
-      { ...toEvidence(nearTemps[nearTemps.length - 1]), weight: 0.5, note: `Nhiệt độ tăng ${jump.toFixed(1)}°C trong cửa sổ tương quan` },
+      {
+        ...toEvidence(smoke),
+        weight: 0.5,
+        note: `Khói ${smoke.value}ppm vượt ngưỡng ${RULES.smokeHigh}ppm`,
+      },
+      {
+        ...toEvidence(nearTemps[nearTemps.length - 1]),
+        weight: 0.5,
+        note: `Nhiệt độ tăng ${jump.toFixed(1)}°C trong cửa sổ tương quan`,
+      },
     ],
   };
 }
@@ -208,8 +243,11 @@ function detectPowerOutage(signals: SensorSignal[]): DetectedIncident | null {
   const off = signals.find((s) => s.deviceType === "POWER" && s.eventType === "POWER_OFF");
   if (!off) return null;
 
-  const near = (s: SensorSignal) => Math.abs(s.occurredAt.getTime() - off.occurredAt.getTime()) <= RULES.correlationWindowMs;
-  const gatewayOffline = signals.some((s) => s.deviceType === "GATEWAY" && s.eventType === "GATEWAY_OFFLINE" && near(s));
+  const near = (s: SensorSignal) =>
+    Math.abs(s.occurredAt.getTime() - off.occurredAt.getTime()) <= RULES.correlationWindowMs;
+  const gatewayOffline = signals.some(
+    (s) => s.deviceType === "GATEWAY" && s.eventType === "GATEWAY_OFFLINE" && near(s),
+  );
   if (gatewayOffline) return null;
 
   return {
@@ -217,10 +255,17 @@ function detectPowerOutage(signals: SensorSignal[]): DetectedIncident | null {
     severity: "HIGH", // ponytail: severity cố định, chưa tính theo thời lượng mất điện — nâng cấp khi có nhu cầu phân cấp rõ hơn
     confidence: 0.8,
     title: "Mất điện kho",
-    evidence: [{ ...toEvidence(off), weight: 1, note: "Nguồn điện kho mất, không kèm lỗi kết nối gateway" }],
+    evidence: [
+      { ...toEvidence(off), weight: 1, note: "Nguồn điện kho mất, không kèm lỗi kết nối gateway" },
+    ],
   };
 }
 
 function toEvidence(s: SensorSignal): Omit<EvidenceItem, "weight" | "note"> {
-  return { deviceCode: s.deviceCode, eventType: s.eventType, value: s.value, occurredAt: s.occurredAt };
+  return {
+    deviceCode: s.deviceCode,
+    eventType: s.eventType,
+    value: s.value,
+    occurredAt: s.occurredAt,
+  };
 }

@@ -14,18 +14,14 @@ const MS_PER_MONTH = 30 * 24 * 60 * 60 * 1000;
  * - 0..soonMonths → 40
  * - Đã hết hạn → 0
  */
-export function scoreExpiry(
-  input: ExpiryInput,
-  thresholds: ExpiryThresholds,
-): ComponentScore {
+export function scoreExpiry(input: ExpiryInput, thresholds: ExpiryThresholds): ComponentScore {
   const base: ComponentScore = { key: "expiry", score: 100, reasons: [] };
 
   if (input.expiryDate === null) {
     return base; // vật tư không có hạn dùng (vd xuồng, đèn)
   }
 
-  const monthsLeft =
-    (input.expiryDate.getTime() - input.now.getTime()) / MS_PER_MONTH;
+  const monthsLeft = (input.expiryDate.getTime() - input.now.getTime()) / MS_PER_MONTH;
 
   if (monthsLeft < 0) {
     return { key: "expiry", score: 0, reasons: ["Đã quá hạn sử dụng"] };

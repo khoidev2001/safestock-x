@@ -21,7 +21,12 @@ export function useIncidentAlertsBridge(incidents: IncidentSummary[] | undefined
     for (const inc of incidents) {
       if (!inc.explanation) continue; // chưa có giải thích AI → chờ enrich
       if (seenExplainedIds.has(inc.id)) continue; // đã đẩy rồi
-      pushAlert({ id: inc.id, title: inc.title, severity: inc.severity, explanation: inc.explanation });
+      pushAlert({
+        id: inc.id,
+        title: inc.title,
+        severity: inc.severity,
+        explanation: inc.explanation,
+      });
       if (CRITICAL_SEVERITIES.has(inc.severity)) requestAutoOpen();
     }
   }, [incidents, pushAlert, requestAutoOpen, seenExplainedIds]);

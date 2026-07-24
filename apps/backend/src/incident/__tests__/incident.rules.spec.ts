@@ -16,8 +16,20 @@ describe("detectIncidents — suspected loss", () => {
   it("should flag suspected loss when loadcell drop + door + rfid coincide", () => {
     const signals: SensorSignal[] = [
       sig({ value: 44 }),
-      sig({ deviceCode: "door_main", deviceType: "DOOR", eventType: "DOOR_OPEN", value: 1, occurredAt: at(2) }),
-      sig({ deviceCode: "gateway_01", deviceType: "RFID_GATEWAY", eventType: "RFID_DETECTED", value: 19, occurredAt: at(3) }),
+      sig({
+        deviceCode: "door_main",
+        deviceType: "DOOR",
+        eventType: "DOOR_OPEN",
+        value: 1,
+        occurredAt: at(2),
+      }),
+      sig({
+        deviceCode: "gateway_01",
+        deviceType: "RFID_GATEWAY",
+        eventType: "RFID_DETECTED",
+        value: 19,
+        occurredAt: at(3),
+      }),
     ];
     const incidents = detectIncidents(signals);
     const loss = incidents.find((i) => i.kind === "SUSPECTED_LOSS");
@@ -30,7 +42,13 @@ describe("detectIncidents — suspected loss", () => {
   it("should be HIGH (not CRITICAL) with only 2 sources", () => {
     const signals: SensorSignal[] = [
       sig({ value: 44 }),
-      sig({ deviceCode: "door_main", deviceType: "DOOR", eventType: "DOOR_OPEN", value: 1, occurredAt: at(2) }),
+      sig({
+        deviceCode: "door_main",
+        deviceType: "DOOR",
+        eventType: "DOOR_OPEN",
+        value: 1,
+        occurredAt: at(2),
+      }),
     ];
     const loss = detectIncidents(signals).find((i) => i.kind === "SUSPECTED_LOSS");
     expect(loss?.severity).toBe("HIGH");
@@ -51,7 +69,13 @@ describe("detectIncidents — suspected loss", () => {
     const signals: SensorSignal[] = [
       sig({ value: 44 }),
       // cửa mở 10 phút sau → ngoài cửa sổ ±5ph
-      sig({ deviceCode: "door_main", deviceType: "DOOR", eventType: "DOOR_OPEN", value: 1, occurredAt: at(600) }),
+      sig({
+        deviceCode: "door_main",
+        deviceType: "DOOR",
+        eventType: "DOOR_OPEN",
+        value: 1,
+        occurredAt: at(600),
+      }),
     ];
     expect(detectIncidents(signals).find((i) => i.kind === "SUSPECTED_LOSS")).toBeUndefined();
   });
@@ -67,7 +91,13 @@ describe("detectIncidents — sensor fault", () => {
   it("should NOT flag sensor fault when door present (it's a loss instead)", () => {
     const signals: SensorSignal[] = [
       sig({ value: 44 }),
-      sig({ deviceCode: "door_main", deviceType: "DOOR", eventType: "DOOR_OPEN", value: 1, occurredAt: at(2) }),
+      sig({
+        deviceCode: "door_main",
+        deviceType: "DOOR",
+        eventType: "DOOR_OPEN",
+        value: 1,
+        occurredAt: at(2),
+      }),
     ];
     expect(detectIncidents(signals).find((i) => i.kind === "SENSOR_FAULT")).toBeUndefined();
   });
@@ -103,9 +133,27 @@ describe("detectIncidents — bad storage", () => {
 describe("detectIncidents — fire risk", () => {
   it("should flag CRITICAL fire risk when smoke + temperature jump coincide", () => {
     const signals: SensorSignal[] = [
-      sig({ deviceCode: "temp_B", deviceType: "TEMPERATURE", eventType: "TEMP_READING", value: 28, occurredAt: T0 }),
-      sig({ deviceCode: "smoke_B", deviceType: "SMOKE", eventType: "SMOKE_READING", value: 45, occurredAt: at(10) }),
-      sig({ deviceCode: "temp_B", deviceType: "TEMPERATURE", eventType: "TEMP_READING", value: 55, occurredAt: at(12) }),
+      sig({
+        deviceCode: "temp_B",
+        deviceType: "TEMPERATURE",
+        eventType: "TEMP_READING",
+        value: 28,
+        occurredAt: T0,
+      }),
+      sig({
+        deviceCode: "smoke_B",
+        deviceType: "SMOKE",
+        eventType: "SMOKE_READING",
+        value: 45,
+        occurredAt: at(10),
+      }),
+      sig({
+        deviceCode: "temp_B",
+        deviceType: "TEMPERATURE",
+        eventType: "TEMP_READING",
+        value: 55,
+        occurredAt: at(12),
+      }),
     ];
     const fire = detectIncidents(signals).find((i) => i.kind === "FIRE_RISK");
     expect(fire).toBeDefined();
@@ -115,26 +163,74 @@ describe("detectIncidents — fire risk", () => {
 
   it("should NOT flag fire when only smoke rises (no temperature jump)", () => {
     const signals: SensorSignal[] = [
-      sig({ deviceCode: "temp_B", deviceType: "TEMPERATURE", eventType: "TEMP_READING", value: 28, occurredAt: T0 }),
-      sig({ deviceCode: "smoke_B", deviceType: "SMOKE", eventType: "SMOKE_READING", value: 45, occurredAt: at(10) }),
-      sig({ deviceCode: "temp_B", deviceType: "TEMPERATURE", eventType: "TEMP_READING", value: 29, occurredAt: at(12) }),
+      sig({
+        deviceCode: "temp_B",
+        deviceType: "TEMPERATURE",
+        eventType: "TEMP_READING",
+        value: 28,
+        occurredAt: T0,
+      }),
+      sig({
+        deviceCode: "smoke_B",
+        deviceType: "SMOKE",
+        eventType: "SMOKE_READING",
+        value: 45,
+        occurredAt: at(10),
+      }),
+      sig({
+        deviceCode: "temp_B",
+        deviceType: "TEMPERATURE",
+        eventType: "TEMP_READING",
+        value: 29,
+        occurredAt: at(12),
+      }),
     ];
     expect(detectIncidents(signals).find((i) => i.kind === "FIRE_RISK")).toBeUndefined();
   });
 
   it("should NOT flag fire when only temperature rises (no smoke)", () => {
     const signals: SensorSignal[] = [
-      sig({ deviceCode: "temp_B", deviceType: "TEMPERATURE", eventType: "TEMP_READING", value: 28, occurredAt: T0 }),
-      sig({ deviceCode: "temp_B", deviceType: "TEMPERATURE", eventType: "TEMP_READING", value: 55, occurredAt: at(12) }),
+      sig({
+        deviceCode: "temp_B",
+        deviceType: "TEMPERATURE",
+        eventType: "TEMP_READING",
+        value: 28,
+        occurredAt: T0,
+      }),
+      sig({
+        deviceCode: "temp_B",
+        deviceType: "TEMPERATURE",
+        eventType: "TEMP_READING",
+        value: 55,
+        occurredAt: at(12),
+      }),
     ];
     expect(detectIncidents(signals).find((i) => i.kind === "FIRE_RISK")).toBeUndefined();
   });
 
   it("should NOT flag fire when smoke is below threshold", () => {
     const signals: SensorSignal[] = [
-      sig({ deviceCode: "temp_B", deviceType: "TEMPERATURE", eventType: "TEMP_READING", value: 28, occurredAt: T0 }),
-      sig({ deviceCode: "smoke_B", deviceType: "SMOKE", eventType: "SMOKE_READING", value: 20, occurredAt: at(10) }),
-      sig({ deviceCode: "temp_B", deviceType: "TEMPERATURE", eventType: "TEMP_READING", value: 55, occurredAt: at(12) }),
+      sig({
+        deviceCode: "temp_B",
+        deviceType: "TEMPERATURE",
+        eventType: "TEMP_READING",
+        value: 28,
+        occurredAt: T0,
+      }),
+      sig({
+        deviceCode: "smoke_B",
+        deviceType: "SMOKE",
+        eventType: "SMOKE_READING",
+        value: 20,
+        occurredAt: at(10),
+      }),
+      sig({
+        deviceCode: "temp_B",
+        deviceType: "TEMPERATURE",
+        eventType: "TEMP_READING",
+        value: 55,
+        occurredAt: at(12),
+      }),
     ];
     expect(detectIncidents(signals).find((i) => i.kind === "FIRE_RISK")).toBeUndefined();
   });
@@ -153,7 +249,13 @@ describe("detectIncidents — power outage", () => {
   it("should NOT flag power outage when gateway is offline at the same time", () => {
     const signals: SensorSignal[] = [
       sig({ deviceCode: "power_main", deviceType: "POWER", eventType: "POWER_OFF", value: 0 }),
-      sig({ deviceCode: "gateway_01", deviceType: "GATEWAY", eventType: "GATEWAY_OFFLINE", value: 0, occurredAt: at(1) }),
+      sig({
+        deviceCode: "gateway_01",
+        deviceType: "GATEWAY",
+        eventType: "GATEWAY_OFFLINE",
+        value: 0,
+        occurredAt: at(1),
+      }),
     ];
     expect(detectIncidents(signals).find((i) => i.kind === "POWER_OUTAGE")).toBeUndefined();
   });

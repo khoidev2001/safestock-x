@@ -19,7 +19,13 @@ const SEVERITY = [
   { label: "Rất cao", color: "var(--color-critical)" },
 ];
 
-export function ActionPlanView({ plan, incidentPoint }: { plan: ActionPlan; incidentPoint?: LatLng | null }) {
+export function ActionPlanView({
+  plan,
+  incidentPoint,
+}: {
+  plan: ActionPlan;
+  incidentPoint?: LatLng | null;
+}) {
   const sev = SEVERITY[Math.min(4, Math.max(0, plan.severityLevel - 1))];
 
   return (
@@ -38,7 +44,10 @@ export function ActionPlanView({ plan, incidentPoint }: { plan: ActionPlan; inci
         style={{ background: `color-mix(in oklch, ${sev.color} 8%, var(--surface))` }}
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <SectionTitle icon={<ColorIcon name="warning" size={19} tone="red" />} title="Đánh giá tình huống" />
+          <SectionTitle
+            icon={<ColorIcon name="warning" size={19} tone="red" />}
+            title="Đánh giá tình huống"
+          />
           <span
             className="rounded-md px-3 py-1 text-sm font-semibold"
             style={{ background: sev.color, color: "white" }}
@@ -79,7 +88,10 @@ export function ActionPlanView({ plan, incidentPoint }: { plan: ActionPlan; inci
       </Panel>
 
       {/* 3. Phương án cấp phát vật tư */}
-      <Panel icon={<ColorIcon name="inventory" size={19} tone="orange" />} title="Phương án cấp phát">
+      <Panel
+        icon={<ColorIcon name="inventory" size={19} tone="orange" />}
+        title="Phương án cấp phát"
+      >
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -99,7 +111,9 @@ export function ActionPlanView({ plan, incidentPoint }: { plan: ActionPlan; inci
                   <td className="tabular py-2 pr-3 text-right">{a.allocated}</td>
                   <td
                     className="tabular py-2 pr-3 text-right font-semibold"
-                    style={{ color: a.shortage > 0 ? "var(--color-critical)" : "var(--color-ready)" }}
+                    style={{
+                      color: a.shortage > 0 ? "var(--color-critical)" : "var(--color-ready)",
+                    }}
                   >
                     {a.shortage > 0 ? a.shortage : "—"}
                   </td>
@@ -115,7 +129,10 @@ export function ActionPlanView({ plan, incidentPoint }: { plan: ActionPlan; inci
 
       {/* 4. Điều phối kho (ETA) */}
       {plan.warehouses.length > 0 && (
-        <Panel icon={<ColorIcon name="location" size={19} tone="blue" />} title="Điều phối kho (thời gian tới điểm nạn)">
+        <Panel
+          icon={<ColorIcon name="location" size={19} tone="blue" />}
+          title="Điều phối kho (thời gian tới điểm nạn)"
+        >
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {plan.warehouses.map((w) => (
               <div key={w.name} className="rounded-md border bg-[var(--surface-2)] p-3">
@@ -130,12 +147,21 @@ export function ActionPlanView({ plan, incidentPoint }: { plan: ActionPlan; inci
             <div className="mt-3">
               <IncidentMap
                 // plan.warehouses không có kind (CENTRAL/HAMLET) — dùng chung màu kho thôn, không ảnh hưởng số liệu
-                warehouses={plan.warehouses.map(
-                  (w): ClusterWarehouse => ({ id: w.name, name: w.name, kind: "HAMLET", lat: w.lat, lng: w.lng }),
-                )}
+                warehouses={plan.warehouses.map((w): ClusterWarehouse => ({
+                  id: w.name,
+                  name: w.name,
+                  kind: "HAMLET",
+                  lat: w.lat,
+                  lng: w.lng,
+                }))}
                 incidentPoint={incidentPoint}
                 officialDistances={
-                  new Map(plan.warehouses.map((w) => [w.name, { distanceKm: w.distanceKm, etaMinutes: w.etaMinutes }]))
+                  new Map(
+                    plan.warehouses.map((w) => [
+                      w.name,
+                      { distanceKm: w.distanceKm, etaMinutes: w.etaMinutes },
+                    ]),
+                  )
                 }
               />
             </div>
@@ -144,7 +170,10 @@ export function ActionPlanView({ plan, incidentPoint }: { plan: ActionPlan; inci
       )}
 
       {/* 5. Phương án theo giai đoạn */}
-      <Panel icon={<ColorIcon name="time" size={19} tone="amber" />} title="Phương án theo giai đoạn">
+      <Panel
+        icon={<ColorIcon name="time" size={19} tone="amber" />}
+        title="Phương án theo giai đoạn"
+      >
         <div className="space-y-3">
           {plan.narrative.phases.map((ph) => (
             <div key={ph.window} className="rounded-md border bg-[var(--surface-2)] p-3">
@@ -167,13 +196,17 @@ export function ActionPlanView({ plan, incidentPoint }: { plan: ActionPlan; inci
 
       {/* 6 + 7. Cảnh báo + Dự báo (2 cột) */}
       <div className="grid gap-4 md:grid-cols-2">
-        <Panel icon={<ColorIcon name="warning" size={19} tone="red" />} title="Cảnh báo" tone="var(--color-degraded)">
+        <Panel
+          icon={<ColorIcon name="warning" size={19} tone="red" />}
+          title="Cảnh báo"
+          tone="var(--color-degraded)"
+        >
           <ul className="space-y-2">
-              {plan.narrative.warnings.map((w, i) => (
-                <li key={i} className="flex gap-2 text-sm">
-                  <ColorIcon className="mt-0.5" name="warning" size={16} tone="red" />
-                  <span>{w}</span>
-                </li>
+            {plan.narrative.warnings.map((w, i) => (
+              <li key={i} className="flex gap-2 text-sm">
+                <ColorIcon className="mt-0.5" name="warning" size={16} tone="red" />
+                <span>{w}</span>
+              </li>
             ))}
           </ul>
         </Panel>
@@ -206,10 +239,7 @@ export function ActionPlanView({ plan, incidentPoint }: { plan: ActionPlan; inci
       <Panel icon={<ColorIcon name="help" size={19} tone="blue" />} title="Thông tin cần bổ sung">
         <div className="flex flex-wrap gap-2">
           {plan.narrative.followUpQuestions.map((q, i) => (
-            <span
-              key={i}
-              className="rounded-md border bg-[var(--surface-2)] px-3 py-1.5 text-sm"
-            >
+            <span key={i} className="rounded-md border bg-[var(--surface-2)] px-3 py-1.5 text-sm">
               {q}
             </span>
           ))}
@@ -241,7 +271,10 @@ function Panel({
 }) {
   return (
     <section className="rounded-md border bg-[var(--surface)] p-5">
-      <div className="mb-3 flex items-center gap-2 font-semibold" style={tone ? { color: tone } : undefined}>
+      <div
+        className="mb-3 flex items-center gap-2 font-semibold"
+        style={tone ? { color: tone } : undefined}
+      >
         {icon}
         <span>{title}</span>
       </div>

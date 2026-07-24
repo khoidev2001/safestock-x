@@ -1,5 +1,18 @@
 import { ForbiddenException } from "@nestjs/common";
-import { PrismaService } from "../prisma/prisma.service";
+import { Prisma } from "@prisma/client";
+
+type BatchScopeClient = Pick<Prisma.TransactionClient, "itemBatch">;
+
+const WAREHOUSE_SCOPE_ERROR = "Bạn chỉ được thao tác trên kho thôn được phân công";
+
+export function assertWarehouseInScope(
+  scopeWarehouseId: string | null | undefined,
+  ownerWarehouseId: string | null | undefined,
+): void {
+  if (scopeWarehouseId && ownerWarehouseId !== scopeWarehouseId) {
+    throw new ForbiddenException(WAREHOUSE_SCOPE_ERROR);
+  }
+}
 
 /**
  * Chặn IDOR theo scope kho (đẳng cấp — chặn Ở SERVICE LAYER, không chỉ ẩn UI).
@@ -7,7 +20,7 @@ import { PrismaService } from "../prisma/prisma.service";
  * Có giá trị (trưởng thôn) = batch PHẢI thuộc đúng kho đó, nếu không → 403.
  */
 export async function assertBatchInScope(
-  prisma: PrismaService,
+  prisma: BatchScopeClient,
   scopeWarehouseId: string | null | undefined,
   batchId: string,
 ): Promise<void> {
@@ -17,7 +30,5 @@ export async function assertBatchInScope(
     select: { shelf: { select: { zone: { select: { warehouseId: true } } } } },
   });
   const owner = batch?.shelf?.zone.warehouseId;
-  if (owner !== scopeWarehouseId) {
-    throw new ForbiddenException("Bạn chỉ được thao tác trên kho thôn được phân công");
-  }
+  assertWarehouseInScope(scopeWarehouseId, owner);
 }

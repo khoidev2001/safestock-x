@@ -16,16 +16,13 @@ describe("AssistantService", () => {
       incident: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const readiness = {
-      getWarehouseScore: jest
-        .fn()
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce({
-          score: 88,
-          zone: "READY",
-          operationalStatus: "READY",
-          blockers: [],
-          recommendedActions: [],
-        }),
+      getWarehouseScore: jest.fn().mockResolvedValueOnce(null).mockResolvedValueOnce({
+        score: 88,
+        zone: "READY",
+        operationalStatus: "READY",
+        blockers: [],
+        recommendedActions: [],
+      }),
       recalculateWarehouse: jest.fn().mockResolvedValue(undefined),
     };
     const ai = { assistantAsk: jest.fn() };
@@ -36,10 +33,7 @@ describe("AssistantService", () => {
       { forecastRain: jest.fn() } as never,
     );
 
-    const result = await service.ask(
-      "warehouse-central",
-      "Kho sẵn sàng đáp ứng được chưa?",
-    );
+    const result = await service.ask("warehouse-central", "Kho sẵn sàng đáp ứng được chưa?");
 
     expect(readiness.recalculateWarehouse).toHaveBeenCalledWith("warehouse-central");
     expect(result.answer).toContain("sẵn sàng điều phối");

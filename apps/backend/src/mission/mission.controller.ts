@@ -152,13 +152,17 @@ export class MissionController {
   @RequirePermission(Permission.MISSION_FULFILL)
   @Post(":id/prepare")
   prepare(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
-    return this.missions.prepareByWarehouse(id, req.user.userId);
+    return this.missions.prepareByWarehouse(id, req.user.userId, req.user.warehouseId);
   }
 
   /** RESCUE xác nhận đã giao hiện trường + kết quả (READY → COMPLETED). */
   @RequirePermission(Permission.MISSION_CONFIRM)
   @Post(":id/complete")
-  complete(@Request() req: AuthenticatedRequest, @Param("id") id: string, @Body() dto: CompleteMissionDto) {
+  complete(
+    @Request() req: AuthenticatedRequest,
+    @Param("id") id: string,
+    @Body() dto: CompleteMissionDto,
+  ) {
     return this.missions.completeByRescue(id, dto.outcome, req.user.userId, dto.note);
   }
 
@@ -185,10 +189,17 @@ export class MissionController {
     incidentType: string;
     affectedPeople: number;
     fulfillment: number;
-    requirements: { itemName: string; required: number; allocated: number; shortage: number; unit: string }[];
+    requirements: {
+      itemName: string;
+      required: number;
+      allocated: number;
+      shortage: number;
+      unit: string;
+    }[];
   }): string {
     const lines = mission.requirements.map(
-      (r) => `${r.itemName}: cần ${r.required} ${r.unit}, cấp được ${r.allocated}, thiếu ${r.shortage}`,
+      (r) =>
+        `${r.itemName}: cần ${r.required} ${r.unit}, cấp được ${r.allocated}, thiếu ${r.shortage}`,
     );
     return [
       `Tình huống ${mission.incidentType}, ${mission.affectedPeople} người.`,

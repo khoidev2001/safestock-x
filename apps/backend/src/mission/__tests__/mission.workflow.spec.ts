@@ -5,7 +5,9 @@ describe("mission workflow state machine", () => {
   it("cho phép chuỗi hợp lệ ADMIN→RESCUE→WAREHOUSE→hoàn thành", () => {
     expect(canTransition(MissionStatus.DRAFT, MissionStatus.PENDING_RESCUE)).toBe(true);
     expect(canTransition(MissionStatus.PENDING_RESCUE, MissionStatus.RESCUE_CONFIRMED)).toBe(true);
-    expect(canTransition(MissionStatus.RESCUE_CONFIRMED, MissionStatus.PENDING_WAREHOUSE)).toBe(true);
+    expect(canTransition(MissionStatus.RESCUE_CONFIRMED, MissionStatus.PENDING_WAREHOUSE)).toBe(
+      true,
+    );
     expect(canTransition(MissionStatus.PENDING_WAREHOUSE, MissionStatus.READY)).toBe(true);
     expect(canTransition(MissionStatus.READY, MissionStatus.COMPLETED)).toBe(true);
   });

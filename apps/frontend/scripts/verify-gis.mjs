@@ -42,7 +42,10 @@ for (const feature of geojson.features) {
   assert(!seen.has(name), `${name}: bị trùng feature`);
   assert(source === "OpenStreetMap" && osmType === "relation", `${name}: sai nguồn OSM`);
   assert(adminLevel === 6, `${name}: adminLevel phải là 6`);
-  assert(["Polygon", "MultiPolygon"].includes(feature.geometry?.type), `${name}: geometry không phải polygon`);
+  assert(
+    ["Polygon", "MultiPolygon"].includes(feature.geometry?.type),
+    `${name}: geometry không phải polygon`,
+  );
 
   let points = 0;
   walkCoordinates(feature.geometry.coordinates, ([lng, lat]) => {
@@ -58,7 +61,9 @@ for (const feature of geojson.features) {
 const lon2x = (lon, zoom) => Math.floor(((lon + 180) / 360) * 2 ** zoom);
 const lat2y = (lat, zoom) => {
   const radians = (lat * Math.PI) / 180;
-  return Math.floor(((1 - Math.log(Math.tan(radians) + 1 / Math.cos(radians)) / Math.PI) / 2) * 2 ** zoom);
+  return Math.floor(
+    ((1 - Math.log(Math.tan(radians) + 1 / Math.cos(radians)) / Math.PI) / 2) * 2 ** zoom,
+  );
 };
 
 const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -75,11 +80,19 @@ for (let zoom = ZOOM_MIN; zoom <= ZOOM_MAX; zoom++) {
       const tilePath = path.join(TILE_ROOT, String(zoom), String(x), `${y}.png`);
       assert(fs.existsSync(tilePath), `${relativePath}: thiếu tile offline`);
       const buffer = fs.readFileSync(tilePath);
-      assert(buffer.length >= 24 && buffer.subarray(0, 8).equals(pngSignature), `${relativePath}: không phải PNG`);
-      assert(buffer.readUInt32BE(16) === 256 && buffer.readUInt32BE(20) === 256, `${relativePath}: tile không phải 256x256`);
+      assert(
+        buffer.length >= 24 && buffer.subarray(0, 8).equals(pngSignature),
+        `${relativePath}: không phải PNG`,
+      );
+      assert(
+        buffer.readUInt32BE(16) === 256 && buffer.readUInt32BE(20) === 256,
+        `${relativePath}: tile không phải 256x256`,
+      );
       tileCount++;
     }
   }
 }
 
-console.log(`GIS hợp lệ: ${seen.size} relation OSM, đủ ${tileCount} tile PNG 256x256 theo BBOX (zoom ${ZOOM_MIN}-${ZOOM_MAX}).`);
+console.log(
+  `GIS hợp lệ: ${seen.size} relation OSM, đủ ${tileCount} tile PNG 256x256 theo BBOX (zoom ${ZOOM_MIN}-${ZOOM_MAX}).`,
+);

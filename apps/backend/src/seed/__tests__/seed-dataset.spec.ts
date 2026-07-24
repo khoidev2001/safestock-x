@@ -12,9 +12,7 @@ describe("standard seed dataset", () => {
   it("có đầy đủ SKU cho mọi định mức Mission", () => {
     const catalogSkus = new Set(STANDARD_ITEMS.map((item) => item.sku));
     const requiredSkus = new Set(
-      Object.values(IncidentType).flatMap((type) =>
-        MISSION_NORMS[type].map((rule) => rule.sku),
-      ),
+      Object.values(IncidentType).flatMap((type) => MISSION_NORMS[type].map((rule) => rule.sku)),
     );
 
     expect([...requiredSkus].filter((sku) => !catalogSkus.has(sku))).toEqual([]);

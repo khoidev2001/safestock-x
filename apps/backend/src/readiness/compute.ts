@@ -9,11 +9,7 @@ import {
   scoreExpiry,
   scoreQuantity,
 } from "./formulas";
-import {
-  BatchReadinessInput,
-  ReadinessResult,
-  WeightedReadiness,
-} from "./readiness.types";
+import { BatchReadinessInput, ReadinessResult, WeightedReadiness } from "./readiness.types";
 
 type Config = typeof READINESS_CONFIG;
 
@@ -58,13 +54,10 @@ export function rollupReadiness(children: WeightedReadiness[]): ReadinessResult 
   }
 
   const weightedScore =
-    children.reduce((sum, child) => sum + child.score * child.weight, 0) /
-    totalWeight;
+    children.reduce((sum, child) => sum + child.score * child.weight, 0) / totalWeight;
 
   // Gộp breakdown theo từng thành phần (trung bình trọng số + gom lý do).
-  const componentKeys = Object.keys(READINESS_WEIGHTS) as Array<
-    keyof typeof READINESS_WEIGHTS
-  >;
+  const componentKeys = Object.keys(READINESS_WEIGHTS) as Array<keyof typeof READINESS_WEIGHTS>;
   const components = componentKeys.map((key) => {
     let acc = 0;
     const reasons = new Set<string>();

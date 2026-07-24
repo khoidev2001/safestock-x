@@ -108,5 +108,7 @@ function StocktakeRow({ batch, warehouseId }: { batch: InventoryBatch; warehouse
 }
 
 function Skeleton() {
-  return <div className="h-72 animate-pulse rounded-md border bg-[var(--surface)]" aria-busy="true" />;
+  return (
+    <div className="h-72 animate-pulse rounded-md border bg-[var(--surface)]" aria-busy="true" />
+  );
 }

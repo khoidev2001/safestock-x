@@ -96,7 +96,11 @@ export async function confirmMission(token: string, id: string): Promise<Mission
  * Từ chối / rút nhiệm vụ kèm lý do. PENDING_RESCUE = từ chối trước khi nhận;
  * RESCUE_CONFIRMED/PENDING_WAREHOUSE = báo không tiếp tục được sau khi đã nhận.
  */
-export async function rejectMission(token: string, id: string, reason: string): Promise<MissionDetail> {
+export async function rejectMission(
+  token: string,
+  id: string,
+  reason: string,
+): Promise<MissionDetail> {
   const res = await fetch(`${API_BASE}/api/missions/${id}/reject`, {
     method: "POST",
     headers: { ...authHeader(token), "Content-Type": "application/json" },

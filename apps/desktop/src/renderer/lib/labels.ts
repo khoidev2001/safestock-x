@@ -47,10 +47,38 @@ export interface SliderConfig {
 }
 
 export const sliderConfigByType: Record<string, SliderConfig> = {
-  TEMPERATURE: { min: 0, max: 60, step: 0.5, unit: "°C", eventType: "TEMP_READING", hint: "> 35°C → cảnh báo bảo quản sai" },
-  HUMIDITY: { min: 0, max: 100, step: 1, unit: "%", eventType: "HUMID_READING", hint: "> 85% → cảnh báo bảo quản sai" },
-  SMOKE: { min: 0, max: 100, step: 1, unit: "ppm", eventType: "SMOKE_READING", hint: "> 30ppm + nhiệt tăng > 15°C → nghi cháy" },
-  LOADCELL: { min: 0, max: 100, step: 0.5, unit: "kg", eventType: "WEIGHT_CHANGED", hint: "≤ 47kg → nghi thất thoát / lỗi cảm biến" },
+  TEMPERATURE: {
+    min: 0,
+    max: 60,
+    step: 0.5,
+    unit: "°C",
+    eventType: "TEMP_READING",
+    hint: "> 35°C → cảnh báo bảo quản sai",
+  },
+  HUMIDITY: {
+    min: 0,
+    max: 100,
+    step: 1,
+    unit: "%",
+    eventType: "HUMID_READING",
+    hint: "> 85% → cảnh báo bảo quản sai",
+  },
+  SMOKE: {
+    min: 0,
+    max: 100,
+    step: 1,
+    unit: "ppm",
+    eventType: "SMOKE_READING",
+    hint: "> 30ppm + nhiệt tăng > 15°C → nghi cháy",
+  },
+  LOADCELL: {
+    min: 0,
+    max: 100,
+    step: 0.5,
+    unit: "kg",
+    eventType: "WEIGHT_CHANGED",
+    hint: "≤ 47kg → nghi thất thoát / lỗi cảm biến",
+  },
 };
 
 // Chỉ các loại có trong sliderConfigByType mới render slider (điều chỉnh được).

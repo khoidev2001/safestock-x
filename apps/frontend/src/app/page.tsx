@@ -96,7 +96,6 @@ export default function HomePage() {
   const queryClient = useQueryClient();
   const token = useAuth((state) => state.token);
   const user = useAuth((state) => state.user);
-  const role = user?.role;
   const hasHydrated = useAuth((state) => state.hasHydrated);
   const [activeView, setActiveView] = useState<DashboardView>("readiness");
 
@@ -150,18 +149,20 @@ export default function HomePage() {
     refetchInterval: 12_000, // fallback nếu WebSocket rớt — bắt kịp AI enrich
   });
 
-  // Realtime: có "notification" (sự cố mới / AI enrich xong) → refetch sự cố để nạp explanation.
+  // Realtime room is derived from the authenticated user; notifications trigger a refetch.
   useEffect(() => {
-    if (!role) return;
-    const socket: Socket = io(BASE, { transports: ["websocket"] });
-    socket.on("connect", () => socket.emit("join-role", { role }));
+    if (!token) return;
+    const socket: Socket = io(BASE, {
+      transports: ["websocket"],
+      auth: { token },
+    });
     socket.on("notification", () => {
       queryClient.invalidateQueries({ queryKey: ["open-incidents", warehouseId] });
     });
     return () => {
       socket.disconnect();
     };
-  }, [role, warehouseId, queryClient]);
+  }, [token, warehouseId, queryClient]);
 
   // Cầu nối: sự cố có explanation (AI) → bong bóng cảnh báo trong trợ lý + tự mở nếu nghiêm trọng.
   useIncidentAlertsBridge(incidentsQuery.data);
@@ -246,12 +247,8 @@ export default function HomePage() {
             {activeView === "stocktake" && warehouseId ? (
               <StocktakeView warehouseId={warehouseId} />
             ) : null}
-            {activeView === "loan" && warehouseId ? (
-              <LoanView warehouseId={warehouseId} />
-            ) : null}
-            {activeView === "map" && warehouseId ? (
-              <MapView warehouseId={warehouseId} />
-            ) : null}
+            {activeView === "loan" && warehouseId ? <LoanView warehouseId={warehouseId} /> : null}
+            {activeView === "map" && warehouseId ? <MapView warehouseId={warehouseId} /> : null}
             {activeView === "report" && warehouseId ? (
               <ReportView warehouseId={warehouseId} />
             ) : null}

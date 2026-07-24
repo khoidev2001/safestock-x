@@ -6,11 +6,7 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
-import {
-  Permission,
-  roleHasPermission,
-  UserRole,
-} from "@safestock/shared-types";
+import { Permission, roleHasPermission, UserRole } from "@safestock/shared-types";
 import { PERMISSIONS_KEY } from "./permissions.decorator";
 
 /**
@@ -24,10 +20,10 @@ export class PermissionGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const required = this.reflector.getAllAndOverride<Permission[]>(
-      PERMISSIONS_KEY,
-      [context.getHandler(), context.getClass()],
-    );
+    const required = this.reflector.getAllAndOverride<Permission[]>(PERMISSIONS_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
     if (!required || required.length === 0) {
       return true;
     }
@@ -38,9 +34,7 @@ export class PermissionGuard implements CanActivate {
       throw new UnauthorizedException("Chưa xác thực");
     }
 
-    const hasAll = required.every((permission) =>
-      roleHasPermission(role, permission),
-    );
+    const hasAll = required.every((permission) => roleHasPermission(role, permission));
     if (!hasAll) {
       throw new ForbiddenException("Không đủ quyền thực hiện thao tác này");
     }

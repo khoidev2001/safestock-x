@@ -113,8 +113,7 @@ export function assessOperationalReadiness(
 
 function toDimension(component: ComponentScore): ReadinessDimension {
   const hardBlocked =
-    component.score === 0 &&
-    (component.key === "accessibility" || component.key === "environment");
+    component.score === 0 && (component.key === "accessibility" || component.key === "environment");
   const status: OperationalStatus = hardBlocked
     ? "NOT_DISPATCHABLE"
     : component.score < HEALTHY_COMPONENT_SCORE

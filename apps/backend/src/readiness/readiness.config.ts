@@ -1,8 +1,5 @@
 import { READINESS_WEIGHTS } from "@safestock/shared-types";
-import {
-  EnvironmentThresholds,
-  ExpiryThresholds,
-} from "./readiness.types";
+import { EnvironmentThresholds, ExpiryThresholds } from "./readiness.types";
 
 /**
  * Cấu hình Readiness Score.

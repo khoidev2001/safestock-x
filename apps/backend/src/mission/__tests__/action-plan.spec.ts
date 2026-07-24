@@ -1,9 +1,5 @@
 import { IncidentType } from "@safestock/shared-types";
-import {
-  buildTemplateNarrative,
-  computeForecasts,
-  scoreSeverity,
-} from "../action-plan";
+import { buildTemplateNarrative, computeForecasts, scoreSeverity } from "../action-plan";
 import { IncidentInput } from "../mission.compute";
 
 const flood: IncidentInput = {
@@ -74,7 +70,15 @@ describe("buildTemplateNarrative (fallback)", () => {
 
   it("có shortage → cảnh báo nêu tên vật tư thiếu", () => {
     const n = buildTemplateNarrative(flood, [
-      { sku: "WATER-01", itemName: "Nước uống", unit: "lít", required: 100, allocated: 60, shortage: 40, fromWarehouses: [] },
+      {
+        sku: "WATER-01",
+        itemName: "Nước uống",
+        unit: "lít",
+        required: 100,
+        allocated: 60,
+        shortage: 40,
+        fromWarehouses: [],
+      },
     ]);
     expect(n.warnings.some((w) => w.includes("Nước uống"))).toBe(true);
   });

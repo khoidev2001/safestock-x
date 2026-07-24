@@ -45,9 +45,7 @@ export function scoreQuantity(input: QuantityInput): ComponentScore {
     reasons.push(`${input.onLoanQty} đang được mượn (chưa sẵn sàng ngay)`);
   }
   if (input.countedQty < input.systemQty) {
-    reasons.push(
-      `Kiểm kê thiếu ${input.systemQty - input.countedQty} so với hệ thống`,
-    );
+    reasons.push(`Kiểm kê thiếu ${input.systemQty - input.countedQty} so với hệ thống`);
   }
 
   return {

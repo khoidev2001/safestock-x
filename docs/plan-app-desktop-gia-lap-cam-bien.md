@@ -99,7 +99,7 @@ apps/desktop/
       index.html
       App.tsx           # UI slider + bảng phản ứng
       lib/api.ts        # login + apiFetch (port từ frontend, base URL cố định)
-      lib/socket.ts     # io() join wh + role, nghe sensor_event + notification
+      lib/socket.ts     # io() gửi access token, backend cấp room, nghe sensor_event + notification
 ```
 
 Dùng **`electron-vite`** (scaffold sạch main/preload/renderer, HMR renderer). Renderer = React 19 (khớp frontend) để tái dùng type từ `@safestock/shared-types` và pattern gọi API.
@@ -108,7 +108,7 @@ Dùng **`electron-vite`** (scaffold sạch main/preload/renderer, HMR renderer).
 
 - **API client:** port [apps/frontend/src/lib/api.ts](../apps/frontend/src/lib/api.ts) — bỏ `resolveApiBase()` phụ thuộc `window.location`, thay bằng base URL cố định `http://localhost:3100` (cho phép cấu hình qua ô nhập IP để demo LAN). Giữ nguyên `apiFetch` + auto-refresh 401.
 - **Login:** `POST /api/auth/login` body `{ email: "admin", password: "admin123@" }` → lưu `accessToken`/`refreshToken`/`user`. Header gọi API: `Authorization: Bearer <accessToken>`.
-- **WebSocket (KHÔNG cần token):** `io("http://localhost:3100", { transports: ["websocket"] })`, `emit("join", { warehouseId })` để nhận `sensor_event`; `emit("join-role", { role: "ADMIN" })` để nhận `notification` (cảnh báo sự cố). Mẫu: [notification-bell.tsx:26](../apps/frontend/src/components/mission/notification-bell.tsx#L26).
+- **WebSocket:** gửi access token qua Socket.IO handshake `auth`; backend xác thực và tự cấp room role/kho từ assignment hiện tại, client chỉ nghe `sensor_event` và `notification`.
 - **Danh mục thiết bị/kịch bản:** lấy động — `GET /api/simulator/first-warehouse` → `warehouseId`; `GET /api/simulator/warehouses/:id/devices` → render slider theo device thật; `GET /api/simulator/scenarios` → dropdown kịch bản. Không hard-code device code.
 
 ### 4.4. UI app desktop (3 khối)

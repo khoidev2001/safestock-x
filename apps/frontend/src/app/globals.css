@@ -28,7 +28,7 @@
   --color-ready: oklch(0.62 0.15 155);
   --color-attention: oklch(0.78 0.15 85);
   --color-degraded: oklch(0.68 0.17 55);
-  --color-critical: oklch(0.60 0.20 25);
+  --color-critical: oklch(0.6 0.2 25);
 }
 
 :root {
@@ -160,6 +160,12 @@ button:disabled {
   display: inline-block;
   white-space: nowrap;
   direction: ltr;
-  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
 }
-.material-symbols-outlined.fill { font-variation-settings: "FILL" 1; }
+.material-symbols-outlined.fill {
+  font-variation-settings: "FILL" 1;
+}

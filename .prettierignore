@@ -1,0 +1,16 @@
+dist
+.next
+out
+build
+release
+coverage
+node_modules
+**/.prisma
+.expo
+apps/ai-service
+pnpm-lock.yaml
+package-lock.json
+apps/backend/public/sim.html
+apps/frontend/public/geo
+**/*.geojson
+*.md

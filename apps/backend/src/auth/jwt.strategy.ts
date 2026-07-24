@@ -4,6 +4,7 @@ import { PassportStrategy } from "@nestjs/passport";
 import { ExtractJwt, Strategy } from "passport-jwt";
 import { UserRole } from "@safestock/shared-types";
 import { AuthUser } from "./authenticated-request";
+import { isSimulationSystemActorEmail } from "../simulation/simulation-system-actor-identity";
 
 export interface JwtPayload {
   sub: string;
@@ -26,6 +27,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   // Giá trị trả về gắn vào req.user
   async validate(payload: JwtPayload): Promise<AuthUser> {
+    if (isSimulationSystemActorEmail(payload.email)) {
+      throw new UnauthorizedException("Actor hệ thống không được đăng nhập tương tác");
+    }
     return {
       userId: payload.sub,
       email: payload.email,

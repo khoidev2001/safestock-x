@@ -33,10 +33,10 @@ export function resolveEmergencyAnswer(question: string): string | null {
   const facts = [situation, weather].filter(Boolean).join(", ");
 
   return [
-    `Đã ghi nhận tình huống ${priority}${location ? ` tại ${location}` : ""}${facts ? `: ${facts}` : ""}.`,
+    `Dạ, đã ghi nhận tình huống ${priority}${location ? ` tại ${location}` : ""}${facts ? `: ${facts}` : ""}.`,
     describeImmediateActions(normalizedQuestion),
     describeVulnerablePeople(normalizedQuestion),
-  ].join("\n");
+  ].join("\n\n");
 }
 
 function isEmergencyScenario(normalizedQuestion: string): boolean {
@@ -81,8 +81,10 @@ function describeWeather(normalizedQuestion: string): string | null {
   if (containsTerm(normalizedQuestion, "mua to")) return "đang mưa to";
   if (containsTerm(normalizedQuestion, "mua lon")) return "đang mưa lớn";
   if (containsTerm(normalizedQuestion, "sat lo")) return "có nguy cơ hoặc dấu hiệu sạt lở";
-  if (containsTerm(normalizedQuestion, "ngap") || containsTerm(normalizedQuestion, "lu")) return "có ngập lụt";
-  if (containsTerm(normalizedQuestion, "chay") || containsTerm(normalizedQuestion, "hoa hoan")) return "có cháy";
+  if (containsTerm(normalizedQuestion, "ngap") || containsTerm(normalizedQuestion, "lu"))
+    return "có ngập lụt";
+  if (containsTerm(normalizedQuestion, "chay") || containsTerm(normalizedQuestion, "hoa hoan"))
+    return "có cháy";
   if (hasAny(normalizedQuestion, ["bao so", "anh huong bao", "gio bao"])) {
     return "đang chịu ảnh hưởng của bão";
   }
@@ -90,19 +92,40 @@ function describeWeather(normalizedQuestion: string): string | null {
 }
 
 function describeImmediateActions(normalizedQuestion: string): string {
+  let steps: string[];
+
   if (hasAny(normalizedQuestion, ["chay", "hoa hoan"])) {
-    return "Ưu tiên ngay: giữ liên lạc với khu vực; xác minh vị trí, nguồn cháy, khói và lối thoát; báo lực lượng chữa cháy, cô lập điện hoặc nguồn nhiên liệu nếu thực hiện được an toàn; đưa người dân ra khỏi hướng khói và chuẩn bị sơ cứu.";
+    steps = [
+      "Giữ liên lạc liên tục với khu vực.",
+      "Xác minh vị trí, nguồn cháy, khói và lối thoát.",
+      "Báo lực lượng chữa cháy; cô lập điện hoặc nguồn nhiên liệu nếu làm được an toàn.",
+      "Đưa người dân ra khỏi hướng khói và chuẩn bị sơ cứu.",
+    ];
+  } else if (containsTerm(normalizedQuestion, "sat lo")) {
+    steps = [
+      "Giữ liên lạc liên tục với khu vực.",
+      "Xác minh điểm sạt lở, vết nứt và nguy cơ sạt tiếp.",
+      "Thiết lập vị trí tập kết ngoài chân dốc, huy động lực lượng chuyên trách.",
+      "Chuẩn bị sơ cứu, chiếu sáng và thiết bị liên lạc.",
+    ];
+  } else if (hasAny(normalizedQuestion, ["mua to", "mua lon", "lu", "ngap"])) {
+    steps = [
+      "Giữ liên lạc liên tục với khu vực.",
+      "Xác minh vị trí chính xác, mực nước và đường tiếp cận.",
+      "Huy động lực lượng, phương tiện cứu hộ phù hợp.",
+      "Chuẩn bị áo phao, sơ cứu và nước uống.",
+    ];
+  } else {
+    steps = [
+      "Giữ liên lạc liên tục với khu vực.",
+      "Xác minh vị trí chính xác, mối nguy và đường tiếp cận.",
+      "Huy động lực lượng, phương tiện cứu hộ phù hợp.",
+      "Chuẩn bị sơ cứu, nước uống và thiết bị liên lạc.",
+    ];
   }
 
-  if (containsTerm(normalizedQuestion, "sat lo")) {
-    return "Ưu tiên ngay: giữ liên lạc với khu vực; xác minh điểm sạt lở, vết nứt và nguy cơ sạt tiếp; thiết lập vị trí tập kết ngoài chân dốc, huy động lực lượng chuyên trách và chuẩn bị sơ cứu, chiếu sáng, liên lạc.";
-  }
-
-  if (hasAny(normalizedQuestion, ["mua to", "mua lon", "lu", "ngap"])) {
-    return "Ưu tiên ngay: giữ liên lạc với khu vực; xác minh vị trí chính xác, mực nước và đường tiếp cận; huy động lực lượng, phương tiện cứu hộ phù hợp; chuẩn bị áo phao, sơ cứu và nước uống.";
-  }
-
-  return "Ưu tiên ngay: giữ liên lạc với khu vực; xác minh vị trí chính xác, mối nguy và đường tiếp cận; huy động lực lượng, phương tiện cứu hộ phù hợp; chuẩn bị sơ cứu, nước uống và thiết bị liên lạc.";
+  const lines = steps.map((step) => `•  ${step}`).join("\n");
+  return `Việc cần làm ngay:\n${lines}`;
 }
 
 function describeVulnerablePeople(normalizedQuestion: string): string {

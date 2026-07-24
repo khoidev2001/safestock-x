@@ -42,9 +42,7 @@ describe("assessOperationalReadiness", () => {
     });
 
     expect(result.operationalStatus).toBe("NOT_DISPATCHABLE");
-    expect(result.blockers[0]).toEqual(
-      expect.objectContaining({ code: "ACCESS_UNAVAILABLE" }),
-    );
+    expect(result.blockers[0]).toEqual(expect.objectContaining({ code: "ACCESS_UNAVAILABLE" }));
   });
 
   it("returns needs action for a low reference score without blockers", () => {
@@ -56,8 +54,9 @@ describe("assessOperationalReadiness", () => {
 
     expect(result.operationalStatus).toBe("NEEDS_ACTION");
     expect(result.blockers).toHaveLength(0);
-    expect(result.dimensions.find((item) => item.key === "quantityAvailability")?.status)
-      .toBe("NEEDS_ACTION");
+    expect(result.dimensions.find((item) => item.key === "quantityAvailability")?.status).toBe(
+      "NEEDS_ACTION",
+    );
   });
 
   it("returns ready when all dimensions are healthy and no incident is open", () => {

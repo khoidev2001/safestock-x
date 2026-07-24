@@ -82,8 +82,9 @@ async function init() {
 function auth(){ return {Authorization:`Bearer ${token}`}; }
 
 function connectWs() {
-  socket = io(API, {transports:["websocket"]});
-  socket.on("connect", ()=> socket.emit("join",{warehouseId:wid}, ()=>log("WS joined room","#9cf")));
+  socket = io(API, {transports:["websocket"],auth:{token}});
+  socket.on("connect", ()=>log("WS authenticated","#9cf"));
+  socket.on("connect_error", ()=>log("WS authentication failed","#f66"));
   socket.on("sensor_event", (e)=> log(`[WS] ${e.deviceCode} ${e.eventType}=${e.value} saved=${e.saved}`, e.saved?"#0f0":"#888"));
 }
 

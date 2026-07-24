@@ -33,10 +33,8 @@ describe("assessBatchEligibility", () => {
   });
 
   it("rejects damaged or needs-check stock", () => {
-    expect(assessBatchEligibility(input({ condition: "DAMAGED" }), NOW).eligible)
-      .toBe(false);
-    expect(assessBatchEligibility(input({ condition: "NEEDS_CHECK" }), NOW).eligible)
-      .toBe(false);
+    expect(assessBatchEligibility(input({ condition: "DAMAGED" }), NOW).eligible).toBe(false);
+    expect(assessBatchEligibility(input({ condition: "NEEDS_CHECK" }), NOW).eligible).toBe(false);
   });
 
   it("subtracts open loans from immediately available quantity", () => {

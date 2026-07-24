@@ -1,6 +1,6 @@
 # Ưu tiên theo nhu cầu và khả năng tiếp cận
 
-## Ưu tiên nhóm dễ tổn thương, không áp một định mức cho mọi người
+## Ưu tiên trẻ em, người già, người bệnh — nhóm dễ tổn thương khi thiếu nước
 Khi đánh giá nhu cầu cứu trợ, cần xem xét khác biệt về tuổi, giới, tình trạng khuyết tật, hạn chế di chuyển, bệnh mạn tính, tập quán và vai trò chăm sóc. Người không tự tiếp cận điểm cấp nước hoặc khu vệ sinh cần giải pháp gần hơn, dễ dùng hơn hoặc có người hỗ trợ. Trẻ nhỏ, người cao tuổi và người đang bị nôn hoặc tiêu chảy có nguy cơ mất nước cao hơn; người chăm sóc cần được hướng dẫn nhận biết và chuẩn bị nước uống an toàn. Việc ưu tiên phải dựa trên nhu cầu thực tế được hỏi và quan sát, không tự gán mọi người trong một nhóm vào cùng mức độ khẩn cấp.
 
 > Nguồn: Sphere Handbook 2018 | Water supply standard 2.1: Access and equity, trang in 107–108 (trang PDF 132–133) | https://spherestandards.org/wp-content/uploads/Sphere-Handbook-2018-EN.pdf | truy cập 2026-07-23

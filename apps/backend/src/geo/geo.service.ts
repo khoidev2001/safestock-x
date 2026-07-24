@@ -90,8 +90,7 @@ export class GeoService {
 
   /** Google Routes Compute Route Matrix: n origins × 1 dest. */
   private async googleRouteMatrix(origins: LatLng[], dest: LatLng): Promise<DistanceResult[]> {
-    const url =
-      "https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix";
+    const url = "https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix";
     const body = {
       origins: origins.map((o) => ({
         waypoint: { location: { latLng: { latitude: o.lat, longitude: o.lng } } },

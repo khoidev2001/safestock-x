@@ -1,15 +1,18 @@
-import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
+import { ForbiddenException, Injectable, Logger, OnModuleDestroy } from "@nestjs/common";
 import {
+  Prisma,
   TransactionSource,
-  UserRole,
   VirtualDevice,
   VirtualDeviceType,
   WarehouseKind,
 } from "@prisma/client";
+import { Permission } from "@safestock/shared-types";
 import { IncidentService } from "../incident/incident.service";
 import { InventoryService } from "../inventory/inventory.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { ReadinessService } from "../readiness/readiness.service";
+import { SimulationAccessService } from "./simulation-access.service";
+import { SimulationSystemActorService } from "./simulation-system-actor.service";
 
 // Ngưỡng lọc: chỉ lưu event khi giá trị đổi đủ lớn so với current (tránh phình bảng).
 const SIGNIFICANT_DELTA: Partial<Record<VirtualDeviceType, number>> = {
@@ -43,48 +46,55 @@ export interface EmitInput {
 }
 
 @Injectable()
-export class SimulationService {
+export class SimulationService implements OnModuleDestroy {
   private readonly log = new Logger(SimulationService.name);
   private recalcTimers = new Map<string, NodeJS.Timeout>();
   private incidentScanTimers = new Map<string, NodeJS.Timeout>();
-  private systemUserId: string | null = null;
 
   constructor(
     private prisma: PrismaService,
     private readiness: ReadinessService,
     private inventory: InventoryService,
     private incidents: IncidentService,
+    private access: SimulationAccessService,
+    private systemActors: SimulationSystemActorService,
   ) {}
 
-  async firstWarehouse(userId: string, scopeWarehouseId?: string | null) {
-    if (scopeWarehouseId) {
-      return this.prisma.warehouse.findUnique({
-        where: { id: scopeWarehouseId },
+  onModuleDestroy(): void {
+    for (const timer of this.recalcTimers.values()) clearTimeout(timer);
+    for (const timer of this.incidentScanTimers.values()) clearTimeout(timer);
+    this.recalcTimers.clear();
+    this.incidentScanTimers.clear();
+  }
+
+  async firstWarehouse(userId: string) {
+    const actor = await this.access.assertPermission(userId, Permission.SIMULATION_VIEW);
+    if (actor.warehouseId) {
+      const warehouse = await this.prisma.warehouse.findFirst({
+        where: { id: actor.warehouseId, organizationId: actor.organizationId },
         select: { id: true, name: true },
       });
+      if (!warehouse) throw new ForbiddenException("Kho được gán không còn hợp lệ");
+      return warehouse;
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { organizationId: true },
-    });
-    if (!user) throw new UnauthorizedException("Tài khoản không còn tồn tại");
-
     return this.prisma.warehouse.findFirst({
-      where: { kind: WarehouseKind.CENTRAL, organizationId: user.organizationId },
+      where: { kind: WarehouseKind.CENTRAL, organizationId: actor.organizationId },
       orderBy: { createdAt: "asc" },
       select: { id: true, name: true },
     });
   }
 
-  listDevices(warehouseId: string) {
+  async listDevices(userId: string, warehouseId: string) {
+    await this.access.assertWarehouseAccess(userId, warehouseId, Permission.SIMULATION_VIEW);
     return this.prisma.virtualDevice.findMany({
       where: { warehouseId },
       orderBy: [{ type: "asc" }, { code: "asc" }],
     });
   }
 
-  getDevice(warehouseId: string, code: string) {
+  async getDevice(userId: string, warehouseId: string, code: string) {
+    await this.access.assertWarehouseAccess(userId, warehouseId, Permission.SIMULATION_VIEW);
     return this.prisma.virtualDevice.findUnique({
       where: { warehouseId_code: { warehouseId, code } },
     });
@@ -94,56 +104,75 @@ export class SimulationService {
    * Ghi 1 sự kiện cảm biến. Cập nhật DeviceState (current) LUÔN, nhưng chỉ LƯU SensorEvent
    * khi vượt ngưỡng (đổi trạng thái door/online, hoặc delta đủ lớn). Trả về event nếu đã lưu.
    */
-  async emit(input: EmitInput) {
-    const device = await this.prisma.virtualDevice.findUnique({
-      where: { warehouseId_code: { warehouseId: input.warehouseId, code: input.deviceCode } },
+  async emit(userId: string, input: EmitInput) {
+    await this.access.assertMutationAccess(userId, input.warehouseId);
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Serialize readings for one device so concurrent loadcell deltas cannot double-apply.
+      await tx.$queryRaw`
+        SELECT "id"
+        FROM "VirtualDevice"
+        WHERE "warehouseId" = ${input.warehouseId} AND "code" = ${input.deviceCode}
+        FOR UPDATE
+      `;
+      const device = await tx.virtualDevice.findUnique({
+        where: { warehouseId_code: { warehouseId: input.warehouseId, code: input.deviceCode } },
+        include: { shelf: { select: { zone: { select: { warehouseId: true } } } } },
+      });
+      if (!device) throw new Error(`Device không tồn tại: ${input.deviceCode}`);
+      if (device.shelfId && device.shelf?.zone.warehouseId !== input.warehouseId) {
+        throw new ForbiddenException("Thiết bị và kệ không cùng kho");
+      }
+
+      const prev = device.currentValue;
+      const delta = SIGNIFICANT_DELTA[device.type] ?? 0;
+      const significant = prev == null || Math.abs(input.value - prev) >= delta || delta === 0;
+      const inventoryBatchId =
+        device.type === VirtualDeviceType.LOADCELL && prev != null && device.shelfId
+          ? await this.applyLoadcellTxnInTx(tx, device, prev, input.value)
+          : null;
+
+      await tx.virtualDevice.update({
+        where: { id: device.id },
+        data: { currentValue: input.value },
+      });
+
+      if (!significant) {
+        return { saved: null, deviceType: device.type, inventoryBatchId };
+      }
+
+      const saved = await tx.sensorEvent.create({
+        data: {
+          deviceId: device.id,
+          warehouseId: input.warehouseId,
+          zoneId: device.zoneId,
+          eventType: input.eventType,
+          value: input.value,
+          unit: device.unit,
+          quality: input.quality ?? 1.0,
+          scenarioId: input.scenarioId,
+          runId: input.runId,
+        },
+      });
+      return { saved, deviceType: device.type, inventoryBatchId };
     });
-    if (!device) throw new Error(`Device không tồn tại: ${input.deviceCode}`);
 
-    const prev = device.currentValue;
-    const delta = SIGNIFICANT_DELTA[device.type] ?? 0;
-    const significant =
-      prev == null || Math.abs(input.value - prev) >= delta || delta === 0;
-
-    if (device.type === VirtualDeviceType.LOADCELL && prev != null && device.shelfId) {
-      await this.autoGenerateLoadcellTxn(device, prev, input.value);
+    if (result.inventoryBatchId) {
+      await this.inventory.recalcBatches([result.inventoryBatchId]);
     }
-
-    // Luôn cập nhật current
-    await this.prisma.virtualDevice.update({
-      where: { id: device.id },
-      data: { currentValue: input.value },
-    });
-
-    // Recalc Readiness khi cảm biến môi trường đổi (điểm rớt <2s — khoảnh khắc vàng).
-    if (ENV_DEVICE_TYPES.includes(device.type)) {
+    if (ENV_DEVICE_TYPES.includes(result.deviceType)) {
       this.scheduleRecalc(input.warehouseId);
     }
-
-    if (!significant) return null;
-
-    const saved = await this.prisma.sensorEvent.create({
-      data: {
-        deviceId: device.id,
-        warehouseId: input.warehouseId,
-        zoneId: device.zoneId,
-        eventType: input.eventType,
-        value: input.value,
-        unit: device.unit,
-        quality: input.quality ?? 1.0,
-        scenarioId: input.scenarioId,
-        runId: input.runId,
-      },
-    });
+    if (!result.saved) return null;
 
     // Event vừa persist → quét sự cố (debounce) để cảnh báo tự bật realtime
     // qua NotificationService/gateway. scanWarehouse đọc sensorEvent đã lưu.
     this.scheduleIncidentScan(input.warehouseId);
 
-    return saved;
+    return result.saved;
   }
 
-  timeline(warehouseId: string, limit = 50) {
+  async timeline(userId: string, warehouseId: string, limit = 50) {
+    await this.access.assertWarehouseAccess(userId, warehouseId, Permission.SIMULATION_VIEW);
     return this.prisma.sensorEvent.findMany({
       where: { warehouseId },
       include: { device: true },
@@ -185,46 +214,54 @@ export class SimulationService {
     this.incidentScanTimers.set(warehouseId, timer);
   }
 
-  /** Actor hệ thống cho giao dịch tự sinh (loadcell không có user thật thao tác) — cache 1 lần. */
-  private async getSystemUserId(): Promise<string | null> {
-    if (this.systemUserId) return this.systemUserId;
-    const admin = await this.prisma.user.findFirst({ where: { role: UserRole.ADMIN } });
-    this.systemUserId = admin?.id ?? null;
-    return this.systemUserId;
-  }
-
   /**
    * Loadcell đổi cân nặng đáng kể → suy số lượng qua Item.unitWeightKg → tự sinh
    * InventoryTransaction (Bp1). Chỉ hỗ trợ kệ có batch, đơn giản hoá lấy batch đầu
    * tiên tạo trên kệ nếu có nhiều batch (ponytail: đủ cho demo 1 SKU/kệ, nâng cấp
    * khi cần map chính xác nhiều batch cùng kệ → thêm cảm biến/label riêng từng batch).
-   * Lỗi không chặn luồng emit() chính — cảm biến vẫn phải cập nhật currentValue.
+   * Chạy trong cùng transaction với device/event để không làm lệch baseline khi có lỗi.
    */
-  private async autoGenerateLoadcellTxn(device: VirtualDevice, prev: number, newValue: number): Promise<void> {
-    try {
-      const deltaKg = prev - newValue;
-      if (Math.abs(deltaKg) < SIGNIFICANT_DELTA.LOADCELL!) return;
+  private async applyLoadcellTxnInTx(
+    tx: Prisma.TransactionClient,
+    device: VirtualDevice,
+    prev: number,
+    newValue: number,
+  ): Promise<string | null> {
+    const deltaKg = prev - newValue;
+    if (Math.abs(deltaKg) < SIGNIFICANT_DELTA.LOADCELL!) return null;
 
-      const batch = await this.prisma.itemBatch.findFirst({
-        where: { shelfId: device.shelfId! },
-        include: { item: true },
-        orderBy: { createdAt: "asc" },
-      });
-      if (!batch || !batch.item.unitWeightKg) return;
+    const batch = await tx.itemBatch.findFirst({
+      where: { shelfId: device.shelfId! },
+      include: { item: true },
+      orderBy: { createdAt: "asc" },
+    });
+    if (!batch || !batch.item.unitWeightKg) return null;
 
-      const deltaQty = Math.round(Math.abs(deltaKg) / batch.item.unitWeightKg);
-      if (deltaQty === 0) return;
+    const deltaQty = Math.round(Math.abs(deltaKg) / batch.item.unitWeightKg);
+    if (deltaQty === 0) return null;
 
-      const systemUserId = await this.getSystemUserId();
-      if (!systemUserId) return;
-
-      if (deltaKg > 0) {
-        await this.inventory.export(systemUserId, batch.id, deltaQty, "Tự động từ loadcell", TransactionSource.LOADCELL);
-      } else {
-        await this.inventory.import(systemUserId, batch.id, deltaQty, "Tự động từ loadcell", TransactionSource.LOADCELL);
-      }
-    } catch (error) {
-      this.log.warn(`Tự sinh giao dịch loadcell lỗi (device ${device.code}): ${(error as Error).message}`);
+    const systemUserId = await this.systemActors.getActorId(device.warehouseId);
+    if (deltaKg > 0) {
+      await this.inventory.exportInTx(
+        tx,
+        systemUserId,
+        batch.id,
+        deltaQty,
+        "Tự động từ loadcell",
+        TransactionSource.LOADCELL,
+        device.warehouseId,
+      );
+    } else {
+      await this.inventory.importInTx(
+        tx,
+        systemUserId,
+        batch.id,
+        deltaQty,
+        "Tự động từ loadcell",
+        TransactionSource.LOADCELL,
+        device.warehouseId,
+      );
     }
+    return batch.id;
   }
 }

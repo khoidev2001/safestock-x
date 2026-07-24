@@ -181,11 +181,20 @@ export const completeMission = (id: string, outcome: DeliveryOutcome, note?: str
 
 // Admin xử lý đơn từ chối của đội cứu hộ
 export const deferMission = (id: string, note?: string) =>
-  apiFetch<Mission>(`/api/missions/${id}/defer`, { method: "POST", body: JSON.stringify({ note }) });
+  apiFetch<Mission>(`/api/missions/${id}/defer`, {
+    method: "POST",
+    body: JSON.stringify({ note }),
+  });
 export const resendMission = (id: string, note?: string) =>
-  apiFetch<Mission>(`/api/missions/${id}/resend`, { method: "POST", body: JSON.stringify({ note }) });
+  apiFetch<Mission>(`/api/missions/${id}/resend`, {
+    method: "POST",
+    body: JSON.stringify({ note }),
+  });
 export const cancelMission = (id: string, note?: string) =>
-  apiFetch<Mission>(`/api/missions/${id}/cancel`, { method: "POST", body: JSON.stringify({ note }) });
+  apiFetch<Mission>(`/api/missions/${id}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({ note }),
+  });
 
 // Thông báo
 export const getNotifications = (unread = false) =>

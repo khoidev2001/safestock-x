@@ -11,8 +11,7 @@ import {
 import { ComponentScore } from "../readiness.types";
 
 const NOW = new Date("2026-07-15T00:00:00+07:00");
-const monthsFromNow = (m: number) =>
-  new Date(NOW.getTime() + m * 30 * 24 * 60 * 60 * 1000);
+const monthsFromNow = (m: number) => new Date(NOW.getTime() + m * 30 * 24 * 60 * 60 * 1000);
 
 describe("scoreExpiry", () => {
   const t = READINESS_CONFIG.expiry;

@@ -15,7 +15,7 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   const port = process.env.API_PORT ?? 3000;
   await app.listen(port);
-  // eslint-disable-next-line no-console
+
   console.log(`Ứng phó nhanh API chạy tại http://localhost:${port}/api`);
 }
 bootstrap();

@@ -82,7 +82,8 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 export async function blobToWavBase64(blob: Blob): Promise<string> {
   const arrayBuffer = await blob.arrayBuffer();
   const AudioCtx =
-    window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    window.AudioContext ??
+    (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
   const ctx = new AudioCtx();
   try {
     const decoded = await ctx.decodeAudioData(arrayBuffer);

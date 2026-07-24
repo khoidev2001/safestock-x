@@ -1,7 +1,4 @@
-import {
-  type AssistantSnapshot,
-  resolveAssistantFastAnswer,
-} from "../assistant-fast-answer";
+import { type AssistantSnapshot, resolveAssistantFastAnswer } from "../assistant-fast-answer";
 import { resolveEmergencyAnswer } from "../assistant-emergency-answer";
 
 const snapshot: AssistantSnapshot = {
@@ -36,37 +33,53 @@ const snapshot: AssistantSnapshot = {
 describe("resolveAssistantFastAnswer", () => {
   it("trả số lượng vật tư trực tiếp từ snapshot", () => {
     expect(resolveAssistantFastAnswer("Còn bao nhiêu áo phao người lớn?", snapshot)).toBe(
-      "Trong Kho thôn Phú Xuân hiện còn 15 chiếc Áo phao người lớn.",
+      "Dạ, Kho thôn Phú Xuân hiện còn 15 chiếc Áo phao người lớn.",
+    );
+  });
+
+  it("nhắc bổ sung khi vật tư đã cạn", () => {
+    const empty: AssistantSnapshot = {
+      ...snapshot,
+      stock: [{ sku: "RICE-01", itemName: "Gạo cứu trợ", quantity: 0, unit: "kg", nearestExpiry: null }],
+    };
+    expect(resolveAssistantFastAnswer("Còn bao nhiêu gạo cứu trợ?", empty)).toBe(
+      "Dạ, Kho thôn Phú Xuân hiện còn 0 kg Gạo cứu trợ.\n\n" +
+        "Gạo cứu trợ hiện đã cạn — anh/chị nên bổ sung sớm nếu cần điều phối.",
     );
   });
 
   it("trả đúng khi kho không có sự cố mở", () => {
     expect(resolveAssistantFastAnswer("Kho đang có sự cố gì không?", snapshot)).toBe(
-      "Kho thôn Phú Xuân hiện không có sự cố đang mở.",
+      "Dạ, Kho thôn Phú Xuân hiện không có sự cố nào đang mở. Tình hình đang ổn.",
     );
   });
 
   it("trả trạng thái readiness không cần LLM", () => {
     expect(resolveAssistantFastAnswer("Điểm sẵn sàng của kho hiện tại?", snapshot)).toBe(
-      "Kho thôn Phú Xuân hiện cần xử lý trước khi điều phối. Việc cần làm: Kiểm kê và bổ sung các vật tư đang thiếu. Điểm tham khảo 73/100.",
+      "Dạ, Kho thôn Phú Xuân hiện cần xử lý trước khi điều phối, điểm sẵn sàng tham khảo là 73/100.\n\n" +
+        "Việc nên làm ngay: Kiểm kê và bổ sung các vật tư đang thiếu.",
     );
   });
 
   it("hiểu câu hỏi tự nhiên về khả năng đáp ứng của kho", () => {
     expect(resolveAssistantFastAnswer("Kho sẵn sàng đáp ứng được chưa?", snapshot)).toBe(
-      "Kho thôn Phú Xuân hiện cần xử lý trước khi điều phối. Việc cần làm: Kiểm kê và bổ sung các vật tư đang thiếu. Điểm tham khảo 73/100.",
+      "Dạ, Kho thôn Phú Xuân hiện cần xử lý trước khi điều phối, điểm sẵn sàng tham khảo là 73/100.\n\n" +
+        "Việc nên làm ngay: Kiểm kê và bổ sung các vật tư đang thiếu.",
     );
   });
 
   it("liệt kê hạn dùng gần nhất", () => {
     expect(resolveAssistantFastAnswer("Vật tư nào sắp hết hạn?", snapshot)).toBe(
-      "Các vật tư có hạn dùng gần nhất tại Kho thôn Phú Xuân: Nước uống đóng chai: 2026-09-30.",
+      "Dạ, các vật tư có hạn dùng gần nhất tại Kho thôn Phú Xuân như sau:\n\n" +
+        "•  Nước uống đóng chai — hạn 30/09/2026\n\n" +
+        "Gần nhất là Nước uống đóng chai (hạn 30/09/2026), anh/chị nên ưu tiên kiểm tra để kịp xử lý.",
     );
   });
 
   it("trả dự báo thời tiết có trong snapshot", () => {
     expect(resolveAssistantFastAnswer("Ba ngày tới có mưa lớn không?", snapshot)).toBe(
-      "Dự báo 72 giờ tới tại Kho thôn Phú Xuân: tổng lượng mưa 125.5 mm. Có cảnh báo mưa lớn.",
+      "Dạ, dự báo 3 ngày tới tại Kho thôn Phú Xuân tổng lượng mưa khoảng 125.5 mm.\n\n" +
+        "Đang có cảnh báo mưa lớn — anh/chị nên rà soát phương án ứng phó và các điểm xung yếu.",
     );
   });
 
@@ -76,8 +89,12 @@ describe("resolveAssistantFastAnswer", () => {
         "thôn tân bình, có 150 người mắc kẹt, mưa to, chưa rõ người già và trẻ em",
       ),
     ).toBe(
-      "Đã ghi nhận tình huống rất khẩn cấp tại thôn tân bình: 150 người mắc kẹt, đang mưa to.\n" +
-        "Ưu tiên ngay: giữ liên lạc với khu vực; xác minh vị trí chính xác, mực nước và đường tiếp cận; huy động lực lượng, phương tiện cứu hộ phù hợp; chuẩn bị áo phao, sơ cứu và nước uống.\n" +
+      "Dạ, đã ghi nhận tình huống rất khẩn cấp tại thôn tân bình: 150 người mắc kẹt, đang mưa to.\n\n" +
+        "Việc cần làm ngay:\n" +
+        "•  Giữ liên lạc liên tục với khu vực.\n" +
+        "•  Xác minh vị trí chính xác, mực nước và đường tiếp cận.\n" +
+        "•  Huy động lực lượng, phương tiện cứu hộ phù hợp.\n" +
+        "•  Chuẩn bị áo phao, sơ cứu và nước uống.\n\n" +
         "Chưa rõ số người già và trẻ em — không được xem là 0; cần thống kê ngay cùng số người bị thương hoặc cần hỗ trợ y tế.",
     );
   });

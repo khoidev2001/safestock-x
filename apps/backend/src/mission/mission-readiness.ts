@@ -32,9 +32,10 @@ export function assessMissionReadiness(
   unavailableReasonsBySku: Map<string, string[]> = new Map(),
 ): MissionReadinessAssessment {
   const items = allocations.map((allocation): MissionItemReadiness => {
-    const fulfillment = allocation.required > 0
-      ? Math.round((allocation.allocated / allocation.required) * 100)
-      : 100;
+    const fulfillment =
+      allocation.required > 0
+        ? Math.round((allocation.allocated / allocation.required) * 100)
+        : 100;
     const status: MissionReadinessStatus =
       fulfillment === 100
         ? "READY"

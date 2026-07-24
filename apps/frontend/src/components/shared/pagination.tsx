@@ -43,8 +43,11 @@ export function Pagination({
   return (
     <footer className="flex flex-col gap-3 border-t px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
       <p className="text-sm text-[var(--text-muted)]">
-        Hiển thị <span className="tabular font-medium text-[var(--text)]">{firstItem}-{lastItem}</span>
-        {" "}trên <span className="tabular font-medium text-[var(--text)]">{totalItems}</span> bản ghi
+        Hiển thị{" "}
+        <span className="tabular font-medium text-[var(--text)]">
+          {firstItem}-{lastItem}
+        </span>{" "}
+        trên <span className="tabular font-medium text-[var(--text)]">{totalItems}</span> bản ghi
       </p>
       <nav aria-label="Phân trang" className="flex items-center gap-1">
         <PageButton
@@ -96,7 +99,15 @@ function PageButton({
       className="inline-flex h-9 min-w-9 items-center justify-center rounded-md border px-2 text-sm font-semibold transition hover:bg-[var(--surface-2)] disabled:opacity-40"
       disabled={disabled}
       onClick={onClick}
-      style={isActive ? { background: "var(--color-accent)", color: "var(--color-accent-fg)", borderColor: "var(--color-accent)" } : undefined}
+      style={
+        isActive
+          ? {
+              background: "var(--color-accent)",
+              color: "var(--color-accent-fg)",
+              borderColor: "var(--color-accent)",
+            }
+          : undefined
+      }
       type="button"
     >
       {children}

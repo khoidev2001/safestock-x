@@ -52,16 +52,17 @@ Trạng thái hiện tại:
 | Chức năng | Hành vi hiện có | Bằng chứng chính | Giới hạn phải biết |
 |---|---|---|---|
 | Hồ sơ cá nhân | Nút profile thay nút đăng xuất; xem/sửa avatar, họ tên, số điện thoại, email cá nhân nhận cảnh báo; xem đơn vị dạng `Xã ...`; đăng xuất nằm trong dialog | `apps/frontend/src/components/profile/`, `apps/frontend/src/lib/profile-api.ts`, `apps/backend/src/auth/`, `apps/backend/src/auth/__tests__/auth-profile.spec.ts` | Email cá nhân chưa có bước xác minh; avatar là WebP data URL lưu DB, giới hạn 80.000 ký tự |
-| Scope tài khoản theo xã | `/auth/me` đọc hồ sơ mới từ DB; admin toàn xã mở kho trung tâm thuộc đúng `organizationId`; cache profile/kho tách theo user | `apps/backend/src/auth/auth.service.ts`, `apps/backend/src/simulation/simulation.service.ts`, `apps/backend/src/simulation/__tests__/first-warehouse.spec.ts`, `apps/frontend/src/components/dashboard/dashboard-shell.tsx` | Scope chưa được centralize cho mọi API/WebSocket; bản đồ offline vẫn là bộ dữ liệu cụm Đồng Xuân |
+| Scope tài khoản theo xã | `/auth/me` đọc hồ sơ mới từ DB; admin toàn xã mở kho trung tâm thuộc đúng `organizationId`; Socket.IO xác thực access JWT rồi lấy role/assignment hiện tại từ DB để cấp room | `apps/backend/src/auth/auth.service.ts`, `apps/backend/src/auth/websocket-auth.service.ts`, `apps/backend/src/auth/__tests__/websocket-auth.rooms.spec.ts`, `apps/backend/src/simulation/simulation.service.ts` | Scope chưa được centralize cho mọi API/AI snapshot; notification realtime vẫn role-wide trong một database xã |
 | Email cảnh báo sự cố | SMTP tùy chọn; gửi tới email cá nhân đúng tổ chức/kho, loại trùng, dùng BCC; `ALERT_EMAIL_TO` chỉ fallback; template không hiển thị điểm tin cậy | `apps/backend/src/mail/`, `apps/backend/src/incident/incident.service.ts`, `.env.example` | Chưa có email verification/outbox/retry bền vững; SMTP lỗi chỉ log và không chặn luồng sự cố |
 | AI diễn giải sự cố | Sự cố rule-based tạo ngay; AI chạy nền để lưu explanation, cập nhật notification và email; AI lỗi vẫn giữ sự cố/email rule-based | `apps/backend/src/incident/incident.context.ts`, `apps/backend/src/incident/__tests__/incident-enrich.spec.ts`, `apps/frontend/src/components/dashboard/incident-view.tsx` | Chưa có bộ redaction/output-safety đầy đủ cho AI service; AI không được quyết định severity hoặc bịa số |
-| Cảnh báo trong trợ lý web | Sau khi query/refetch thấy sự cố đã có AI explanation, dữ liệu được đồng bộ sang bong bóng trợ lý; sự cố nghiêm trọng có thể tự mở cảnh báo | `apps/frontend/src/components/assistant/use-incident-alerts.ts`, `apps/frontend/src/lib/incident-alert-store.ts`, `apps/frontend/src/components/assistant/floating-assistant.tsx` | Incident view vẫn polling; WebSocket handshake chưa xác thực JWT và chưa có browser E2E |
+| Cảnh báo trong trợ lý web | Sau khi query/refetch thấy sự cố đã có AI explanation, dữ liệu được đồng bộ sang bong bóng trợ lý; sự cố nghiêm trọng có thể tự mở cảnh báo | `apps/frontend/src/components/assistant/use-incident-alerts.ts`, `apps/frontend/src/lib/incident-alert-store.ts`, `apps/frontend/src/components/assistant/floating-assistant.tsx` | Incident view vẫn polling; chưa có browser E2E và notification chưa partition theo warehouse |
 | App desktop giả lập cảm biến | Electron app đăng nhập admin demo, chọn backend, xem/chỉnh thiết bị, chạy scenario, theo dõi readiness, incident và log realtime | `apps/desktop/`, lệnh `pnpm desktop:dev` | Chỉ là công cụ demo/test; credentials tài khoản seed đang hard-code trong renderer; chưa được phép ghi production |
-| Sensor emit tự kích hoạt incident | Event cảm biến đã persist sẽ lên lịch scan incident debounce 1,2 giây; burst event được gộp, lỗi scan không chặn cập nhật sensor | `apps/backend/src/simulation/simulation.service.ts`, `apps/backend/src/simulation/__tests__/incident-scan-debounce.spec.ts` | Dedupe chỉ chặn sự cố cùng loại/thiết bị còn mở; simulator isolation/permission production vẫn chưa hoàn tất |
+| Sensor emit tự kích hoạt incident | Event cảm biến đã persist sẽ lên lịch scan incident debounce 1,2 giây; burst event được gộp, lỗi scan không chặn cập nhật sensor | `apps/backend/src/simulation/simulation.service.ts`, `apps/backend/src/simulation/__tests__/incident-scan-debounce.spec.ts` | Dedupe chỉ chặn sự cố cùng loại/thiết bị còn mở |
+| Biên an toàn simulator | Mutation vận hành mặc định tắt; runtime demo có cấu hình PostgreSQL/Redis/volume/credentials/backend port riêng và launcher guard reset/start | `apps/backend/src/simulation/`, `.env.demo.example`, `infrastructure/docker-compose.yml`, `infrastructure/demo/`, `apps/backend/src/config/env.validation.ts` | Hỗ trợ cấu hình cô lập đã hoàn tất; chưa có biên bản smoke live chạy đồng thời stack vận hành và demo trên máy pilot |
 
 Năm blocker trực tiếp:
 
-1. Simulator có thể làm sai tồn kho thật và ghi actor admin không đúng.
+1. Simulator đã có cấu hình runtime demo tách biệt; deployment vận hành vẫn phải giữ mutation flag ở `false`, và pilot còn phải smoke live hai stack đồng thời.
 2. Transfer nhận `quantity` nhưng di chuyển toàn batch.
 3. Mission đa role không chạy qua các phiên đăng nhập độc lập.
 4. Web trả vật tư gửi sai contract backend.
@@ -246,22 +247,22 @@ Thứ tự quyết định bắt buộc:
 - [x] Sự cố mới được AI diễn giải nền, lưu explanation, cập nhật notification/email; AI lỗi vẫn giữ cảnh báo rule-based.
 - [x] Email sự cố hỗ trợ SMTP, người nhận theo profile + organization/warehouse scope, BCC và fallback vận hành.
 - [x] Web hiển thị explanation và đưa sự cố vào bong bóng trợ lý sau khi query/refetch thấy bản AI enrichment.
-- [ ] Simulator mutation bị khóa khỏi production và có permission/scope riêng.
+- [x] Simulator mutation mặc định khóa trong runtime vận hành; permission/scope riêng và cấu hình runtime demo cô lập đã có.
 - [ ] Next.js có play/pause/reset/x1/x10 và chỉnh thiết bị; hiện panel chủ yếu read-only.
-- [ ] Socket.IO handshake xác thực JWT; room do server cấp.
+- [x] Socket.IO handshake xác thực access JWT; role/warehouse room do server cấp từ assignment DB, client không tự join.
 - [ ] Readiness/incident UI subscribe realtime đúng kho.
 - [ ] Incident view có detail, evidence timeline, assign/ack/resolve đúng permission.
 - [ ] Redaction, prompt-injection defense và output-safety test cho AI explain-incident hoàn chỉnh.
 - [ ] `sim.html` không dùng CDN/credential hard-code nếu còn dùng cho demo.
 
-**Verdict:** demo path đã có app desktop và phản ứng sensor -> readiness/incident; integration vẫn chưa an toàn cho production vì simulator permission/isolation và WebSocket auth chưa đạt.
+**Verdict:** demo path đã có app desktop, phản ứng sensor -> readiness/incident và cấu hình runtime demo cô lập. Đây là mức implementation/config; live pilot dual-stack smoke, session revocation và hardening mạng vẫn chưa nghiệm thu.
 
 ### 5.7. Normal Mode, assistant và report
 
 - [x] Có forecast cạn kho, hạn dùng, rebalance, trend, weather và monthly narrative.
 - [x] Có assistant dùng snapshot kho, câu nhanh, Ollama cho câu mở và trả lời trực tiếp tình huống khẩn cấp trong chat; tình huống có người mắc kẹt có fallback không phụ thuộc AI/database.
 - [ ] Snapshot assistant/insights scope đúng kho và quyền.
-- [ ] Report approval atomic, idempotent và xử lý đúng SKU có nhiều batch.
+- [x] Report approval atomic, idempotent và xử lý đúng SKU có nhiều batch.
 - [ ] Role frontend/backend cho report thống nhất.
 - [ ] AI service có automated test và policy redaction/output đầy đủ.
 - [ ] Forecast nâng từ trung bình phẳng lên dự báo thống kê có độ tin cậy và reorder point (chi tiết: `docs/plan-tang-ham-luong-ai-di-thi.md`, B2).
@@ -324,7 +325,7 @@ Thứ tự quyết định bắt buộc:
 | Prisma migrations | Không có |
 | Dependency audit production | 16 finding: 6 high, 9 moderate, 1 low |
 
-Kết luận: test hiện tại chứng minh tốt các hàm rule/compute thuần. Chưa chứng minh authorization, controller contract, concurrency, WebSocket hoặc workflow đa role.
+Kết luận: test hiện tại chứng minh tốt các hàm rule/compute thuần, một số concurrency path và WebSocket auth/room isolation. Authorization toàn hệ thống, controller contract và workflow đa role vẫn chưa được chứng minh đầy đủ.
 
 ## 7. Workflow nghiệm thu bắt buộc
 
@@ -366,7 +367,7 @@ ADMIN bật demo mode
   -> reset đưa dữ liệu demo về trạng thái biết trước
 ```
 
-Hiện trạng: **Một phần**. App desktop đã có slider thiết bị, chạy scenario x1/x10, reset và quan sát Readiness/incident; chưa có pause, Next.js control đầy đủ, WebSocket auth, production isolation, portable-package acceptance hoặc nghiệm thu Ollama/SMTP live.
+Hiện trạng: **Một phần**. App desktop đã có slider thiết bị, chạy scenario x1/x10, reset, WebSocket auth và quan sát Readiness/incident; cấu hình demo đã tách database/Redis/volume/credentials/backend port khỏi vận hành. Chưa nghiệm thu live hai stack đồng thời, pause, Next.js control đầy đủ, portable package hoặc Ollama/SMTP live.
 
 ### 7.4. Workflow online/offline pilot
 
@@ -385,15 +386,16 @@ Hiện trạng: **Chưa nghiệm thu**.
 
 ### P0 - Chặn corruption, privilege bypass và double-write
 
-- [ ] Tách simulator demo/prod; production disable mutation mặc định.
-- [ ] Thêm permission simulator riêng, scope kho và system actor riêng.
+- [x] Production disable mutation simulator mặc định.
+- [x] Hỗ trợ cấu hình runtime simulator demo tách database/Redis/volume/credentials/backend port khỏi vận hành.
+- [x] Thêm permission simulator riêng, scope kho/run và system actor riêng từng kho.
 - [ ] Centralize organization/commune/warehouse scope cho REST, AI snapshot và WebSocket.
 - [ ] Sửa transfer partial bằng tách batch transactionally; authorize source/destination.
-- [ ] Xác thực Socket.IO handshake; server tự join role/warehouse room.
+- [x] Xác thực Socket.IO handshake; server tự join role/warehouse room từ assignment hiện tại trong DB.
 - [ ] Tách `incident:view`, `incident:ack`, `incident:assign`, `incident:resolve`.
 - [ ] Sửa loan return contract; borrow/return atomic; giữ condition hỏng; partial loan đúng.
 - [ ] Mission fulfillment atomic, idempotent, scoped theo allocation/kho.
-- [ ] Report approval atomic, idempotent, multi-batch đúng.
+- [x] Report approval atomic, idempotent, multi-batch đúng.
 - [ ] Giới hạn upload, nâng dependency có CVE high trên path public.
 
 Điều kiện thoát P0:
@@ -449,6 +451,7 @@ Hiện trạng: **Chưa nghiệm thu**.
 - [ ] Secret production ngoài Git; bỏ credential demo/hard-code.
 - [ ] Backup retry/checksum/retention; restore drill ghi nhận RPO/RTO.
 - [ ] Reboot test toàn bộ Windows services, Docker, AI và Ollama.
+- [ ] Smoke live đồng thời runtime vận hành và demo trên máy pilot; xác nhận runtime vận hành giữ `SIMULATION_MUTATION_ENABLED=false`, demo dùng cổng 3110 và không chia sẻ dữ liệu/volume.
 - [ ] Online/LAN/offline/recovery acceptance test.
 - [ ] Offline tiles/package không phụ thuộc CDN.
 - [ ] Scan cổng public và dependency audit không còn high exploitable trong scope.

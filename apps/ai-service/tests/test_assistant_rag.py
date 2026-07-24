@@ -56,6 +56,29 @@ def _hit(score=0.91):
     )
 
 
+def _procedure_hit(score=0.9):
+    # Chunk kiểu quy trình: nhiều câu mô tả các bước → phải render mỗi câu một dòng bullet.
+    return SearchHit(
+        id="storm-prep",
+        document="quy-trinh-ung-pho-bao-lu.md",
+        heading="Chuẩn bị trước khi bão, lũ đổ bộ",
+        text=(
+            "Chủ động dự trữ lương thực, nước uống và thuốc men đủ dùng nhiều ngày. "
+            "Kê cao tài sản và cất giữ giấy tờ quan trọng ở nơi an toàn. "
+            "Trước khi nước dâng cao, chủ động ngắt nguồn điện và khóa van gas."
+        ),
+        score=score,
+        sources=(
+            {
+                "title": "Cục Quản lý đê điều và Phòng, chống thiên tai",
+                "locator": "Hướng dẫn đảm bảo an toàn trước mưa lớn, ngập lụt, mục 2, 4 và 6",
+                "url": "https://phongchongthientai.mard.gov.vn/Pages/huong-dan.aspx",
+                "accessedAt": "2026-07-24",
+            },
+        ),
+    )
+
+
 def _result(*hits, available=True, reason=None):
     return SearchResult(
         available=available,
@@ -79,10 +102,10 @@ def test_assistant_rag_renders_exact_evidence_and_source(monkeypatch):
     answer = main.assistant(
         AssistantRequest(question="Một người cần bao nhiêu nước?", snapshot='{"stock":[]}')
     ).answer
-    assert answer.startswith(
-        "Mức tối thiểu là 15 lít mỗi người mỗi ngày cho uống và vệ sinh sinh hoạt."
-    )
-    assert "[Nguồn: Sphere Handbook 2018" in answer
+    assert answer.startswith("Dạ, theo tài liệu tham khảo:")
+    assert "Mức tối thiểu là 15 lít mỗi người mỗi ngày cho uống và vệ sinh sinh hoạt." in answer
+    assert "Nguồn tham khảo:" in answer
+    assert "Sphere Handbook 2018" in answer  # nguyên văn tiêu đề nguồn được giữ
     assert "https://spherestandards.org/handbook/" in answer
     assert retriever.calls == [("Một người cần bao nhiêu nước?", 3)]
 
@@ -97,6 +120,43 @@ def test_assistant_rag_renders_exact_evidence_and_source(monkeypatch):
     assert "url" not in payload["knowledge"][0]
 
 
+def test_procedure_evidence_renders_one_bullet_per_step(monkeypatch):
+    # Câu hỏi hành động/quy trình: model chọn nhiều câu evidence trong cùng một chunk.
+    retriever = FakeRetriever(_result(_procedure_hit()))
+    provider = FakeProvider([json.dumps({"evidenceIds": ["K1S1", "K1S2", "K1S3"]})])
+    _patch(monkeypatch, retriever, provider)
+
+    answer = main.assistant(
+        AssistantRequest(question="Cần chuẩn bị gì trước khi bão đổ bộ?", snapshot='{"stock":[]}')
+    ).answer
+
+    # Nhiều câu → mỗi câu một dòng bullet "•  " (chat bubble whitespace-pre-wrap, không markdown).
+    assert "•  Chủ động dự trữ lương thực, nước uống và thuốc men đủ dùng nhiều ngày." in answer
+    assert "•  Kê cao tài sản và cất giữ giấy tờ quan trọng ở nơi an toàn." in answer
+    assert "•  Trước khi nước dâng cao, chủ động ngắt nguồn điện và khóa van gas." in answer
+    # Đúng 3 bullet phần thân (khối nguồn dùng bullet riêng, đếm sau khi cắt).
+    body = answer.split("Nguồn tham khảo:")[0]
+    assert body.count("•  ") == 3
+    # Vẫn giữ khung giọng người + nguồn nguyên văn (không hồi quy Phần 3).
+    assert answer.startswith("Dạ, theo tài liệu tham khảo:")
+    assert "Cục Quản lý đê điều và Phòng, chống thiên tai" in answer
+
+
+def test_single_evidence_sentence_stays_inline_without_bullet(monkeypatch):
+    # Một câu evidence → giữ đoạn liền, KHÔNG thêm bullet (tránh nhiễu thị giác).
+    retriever = FakeRetriever(_result(_hit()))
+    provider = FakeProvider([json.dumps({"evidenceIds": ["K1S1"]})])
+    _patch(monkeypatch, retriever, provider)
+
+    answer = main.assistant(
+        AssistantRequest(question="Một người cần bao nhiêu nước?", snapshot='{"stock":[]}')
+    ).answer
+
+    body = answer.split("Nguồn tham khảo:")[0]
+    assert body.count("•  ") == 0
+    assert "Mức tối thiểu là 15 lít mỗi người mỗi ngày cho uống và vệ sinh sinh hoạt." in body
+
+
 def test_fabricated_evidence_id_retries_then_accepts_valid_id(monkeypatch):
     provider = FakeProvider([
         json.dumps({"evidenceIds": ["K9S1"]}),
@@ -107,7 +167,7 @@ def test_fabricated_evidence_id_retries_then_accepts_valid_id(monkeypatch):
     answer = main.assistant(
         AssistantRequest(question="Định mức nước", snapshot='{"stock":[]}')
     ).answer
-    assert answer.startswith("Mức tối thiểu là 15 lít")
+    assert "Mức tối thiểu là 15 lít" in answer
     assert len(provider.json_calls) == 2
     retry_payload = json.loads(provider.json_calls[1][1])
     assert "previousError" in retry_payload
@@ -124,7 +184,7 @@ def test_model_cannot_inject_claim_url_or_changed_unit(monkeypatch):
     answer = main.assistant(
         AssistantRequest(question="Định mức nước", snapshot='{"stock":[]}')
     ).answer
-    assert answer.startswith("Mức tối thiểu là 15 lít")
+    assert "Mức tối thiểu là 15 lít" in answer
     assert "nước nhiễm mặn" not in answer.lower()
     assert "viên thuốc" not in answer.lower()
     assert "evil.example" not in answer
@@ -165,6 +225,21 @@ def test_no_hit_keeps_snapshot_flow_without_citation(monkeypatch):
     payload = json.loads(provider.json_calls[0][1])
     assert payload["knowledge"] == []
     assert payload["knowledgeStatus"] == "no_relevant_document"
+
+
+def test_plain_answer_preserves_newlines_and_normalizes_bullets(monkeypatch):
+    # Chat render whitespace-pre-wrap: xuống dòng phải được GIỮ, bullet markdown đổi thành "• ".
+    draft = "Dạ, kho còn các vật tư sau:\n- Áo phao\n- Nước uống\n\nAnh/chị nên kiểm tra thêm."
+    provider = FakeProvider([json.dumps({"answer": draft, "outOfScope": False})])
+    _patch(monkeypatch, FakeRetriever(_result()), provider)
+
+    answer = main.assistant(
+        AssistantRequest(question="Kho còn vật tư gì?", snapshot='{"stock":[]}')
+    ).answer
+    assert "\n" in answer  # không bị gộp thành một dòng
+    assert "•  Áo phao" in answer
+    assert "•  Nước uống" in answer
+    assert "- Áo phao" not in answer  # bullet markdown đã được chuẩn hoá
 
 
 def test_out_of_scope_discards_model_snapshot_dump(monkeypatch):

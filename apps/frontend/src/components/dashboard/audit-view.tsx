@@ -87,11 +87,16 @@ export function AuditView() {
 function AuditRow({ log }: { log: AuditLog }) {
   return (
     <div className="flex items-start gap-3 px-5 py-3">
-      <div className="mt-1 h-2 w-2 shrink-0 rounded-full" style={{ background: "var(--color-accent)" }} />
+      <div
+        className="mt-1 h-2 w-2 shrink-0 rounded-full"
+        style={{ background: "var(--color-accent)" }}
+      />
       <div className="min-w-0 flex-1">
         <p className="text-sm">
           <b className="capitalize">{readableAction(log.action)}</b>{" "}
-          <span className="text-[var(--text-muted)]">· {entityLabels[log.entity] ?? log.entity}</span>
+          <span className="text-[var(--text-muted)]">
+            · {entityLabels[log.entity] ?? log.entity}
+          </span>
         </p>
         {log.entityId && (
           <p className="truncate text-xs text-[var(--text-muted)]">Mã bản ghi: {log.entityId}</p>
