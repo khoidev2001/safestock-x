@@ -133,6 +133,19 @@ async function main() {
     password("truongthon123"),
   );
 
+  // Trưởng thôn báo cáo tình huống từ mobile (role REPORTER) — scope kho thôn đầu tiên.
+  const reportingHamlet = hamletWarehouses[0] ?? centralWarehouse;
+  await prisma.user.create({
+    data: {
+      organizationId: organization.id,
+      email: "truongthon@safestock.vn",
+      passwordHash: password("reporter123"),
+      fullName: `Trưởng thôn ${reportingHamlet.name.replace("Kho ", "")}`,
+      role: "REPORTER",
+      warehouseId: reportingHamlet.id,
+    },
+  });
+
   const deviceByCode = await seedDevices(prisma, {
     centralWarehouse,
     centralZones: zones,

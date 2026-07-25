@@ -29,15 +29,21 @@ def _load_pipeline():
         if _pipe is not None:
             return _pipe
         try:
+            import inspect
+
             import torch  # nặng — chỉ import khi thật sự dùng
             from transformers import pipeline
 
             device = 0 if torch.cuda.is_available() else -1
+            dtype = torch.float16 if device == 0 else torch.float32
+            # transformers 5.x đổi kwarg torch_dtype → dtype; 4.x vẫn dùng torch_dtype.
+            # Dò chữ ký để chạy đúng trên cả hai (tránh dtype lọt vào **kwargs bị bỏ qua).
+            dtype_kw = "dtype" if "dtype" in inspect.signature(pipeline).parameters else "torch_dtype"
             _pipe = pipeline(
                 "automatic-speech-recognition",
                 model=_MODEL_ID,
                 device=device,
-                torch_dtype=torch.float16 if device == 0 else torch.float32,
+                **{dtype_kw: dtype},
             )
             return _pipe
         except Exception as exc:  # noqa: BLE001 — báo lỗi rõ, không để service sập

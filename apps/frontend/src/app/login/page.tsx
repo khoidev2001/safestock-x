@@ -37,7 +37,7 @@ export default function LoginPage() {
       }
       const data = await response.json();
       setAuth(data.accessToken, data.refreshToken, data.user);
-      router.push("/");
+      router.push("/readiness");
     } catch (err) {
       setError(
         err instanceof TypeError

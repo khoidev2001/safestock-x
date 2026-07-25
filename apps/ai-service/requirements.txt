@@ -5,12 +5,17 @@ httpx==0.27.2
 python-dotenv==1.0.1
 
 # ==== Nhận dạng giọng nói PhoWhisper (offline, tuỳ chọn) ====
-# Cài cho máy demo có GPU. Nếu KHÔNG dùng voice, có thể bỏ qua khối này —
+# Cài cho máy demo dùng voice. Nếu KHÔNG dùng voice, có thể bỏ qua khối này —
 # endpoint /transcribe sẽ trả 503 và frontend degrade an toàn (vẫn gõ tay).
 #
-# torch: cài bản CUDA khớp driver (RTX 2060 → cu121). Chạy TRƯỚC lệnh dưới:
-#   pip install torch --index-url https://download.pytorch.org/whl/cu121
-# rồi mới: pip install -r requirements.txt
-transformers==4.44.2
-soundfile==0.12.1
-numpy==1.26.4
+# torch: mặc định bản CPU (chạy mọi máy, clip ngắn đủ nhanh). Cài TRƯỚC lệnh dưới:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+# Máy có GPU muốn nhanh hơn: chọn kênh CUDA khớp kiến trúc card
+#   (RTX 40xx → cu121/cu124; RTX 50xx Blackwell/sm_120 → cu128), rồi:
+#   pip install -r requirements.txt
+#
+# Không ghim phiên bản: các bản cũ không có wheel cho Python 3.14. Phối hợp đã kiểm thử:
+#   torch 2.13.0+cpu · transformers 5.14.1 · soundfile 0.14.0 · numpy 2.5.1
+transformers
+soundfile
+numpy

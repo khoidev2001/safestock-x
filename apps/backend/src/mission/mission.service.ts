@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { DeliveryOutcome, MissionStatus, NotificationKind, Prisma, UserRole } from "@prisma/client";
+import { IncidentType } from "@safestock/shared-types";
 import { AiClientService } from "../ai/ai-client.service";
 import { GeoService } from "../geo/geo.service";
 import { LatLng } from "../geo/haversine";
@@ -123,6 +124,66 @@ export class MissionService {
       include: { requirements: true },
     });
     return mission;
+  }
+
+  /**
+   * Trưởng thôn (mobile) báo cáo tình huống → tạo Mission DRAFT "hộp thư": chỉ lưu
+   * mô tả THÔ (`reportText`) + toạ độ + người báo, KHÔNG parse / phân bổ ở đây.
+   * Admin mở tin trên web mới chạy phân tích AI (tái dùng generatePlan). Trả mission.
+   */
+  async createReportDraft(input: {
+    warehouseId: string;
+    description: string;
+    userId?: string;
+    incidentPoint?: LatLng;
+  }) {
+    const warehouse = await this.prisma.warehouse.findUnique({
+      where: { id: input.warehouseId },
+    });
+    if (!warehouse) throw new NotFoundException("Không tìm thấy kho tiếp nhận báo cáo");
+
+    // parsedInput placeholder — chưa phân tích; web sẽ ghi đè khi lập phương án.
+    const placeholder: IncidentInput = {
+      incidentType: IncidentType.OTHER,
+      affectedPeople: 0,
+      durationHours: 24,
+      children: 0,
+      elderly: 0,
+      medicalSupportCases: 0,
+    };
+
+    return this.prisma.mission.create({
+      data: {
+        warehouseId: input.warehouseId,
+        incidentType: placeholder.incidentType,
+        affectedPeople: placeholder.affectedPeople,
+        durationHours: placeholder.durationHours,
+        priority: "MEDIUM",
+        parsedInput: placeholder as unknown as Prisma.InputJsonValue,
+        reportText: input.description,
+        status: MissionStatus.DRAFT,
+        incidentLat: input.incidentPoint?.lat,
+        incidentLng: input.incidentPoint?.lng,
+        createdByUserId: input.userId,
+      },
+    });
+  }
+
+  /**
+   * Chọn kho tiếp nhận báo cáo: ưu tiên kho scope của trưởng thôn → kho chỉ định →
+   * kho TỔNG (CENTRAL) của xã → kho bất kỳ. Không có kho nào → ném NotFound.
+   */
+  async resolveReportWarehouseId(scopeWarehouseId?: string | null, requestedId?: string) {
+    if (scopeWarehouseId) return scopeWarehouseId;
+    if (requestedId) return requestedId;
+    const central = await this.prisma.warehouse.findFirst({
+      where: { kind: "CENTRAL" },
+      orderBy: { createdAt: "asc" },
+    });
+    if (central) return central.id;
+    const any = await this.prisma.warehouse.findFirst({ orderBy: { createdAt: "asc" } });
+    if (!any) throw new NotFoundException("Chưa có kho nào để tiếp nhận báo cáo");
+    return any.id;
   }
 
   async getMission(id: string) {

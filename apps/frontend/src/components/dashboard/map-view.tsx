@@ -70,10 +70,18 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
             if (pickingId) setDraftCoord(pickingId, lat, lng);
           }}
         />
-        <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--text-muted)]">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-[var(--text-muted)]">
           <Legend color="var(--color-accent, #2f9e6e)" label="Kho tổng xã" />
           <Legend color="var(--text-muted, #8a8f98)" label="Kho thôn" />
-          <span>· Ranh giới xã: cụm Đồng Xuân (Phú Yên cũ)</span>
+          <span className="text-[var(--border)]">|</span>
+          {/* Màu ghim địa danh — khớp PLACE_COLORS trong map-canvas. */}
+          <Legend color="#7a2e12" label="Thôn/xóm" />
+          <Legend color="#d64545" label="Y tế" />
+          <Legend color="#2f6fd6" label="Trường học" />
+          <Legend color="#7b41c9" label="Hành chính" />
+          <Legend color="#1f7a52" label="Chợ/cửa hàng" />
+          <Legend color="#a06a1f" label="Tôn giáo" />
+          <span>· Ranh giới 102 xã/phường tỉnh Đắk Lắk (OSM) · địa danh đã bỏ nhãn “huyện”</span>
         </div>
       </div>
 

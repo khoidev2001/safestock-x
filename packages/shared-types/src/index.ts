@@ -59,6 +59,7 @@ export enum UserRole {
   WAREHOUSE = "WAREHOUSE",
   RESCUE = "RESCUE",
   ADMIN = "ADMIN",
+  REPORTER = "REPORTER", // trưởng thôn — báo cáo tình huống từ hiện trường (mobile)
 }
 
 /**
@@ -88,6 +89,7 @@ export enum Permission {
   ADMIN_USERS = "admin:users",
   REPORT_SUBMIT = "report:submit", // trưởng thôn gửi báo cáo kiểm kê tháng
   REPORT_APPROVE = "report:approve", // admin xã duyệt báo cáo
+  INCIDENT_REPORT_SUBMIT = "incident:report_submit", // trưởng thôn báo cáo tình huống khẩn cấp
 }
 
 /**
@@ -126,6 +128,12 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   [UserRole.ADMIN]: [
     // ADMIN có mọi quyền.
     ...Object.values(Permission),
+  ],
+  [UserRole.REPORTER]: [
+    // Trưởng thôn: báo cáo tình huống + dùng ghi âm (transcribe) + xem thông báo phản hồi.
+    Permission.INCIDENT_REPORT_SUBMIT,
+    Permission.MISSION_CREATE, // để gọi /missions/transcribe (đang yêu cầu quyền này)
+    Permission.NOTIFICATION_VIEW,
   ],
 };
 
