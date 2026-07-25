@@ -4,32 +4,41 @@ import { FlatList, Pressable, SafeAreaView, Text, TextInput, View } from "react-
 import { io, type Socket } from "socket.io-client";
 import { fetchNotifications, login, type AuthUser, type Notification } from "./api";
 import { MissionDetailScreen } from "./MissionDetail";
+import { ReportScreen } from "./ReportScreen";
 import { API_BASE } from "./config";
 import { c, styles } from "./styles";
+import {
+  assessDanger,
+  disasterOf,
+  formatShortTime,
+  kindIcon,
+  parseMissionSummary,
+} from "./disaster";
 
 export default function App() {
   const [session, setSession] = useState<{ token: string; user: AuthUser } | null>(null);
+  const logout = () => setSession(null);
 
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar style="light" />
-      {session ? (
-        <NotificationsScreen
-          token={session.token}
-          user={session.user}
-          onLogout={() => setSession(null)}
-        />
-      ) : (
+      {!session ? (
         <LoginScreen onLogin={(token, user) => setSession({ token, user })} />
+      ) : session.user.role === "REPORTER" ? (
+        // Trưởng thôn: màn báo cáo tình huống (gõ/ghi âm → gửi cơ quan điều phối).
+        <ReportScreen token={session.token} user={session.user} onLogout={logout} />
+      ) : (
+        // Đội cứu hộ (RESCUE) và role khác: nhận thông báo điều phối realtime.
+        <NotificationsScreen token={session.token} user={session.user} onLogout={logout} />
       )}
     </SafeAreaView>
   );
 }
 
-/** Màn đăng nhập — điền sẵn tài khoản cứu hộ để test nhanh. */
+/** Màn đăng nhập chung — trưởng thôn (báo cáo) hoặc đội cứu hộ (nhận điều phối). */
 function LoginScreen({ onLogin }: { onLogin: (token: string, user: AuthUser) => void }) {
-  const [email, setEmail] = useState("rescue@safestock.vn");
-  const [password, setPassword] = useState("rescue123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -49,7 +58,7 @@ function LoginScreen({ onLogin }: { onLogin: (token: string, user: AuthUser) => 
   return (
     <View style={styles.center}>
       <Text style={styles.logo}>SafeStock</Text>
-      <Text style={[styles.subtitle, { marginBottom: 28 }]}>Đội cứu hộ · Nhận điều phối</Text>
+      <Text style={[styles.subtitle, { marginBottom: 28 }]}>Ứng phó hiện trường</Text>
 
       <Text style={styles.label}>Email</Text>
       <TextInput
@@ -222,7 +231,84 @@ function NotificationsScreen({
   );
 }
 
+/**
+ * Thẻ thông báo. Nếu gắn nhiệm vụ (có missionId + parse được số người) → thẻ nổi bật
+ * làm rõ 3 tín hiệu: loại thiên tai · mức nguy hiểm · số người gặp nạn.
+ * Ngược lại → thẻ thông tin gọn (sự cố kho, readiness…).
+ */
 function Card({
+  item,
+  isNew,
+  onPress,
+}: {
+  item: Notification;
+  isNew: boolean;
+  onPress?: () => void;
+}) {
+  const summary = item.missionId ? parseMissionSummary(item.body) : null;
+  if (onPress && summary) {
+    return <MissionCard item={item} summary={summary} isNew={isNew} onPress={onPress} />;
+  }
+  return <InfoCard item={item} isNew={isNew} onPress={onPress} />;
+}
+
+/** Thẻ nhiệm vụ nổi bật — dành cho đội cứu hộ nắm bắt nhanh trong 1 cái liếc. */
+function MissionCard({
+  item,
+  summary,
+  isNew,
+  onPress,
+}: {
+  item: Notification;
+  summary: { type?: string; people: number };
+  isNew: boolean;
+  onPress: () => void;
+}) {
+  const disaster = disasterOf(summary.type ?? "");
+  const danger = assessDanger(summary.type ?? "", summary.people);
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${disaster.label}, ${danger.label}, ${summary.people} người gặp nạn`}
+      style={({ pressed }) => [
+        styles.missionCard,
+        isNew && styles.missionCardNew,
+        pressed && { opacity: 0.75 },
+      ]}
+    >
+      <View style={[styles.stripe, { backgroundColor: danger.stripe }]} />
+      <View style={styles.missionBody}>
+        <View style={styles.disasterRow}>
+          <Text style={styles.disasterIcon}>{disaster.icon}</Text>
+          <Text style={styles.disasterName}>{disaster.label}</Text>
+          {isNew ? (
+            <View style={styles.newBadge}>
+              <Text style={styles.newBadgeText}>MỚI</Text>
+            </View>
+          ) : null}
+          <View style={[styles.dangerBadge, { backgroundColor: danger.bg }]}>
+            <Text style={[styles.dangerBadgeText, { color: danger.color }]}>{danger.label}</Text>
+          </View>
+        </View>
+
+        <View style={styles.peopleRow}>
+          <Text style={styles.peopleNumber}>{summary.people}</Text>
+          <Text style={styles.peopleUnit}>người gặp nạn</Text>
+        </View>
+
+        <View style={styles.metaRow}>
+          <Text style={styles.metaTime}>🕐 {formatShortTime(item.createdAt)}</Text>
+          <Text style={styles.metaHint}>Xem chi tiết ›</Text>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+/** Thẻ thông tin gọn — thông báo không gắn nhiệm vụ. */
+function InfoCard({
   item,
   isNew,
   onPress,
@@ -237,37 +323,24 @@ function Card({
       disabled={!onPress}
       accessibilityRole={onPress ? "button" : undefined}
       style={({ pressed }) => [
-        styles.card,
-        isNew && styles.cardNew,
+        styles.infoCard,
+        isNew && styles.infoCardNew,
         pressed && onPress && { opacity: 0.7 },
       ]}
     >
-      <View style={styles.cardTop}>
-        <Text style={styles.cardTitle}>{item.title}</Text>
-        {isNew ? (
-          <View style={styles.newBadge}>
-            <Text style={styles.newBadgeText}>MỚI</Text>
-          </View>
-        ) : null}
-      </View>
-      <Text style={styles.cardBody}>{item.body}</Text>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-        <Text style={styles.cardTime}>{formatTime(item.createdAt)}</Text>
+      <Text style={styles.infoIcon}>{kindIcon(item.kind)}</Text>
+      <View style={{ flex: 1 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          {onPress ? <Text style={styles.cardTime}>Xem chi tiết ›</Text> : null}
-          <View style={[styles.chip, { marginTop: 8 }]}>
-            <Text style={styles.chipText}>{item.kind}</Text>
-          </View>
+          <Text style={styles.infoTitle}>{item.title}</Text>
+          {isNew ? (
+            <View style={styles.newBadge}>
+              <Text style={styles.newBadgeText}>MỚI</Text>
+            </View>
+          ) : null}
         </View>
+        <Text style={styles.infoBody}>{item.body}</Text>
+        <Text style={styles.infoTime}>🕐 {formatShortTime(item.createdAt)}</Text>
       </View>
     </Pressable>
   );
-}
-
-/** HH:mm dd/MM — giờ do backend cấp (createdAt), client chỉ format hiển thị. */
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getHours())}:${p(d.getMinutes())} · ${p(d.getDate())}/${p(d.getMonth() + 1)}`;
 }

@@ -43,6 +43,30 @@ export class CompleteMissionDto {
   note?: string;
 }
 
+/**
+ * Trưởng thôn (mobile) báo cáo tình huống từ hiện trường — chỉ gửi mô tả THÔ
+ * (gõ tay hoặc voice→text). KHÔNG parse ở đây; admin mở tin trên web mới phân tích.
+ */
+export class SubmitReportDto {
+  @IsString()
+  @MinLength(5)
+  description!: string;
+
+  // Kho tiếp nhận (tuỳ chọn) — mặc định lấy theo scope trưởng thôn hoặc kho tổng xã.
+  @IsOptional()
+  @IsString()
+  warehouseId?: string;
+
+  // Toạ độ điểm nạn (ghim tay trên mobile) — dùng lại khi web lập phương án.
+  @IsOptional()
+  @IsNumber()
+  incidentLat?: number;
+
+  @IsOptional()
+  @IsNumber()
+  incidentLng?: number;
+}
+
 /** Lập phương án: parse rồi phân bổ, HOẶC truyền tình huống đã parse sẵn. */
 export class GeneratePlanDto {
   @IsString()

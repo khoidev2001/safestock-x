@@ -22,10 +22,10 @@ import {
   prepareMission,
   resendMission,
   transcribeAudio,
+  type ClusterWarehouse,
   type DeliveryOutcome,
   type GenerateInput,
   type Mission,
-  type ParsedIncident,
 } from "@/lib/mission-api";
 import { blobToWavBase64 } from "@/lib/audio-wav";
 import { ActionPlanView } from "./action-plan-view";
@@ -83,6 +83,24 @@ const INCIDENT_TYPES = [
   { value: "OTHER", label: "Khác" },
 ];
 
+/** Tâm bản đồ mặc định (khớp incident-map) — dùng khi cụm chưa có kho nào. */
+const DEFAULT_CENTER: LatLng = { lat: 13.38, lng: 109.045 };
+
+/**
+ * Chưa nhập vị trí sự cố → chọn ngẫu nhiên một điểm gần một kho trong cụm
+ * (lệch ~1–4 km) để khoảng cách/ETA vẫn thực tế. Không có kho → quanh tâm bản đồ.
+ */
+function randomIncidentPoint(warehouses?: ClusterWarehouse[]): LatLng {
+  const base =
+    warehouses && warehouses.length > 0
+      ? warehouses[Math.floor(Math.random() * warehouses.length)]
+      : DEFAULT_CENTER;
+  // ~0.01–0.04° ≈ 1–4 km, hướng ngẫu nhiên quanh kho.
+  const angle = Math.random() * 2 * Math.PI;
+  const dist = 0.01 + Math.random() * 0.03;
+  return { lat: base.lat + Math.sin(angle) * dist, lng: base.lng + Math.cos(angle) * dist };
+}
+
 export function MissionView({ warehouseId }: { warehouseId: string }) {
   const role = useAuth((s) => s.user?.role);
   const queryClient = useQueryClient();
@@ -100,7 +118,6 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
   const [workflowError, setWorkflowError] = useState<string | null>(null);
   const [description, setDescription] = useState("");
   const [parseError, setParseError] = useState<string | null>(null);
-  const [parsedOk, setParsedOk] = useState(false);
 
   // Mở đúng nhiệm vụ khi bấm thông báo (chuông) — kể cả mission đã REJECTED/DEFERRED.
   const focusMissionId = useMissionFocus((s) => s.focusMissionId);
@@ -125,13 +142,16 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
   });
 
   const genPlan = useMutation({
-    mutationFn: () =>
-      generatePlan({
+    mutationFn: () => {
+      const point = incidentPoint ?? randomIncidentPoint(warehousesQuery.data);
+      if (!incidentPoint) setIncidentPoint(point);
+      return generatePlan({
         warehouseId,
         incident: form,
-        incidentLat: incidentPoint?.lat,
-        incidentLng: incidentPoint?.lng,
-      }),
+        incidentLat: point.lat,
+        incidentLng: point.lng,
+      });
+    },
     onSuccess: (m: Mission) => {
       setMissionId(m.id);
       setPlanError(null);
@@ -142,23 +162,35 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
       ),
   });
 
-  // AI trích xuất tình huống từ lời kể → điền vào form số để ADMIN xem lại & sửa (con người là trọng tài).
-  const parse = useMutation({
-    mutationFn: () => parseIncident(description),
-    onSuccess: (p: ParsedIncident) => {
-      setForm({
+  // AI phân tích lời kể → tính nhu cầu vật tư + lập phương án NGAY trong một bước.
+  // Mô tả chưa kèm toạ độ → chọn ngẫu nhiên một điểm gần kho để ước tính khoảng cách/ETA.
+  const analyze = useMutation({
+    mutationFn: async () => {
+      const p = await parseIncident(description);
+      const incident = {
         incidentType: p.incidentType,
         affectedPeople: p.affectedPeople,
         durationHours: p.durationHours,
         children: p.children,
         elderly: p.elderly,
         medicalSupportCases: p.medicalSupportCases,
+      };
+      setForm(incident); // phản chiếu lên form để cán bộ vẫn xem/sửa lại được sau
+      const point = incidentPoint ?? randomIncidentPoint(warehousesQuery.data);
+      if (!incidentPoint) setIncidentPoint(point);
+      return generatePlan({
+        warehouseId,
+        incident,
+        incidentLat: point.lat,
+        incidentLng: point.lng,
       });
+    },
+    onSuccess: (m: Mission) => {
+      setMissionId(m.id);
       setParseError(null);
-      setParsedOk(true);
+      setPlanError(null);
     },
     onError: (err) => {
-      setParsedOk(false);
       setParseError(
         err instanceof ApiError
           ? err.message
@@ -212,14 +244,10 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
 
             <DescribeIncidentBlock
               value={description}
-              onChange={(v) => {
-                setDescription(v);
-                setParsedOk(false);
-              }}
-              onAnalyze={() => parse.mutate()}
-              analyzing={parse.isPending}
+              onChange={setDescription}
+              onAnalyze={() => analyze.mutate()}
+              analyzing={analyze.isPending}
               error={parseError}
-              parsedOk={parsedOk}
             />
 
             <div className="mt-4 flex flex-wrap gap-2">
@@ -283,7 +311,7 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
             <button
               type="button"
               onClick={() => genPlan.mutate()}
-              disabled={genPlan.isPending || !incidentPoint}
+              disabled={genPlan.isPending}
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-md bg-[var(--color-accent)] px-4 py-2.5 font-semibold text-[var(--color-accent-fg)] transition hover:brightness-95 active:translate-y-px disabled:opacity-60"
             >
               <ColorIcon name="mission" size={19} tone="orange" />
@@ -291,7 +319,8 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
             </button>
             {!incidentPoint && (
               <p className="mt-2 text-xs text-[var(--text-muted)]">
-                Đánh dấu vị trí xảy ra sự cố trên bản đồ trước khi tiếp tục.
+                Chưa đánh dấu vị trí — hệ thống sẽ tự chọn một điểm gần kho. Bấm trên bản đồ để đặt
+                chính xác.
               </p>
             )}
             {planError && <p className="mt-2 text-xs text-[var(--color-critical)]">{planError}</p>}
@@ -831,9 +860,8 @@ function EmptyState({ isAdmin }: { isAdmin: boolean }) {
 }
 
 /**
- * Nhập tình huống bằng lời → AI trích xuất. Nút mic ghi âm rồi PhoWhisper local
- * nhận dạng (offline, giọng Việt). Người dùng đọc lại & sửa trước khi phân tích —
- * AI chỉ hỗ trợ nhập, con người quyết. Không hỗ trợ mic → ẩn nút, gõ tay vẫn chạy.
+ * Nhập tình huống bằng lời → AI phân tích và lập phương án cứu hộ ngay. Nút mic ghi âm
+ * rồi PhoWhisper local nhận dạng (offline, giọng Việt). Không hỗ trợ mic → ẩn nút, gõ tay vẫn chạy.
  */
 function DescribeIncidentBlock({
   value,
@@ -841,14 +869,12 @@ function DescribeIncidentBlock({
   onAnalyze,
   analyzing,
   error,
-  parsedOk,
 }: {
   value: string;
   onChange: (v: string) => void;
   onAnalyze: () => void;
   analyzing: boolean;
   error: string | null;
-  parsedOk: boolean;
 }) {
   // Ghi thêm vào cuối phần đã có (nối tiếp nhiều lần nói), gọn ghẽ khoảng trắng.
   const { supported, status, voiceError, toggle } = useAudioRecorder((text) =>
@@ -861,7 +887,9 @@ function DescribeIncidentBlock({
     <div className="mt-4 rounded-md border border-dashed bg-[var(--surface-2)] p-3">
       <div className="flex items-center gap-2">
         <ColorIcon name="magic" size={16} tone="amber" />
-        <span className="text-xs font-semibold">Mô tả tình huống bằng lời (AI trích xuất)</span>
+        <span className="text-xs font-semibold">
+          Mô tả tình huống bằng lời — AI phân tích &amp; lập phương án ngay
+        </span>
       </div>
       <div className="relative mt-2">
         <textarea
@@ -900,7 +928,7 @@ function DescribeIncidentBlock({
           className="inline-flex items-center gap-2 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-fg)] transition hover:brightness-95 active:translate-y-px disabled:opacity-60"
         >
           <ColorIcon name="magic" size={15} tone="amber" />
-          {analyzing ? "Đang phân tích…" : "Phân tích bằng AI"}
+          {analyzing ? "Đang phân tích & lập phương án…" : "Phân tích bằng AI"}
         </button>
         {recording && (
           <span className="text-xs text-[var(--color-critical)]">
@@ -909,11 +937,6 @@ function DescribeIncidentBlock({
         )}
         {transcribing && (
           <span className="text-xs text-[var(--text-muted)]">Đang nhận dạng giọng nói…</span>
-        )}
-        {parsedOk && !analyzing && (
-          <span className="text-xs text-[var(--color-ready)]">
-            ✓ Đã điền form bên dưới — hãy kiểm tra & sửa nếu cần
-          </span>
         )}
       </div>
       {voiceError && <p className="mt-1.5 text-xs text-[var(--color-attention)]">{voiceError}</p>}

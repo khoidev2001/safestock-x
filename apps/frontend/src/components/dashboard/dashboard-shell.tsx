@@ -1,71 +1,18 @@
 "use client";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { ColorIcon, type ColorIconName, type ColorIconTone } from "@/components/shared/color-icon";
 import { useAuth } from "@/lib/auth-store";
+import { navGroups, navItems, type NavItem } from "@/lib/dashboard-nav";
 import { NotificationBell } from "@/components/mission/notification-bell";
 import { UserProfileButton } from "@/components/profile/user-profile-button";
 
-export type DashboardView =
-  | "readiness"
-  | "insights"
-  | "assistant"
-  | "inventory"
-  | "simulator"
-  | "mission"
-  | "incident"
-  | "stocktake"
-  | "loan"
-  | "map"
-  | "report"
-  | "users"
-  | "audit";
-
 interface DashboardShellProps {
-  activeView: DashboardView;
   children: React.ReactNode;
-  onViewChange: (view: DashboardView) => void;
   warehouseName?: string;
 }
-
-const navItems: {
-  id: DashboardView;
-  label: string;
-  icon: ColorIconName;
-  tone: ColorIconTone;
-  group: "Điều hành" | "Nghiệp vụ kho" | "Quản trị";
-  adminOnly?: boolean;
-}[] = [
-  { id: "readiness", label: "Tổng quan", icon: "dashboard", tone: "green", group: "Điều hành" },
-  { id: "mission", label: "Điều phối cứu hộ", icon: "mission", tone: "orange", group: "Điều hành" },
-  { id: "insights", label: "Theo dõi, dự báo", icon: "insights", tone: "blue", group: "Điều hành" },
-  { id: "assistant", label: "Tra cứu kho", icon: "assistant", tone: "blue", group: "Điều hành" },
-  { id: "inventory", label: "Vật tư", icon: "inventory", tone: "orange", group: "Nghiệp vụ kho" },
-  { id: "stocktake", label: "Kiểm kê", icon: "stocktake", tone: "green", group: "Nghiệp vụ kho" },
-  { id: "loan", label: "Mượn, trả", icon: "loan", tone: "amber", group: "Nghiệp vụ kho" },
-  { id: "incident", label: "Sự cố", icon: "incident", tone: "red", group: "Nghiệp vụ kho" },
-  { id: "report", label: "Báo cáo tháng", icon: "report", tone: "green", group: "Nghiệp vụ kho" },
-  { id: "map", label: "Bản đồ kho", icon: "map", tone: "blue", group: "Nghiệp vụ kho" },
-  {
-    id: "simulator",
-    label: "Cảm biến thử nghiệm",
-    icon: "simulator",
-    tone: "amber",
-    group: "Quản trị",
-  },
-  {
-    id: "users",
-    label: "Tài khoản",
-    icon: "users",
-    tone: "blue",
-    group: "Quản trị",
-    adminOnly: true,
-  },
-  { id: "audit", label: "Nhật ký", icon: "audit", tone: "amber", group: "Quản trị" },
-];
-
-const navGroups = ["Điều hành", "Nghiệp vụ kho", "Quản trị"] as const;
 
 const roleLabels: Record<string, string> = {
   ADMIN: "Quản trị xã",
@@ -73,15 +20,15 @@ const roleLabels: Record<string, string> = {
   RESCUE: "Đội cứu hộ",
 };
 
-export function DashboardShell({
-  activeView,
-  children,
-  onViewChange,
-  warehouseName,
-}: DashboardShellProps) {
+export function DashboardShell({ children, warehouseName }: DashboardShellProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, clear } = useAuth();
   const visibleNav = navItems.filter((item) => !item.adminOnly || user?.role === "ADMIN");
+
+  function isActive(path: string) {
+    return pathname === path || pathname.startsWith(`${path}/`);
+  }
 
   function logout() {
     clear();
@@ -118,12 +65,7 @@ export function DashboardShell({
                   </p>
                   <div className="space-y-0.5">
                     {items.map((item) => (
-                      <NavButton
-                        key={item.id}
-                        isActive={activeView === item.id}
-                        item={item}
-                        onClick={() => onViewChange(item.id)}
-                      />
+                      <NavLink key={item.path} isActive={isActive(item.path)} item={item} />
                     ))}
                   </div>
                 </div>
@@ -148,7 +90,7 @@ export function DashboardShell({
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <NotificationBell onOpenMission={() => onViewChange("mission")} />
+                <NotificationBell onOpenMission={() => router.push("/mission")} />
                 <UserProfileButton onLogout={logout} />
               </div>
             </div>
@@ -158,13 +100,7 @@ export function DashboardShell({
               className="mx-auto mt-3 flex max-w-[1440px] gap-1 overflow-x-auto pb-1 lg:hidden"
             >
               {visibleNav.map((item) => (
-                <NavButton
-                  key={item.id}
-                  compact
-                  isActive={activeView === item.id}
-                  item={item}
-                  onClick={() => onViewChange(item.id)}
-                />
+                <NavLink key={item.path} compact isActive={isActive(item.path)} item={item} />
               ))}
             </nav>
           </header>
@@ -178,31 +114,28 @@ export function DashboardShell({
   );
 }
 
-function NavButton({
+function NavLink({
   compact = false,
   isActive,
   item,
-  onClick,
 }: {
   compact?: boolean;
   isActive: boolean;
-  item: { id: DashboardView; label: string; icon: ColorIconName; tone: ColorIconTone };
-  onClick: () => void;
+  item: { path: string; label: string; icon: ColorIconName; tone: ColorIconTone };
 }) {
   return (
-    <button
+    <Link
       aria-current={isActive ? "page" : undefined}
       className={`flex items-center rounded-md text-sm transition active:translate-y-px ${
         compact
           ? "w-auto shrink-0 justify-center gap-2 px-3 py-2.5 text-xs"
           : "w-full gap-3 px-3 py-2.5 text-left"
       }`}
-      onClick={onClick}
+      href={item.path}
       style={{
         background: isActive ? "var(--accent-soft)" : "transparent",
         color: isActive ? "var(--color-accent)" : "var(--text-muted)",
       }}
-      type="button"
     >
       <span
         className={`inline-flex shrink-0 items-center justify-center ${compact ? "h-7 w-7" : "h-8 w-8"}`}
@@ -210,6 +143,8 @@ function NavButton({
         <ColorIcon name={item.icon} size={compact ? 17 : 20} tone={item.tone} />
       </span>
       <span className={`truncate ${isActive ? "font-semibold" : "font-medium"}`}>{item.label}</span>
-    </button>
+    </Link>
   );
 }
+
+export type { NavItem };

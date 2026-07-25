@@ -17,9 +17,14 @@ interface CreateUserInput {
   warehouseId?: string | null;
 }
 
+/** Role được scope vào 1 kho thôn: phụ trách kho (WAREHOUSE) và trưởng thôn báo cáo (REPORTER). */
+function isWarehouseScopedRole(role: UserRole): boolean {
+  return role === UserRole.WAREHOUSE || role === UserRole.REPORTER;
+}
+
 /**
  * Quản lý user (ADMIN xã): tạo/sửa/xoá tài khoản, gán trưởng thôn vào 1 kho (warehouseId).
- * warehouseId chỉ có nghĩa với role WAREHOUSE (trưởng thôn scope kho); role khác → bỏ qua.
+ * warehouseId chỉ có nghĩa với role scope kho (WAREHOUSE/REPORTER); role khác → bỏ qua.
  */
 @Injectable()
 export class AdminUserService {
@@ -59,7 +64,7 @@ export class AdminUserService {
         passwordHash: bcrypt.hashSync(input.password, 10),
         fullName: input.fullName,
         role: input.role,
-        warehouseId: input.role === UserRole.WAREHOUSE ? (input.warehouseId ?? null) : null,
+        warehouseId: isWarehouseScopedRole(input.role) ? (input.warehouseId ?? null) : null,
       },
       select: { id: true, email: true, fullName: true, role: true, warehouseId: true },
     });
@@ -85,7 +90,7 @@ export class AdminUserService {
         role: patch.role,
         warehouseId:
           patch.warehouseId !== undefined
-            ? role === UserRole.WAREHOUSE
+            ? isWarehouseScopedRole(role)
               ? patch.warehouseId
               : null
             : undefined,
@@ -105,11 +110,11 @@ export class AdminUserService {
     return { deleted: true };
   }
 
-  /** warehouseId (nếu có) phải trỏ tới kho có thật; chỉ WAREHOUSE mới được gán. */
+  /** warehouseId (nếu có) phải trỏ tới kho có thật; chỉ role scope kho (WAREHOUSE/REPORTER) được gán. */
   private async assertWarehouseValid(role: UserRole, warehouseId?: string | null): Promise<void> {
     if (!warehouseId) return;
-    if (role !== UserRole.WAREHOUSE) {
-      throw new BadRequestException("Chỉ role WAREHOUSE (trưởng thôn) mới gán được kho");
+    if (!isWarehouseScopedRole(role)) {
+      throw new BadRequestException("Chỉ role WAREHOUSE/REPORTER (trưởng thôn) mới gán được kho");
     }
     const wh = await this.prisma.warehouse.findUnique({ where: { id: warehouseId } });
     if (!wh) throw new NotFoundException("Kho gán không tồn tại");

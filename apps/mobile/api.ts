@@ -46,8 +46,47 @@ export async function fetchNotifications(token: string): Promise<Notification[]>
   return res.json();
 }
 
+/** Giọng nói (WAV 16kHz base64) → text tiếng Việt bằng PhoWhisper local (proxy AI). */
+export async function transcribe(
+  token: string,
+  audioBase64: string,
+  mimeType = "audio/wav",
+): Promise<{ text: string }> {
+  const res = await fetch(`${API_BASE}/api/missions/transcribe`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ audioBase64, mimeType }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message ?? "Nhận dạng giọng nói chưa sẵn sàng");
+  }
+  return res.json();
+}
+
+/**
+ * Trưởng thôn gửi báo cáo tình huống từ hiện trường → backend tạo DRAFT + báo cơ quan
+ * điều phối (ADMIN). Trả { missionId }. Toạ độ tuỳ chọn (ghim điểm nạn nếu có).
+ */
+export async function submitReport(
+  token: string,
+  input: { description: string; incidentLat?: number; incidentLng?: number },
+): Promise<{ missionId: string }> {
+  const res = await fetch(`${API_BASE}/api/missions/report`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message ?? "Không gửi được báo cáo");
+  }
+  return res.json();
+}
+
 export interface MissionRequirement {
   id: string;
+  sku: string;
   itemName: string;
   required: number;
   allocated: number;
@@ -62,6 +101,10 @@ export interface MissionDetail {
   durationHours: number;
   status: string;
   fulfillment: number;
+  location?: string | null;
+  priority?: string | null;
+  createdAt?: string | null;
+  adminNote?: string | null;
   rejectionReason?: string | null;
   deliveryOutcome?: DeliveryOutcome | null;
   deliveryNote?: string | null;

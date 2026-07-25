@@ -14,6 +14,7 @@ enum UserRole {
   WAREHOUSE
   RESCUE
   ADMIN
+  REPORTER // trưởng thôn — báo cáo tình huống từ hiện trường (mobile)
 }
 
 enum ItemStatus {
@@ -461,6 +462,7 @@ model Mission {
   durationHours       Int
   priority            String
   parsedInput         Json // JSON tình huống đã parse (từ AI hoặc nhập tay)
+  reportText          String? // mô tả thô của trưởng thôn (mobile) — web đọc lại để tự điền + phân tích
   status              MissionStatus        @default(DRAFT)
   fulfillment         Float                @default(0) // mức đáp ứng % (min qua các loại)
   readinessAssessment Json? // blocker + trạng thái + mức đáp ứng tại lúc lập phương án
@@ -584,6 +586,7 @@ enum NotificationKind {
   MISSION_DEFERRED // admin tiếp nhận đơn → tạm hoãn, báo đội cứu hộ
   MISSION_CANCELLED // admin huỷ nhiệm vụ (kèm lý do) → báo đội cứu hộ
   MISSION_COMPLETED // đội cứu hộ xác nhận đã giao (kèm kết quả) → báo admin + kho
+  INCIDENT_REPORTED // trưởng thôn báo cáo tình huống từ hiện trường → báo admin
 }
 
 model Notification {

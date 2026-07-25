@@ -50,6 +50,8 @@ export interface Mission {
   durationHours: number;
   status: MissionStatus;
   fulfillment: number;
+  // Mô tả thô của trưởng thôn (mobile) khi mission là "hộp thư" báo cáo — web tự điền + phân tích.
+  reportText?: string | null;
   incidentLat: number | null;
   incidentLng: number | null;
   actionPlan: ActionPlan | null;

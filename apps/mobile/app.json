@@ -10,6 +10,14 @@
       "resizeMode": "contain",
       "backgroundColor": "#0f172a"
     },
+    "ios": {
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Dùng micro để ghi âm mô tả tình huống báo cáo cứu hộ."
+      }
+    },
+    "android": {
+      "permissions": ["RECORD_AUDIO"]
+    },
     "web": {
       "bundler": "metro"
     }

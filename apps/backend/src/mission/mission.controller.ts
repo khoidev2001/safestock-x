@@ -1,17 +1,19 @@
 import { Body, Controller, Get, Param, Post, Query, Request, UseGuards } from "@nestjs/common";
-import { MissionStatus } from "@prisma/client";
+import { MissionStatus, NotificationKind, UserRole } from "@prisma/client";
 import { IncidentType, Permission } from "@safestock/shared-types";
 import { AuthenticatedRequest } from "../auth/authenticated-request";
 import { JwtAuthGuard } from "../auth/guards";
 import { PermissionGuard } from "../rbac/permission.guard";
 import { RequirePermission } from "../rbac/permissions.decorator";
 import { AiClientService } from "../ai/ai-client.service";
+import { NotificationService } from "../notification/notification.service";
 import {
   AdminNoteDto,
   CompleteMissionDto,
   GeneratePlanDto,
   ParseDto,
   RejectMissionDto,
+  SubmitReportDto,
   TranscribeDto,
 } from "./dto";
 import { IncidentInput } from "./mission.compute";
@@ -23,6 +25,7 @@ export class MissionController {
   constructor(
     private missions: MissionService,
     private ai: AiClientService,
+    private notifications: NotificationService,
   ) {}
 
   /** Parse mô tả → tình huống JSON (proxy AI, có cache). */
@@ -37,6 +40,40 @@ export class MissionController {
   @Post("transcribe")
   transcribe(@Body() dto: TranscribeDto) {
     return this.ai.transcribe(dto.audioBase64, dto.mimeType ?? "audio/wav");
+  }
+
+  /**
+   * Trưởng thôn (mobile) gửi báo cáo tình huống từ hiện trường → tạo DRAFT "hộp thư"
+   * (lưu mô tả thô, CHƯA phân tích) → báo ADMIN. Admin mở tin trên web sẽ tự điền +
+   * tự phân tích AI (nhu cầu vật tư, tình huống, địa điểm). Trả { missionId }.
+   */
+  @RequirePermission(Permission.INCIDENT_REPORT_SUBMIT)
+  @Post("report")
+  async report(@Request() req: AuthenticatedRequest, @Body() dto: SubmitReportDto) {
+    const warehouseId = await this.missions.resolveReportWarehouseId(
+      req.user.warehouseId,
+      dto.warehouseId,
+    );
+    const incidentPoint =
+      dto.incidentLat != null && dto.incidentLng != null
+        ? { lat: dto.incidentLat, lng: dto.incidentLng }
+        : undefined;
+    const mission = await this.missions.createReportDraft({
+      warehouseId,
+      description: dto.description,
+      userId: req.user.userId,
+      incidentPoint,
+    });
+    const excerpt = dto.description.length > 140 ? `${dto.description.slice(0, 140)}…` : dto.description;
+    await this.notifications.create({
+      recipientRole: UserRole.ADMIN,
+      kind: NotificationKind.INCIDENT_REPORTED,
+      title: "Báo cáo mới từ trưởng thôn",
+      body: excerpt,
+      missionId: mission.id,
+      warehouseId,
+    });
+    return { missionId: mission.id };
   }
 
   /**
