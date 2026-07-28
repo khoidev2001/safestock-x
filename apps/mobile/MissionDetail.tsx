@@ -11,6 +11,7 @@ import {
 import { c, styles } from "./styles";
 import { assessDanger, disasterOf, formatLongTime } from "./disaster";
 import { supplyOf, supplyProgress } from "./supplies";
+import { readOfflineCache, writeOfflineCache } from "./offline-cache";
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: "Nháp",
@@ -38,11 +39,13 @@ const OUTCOME_OPTIONS: { key: DeliveryOutcome; label: string }[] = [
 /** Màn chi tiết nhiệm vụ + hành động Chấp nhận / Từ chối (kèm lý do). */
 export function MissionDetailScreen({
   token,
+  userId,
   missionId,
   onBack,
   onResolved,
 }: {
   token: string;
+  userId: string;
   missionId: string;
   onBack: () => void;
   onResolved: () => void;
@@ -50,6 +53,7 @@ export function MissionDetailScreen({
   const [mission, setMission] = useState<MissionDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [cacheStoredAt, setCacheStoredAt] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
@@ -59,16 +63,41 @@ export function MissionDetailScreen({
   const [deliveryNote, setDeliveryNote] = useState("");
 
   const load = useCallback(async () => {
-    setLoading(true);
     setError(null);
+    let hasCachedData = false;
     try {
-      setMission(await fetchMission(token, missionId));
+      const cached = await readOfflineCache<MissionDetail>(
+        userId,
+        `mission.${missionId}`,
+      );
+      if (cached) {
+        hasCachedData = true;
+        setMission(cached.data);
+        setCacheStoredAt(cached.storedAt);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+    } catch {
+      setLoading(true);
+    }
+    try {
+      const latest = await fetchMission(token, missionId);
+      setMission(latest);
+      setCacheStoredAt(null);
+      await writeOfflineCache(userId, `mission.${missionId}`, latest);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Lỗi tải dữ liệu");
+      setError(
+        hasCachedData
+          ? "Đang xem bản lưu vì không kết nối được máy chủ LAN."
+          : e instanceof Error
+            ? e.message
+            : "Lỗi tải dữ liệu",
+      );
     } finally {
       setLoading(false);
     }
-  }, [token, missionId]);
+  }, [token, userId, missionId]);
 
   useEffect(() => {
     load();
@@ -141,6 +170,24 @@ export function MissionDetailScreen({
         </View>
       ) : mission ? (
         <ScrollView contentContainerStyle={styles.detailScroll}>
+          {cacheStoredAt ? (
+            <View
+              style={{
+                borderWidth: 1,
+                borderColor: c.amber,
+                backgroundColor: "rgba(245,158,11,0.12)",
+                borderRadius: 10,
+                padding: 12,
+                marginBottom: 12,
+              }}
+              accessibilityRole="alert"
+            >
+              <Text style={{ color: c.amber, fontSize: 12, fontWeight: "700" }}>
+                Ngoại tuyến · chỉ đọc · bản lưu{" "}
+                {new Date(cacheStoredAt).toLocaleString("vi-VN")}
+              </Text>
+            </View>
+          ) : null}
           <MissionHero mission={mission} />
 
           <View style={styles.factRow}>
@@ -153,7 +200,7 @@ export function MissionDetailScreen({
 
           {error ? <Text style={[styles.errorText, { marginTop: 12 }]}>{error}</Text> : null}
 
-          {rejecting ? (
+          {cacheStoredAt ? null : rejecting ? (
             <View style={styles.reasonBox}>
               <Text style={styles.reasonTitle}>
                 {mission.status === "PENDING_RESCUE"

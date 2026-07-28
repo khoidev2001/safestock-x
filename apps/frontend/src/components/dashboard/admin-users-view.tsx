@@ -19,7 +19,12 @@ const ROLES = [
   { value: "ADMIN", label: "Quản trị xã" },
 ] as const;
 
-const roleLabels = new Map(ROLES.map((role) => [role.value, role.label]));
+// Nhãn HIỂN THỊ cho mọi role (gồm REPORTER — trưởng thôn báo cáo từ mobile, tạo qua seed/di động,
+// không nằm trong dropdown tạo tài khoản ở trên). Dùng string key để nhận mọi UserRole.
+const roleLabels = new Map<string, string>([
+  ...ROLES.map((role) => [role.value, role.label] as [string, string]),
+  ["REPORTER", "Trưởng thôn (báo cáo)"],
+]);
 
 /** ADMIN xã quản lý tài khoản: tạo trưởng thôn gán kho, cứu hộ, quản trị. */
 export function AdminUsersView({ warehouseId }: { warehouseId: string }) {

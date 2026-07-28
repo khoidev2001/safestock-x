@@ -10,7 +10,7 @@ export const deviceTypeLabels: Record<string, string> = {
   DOOR: "Cửa kho",
   RFID_GATEWAY: "Cổng RFID",
   SMOKE: "Cảm biến khói",
-  CAMERA: "Camera",
+  CAMERA_AI: "Camera AI",
 };
 
 const deviceCodeLabels: Record<string, string> = {

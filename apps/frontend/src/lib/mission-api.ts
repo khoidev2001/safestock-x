@@ -18,8 +18,25 @@ export interface MissionRequirement {
   allocated: number;
   shortage: number;
   unit: string;
-  allocations: { batchId: string; qty: number; warehouseName?: string }[] | null;
+  allocations:
+    | {
+        batchId: string;
+        qty: number;
+        warehouseId?: string;
+        warehouseName?: string;
+      }[]
+    | null;
   neighborSuggestion: { name: string; distanceKm: number; available: number }[] | null;
+}
+
+export interface MissionWarehousePreparation {
+  id: string;
+  missionId: string;
+  warehouseId: string;
+  preparedByUserId: string | null;
+  preparedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type DeliveryOutcome = "DELIVERED" | "PARTIAL" | "FAILED";
@@ -45,9 +62,14 @@ export interface MissionReadinessAssessment {
 
 export interface Mission {
   id: string;
+  createdAt: string;
+  warehouseId: string;
   incidentType: string;
   affectedPeople: number;
   durationHours: number;
+  location?: string | null;
+  hamletId?: string | null;
+  hamletName?: string | null;
   status: MissionStatus;
   fulfillment: number;
   // Mô tả thô của trưởng thôn (mobile) khi mission là "hộp thư" báo cáo — web tự điền + phân tích.
@@ -57,6 +79,7 @@ export interface Mission {
   actionPlan: ActionPlan | null;
   readinessAssessment: MissionReadinessAssessment | null;
   requirements: MissionRequirement[];
+  warehousePreparations?: MissionWarehousePreparation[];
   rejectionReason?: string | null;
   adminNote?: string | null;
   deliveryOutcome?: DeliveryOutcome | null;
@@ -78,7 +101,7 @@ export interface ActionPlan {
     shortage: number;
     fromWarehouses: string[];
   }[];
-  warehouses: { name: string; distanceKm: number; etaMinutes: number; lat: number; lng: number }[];
+  warehouses: DispatchRoute[];
   forecasts: { label: string; probability: number }[];
   narrative: {
     objectives: string[];
@@ -87,6 +110,21 @@ export interface ActionPlan {
     followUpQuestions: string[];
   };
   generatedBy: "ai" | "template";
+}
+
+export interface DispatchRoute {
+  id: string;
+  name: string;
+  kind: "CENTRAL" | "HAMLET";
+  distanceKm: number | null;
+  etaMinutes: number | null;
+  lat: number;
+  lng: number;
+  routeStatus: "ROUTED" | "ENGINE_UNAVAILABLE" | "ROUTE_NOT_FOUND" | "TIMEOUT";
+  routeGeometry: { type: "LineString"; coordinates: [number, number][] } | null;
+  contributions: { sku: string; itemName: string; quantity: number; unit: string }[];
+  engine: "local-osrm";
+  graphVersion: string | null;
 }
 
 export interface ClusterWarehouse {
@@ -112,6 +150,7 @@ export interface GenerateInput {
   warehouseId: string;
   incident: {
     incidentType: string;
+    location?: string;
     affectedPeople: number;
     durationHours: number;
     children?: number;
@@ -128,9 +167,36 @@ export const generatePlan = (input: GenerateInput) =>
     body: JSON.stringify(input),
   });
 
+/** Tình huống đã parse để phân tích báo cáo (khớp ParsedIncident, gửi kèm khi có sẵn). */
+export interface PlanFromReportInput {
+  incident?: {
+    incidentType: string;
+    location?: string;
+    affectedPeople: number;
+    durationHours: number;
+    children?: number;
+    elderly?: number;
+    medicalSupportCases?: number;
+  };
+  description?: string;
+  incidentLat?: number;
+  incidentLng?: number;
+}
+
+/**
+ * Admin phân tích BÁO CÁO của trưởng thôn ngay trên mission đó (không tạo mission mới).
+ * Trả về mission đã cập nhật (kèm requirements + readiness) để hiển thị phương án.
+ */
+export const planFromReport = (id: string, input: PlanFromReportInput) =>
+  apiFetch<Mission>(`/api/missions/${id}/plan-from-report`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+
 /** Tình huống do AI trích xuất từ mô tả bằng lời (khớp form nhập tay). */
 export interface ParsedIncident {
   incidentType: string;
+  location?: string | null;
   affectedPeople: number;
   durationHours: number;
   children: number;

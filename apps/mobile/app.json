@@ -2,7 +2,8 @@
   "expo": {
     "name": "SafeStock Cứu hộ",
     "slug": "safestock-mobile",
-    "version": "0.1.0",
+    "version": "0.5.0",
+    "scheme": "safestock",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
@@ -16,8 +17,38 @@
       }
     },
     "android": {
-      "permissions": ["RECORD_AUDIO"]
+      "package": "vn.ungphonhanh.safestock",
+      "versionCode": 5,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
     },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ],
+      "expo-asset",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Cho phép SafeStock dùng camera để quét mã QR vật tư.",
+          "recordAudioAndroid": true
+        }
+      ]
+    ],
     "web": {
       "bundler": "metro"
     }

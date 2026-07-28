@@ -3,7 +3,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ColorIcon } from "@/components/shared/color-icon";
 import { useState } from "react";
-import { getOpenLoans, returnLoan, type LoanRecord } from "@/lib/dashboard-api";
+import {
+  createMutationRequestId,
+  getOpenLoans,
+  returnLoan,
+  type LoanRecord,
+} from "@/lib/dashboard-api";
 import { Pagination, usePagination } from "@/components/shared/pagination";
 
 export function LoanView({ warehouseId }: { warehouseId: string }) {
@@ -17,6 +22,20 @@ export function LoanView({ warehouseId }: { warehouseId: string }) {
   const pagination = usePagination(loans);
 
   if (query.isLoading) return <Skeleton />;
+
+  if (query.isError) {
+    return (
+      <section className="rounded-md border border-red-300 bg-[var(--surface)] p-6">
+        <p className="font-semibold text-[var(--color-critical)]">Không tải được phiếu mượn</p>
+        <p className="mt-1 text-sm text-[var(--text-muted)]">
+          Lỗi kết nối được giữ nguyên, không hiển thị thành trạng thái “không có phiếu”.
+        </p>
+        <button className="mt-4 rounded-md border px-3 py-2 text-sm font-semibold" onClick={() => void query.refetch()}>
+          Tải lại
+        </button>
+      </section>
+    );
+  }
 
   if (loans.length === 0) {
     return (
@@ -53,12 +72,14 @@ function LoanCard({ loan, warehouseId }: { loan: LoanRecord; warehouseId: string
   const [open, setOpen] = useState(false);
   const outstanding = loan.quantity - loan.returnedOk - loan.returnedDamaged - loan.lost;
   const [form, setForm] = useState({ returnedOk: outstanding, returnedDamaged: 0, lost: 0 });
+  const [requestId, setRequestId] = useState(createMutationRequestId);
 
   const mutate = useMutation({
-    mutationFn: () => returnLoan(loan.id, form),
+    mutationFn: () => returnLoan(loan.id, { ...form, requestId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["open-loans", warehouseId] });
       setOpen(false);
+      setRequestId(createMutationRequestId());
     },
   });
 
@@ -122,6 +143,11 @@ function LoanCard({ loan, warehouseId }: { loan: LoanRecord; warehouseId: string
               {mutate.isPending ? "Đang lưu…" : "Xác nhận trả"}
             </button>
           </div>
+          {mutate.isError ? (
+            <p className="mt-3 text-sm text-[var(--color-critical)]" role="alert">
+              {mutate.error instanceof Error ? mutate.error.message : "Không ghi nhận được phiếu hoàn."}
+            </p>
+          ) : null}
         </div>
       )}
     </section>

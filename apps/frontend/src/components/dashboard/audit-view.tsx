@@ -12,6 +12,7 @@ const FILTERS = [
   { value: "Mission", label: "Nhiệm vụ" },
   { value: "Incident", label: "Sự cố" },
   { value: "LoanRecord", label: "Mượn-trả" },
+  { value: "MonthlyStockReport", label: "Báo cáo tháng" },
 ];
 
 const entityLabels: Record<string, string> = {
@@ -19,6 +20,7 @@ const entityLabels: Record<string, string> = {
   Mission: "Nhiệm vụ",
   Incident: "Sự cố",
   LoanRecord: "Phiếu mượn",
+  MonthlyStockReport: "Báo cáo tháng",
 };
 
 function readableAction(value: string): string {
@@ -62,6 +64,15 @@ export function AuditView() {
 
       {query.isLoading ? (
         <div className="h-72 animate-pulse" aria-busy="true" />
+      ) : query.isError ? (
+        <div className="px-5 py-10 text-center">
+          <p className="text-sm font-semibold text-[var(--color-critical)]">
+            Không tải được nhật ký
+          </p>
+          <button className="mt-3 rounded-md border px-3 py-1.5 text-sm" onClick={() => void query.refetch()}>
+            Tải lại
+          </button>
+        </div>
       ) : logs.length === 0 ? (
         <p className="px-5 py-10 text-center text-sm text-[var(--text-muted)]">
           Chưa có bản ghi hậu kiểm.
@@ -101,12 +112,51 @@ function AuditRow({ log }: { log: AuditLog }) {
         {log.entityId && (
           <p className="truncate text-xs text-[var(--text-muted)]">Mã bản ghi: {log.entityId}</p>
         )}
+        <p className="truncate text-xs text-[var(--text-muted)]">
+          Người thực hiện: {log.actor?.fullName ?? log.actorId ?? "Hệ thống"}
+        </p>
+        <AuditMetadata metadata={log.metadata} />
       </div>
       <p className="shrink-0 text-xs text-[var(--text-muted)]">
         {new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyle: "short" }).format(
           new Date(log.createdAt),
         )}
       </p>
+    </div>
+  );
+}
+
+function AuditMetadata({ metadata }: { metadata: unknown }) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+  const value = metadata as Record<string, unknown>;
+  const reason =
+    typeof value.reason === "string"
+      ? value.reason
+      : typeof value.note === "string"
+        ? value.note
+        : null;
+  const before =
+    typeof value.before === "number"
+      ? value.before
+      : typeof value.beforeStatus === "string"
+        ? value.beforeStatus
+        : null;
+  const after =
+    typeof value.after === "number"
+      ? value.after
+      : typeof value.afterStatus === "string"
+        ? value.afterStatus
+        : null;
+  const quantity = typeof value.quantity === "number" ? value.quantity : null;
+
+  if (!reason && before === null && after === null && quantity === null) return null;
+  return (
+    <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-[var(--text-muted)]">
+      {before !== null || after !== null ? (
+        <span>Trước/sau: {String(before ?? "—")} → {String(after ?? "—")}</span>
+      ) : null}
+      {quantity !== null ? <span>Số lượng: {quantity}</span> : null}
+      {reason ? <span className="basis-full">Lý do: {reason}</span> : null}
     </div>
   );
 }

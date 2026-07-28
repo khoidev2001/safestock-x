@@ -6,8 +6,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { ColorIcon, type ColorIconName, type ColorIconTone } from "@/components/shared/color-icon";
 import { useAuth } from "@/lib/auth-store";
 import { navGroups, navItems, type NavItem } from "@/lib/dashboard-nav";
+import { missionDeepLink } from "@/lib/mission-inbox-state";
 import { NotificationBell } from "@/components/mission/notification-bell";
 import { UserProfileButton } from "@/components/profile/user-profile-button";
+import { roleHasPermission } from "@safestock/shared-types";
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -24,7 +26,9 @@ export function DashboardShell({ children, warehouseName }: DashboardShellProps)
   const router = useRouter();
   const pathname = usePathname();
   const { user, clear } = useAuth();
-  const visibleNav = navItems.filter((item) => !item.adminOnly || user?.role === "ADMIN");
+  const visibleNav = navItems.filter(
+    (item) => user?.role && roleHasPermission(user.role, item.requiredPermission),
+  );
 
   function isActive(path: string) {
     return pathname === path || pathname.startsWith(`${path}/`);
@@ -90,7 +94,9 @@ export function DashboardShell({ children, warehouseName }: DashboardShellProps)
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <NotificationBell onOpenMission={() => router.push("/mission")} />
+                <NotificationBell
+                  onOpenMission={(missionId) => router.push(missionDeepLink(missionId))}
+                />
                 <UserProfileButton onLogout={logout} />
               </div>
             </div>

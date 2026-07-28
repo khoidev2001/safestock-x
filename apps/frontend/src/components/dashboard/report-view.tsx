@@ -5,13 +5,12 @@ import { ColorIcon } from "@/components/shared/color-icon";
 import { useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-store";
 import {
-  approveReport,
   listReports,
-  rejectReport,
   uploadReport,
   type StockReport,
 } from "@/lib/report-api";
 import { Pagination, usePagination } from "@/components/shared/pagination";
+import { ReportReviewDialog } from "./report-review-dialog";
 
 /** Báo cáo kiểm kê tháng: trưởng thôn gửi tệp, quản trị xã duyệt và cập nhật kho. */
 export function ReportView({ warehouseId }: { warehouseId: string }) {
@@ -53,8 +52,9 @@ function UploadCard({ warehouseId }: { warehouseId: string }) {
         <span>Gửi báo cáo kiểm kê tháng</span>
       </div>
       <p className="mt-1 text-sm text-[var(--text-muted)]">
-        Đính kèm bảng kiểm kê gồm 7 cột: mã vật tư, tên vật tư, số lượng, đơn vị, hạn dùng, tình
-        trạng và ghi chú. Số liệu chỉ được cập nhật sau khi xã phê duyệt.
+        Đính kèm bảng kiểm kê theo từng lô. Giữ 7 cột cũ và thêm Batch ID, mã lô, mã kệ ở
+        cột 8–10; báo cáo có một SKU ở nhiều lô sẽ không được duyệt nếu thiếu định danh lô.
+        Số liệu chỉ được cập nhật sau khi xã phê duyệt.
       </p>
 
       <div className="mt-4 flex flex-wrap items-end gap-3">
@@ -97,16 +97,11 @@ function UploadCard({ warehouseId }: { warehouseId: string }) {
 }
 
 function ReportList({ isAdmin }: { isAdmin: boolean }) {
-  const qc = useQueryClient();
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const reportsQuery = useQuery({
     queryKey: ["reports"],
     queryFn: () => listReports(),
     refetchInterval: 8000,
-  });
-
-  const act = useMutation({
-    mutationFn: (fn: () => Promise<unknown>) => fn(),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["reports"] }),
   });
 
   const reports = reportsQuery.data ?? [];
@@ -117,7 +112,18 @@ function ReportList({ isAdmin }: { isAdmin: boolean }) {
       <h3 className="text-sm font-semibold">
         {isAdmin ? "Báo cáo thôn chờ duyệt" : "Báo cáo đã gửi"}
       </h3>
-      {reports.length === 0 ? (
+      {reportsQuery.isLoading ? (
+        <div className="mt-4 h-24 animate-pulse rounded-md bg-[var(--surface-2)]" aria-busy="true" />
+      ) : reportsQuery.isError ? (
+        <div className="mt-4 rounded-md border border-red-300 p-4">
+          <p className="text-sm font-semibold text-[var(--color-critical)]">
+            Không tải được danh sách báo cáo
+          </p>
+          <button className="mt-3 rounded-md border px-3 py-1.5 text-sm" onClick={() => void reportsQuery.refetch()}>
+            Tải lại
+          </button>
+        </div>
+      ) : reports.length === 0 ? (
         <p className="mt-3 text-sm text-[var(--text-muted)]">Chưa có báo cáo nào.</p>
       ) : (
         <ul className="mt-4 divide-y">
@@ -126,8 +132,7 @@ function ReportList({ isAdmin }: { isAdmin: boolean }) {
               key={r.id}
               report={r}
               isAdmin={isAdmin}
-              busy={act.isPending}
-              onAct={act.mutate}
+              onOpen={() => setSelectedReportId(r.id)}
             />
           ))}
         </ul>
@@ -139,6 +144,13 @@ function ReportList({ isAdmin }: { isAdmin: boolean }) {
         totalItems={reports.length}
         totalPages={pagination.totalPages}
       />
+      {selectedReportId ? (
+        <ReportReviewDialog
+          id={selectedReportId}
+          isAdmin={isAdmin}
+          onClose={() => setSelectedReportId(null)}
+        />
+      ) : null}
     </section>
   );
 }
@@ -146,13 +158,11 @@ function ReportList({ isAdmin }: { isAdmin: boolean }) {
 function ReportRow({
   report,
   isAdmin,
-  busy,
-  onAct,
+  onOpen,
 }: {
   report: StockReport;
   isAdmin: boolean;
-  busy: boolean;
-  onAct: (fn: () => Promise<unknown>) => void;
+  onOpen: () => void;
 }) {
   const tone =
     report.status === "APPROVED"
@@ -185,26 +195,13 @@ function ReportRow({
         >
           {label}
         </span>
-        {isAdmin && report.status === "PENDING" && (
-          <>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onAct(() => approveReport(report.id))}
-              className="inline-flex items-center gap-1 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-fg)] transition hover:brightness-95 active:translate-y-px disabled:opacity-60"
-            >
-              <ColorIcon name="success" size={16} tone="green" /> Duyệt
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onAct(() => rejectReport(report.id))}
-              className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-xs font-semibold transition hover:bg-[var(--surface-2)] active:translate-y-px disabled:opacity-60"
-            >
-              <ColorIcon name="blocked" size={16} tone="red" /> Từ chối
-            </button>
-          </>
-        )}
+        <button
+          type="button"
+          onClick={onOpen}
+          className="rounded-md border px-3 py-1.5 text-xs font-semibold transition hover:bg-[var(--surface-2)]"
+        >
+          {isAdmin && report.status === "PENDING" ? "Xem & duyệt" : "Xem chi tiết"}
+        </button>
       </div>
     </li>
   );

@@ -23,6 +23,7 @@ const KIND_LABEL: Record<string, string> = {
   BAD_STORAGE: "Bảo quản kém",
   FIRE_RISK: "Nghi cháy",
   POWER_OUTAGE: "Mất điện",
+  MISPLACED_ITEM: "Vật tư sai vị trí",
   STAT_ANOMALY: "Bất thường cảm biến",
   PREDICTIVE_WARNING: "Cảnh báo sớm",
 };

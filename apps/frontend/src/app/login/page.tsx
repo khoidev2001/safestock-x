@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ColorIcon } from "@/components/shared/color-icon";
@@ -136,6 +137,16 @@ export default function LoginPage() {
               ) : null}
               {isLoading ? "Đang đăng nhập" : "Đăng nhập"}
             </button>
+
+            <div className="mt-6 border-t pt-5 text-center">
+              <Link
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-3 text-sm font-semibold text-[var(--color-accent)] transition hover:bg-[var(--accent-soft)]"
+                href="/contacts"
+              >
+                <ColorIcon name="phone" size={19} tone="green" />
+                Xem số liên hệ UBND các xã
+              </Link>
+            </div>
           </form>
         </section>
       </div>

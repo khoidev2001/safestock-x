@@ -3,9 +3,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ColorIcon } from "@/components/shared/color-icon";
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-store";
 import { useMissionFocus } from "@/lib/mission-focus-store";
+import { filterMissionInbox, missionDeepLink } from "@/lib/mission-inbox-state";
 import type { LatLng } from "@/lib/geo";
 import { ApiError } from "@/lib/api";
 import {
@@ -16,19 +18,20 @@ import {
   dispatchMission,
   generateActionPlan,
   generatePlan,
-  getClusterWarehouses,
   getMission,
+  listMissions,
   parseIncident,
+  planFromReport,
   prepareMission,
   resendMission,
   transcribeAudio,
-  type ClusterWarehouse,
   type DeliveryOutcome,
   type GenerateInput,
   type Mission,
 } from "@/lib/mission-api";
 import { blobToWavBase64 } from "@/lib/audio-wav";
 import { ActionPlanView } from "./action-plan-view";
+import { MissionInbox } from "./mission-inbox";
 import { MissionReadinessPanel } from "./mission-readiness-panel";
 import { WorkflowStepper } from "./workflow-stepper";
 
@@ -83,37 +86,40 @@ const INCIDENT_TYPES = [
   { value: "OTHER", label: "Khác" },
 ];
 
-/** Tâm bản đồ mặc định (khớp incident-map) — dùng khi cụm chưa có kho nào. */
-const DEFAULT_CENTER: LatLng = { lat: 13.38, lng: 109.045 };
-
-/**
- * Chưa nhập vị trí sự cố → chọn ngẫu nhiên một điểm gần một kho trong cụm
- * (lệch ~1–4 km) để khoảng cách/ETA vẫn thực tế. Không có kho → quanh tâm bản đồ.
- */
-function randomIncidentPoint(warehouses?: ClusterWarehouse[]): LatLng {
-  const base =
-    warehouses && warehouses.length > 0
-      ? warehouses[Math.floor(Math.random() * warehouses.length)]
-      : DEFAULT_CENTER;
-  // ~0.01–0.04° ≈ 1–4 km, hướng ngẫu nhiên quanh kho.
-  const angle = Math.random() * 2 * Math.PI;
-  const dist = 0.01 + Math.random() * 0.03;
-  return { lat: base.lat + Math.sin(angle) * dist, lng: base.lng + Math.cos(angle) * dist };
-}
+type IncidentForm = GenerateInput["incident"] & {
+  children: number;
+  elderly: number;
+  medicalSupportCases: number;
+};
 
 export function MissionView({ warehouseId }: { warehouseId: string }) {
   const role = useAuth((s) => s.user?.role);
+  const assignedWarehouseId = useAuth((s) => s.user?.warehouseId);
   const queryClient = useQueryClient();
-  const [missionId, setMissionId] = useState<string | null>(null);
-  const [form, setForm] = useState({
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const missionId = searchParams.get("mission")?.trim() || null;
+  const selectMission = useCallback(
+    (id: string, replace = false) => {
+      const href = missionDeepLink(id);
+      if (replace) {
+        router.replace(href, { scroll: false });
+      } else {
+        router.push(href, { scroll: false });
+      }
+    },
+    [router],
+  );
+  const [form, setForm] = useState<IncidentForm>({
     incidentType: "FLOOD",
+    location: "",
     affectedPeople: 100,
     durationHours: 24,
     children: 0,
     elderly: 0,
     medicalSupportCases: 0,
   });
-  const [incidentPoint, setIncidentPoint] = useState<LatLng | null>(null);
+  const [incidentPoint] = useState<LatLng | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
   const [description, setDescription] = useState("");
@@ -124,15 +130,39 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
   const clearFocus = useMissionFocus((s) => s.clearFocus);
   useEffect(() => {
     if (focusMissionId) {
-      setMissionId(focusMissionId);
+      if (focusMissionId !== missionId) {
+        selectMission(focusMissionId);
+      }
       clearFocus();
     }
-  }, [focusMissionId, clearFocus]);
+  }, [focusMissionId, missionId, clearFocus, selectMission]);
 
-  const warehousesQuery = useQuery({
-    queryKey: ["cluster-warehouses", warehouseId],
-    queryFn: () => getClusterWarehouses(warehouseId),
+  const missionListQuery = useQuery({
+    queryKey: ["missions", "inbox", role, assignedWarehouseId],
+    queryFn: () => listMissions(),
+    enabled: Boolean(role),
+    refetchInterval: 5000,
   });
+
+  useEffect(() => {
+    if (missionId || !missionListQuery.data?.length) {
+      return;
+    }
+
+    const activeMission = filterMissionInbox(missionListQuery.data, {
+      view: "active",
+      search: "",
+      role,
+      warehouseId: assignedWarehouseId,
+    })[0];
+    selectMission(activeMission?.id ?? missionListQuery.data[0].id, true);
+  }, [
+    assignedWarehouseId,
+    missionId,
+    missionListQuery.data,
+    role,
+    selectMission,
+  ]);
 
   const missionQuery = useQuery({
     queryKey: ["mission", missionId],
@@ -141,20 +171,51 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
     refetchInterval: 5000, // Cập nhật trạng thái khi bộ phận khác hoàn tất phần việc.
   });
 
+  const mission = missionQuery.data;
+  // Báo cáo của trưởng thôn (mobile): DRAFT chỉ có mô tả thô, chưa phân tích (0 nhu cầu).
+  // Admin mở tin này trên web để đọc lại rồi phân tích thành phương án ngay trên chính nó.
+  const isReportDraft =
+    Boolean(mission?.reportText) &&
+    mission?.status === "DRAFT" &&
+    mission.requirements.length === 0;
+
+  // Mở một báo cáo chưa phân tích → đổ mô tả thô vào ô nhập để admin xem lại rồi phân tích.
+  // Chỉ chạy khi cờ báo cáo/mô tả đổi (không đè chỉnh sửa của admin khi query tự refetch).
+  useEffect(() => {
+    if (isReportDraft && mission?.reportText) setDescription(mission.reportText);
+  }, [isReportDraft, mission?.reportText]);
+
+  // Phân tích BÁO CÁO đang mở ngay trên nó (không tạo mission mới) — dùng lại cho cả
+  // đường "mô tả bằng lời" lẫn "nhập tay form", tránh đẻ DRAFT mồ côi bỏ quên báo cáo.
+  const analyzeOpenReport = (incident: GenerateInput["incident"]) => {
+    const reportPoint =
+      mission?.incidentLat != null && mission?.incidentLng != null
+        ? { lat: mission.incidentLat, lng: mission.incidentLng }
+        : undefined;
+    return planFromReport(missionId as string, {
+      incident,
+      ...(reportPoint
+        ? { incidentLat: reportPoint.lat, incidentLng: reportPoint.lng }
+        : {}),
+    });
+  };
+
   const genPlan = useMutation({
     mutationFn: () => {
-      const point = incidentPoint ?? randomIncidentPoint(warehousesQuery.data);
-      if (!incidentPoint) setIncidentPoint(point);
+      if (missionId && isReportDraft) return analyzeOpenReport(form);
       return generatePlan({
         warehouseId,
         incident: form,
-        incidentLat: point.lat,
-        incidentLng: point.lng,
+        ...(incidentPoint
+          ? { incidentLat: incidentPoint.lat, incidentLng: incidentPoint.lng }
+          : {}),
       });
     },
     onSuccess: (m: Mission) => {
-      setMissionId(m.id);
+      selectMission(m.id);
       setPlanError(null);
+      queryClient.invalidateQueries({ queryKey: ["mission", m.id] });
+      queryClient.invalidateQueries({ queryKey: ["missions", "inbox"] });
     },
     onError: (err) =>
       setPlanError(
@@ -163,12 +224,13 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
   });
 
   // AI phân tích lời kể → tính nhu cầu vật tư + lập phương án NGAY trong một bước.
-  // Mô tả chưa kèm toạ độ → chọn ngẫu nhiên một điểm gần kho để ước tính khoảng cách/ETA.
+  // Backend chỉ chấp nhận thôn đã xác minh hoặc tọa độ thật; không sinh điểm giả để lấp dữ liệu.
   const analyze = useMutation({
     mutationFn: async () => {
       const p = await parseIncident(description);
       const incident = {
         incidentType: p.incidentType,
+        location: p.location ?? undefined,
         affectedPeople: p.affectedPeople,
         durationHours: p.durationHours,
         children: p.children,
@@ -176,19 +238,21 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
         medicalSupportCases: p.medicalSupportCases,
       };
       setForm(incident); // phản chiếu lên form để cán bộ vẫn xem/sửa lại được sau
-      const point = incidentPoint ?? randomIncidentPoint(warehousesQuery.data);
-      if (!incidentPoint) setIncidentPoint(point);
+      if (missionId && isReportDraft) return analyzeOpenReport(incident);
       return generatePlan({
         warehouseId,
         incident,
-        incidentLat: point.lat,
-        incidentLng: point.lng,
+        ...(incidentPoint
+          ? { incidentLat: incidentPoint.lat, incidentLng: incidentPoint.lng }
+          : {}),
       });
     },
     onSuccess: (m: Mission) => {
-      setMissionId(m.id);
+      selectMission(m.id);
       setParseError(null);
       setPlanError(null);
+      queryClient.invalidateQueries({ queryKey: ["mission", m.id] });
+      queryClient.invalidateQueries({ queryKey: ["missions", "inbox"] });
     },
     onError: (err) => {
       setParseError(
@@ -201,13 +265,24 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
 
   const genActionPlan = useMutation({
     mutationFn: () => generateActionPlan(missionId as string),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["mission", missionId] }),
+    onSuccess: () => {
+      setWorkflowError(null);
+      queryClient.invalidateQueries({ queryKey: ["missions", "inbox"] });
+      return queryClient.invalidateQueries({ queryKey: ["mission", missionId] });
+    },
+    onError: (err) =>
+      setWorkflowError(
+        err instanceof ApiError
+          ? err.message
+          : "Chưa thể lập kế hoạch cứu hộ. Vui lòng kiểm tra địa điểm ứng phó.",
+      ),
   });
 
   const step = useMutation({
     mutationFn: (fn: (id: string) => Promise<Mission>) => fn(missionId as string),
     onSuccess: () => {
       setWorkflowError(null);
+      queryClient.invalidateQueries({ queryKey: ["missions", "inbox"] });
       return queryClient.invalidateQueries({ queryKey: ["mission", missionId] });
     },
     onError: (err) =>
@@ -216,23 +291,32 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
       ),
   });
 
-  const mission = missionQuery.data;
   const isAdmin = role === "ADMIN";
-  const officialDistances = mission?.actionPlan
-    ? new Map(
-        mission.actionPlan.warehouses.map((w) => [
-          w.name,
-          { distanceKm: w.distanceKm, etaMinutes: w.etaMinutes },
-        ]),
-      )
-    : undefined;
   const effectiveIncidentPoint =
     mission?.incidentLat != null && mission?.incidentLng != null
       ? { lat: mission.incidentLat, lng: mission.incidentLng }
       : incidentPoint;
+  const missionHasIncidentPoint =
+    mission?.incidentLat != null && mission?.incidentLng != null;
+  const reportHasIncidentPoint = isReportDraft && missionHasIncidentPoint;
+  const canCalculatePlan = Boolean(
+    incidentPoint || form.location?.trim() || reportHasIncidentPoint,
+  );
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[380px_1fr]">
+    <div className="space-y-4">
+      <MissionInbox
+        missions={missionListQuery.data ?? []}
+        selectedMissionId={missionId}
+        role={role}
+        warehouseId={assignedWarehouseId}
+        isLoading={missionListQuery.isPending}
+        error={missionListQuery.error}
+        onRetry={() => missionListQuery.refetch()}
+        onSelect={selectMission}
+      />
+
+      <div className="grid gap-4 xl:grid-cols-[380px_1fr]">
       {/* Cột trái: nhập tình huống (chỉ ADMIN lập) */}
       <div className="space-y-4">
         {isAdmin && (
@@ -279,6 +363,14 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
                   ))}
                 </select>
               </Field>
+              <Field label="Địa điểm ứng phó">
+                <input
+                  value={form.location ?? ""}
+                  onChange={(e) => setForm({ ...form, location: e.target.value })}
+                  placeholder="Tên thôn đã được ADMIN xác minh"
+                  className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+                />
+              </Field>
               <div className="grid grid-cols-2 gap-3">
                 <NumberField
                   label="Số người"
@@ -311,16 +403,20 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
             <button
               type="button"
               onClick={() => genPlan.mutate()}
-              disabled={genPlan.isPending}
+              disabled={genPlan.isPending || !canCalculatePlan}
+              title={
+                canCalculatePlan
+                  ? undefined
+                  : "Cần nhập thôn đã xác minh trước khi tính nhu cầu"
+              }
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-md bg-[var(--color-accent)] px-4 py-2.5 font-semibold text-[var(--color-accent-fg)] transition hover:brightness-95 active:translate-y-px disabled:opacity-60"
             >
               <ColorIcon name="mission" size={19} tone="orange" />
               {genPlan.isPending ? "Đang tính nhu cầu" : "Tính nhu cầu vật tư"}
             </button>
-            {!incidentPoint && (
-              <p className="mt-2 text-xs text-[var(--text-muted)]">
-                Chưa đánh dấu vị trí — hệ thống sẽ tự chọn một điểm gần kho. Bấm trên bản đồ để đặt
-                chính xác.
+            {!canCalculatePlan && (
+              <p className="mt-2 text-xs text-[var(--color-critical)]">
+                Cần nhập tên thôn đã được ADMIN xác minh trước khi tính nhu cầu vật tư.
               </p>
             )}
             {planError && <p className="mt-2 text-xs text-[var(--color-critical)]">{planError}</p>}
@@ -332,15 +428,15 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
             <h3 className="text-sm font-semibold">Vị trí sự cố và các kho</h3>
             <p className="mt-1 text-sm text-[var(--text-muted)]">
               {mission
-                ? "Vị trí đã được ghi nhận trong phương án."
-                : "Bấm trên bản đồ hoặc kéo dấu ghim đến vị trí xảy ra sự cố."}
+                ? missionHasIncidentPoint
+                  ? "Vị trí đã được ghi nhận trong phương án."
+                  : "Nhiệm vụ chưa có điểm ứng phó. Hãy nhập thôn đã xác minh và tính lại phương án."
+                : "Nhập tên thôn đã được ADMIN xác minh để hệ thống xác định điểm ứng phó."}
             </p>
             <div className="mt-3">
               <IncidentMap
-                warehouses={warehousesQuery.data ?? []}
+                warehouses={mission?.actionPlan?.warehouses ?? []}
                 incidentPoint={effectiveIncidentPoint}
-                onPickPoint={mission ? undefined : setIncidentPoint}
-                officialDistances={officialDistances}
               />
             </div>
           </section>
@@ -368,10 +464,29 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
 
       {/* Cột phải: workflow + Action Plan */}
       <div className="space-y-4">
-        {!mission ? (
+        {missionId && missionQuery.isPending ? (
+          <MissionDetailLoading />
+        ) : missionQuery.isError ? (
+          <MissionDetailError
+            message={
+              missionQuery.error instanceof ApiError
+                ? missionQuery.error.message
+                : "Không mở được nhiệm vụ này. Nhiệm vụ có thể đã bị xóa hoặc bạn không có quyền truy cập."
+            }
+            onRetry={() => missionQuery.refetch()}
+          />
+        ) : !mission ? (
           <EmptyState isAdmin={isAdmin} />
         ) : (
           <>
+            {isReportDraft && (
+              <ReportDraftBanner
+                reportText={mission.reportText ?? ""}
+                isAdmin={isAdmin}
+                onAnalyze={() => analyze.mutate()}
+                analyzing={analyze.isPending}
+              />
+            )}
             {mission.readinessAssessment && (
               <MissionReadinessPanel assessment={mission.readinessAssessment} />
             )}
@@ -381,6 +496,9 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
                 <RoleActions
                   mission={mission}
                   role={role}
+                  assignedWarehouseId={assignedWarehouseId}
+                  isReportDraft={isReportDraft}
+                  hasIncidentPoint={missionHasIncidentPoint}
                   onGenerateActionPlan={() => genActionPlan.mutate()}
                   onDispatch={() => step.mutate(dispatchMission)}
                   onConfirm={() => step.mutate(confirmMission)}
@@ -410,6 +528,42 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
         )}
       </div>
     </div>
+    </div>
+  );
+}
+
+function MissionDetailLoading() {
+  return (
+    <div className="app-panel space-y-4 p-5" aria-label="Đang tải chi tiết nhiệm vụ" aria-busy>
+      <div className="h-5 w-44 animate-pulse rounded bg-[var(--surface-2)]" />
+      <div className="h-16 animate-pulse rounded-md bg-[var(--surface-2)]" />
+      <div className="h-36 animate-pulse rounded-md bg-[var(--surface-2)]" />
+    </div>
+  );
+}
+
+function MissionDetailError({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div
+      role="alert"
+      className="app-panel border-[var(--color-critical)]/30 bg-[var(--color-critical)]/5 p-5"
+    >
+      <h2 className="font-semibold">Không mở được nhiệm vụ</h2>
+      <p className="mt-1 text-sm text-[var(--text-muted)]">{message}</p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-4 rounded-md border bg-[var(--surface)] px-3 py-2 text-sm font-semibold transition hover:bg-[var(--surface-2)] active:translate-y-px"
+      >
+        Thử lại
+      </button>
+    </div>
   );
 }
 
@@ -421,6 +575,9 @@ const primaryStyle = { background: "var(--color-accent)", color: "var(--color-ac
 function RoleActions({
   mission,
   role,
+  assignedWarehouseId,
+  isReportDraft,
+  hasIncidentPoint,
   onGenerateActionPlan,
   onDispatch,
   onConfirm,
@@ -433,6 +590,9 @@ function RoleActions({
 }: {
   mission: Mission;
   role: string | undefined;
+  assignedWarehouseId: string | null | undefined;
+  isReportDraft: boolean;
+  hasIncidentPoint: boolean;
   onGenerateActionPlan: () => void;
   onDispatch: () => void;
   onConfirm: () => void;
@@ -444,11 +604,29 @@ function RoleActions({
   busy: boolean;
 }) {
   const isAdmin = role === "ADMIN";
+  const preparations = mission.warehousePreparations ?? [];
+  const preparedWarehouseCount = preparations.filter((item) => item.preparedAt).length;
+  const assignedPreparation = assignedWarehouseId
+    ? preparations.find((item) => item.warehouseId === assignedWarehouseId)
+    : undefined;
+  const isLegacySourceWarehouse =
+    preparations.length === 0 && assignedWarehouseId === mission.warehouseId;
+  const warehouseCanPrepare =
+    role === "WAREHOUSE" &&
+    mission.status === "PENDING_WAREHOUSE" &&
+    (Boolean(assignedPreparation && !assignedPreparation.preparedAt) ||
+      isLegacySourceWarehouse);
+  const warehouseAlreadyPrepared =
+    role === "WAREHOUSE" &&
+    mission.status === "PENDING_WAREHOUSE" &&
+    Boolean(assignedPreparation?.preparedAt);
   const showReason =
     (mission.status === "REJECTED" || mission.status === "DEFERRED") && mission.rejectionReason;
   // Admin huỷ được khi nhiệm vụ đang chạy nhưng kho CHƯA xuất vật tư.
   const adminCanCancelActive =
-    isAdmin && ["PENDING_RESCUE", "RESCUE_CONFIRMED", "PENDING_WAREHOUSE"].includes(mission.status);
+    isAdmin &&
+    ["PENDING_RESCUE", "RESCUE_CONFIRMED", "PENDING_WAREHOUSE"].includes(mission.status) &&
+    preparedWarehouseCount === 0;
 
   return (
     <div className="space-y-4">
@@ -465,15 +643,33 @@ function RoleActions({
         <DeliveryResultBanner outcome={mission.deliveryOutcome} note={mission.deliveryNote} />
       )}
 
+      {preparations.length > 0 &&
+        (mission.status === "PENDING_WAREHOUSE" || mission.status === "READY") && (
+          <div className="rounded-md border bg-[var(--surface-2)] p-3">
+            <p className="text-sm font-semibold">
+              Tiến độ kho: {preparedWarehouseCount}/{preparations.length} đã chuẩn bị
+            </p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              Nhiệm vụ chỉ sẵn sàng giao khi tất cả kho tham gia đã xuất phần được phân bổ.
+            </p>
+          </div>
+        )}
+
       <div className="flex flex-wrap gap-2">
-        {isAdmin && mission.status === "DRAFT" && (
+        {/* Báo cáo chưa phân tích: hành động nằm ở thẻ báo cáo phía trên, không hiện nút phương án. */}
+        {isAdmin && mission.status === "DRAFT" && !isReportDraft && (
           <>
             {!mission.actionPlan && (
               <button
                 className={actionBtn}
                 style={primaryStyle}
                 onClick={onGenerateActionPlan}
-                disabled={busy}
+                disabled={busy || !hasIncidentPoint}
+                title={
+                  hasIncidentPoint
+                    ? undefined
+                    : "Cần xác nhận địa điểm ứng phó trước khi lập kế hoạch"
+                }
               >
                 <ColorIcon name="mission" size={18} tone="orange" /> Lập kế hoạch cứu hộ
               </button>
@@ -483,9 +679,15 @@ function RoleActions({
                 className={actionBtn}
                 style={primaryStyle}
                 onClick={onDispatch}
-                disabled={busy || mission.readinessAssessment?.status === "NOT_DISPATCHABLE"}
-                title={
+                disabled={
+                  busy ||
+                  !hasIncidentPoint ||
                   mission.readinessAssessment?.status === "NOT_DISPATCHABLE"
+                }
+                title={
+                  !hasIncidentPoint
+                    ? "Cần xác nhận địa điểm ứng phó trước khi gửi"
+                    : mission.readinessAssessment?.status === "NOT_DISPATCHABLE"
                     ? "Cần xử lý phần vật tư còn thiếu trước khi gửi"
                     : undefined
                 }
@@ -496,17 +698,41 @@ function RoleActions({
           </>
         )}
 
+        {isAdmin &&
+          mission.status === "DRAFT" &&
+          !isReportDraft &&
+          !hasIncidentPoint && (
+            <p className="w-full text-sm text-[var(--color-critical)]">
+              Cần xác nhận địa điểm ứng phó trước khi lập kế hoạch hoặc gửi nhiệm vụ.
+            </p>
+          )}
+
         {role === "RESCUE" && mission.status === "PENDING_RESCUE" && (
           <button className={actionBtn} style={primaryStyle} onClick={onConfirm} disabled={busy}>
             Xác nhận nhận nhiệm vụ
           </button>
         )}
 
-        {role === "WAREHOUSE" && mission.status === "PENDING_WAREHOUSE" && (
+        {warehouseCanPrepare && (
           <button className={actionBtn} style={primaryStyle} onClick={onPrepare} disabled={busy}>
-            Chuẩn bị và xuất kho
+            Chuẩn bị và xuất phần của kho này
           </button>
         )}
+
+        {warehouseAlreadyPrepared && (
+          <p className="text-sm text-[var(--text-muted)]">
+            Kho của bạn đã xuất xong; đang chờ các kho còn lại.
+          </p>
+        )}
+
+        {role === "WAREHOUSE" &&
+          mission.status === "PENDING_WAREHOUSE" &&
+          !warehouseCanPrepare &&
+          !warehouseAlreadyPrepared && (
+            <p className="text-sm text-[var(--text-muted)]">
+              Kho của bạn không có phần vật tư được phân bổ trong nhiệm vụ này.
+            </p>
+          )}
 
         {/* RESCUE xác nhận đã giao tới hiện trường + kết quả (READY → COMPLETED) */}
         {role === "RESCUE" && mission.status === "READY" && (
@@ -856,6 +1082,57 @@ function EmptyState({ isAdmin }: { isAdmin: boolean }) {
           : "Chờ cơ quan lập và gửi phương án cứu hộ."}
       </p>
     </div>
+  );
+}
+
+/**
+ * Báo cáo thô của trưởng thôn (gửi từ mobile) — hiển thị nguyên văn để admin đọc lại,
+ * kèm nút phân tích. Mô tả đã được đổ sẵn xuống ô nhập bên trái để admin xem/sửa trước
+ * khi bấm phân tích; nút ở đây là lối tắt nhanh. RESCUE/WAREHOUSE chỉ xem, không phân tích.
+ */
+function ReportDraftBanner({
+  reportText,
+  isAdmin,
+  onAnalyze,
+  analyzing,
+}: {
+  reportText: string;
+  isAdmin: boolean;
+  onAnalyze: () => void;
+  analyzing: boolean;
+}) {
+  return (
+    <section className="app-panel border-l-4 border-l-[var(--color-accent)] p-5">
+      <div className="flex items-center gap-2">
+        <ColorIcon name="mission" size={18} tone="orange" />
+        <h3 className="text-sm font-semibold">Báo cáo từ trưởng thôn</h3>
+        <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-xs text-[var(--text-muted)]">
+          Chưa phân tích
+        </span>
+      </div>
+      <p className="mt-3 whitespace-pre-wrap rounded-md bg-[var(--surface)] p-3 text-sm">
+        {reportText}
+      </p>
+      {isAdmin ? (
+        <>
+          <p className="mt-3 text-xs text-[var(--text-muted)]">
+            Đã đổ mô tả xuống ô nhập bên trái — xem/sửa lại rồi phân tích thành phương án ngay trên
+            báo cáo này (không tạo tin mới).
+          </p>
+          <button
+            type="button"
+            onClick={onAnalyze}
+            disabled={analyzing}
+            className="mt-3 flex items-center justify-center gap-2 rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-fg)] transition hover:brightness-95 active:translate-y-px disabled:opacity-60"
+          >
+            <ColorIcon name="mission" size={18} tone="orange" />
+            {analyzing ? "Đang phân tích" : "Phân tích báo cáo"}
+          </button>
+        </>
+      ) : (
+        <p className="mt-3 text-xs text-[var(--text-muted)]">Chờ cơ quan phân tích và lập phương án.</p>
+      )}
+    </section>
   );
 }
 

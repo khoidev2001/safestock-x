@@ -3,7 +3,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ColorIcon } from "@/components/shared/color-icon";
 import { useState } from "react";
-import { getInventoryBatches, reconcileBatch, type InventoryBatch } from "@/lib/dashboard-api";
+import {
+  createMutationRequestId,
+  getInventoryBatches,
+  reconcileBatch,
+  type InventoryBatch,
+} from "@/lib/dashboard-api";
 import { Pagination, usePagination } from "@/components/shared/pagination";
 
 export function StocktakeView({ warehouseId }: { warehouseId: string }) {
@@ -17,6 +22,24 @@ export function StocktakeView({ warehouseId }: { warehouseId: string }) {
   const pagination = usePagination(batches);
 
   if (query.isLoading) return <Skeleton />;
+  if (query.isError) {
+    return (
+      <section className="rounded-md border border-red-300 bg-[var(--surface)] p-5" role="alert">
+        <p className="font-semibold text-[var(--color-critical)]">
+          Không tải được danh sách kiểm kê
+        </p>
+        <p className="mt-1 text-sm text-[var(--text-muted)]">
+          {query.error instanceof Error ? query.error.message : "Vui lòng thử lại."}
+        </p>
+        <button
+          className="mt-3 rounded-md border px-3 py-1.5 text-sm"
+          onClick={() => void query.refetch()}
+        >
+          Tải lại
+        </button>
+      </section>
+    );
+  }
 
   return (
     <section className="rounded-md border bg-[var(--surface)]">
@@ -29,7 +52,11 @@ export function StocktakeView({ warehouseId }: { warehouseId: string }) {
         </p>
       </div>
       <div className="divide-y">
-        {pagination.pageItems.map((b) => (
+        {batches.length === 0 ? (
+          <p className="p-5 text-sm text-[var(--text-muted)]">
+            Kho chưa có lô vật tư để kiểm kê.
+          </p>
+        ) : pagination.pageItems.map((b) => (
           <StocktakeRow key={b.id} batch={b} warehouseId={warehouseId} />
         ))}
       </div>
@@ -47,8 +74,10 @@ export function StocktakeView({ warehouseId }: { warehouseId: string }) {
 function StocktakeRow({ batch, warehouseId }: { batch: InventoryBatch; warehouseId: string }) {
   const queryClient = useQueryClient();
   const [counted, setCounted] = useState<string>("");
+  const [requestId, setRequestId] = useState(createMutationRequestId);
   const countedNum = counted === "" ? null : Number(counted);
   const diff = countedNum === null ? null : countedNum - batch.quantity;
+  const isValid = countedNum !== null && Number.isInteger(countedNum) && countedNum >= 0;
 
   const mutate = useMutation({
     mutationFn: () =>
@@ -57,10 +86,13 @@ function StocktakeRow({ batch, warehouseId }: { batch: InventoryBatch; warehouse
         countedQty: countedNum as number,
         applyOverride: true,
         note: "Kiểm kê tay",
+        requestId,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inventory-batches", warehouseId] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-transactions", warehouseId] });
       setCounted("");
+      setRequestId(createMutationRequestId());
     },
   });
 
@@ -69,7 +101,8 @@ function StocktakeRow({ batch, warehouseId }: { batch: InventoryBatch; warehouse
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{batch.item.name}</p>
         <p className="text-xs text-[var(--text-muted)]">
-          Lô {batch.code} · kệ {batch.shelf.zone.code}-{batch.shelf.code}
+          Lô {batch.batchCode} · kệ{" "}
+          {batch.shelf ? `${batch.shelf.zone.code}-${batch.shelf.code}` : "chưa xếp"}
         </p>
       </div>
       <div className="text-right">
@@ -97,12 +130,19 @@ function StocktakeRow({ batch, warehouseId }: { batch: InventoryBatch; warehouse
       </div>
       <button
         onClick={() => mutate.mutate()}
-        disabled={countedNum === null || diff === 0 || mutate.isPending}
+        disabled={!isValid || diff === 0 || mutate.isPending}
         className="rounded-md px-3 py-2 text-xs font-semibold text-[var(--color-accent-fg)] transition active:translate-y-px disabled:opacity-40"
         style={{ background: "var(--color-accent)" }}
       >
         Cập nhật
       </button>
+      {mutate.isError ? (
+        <p className="basis-full text-right text-xs text-[var(--color-critical)]" role="alert">
+          {mutate.error instanceof Error
+            ? mutate.error.message
+            : "Không cập nhật được kết quả kiểm kê."}
+        </p>
+      ) : null}
     </div>
   );
 }

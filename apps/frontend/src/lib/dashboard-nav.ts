@@ -1,4 +1,5 @@
 import type { ColorIconName, ColorIconTone } from "@/components/shared/color-icon";
+import { Permission } from "@safestock/shared-types";
 
 export type NavGroup = "Điều hành" | "Nghiệp vụ kho" | "Quản trị";
 
@@ -11,6 +12,7 @@ export interface NavItem {
   tone: ColorIconTone;
   group: NavGroup;
   adminOnly?: boolean;
+  requiredPermission: Permission;
   /** Tiêu đề + mô tả hiển thị ở đầu trang. */
   title: string;
   subtitle: string;
@@ -27,6 +29,7 @@ export const navItems: NavItem[] = [
     icon: "dashboard",
     tone: "green",
     group: "Điều hành",
+    requiredPermission: Permission.READINESS_VIEW,
     title: "Tình trạng sẵn sàng",
     subtitle: "Theo dõi khả năng vận hành, các vướng mắc và việc cần xử lý.",
   },
@@ -36,6 +39,7 @@ export const navItems: NavItem[] = [
     icon: "mission",
     tone: "orange",
     group: "Điều hành",
+    requiredPermission: Permission.MISSION_VIEW,
     title: "Điều phối cứu hộ",
     subtitle: "Ghi nhận tình huống, xác định nhu cầu và phối hợp cấp phát vật tư.",
   },
@@ -45,6 +49,7 @@ export const navItems: NavItem[] = [
     icon: "insights",
     tone: "blue",
     group: "Điều hành",
+    requiredPermission: Permission.READINESS_VIEW,
     title: "Theo dõi và dự báo",
     subtitle: "Nhận biết sớm nguy cơ thiếu hàng, hết hạn và nhu cầu điều chuyển giữa các kho.",
   },
@@ -54,6 +59,7 @@ export const navItems: NavItem[] = [
     icon: "assistant",
     tone: "blue",
     group: "Điều hành",
+    requiredPermission: Permission.INVENTORY_READ,
     title: "Tra cứu kho",
     subtitle: "Hỏi nhanh về số lượng, hạn dùng, sự cố và khả năng đáp ứng hiện tại.",
   },
@@ -63,6 +69,7 @@ export const navItems: NavItem[] = [
     icon: "inventory",
     tone: "orange",
     group: "Nghiệp vụ kho",
+    requiredPermission: Permission.INVENTORY_READ,
     title: "Kho vật tư",
     subtitle: "Tra cứu từng lô hàng, vị trí lưu trữ và số lượng hiện có.",
   },
@@ -72,6 +79,7 @@ export const navItems: NavItem[] = [
     icon: "stocktake",
     tone: "green",
     group: "Nghiệp vụ kho",
+    requiredPermission: Permission.INVENTORY_RECONCILE,
     title: "Kiểm kê",
     subtitle: "Đối chiếu số đếm thực tế với số liệu đang được ghi nhận.",
   },
@@ -81,6 +89,7 @@ export const navItems: NavItem[] = [
     icon: "loan",
     tone: "amber",
     group: "Nghiệp vụ kho",
+    requiredPermission: Permission.LOAN_MANAGE,
     title: "Mượn, trả vật tư",
     subtitle: "Theo dõi vật tư đã cho mượn và ghi nhận số lượng được hoàn trả.",
   },
@@ -90,6 +99,7 @@ export const navItems: NavItem[] = [
     icon: "incident",
     tone: "red",
     group: "Nghiệp vụ kho",
+    requiredPermission: Permission.NOTIFICATION_VIEW,
     title: "Sự cố kho",
     subtitle: "Ghi nhận và xử lý các vấn đề ảnh hưởng đến vật tư hoặc hoạt động của kho.",
   },
@@ -99,6 +109,7 @@ export const navItems: NavItem[] = [
     icon: "report",
     tone: "green",
     group: "Nghiệp vụ kho",
+    requiredPermission: Permission.REPORT_VIEW,
     title: "Báo cáo kiểm kê tháng",
     subtitle: "Tiếp nhận báo cáo từ các thôn, kiểm tra và cập nhật số liệu tồn kho.",
   },
@@ -108,6 +119,7 @@ export const navItems: NavItem[] = [
     icon: "map",
     tone: "blue",
     group: "Nghiệp vụ kho",
+    requiredPermission: Permission.WAREHOUSE_MANAGE,
     title: "Bản đồ kho trong xã",
     subtitle: "Theo dõi vị trí kho xã, kho thôn và cập nhật tọa độ khi cần.",
   },
@@ -117,6 +129,7 @@ export const navItems: NavItem[] = [
     icon: "simulator",
     tone: "amber",
     group: "Quản trị",
+    requiredPermission: Permission.SIMULATION_VIEW,
     title: "Cảm biến thử nghiệm",
     subtitle: "Theo dõi dữ liệu mô phỏng trước khi kết nối thiết bị thực tế.",
   },
@@ -126,6 +139,7 @@ export const navItems: NavItem[] = [
     icon: "users",
     tone: "blue",
     group: "Quản trị",
+    requiredPermission: Permission.ADMIN_USERS,
     adminOnly: true,
     title: "Quản lý tài khoản",
     subtitle: "Cấp quyền sử dụng cho phụ trách kho, đội cứu hộ và quản trị xã.",
@@ -136,6 +150,7 @@ export const navItems: NavItem[] = [
     icon: "audit",
     tone: "amber",
     group: "Quản trị",
+    requiredPermission: Permission.AUDIT_VIEW,
     title: "Nhật ký hoạt động",
     subtitle: "Tra cứu những thay đổi quan trọng đã thực hiện trên hệ thống.",
   },

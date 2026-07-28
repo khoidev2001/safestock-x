@@ -1,7 +1,8 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { submitReport, transcribe, type AuthUser } from "./api";
 import { isRecordingSupported, startRecording, type AudioRecording } from "./audio";
+import { MAX_RECORDING_MS } from "./audio-platform-state";
 import { c, styles } from "./styles";
 
 type MicStatus = "idle" | "recording" | "transcribing";
@@ -10,7 +11,7 @@ type MicStatus = "idle" | "recording" | "transcribing";
  * Màn báo cáo tình huống cho trưởng thôn (role REPORTER) trên mobile.
  * Mô tả tình huống bằng GÕ TAY hoặc GHI ÂM (voice → PhoWhisper → text) rồi gửi lên
  * cơ quan điều phối. Backend tạo DRAFT + báo ADMIN; admin mở tin trên web sẽ tự
- * phân tích AI. Ghi âm chỉ có trên Expo Web (dùng Web Audio); native → gõ tay.
+ * phân tích AI. Android APK dùng AudioRecord native; Expo Web dùng Web Audio.
  */
 export function ReportScreen({
   token,
@@ -28,6 +29,32 @@ export function ReportScreen({
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const recordingRef = useRef<AudioRecording | null>(null);
+  const recordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestRef = useRef<{ description: string; requestId: string } | null>(null);
+
+  useEffect(
+    () => () => {
+      if (recordingTimeoutRef.current) {
+        clearTimeout(recordingTimeoutRef.current);
+      }
+      const recording = recordingRef.current;
+      recordingRef.current = null;
+      if (recording) void recording.stop().catch(() => undefined);
+    },
+    [],
+  );
+
+  function createRequestId() {
+    return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+
+  function requestFor(descriptionText: string) {
+    const current = requestRef.current;
+    if (current?.description === descriptionText) return current.requestId;
+    const next = { description: descriptionText, requestId: createRequestId() };
+    requestRef.current = next;
+    return next.requestId;
+  }
   const micSupported = isRecordingSupported();
 
   /** Nối text nhận dạng vào ô mô tả (không đè phần đã gõ). */
@@ -37,31 +64,40 @@ export function ReportScreen({
     setDescription((prev) => (prev.trim() ? `${prev.trim()} ${clean}` : clean));
   }
 
+  async function finishRecording(recording = recordingRef.current) {
+    if (!recording || recordingRef.current !== recording) return;
+    recordingRef.current = null;
+    if (recordingTimeoutRef.current) {
+      clearTimeout(recordingTimeoutRef.current);
+      recordingTimeoutRef.current = null;
+    }
+    setMicStatus("transcribing");
+    try {
+      const base64 = await recording.stop();
+      if (!base64) return;
+      const { text } = await transcribe(token, base64);
+      if (text.trim()) appendText(text);
+      else setVoiceError("Chưa nghe rõ nội dung. Vui lòng nói lại hoặc gõ tay.");
+    } catch {
+      setVoiceError("Nhận dạng giọng nói chưa sẵn sàng — vui lòng gõ tay.");
+    } finally {
+      setMicStatus("idle");
+    }
+  }
+
   async function toggleRecording() {
     setVoiceError(null);
     if (micStatus === "recording") {
-      const recording = recordingRef.current;
-      recordingRef.current = null;
-      setMicStatus("transcribing");
-      try {
-        const base64 = await recording!.stop();
-        if (!base64) {
-          setMicStatus("idle");
-          return;
-        }
-        const { text } = await transcribe(token, base64);
-        if (text.trim()) appendText(text);
-        else setVoiceError("Chưa nghe rõ nội dung. Vui lòng nói lại hoặc gõ tay.");
-      } catch {
-        setVoiceError("Nhận dạng giọng nói chưa sẵn sàng — vui lòng gõ tay.");
-      } finally {
-        setMicStatus("idle");
-      }
+      await finishRecording();
       return;
     }
     if (micStatus === "idle") {
       try {
-        recordingRef.current = await startRecording();
+        const recording = await startRecording();
+        recordingRef.current = recording;
+        recordingTimeoutRef.current = setTimeout(() => {
+          void finishRecording(recording);
+        }, MAX_RECORDING_MS);
         setMicStatus("recording");
       } catch {
         setVoiceError("Không truy cập được micro. Kiểm tra quyền hoặc gõ tay.");
@@ -75,10 +111,13 @@ export function ReportScreen({
       setError("Vui lòng mô tả tình huống (ít nhất 5 ký tự).");
       return;
     }
+    const cleanDescription = description.trim();
+    const requestId = requestFor(cleanDescription);
     setSending(true);
     setError(null);
     try {
-      await submitReport(token, { description: description.trim() });
+      await submitReport(token, { description: cleanDescription, requestId });
+      requestRef.current = null;
       setSent(true);
       setDescription("");
     } catch (e) {
@@ -159,8 +198,8 @@ export function ReportScreen({
             </Pressable>
             <Text style={styles.micHint}>
               {micStatus === "recording"
-                ? "Đang ghi… nói rõ rồi bấm dừng."
-                : "Bấm để ghi âm, hệ thống tự chuyển thành chữ."}
+                ? "Đang ghi… nói rõ rồi bấm dừng (tối đa 60 giây)."
+                : "Bấm để ghi âm, hệ thống tự chuyển thành chữ bằng PhoWhisper."}
             </Text>
           </>
         ) : null}

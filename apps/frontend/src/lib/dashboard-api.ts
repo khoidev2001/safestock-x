@@ -20,7 +20,7 @@ export interface WarehouseZone {
 export interface ShelfSummary {
   id: string;
   code: string;
-  name: string;
+  name?: string;
   isLocked: boolean;
   _count?: { batches: number };
 }
@@ -82,24 +82,29 @@ export interface WarehouseReadiness {
 
 export interface InventoryBatch {
   id: string;
-  code: string;
+  batchCode: string;
   quantity: number;
   condition: string;
   circulation: string;
   expiryDate: string | null;
+  loans?: {
+    quantity: number;
+    returnedOk: number;
+    returnedDamaged: number;
+    lost: number;
+  }[];
   item: {
     id: string;
     name: string;
     sku: string;
-    unit: string;
-    category: { name: string };
+    category: { name: string; unit: string };
   };
   shelf: {
     id: string;
     code: string;
     name: string;
     zone: { id: string; name: string; code: string };
-  };
+  } | null;
 }
 
 export interface VirtualDevice {
@@ -141,7 +146,230 @@ export async function getWarehouseTree(warehouseId: string): Promise<WarehouseTr
 }
 
 export async function getInventoryBatches(warehouseId: string): Promise<InventoryBatch[]> {
-  return apiFetch<InventoryBatch[]>(`/api/inventory/warehouses/${warehouseId}/batches`);
+  const batches: InventoryBatch[] = [];
+  const seenCursors = new Set<string>();
+  let cursor: string | null = null;
+  do {
+    const query: string = cursor
+      ? `?cursor=${encodeURIComponent(cursor)}`
+      : "";
+    const page: {
+      data: InventoryBatch[];
+      nextCursor: string | null;
+    } = await apiFetch<{
+      data: InventoryBatch[];
+      nextCursor: string | null;
+    }>(
+      `/api/inventory/warehouses/${warehouseId}/batches-page${query}`,
+    );
+    batches.push(...page.data);
+    cursor = page.nextCursor;
+    if (cursor) {
+      if (seenCursors.has(cursor)) {
+        throw new Error("Phân trang tồn kho trả cursor bị lặp");
+      }
+      seenCursors.add(cursor);
+    }
+  } while (cursor);
+  return batches;
+}
+
+export function getTransferDestinations(
+  warehouseId: string,
+): Promise<WarehouseTree[]> {
+  return apiFetch<WarehouseTree[]>(
+    `/api/inventory/warehouses/${warehouseId}/transfer-destinations`,
+  );
+}
+
+export interface InventoryTransactionHistory {
+  id: string;
+  type: "IMPORT" | "EXPORT" | "TRANSFER" | "ADJUST" | "COUNT" | "CONDITION" | "RETURN";
+  source: string;
+  quantity: number;
+  beforeQuantity: number | null;
+  afterQuantity: number | null;
+  quantityDelta: number | null;
+  note: string | null;
+  createdAt: string;
+  user: { fullName: string };
+  batch: {
+    id: string;
+    batchCode: string;
+    item: { sku: string; name: string };
+    shelf: {
+      code: string;
+      zone: { code: string; name: string };
+    } | null;
+  };
+}
+
+export function getInventoryTransactions(
+  warehouseId: string,
+  limit = 100,
+): Promise<InventoryTransactionHistory[]> {
+  return apiFetch<InventoryTransactionHistory[]>(
+    `/api/inventory/warehouses/${warehouseId}/transactions?limit=${limit}`,
+  );
+}
+
+export interface SemanticInventoryResult {
+  id: string;
+  sku: string;
+  name: string;
+  categoryName: string;
+  unit: string;
+  availableQuantity?: number;
+  score: number;
+}
+
+export interface SemanticInventoryResponse {
+  available: boolean;
+  mode: "EMBEDDING" | "LEXICAL_FALLBACK";
+  reason: string | null;
+  results: SemanticInventoryResult[];
+}
+
+export interface NormalizeInventoryResponse extends SemanticInventoryResponse {
+  input: string;
+  reviewRequired: true;
+  autoApplied: false;
+}
+
+export function semanticSearchInventory(
+  warehouseId: string,
+  query: string,
+): Promise<SemanticInventoryResponse> {
+  const params = new URLSearchParams({ query, limit: "6" });
+  return apiFetch<SemanticInventoryResponse>(
+    `/api/inventory/warehouses/${warehouseId}/semantic-search?${params}`,
+  );
+}
+
+export function normalizeInventoryInput(name: string): Promise<NormalizeInventoryResponse> {
+  return apiFetch<NormalizeInventoryResponse>("/api/inventory/normalize-input", {
+    method: "POST",
+    body: JSON.stringify({ name, limit: 5 }),
+  });
+}
+
+export interface InventoryCatalogItem {
+  id: string;
+  name: string;
+  sku: string;
+  consumable: boolean;
+  categoryId: string;
+  category: { id: string; name: string; unit: string };
+}
+
+export type ReceiveBatchInput = {
+  itemId?: string;
+  newItem?: {
+    sku: string;
+    name: string;
+    consumable: boolean;
+    categoryId?: string;
+    categoryName?: string;
+    unit?: string;
+  };
+  shelfId: string;
+  batchCode: string;
+  quantity: number;
+  expiryDate?: string;
+  condition?: string;
+  note?: string;
+  requestId: string;
+};
+
+export function createMutationRequestId(): string {
+  return globalThis.crypto?.randomUUID?.() ??
+    `request-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+export function getInventoryCatalog(): Promise<InventoryCatalogItem[]> {
+  return apiFetch<InventoryCatalogItem[]>("/api/inventory/catalog");
+}
+
+export function receiveInventoryBatch(input: ReceiveBatchInput) {
+  return apiFetch<{
+    batch: InventoryBatch;
+    qrPayload: string;
+  }>("/api/inventory/batches", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function importInventoryBatch(input: {
+  batchId: string;
+  quantity: number;
+  note?: string;
+  requestId: string;
+}) {
+  return apiFetch("/api/inventory/import", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function exportInventoryBatch(input: {
+  batchId: string;
+  quantity: number;
+  note?: string;
+  requestId: string;
+}) {
+  return apiFetch("/api/inventory/export", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function transferInventoryBatch(input: {
+  batchId: string;
+  toShelfId: string;
+  quantity: number;
+  note?: string;
+  requestId: string;
+}) {
+  return apiFetch("/api/inventory/transfer", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function adjustInventoryBatch(input: {
+  batchId: string;
+  newQuantity: number;
+  reason: string;
+  requestId: string;
+}) {
+  return apiFetch("/api/inventory/adjust", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateInventoryCondition(input: {
+  batchId: string;
+  condition: string;
+  note: string;
+  requestId: string;
+}) {
+  return apiFetch("/api/inventory/condition", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function bulkExportInventory(input: {
+  items: { batchId: string; quantity: number }[];
+  note?: string;
+  requestId: string;
+}) {
+  return apiFetch("/api/inventory/bulk-export", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
 export async function getWarehouseReadiness(
@@ -199,10 +427,34 @@ export interface LoanRecord {
 export function getOpenLoans(warehouseId: string): Promise<LoanRecord[]> {
   return apiFetch<LoanRecord[]>(`/api/loans/warehouses/${warehouseId}/open`);
 }
+export const borrowInventoryBatch = (body: {
+  batchId: string;
+  quantity: number;
+  missionId?: string;
+  requestId: string;
+}) =>
+  apiFetch("/api/loans", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 export const returnLoan = (
   id: string,
-  body: { returnedOk: number; returnedDamaged: number; lost: number },
-) => apiFetch(`/api/loans/${id}/return`, { method: "POST", body: JSON.stringify(body) });
+  body: {
+    returnedOk: number;
+    returnedDamaged: number;
+    lost: number;
+    requestId?: string;
+  },
+) =>
+  apiFetch(`/api/loans/${id}/return`, {
+    method: "POST",
+    body: JSON.stringify({
+      ok: body.returnedOk,
+      damaged: body.returnedDamaged,
+      lost: body.lost,
+      requestId: body.requestId,
+    }),
+  });
 
 // ===== Hậu kiểm (audit) =====
 export interface AuditLog {
@@ -213,6 +465,7 @@ export interface AuditLog {
   entityId: string | null;
   metadata: unknown;
   createdAt: string;
+  actor?: { fullName: string; email: string } | null;
 }
 export function getAuditLogs(entity?: string): Promise<AuditLog[]> {
   const q = entity ? `?entity=${entity}` : "";
@@ -225,4 +478,5 @@ export const reconcileBatch = (body: {
   countedQty: number;
   applyOverride: boolean;
   note?: string;
+  requestId?: string;
 }) => apiFetch("/api/inventory/reconcile", { method: "POST", body: JSON.stringify(body) });

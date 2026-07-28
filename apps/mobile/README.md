@@ -1,6 +1,17 @@
 # @safestock/mobile
 
-App hiện trường cho **đội cứu hộ (RESCUE)** — nhận thông báo điều phối **realtime** qua WebSocket. Dựng bằng Expo, target **Expo Web** (chạy trong trình duyệt trên máy dev, hợp với WSL2).
+App hiện trường cho **REPORTER/RESCUE/WAREHOUSE/ADMIN** theo role — report, notification/mission, dashboard/readiness, QR và nghiệp vụ kho. Cut-line dự thi là APK Android cài ngoài Expo Go, kết nối backend qua private LAN khi public Internet tắt; Expo Web chỉ là dev fallback.
+
+## Khả năng hiện tại
+
+- Session access/refresh token lưu bằng Expo SecureStore; logout xóa session và cache theo tài khoản.
+- Trên APK Android, mọi snapshot offline được mã hóa AES-256-GCM trước khi ghi
+  AsyncStorage; khóa nằm trong Android Keystore và không được xuất sang
+  JavaScript. Cache plaintext của bản cũ bị loại bỏ theo cơ chế fail-closed.
+- Dashboard/readiness/cảnh báo, mưa Open-Meteo 72 giờ và bản tin AI đầu ngày; bản tin tải nền để không chặn dashboard.
+- Kho mobile: quét QR hoặc nhập tay, tìm thường/tìm semantic local, nhập, xuất, chuyển kệ, kiểm kê, điều chỉnh, báo tình trạng và xuất nhiều lô.
+- Mượn/hoàn vật tư, gồm hoàn tốt, hỏng và mất; action chỉ hiện khi role có quyền.
+- Cache offline-read cho notification, mission, dashboard và kho. Mất LAN hiển thị stale timestamp và khóa toàn bộ mutation; không có queue offline-write.
 
 ## Kiến trúc
 
@@ -32,20 +43,63 @@ Cần **3 tiến trình** (mở 3 terminal, chạy từ thư mục gốc repo):
 # 1. Backend (cổng 3100) — DB phải đã push + seed
 pnpm be:dev
 
-# 2. Dashboard web (để bấm Điều phối) — cổng 3000
+# 2. Dashboard web (để bấm Điều phối) — cổng 3200
 pnpm fe:dev
 
-# 3. App mobile (Expo Web)
+# 3. App mobile trên web (dev fallback)
 pnpm mobile:dev        # rồi bấm phím "w" để mở web, hoặc:
 pnpm --filter @safestock/mobile web
 ```
 
-Expo mở tab trình duyệt (thường `http://localhost:8081`). Nếu backend không ở cổng 3100, sửa `API_BASE` trong [config.ts](config.ts).
+Expo mở tab trình duyệt (thường `http://localhost:8081`). API release phải lấy từ `EXPO_PUBLIC_API_BASE_URL`/profile và trỏ IP/hostname private LAN; không dùng `localhost` trên điện thoại.
+
+## Build APK release Android
+
+Trước khi build, đặt `EXPO_PUBLIC_API_BASE_URL` trong `apps/mobile/.env.local` về địa chỉ backend private LAN. Khóa release chỉ tạo một lần; script không được dùng để thay khóa giữa các bản cập nhật:
+
+```powershell
+# Chỉ chạy một lần nếu chưa có release keystore
+pnpm --filter @safestock/mobile android:keystore
+
+# JDK 17 + Android SDK phải có trong JAVA_HOME/ANDROID_HOME.
+# Trên máy Windows hiện tại, không dùng Java 8 mặc định:
+$env:JAVA_HOME = "C:\Program Files\Java\jdk-17"
+$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
+$env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
+$env:Path = "$env:JAVA_HOME\bin;$env:ANDROID_HOME\platform-tools;$env:Path"
+pnpm --filter @safestock/mobile android:release
+```
+
+Artifact hiện tại:
+
+- File: `apps/mobile/android/app/build/outputs/apk/release/app-release.apk`
+- Package: `vn.ungphonhanh.safestock`
+- Phiên bản: `0.5.0` (`versionCode=5`)
+- SHA-256: `EC415126E26B4FC4F80B7A8825C5792B8DDCEE5F5A0EEFBE67960C33DA817CA2`
+- Ký APK Signature Scheme v2, RSA 4096-bit; manifest release có camera và microphone, không có overlay, storage hay biometric.
+
+Voice trên APK dùng `AudioRecord` native Android để tạo WAV PCM 16-bit, mono, 16 kHz rồi gửi lên endpoint PhoWhisper hiện có. App chỉ xin quyền micro khi người dùng bấm ghi âm, giới hạn mỗi clip 60 giây, điền chữ nhận dạng vào ô mô tả và không tự gửi báo cáo. Người dùng luôn có thể đọc lại, sửa hoặc gõ tay.
+
+Mã native voice và mã hóa cache đang được giữ trực tiếp trong thư mục
+`android/`. Không chạy `expo prebuild --clean` nếu chưa chuyển
+`VoiceRecorderPackage` và `SecureCacheCipherPackage` thành config plugin, vì
+thao tác đó tái tạo và có thể ghi đè thay đổi native thủ công.
+
+Phải sao lưu riêng, có kiểm soát truy cập, cả `android/app/safestock-release.keystore` và `android/keystore.properties`. Hai file đã bị git-ignore; mất khóa sẽ không thể phát hành bản cập nhật mang cùng chữ ký.
+
+Cài trên thiết bị đã bật USB debugging:
+
+```powershell
+adb devices -l
+adb install -r apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+```
+
+Tại lần build ghi trong tài liệu này, `adb devices -l` chưa thấy thiết bị nên fresh-install/S23 Ultra acceptance chưa được đánh dấu pass.
 
 ## Test realtime (end-to-end)
 
-1. **Mobile web**: đăng nhập `rescue@safestock.vn` / `rescue123` (đã điền sẵn). Thấy danh sách thông báo + chấm xanh **"Đã kết nối"**.
-2. **Dashboard** (`http://localhost:3000`): đăng nhập `admin` / `admin123@` → tab **Nhiệm vụ** → tạo/chọn 1 nhiệm vụ → bấm **Điều phối**.
+1. **Mobile web**: đăng nhập bằng tài khoản seed/demo được cấu hình riêng trong môi trường local; không dùng credential demo khi mở Internet. Thấy danh sách thông báo + chấm xanh **"Đã kết nối"**.
+2. **Dashboard** (`http://localhost:3200`): đăng nhập `admin` / `admin123@` → tab **Nhiệm vụ** → tạo/chọn 1 nhiệm vụ → bấm **Điều phối**.
 3. **Kỳ vọng**: app mobile hiện thông báo *"Nhiệm vụ cứu hộ mới"* **ngay lập tức** (không cần refresh), nhảy lên đầu danh sách kèm badge **MỚI**.
 4. **Test reconnect**: tắt rồi bật lại `pnpm be:dev` → chấm chuyển xám ("Mất kết nối") rồi xanh lại.
 
@@ -70,6 +124,6 @@ TOKEN=$(curl -s localhost:3100/api/auth/login -H 'Content-Type: application/json
 curl -s -X POST localhost:3100/api/missions/<MISSION_ID>/dispatch -H "Authorization: Bearer $TOKEN"
 ```
 
-## Test trên điện thoại thật (Expo Go)
+## APK/device gate (bắt buộc)
 
-Đổi `API_BASE` trong [config.ts](config.ts) thành `http://<IP-LAN-máy>:3100` (không dùng `localhost`), chạy `pnpm mobile:dev`, quét QR bằng app **Expo Go**. Điện thoại phải cùng mạng Wi-Fi với máy dev.
+Build/install APK release trên fresh device, cùng private Wi-Fi với máy chạy backend. Tắt public Internet nhưng giữ LAN, xác nhận login/report/mission sau restart; khi rút LAN, app phải hiện stale/offline state và không báo thành công giả. Expo Go chỉ dùng để debug, không phải bằng chứng nộp.

@@ -18,7 +18,7 @@ const deviceTypeLabels: Record<string, string> = {
   DOOR: "Cửa kho",
   RFID_GATEWAY: "Cổng RFID",
   SMOKE: "Cảm biến khói",
-  CAMERA: "Camera",
+  CAMERA_AI: "Camera AI",
 };
 
 const eventTypeLabels: Record<string, string> = {
@@ -86,6 +86,26 @@ function formatEventDetail(event: SensorTimelineEvent): string {
 export function SimulatorPanel({ devices, timeline, isLoading }: SimulatorPanelProps) {
   if (isLoading) {
     return <div className="h-[360px] animate-pulse rounded-md border bg-[var(--surface)]" />;
+  }
+
+  if ((devices?.length ?? 0) === 0) {
+    return (
+      <section
+        className="rounded-md border bg-[var(--surface)] p-5"
+        role="status"
+        aria-label="Trạng thái thiết bị IoT"
+      >
+        <div className="flex items-start gap-3">
+          <ColorIcon name="simulator" size={20} tone="blue" />
+          <div>
+            <h2 className="text-sm font-semibold">Kho không triển khai thiết bị IoT</h2>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">
+              Tồn kho và tình trạng vật tư được cập nhật qua nghiệp vụ web/mobile.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
   }
 
   const environmentDevices = (devices ?? []).filter((device) =>

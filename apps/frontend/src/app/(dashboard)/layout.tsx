@@ -11,6 +11,8 @@ import { useIncidentAlertsBridge } from "@/components/assistant/use-incident-ale
 import { getOpenIncidents } from "@/lib/dashboard-api";
 import { useAuth } from "@/lib/auth-store";
 import { useWarehouse } from "@/lib/use-warehouse";
+import { getNavItem, navItems } from "@/lib/dashboard-nav";
+import { roleHasPermission } from "@safestock/shared-types";
 
 /**
  * Layout dùng chung cho toàn bộ trang đã đăng nhập. Trước đây mọi thứ nằm trong
@@ -22,6 +24,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const queryClient = useQueryClient();
   const token = useAuth((state) => state.token);
+  const user = useAuth((state) => state.user);
   const hasHydrated = useAuth((state) => state.hasHydrated);
 
   const warehouseQuery = useWarehouse();
@@ -30,6 +33,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     if (hasHydrated && !token) router.replace("/login");
   }, [hasHydrated, token, router]);
+
+  useEffect(() => {
+    if (!hasHydrated || !token || !user) return;
+    const route = getNavItem(pathname);
+    if (!route || roleHasPermission(user.role, route.requiredPermission)) return;
+    const fallback = navItems.find((item) =>
+      roleHasPermission(user.role, item.requiredPermission),
+    );
+    router.replace(fallback?.path ?? "/login");
+  }, [hasHydrated, pathname, router, token, user]);
 
   // Sự cố đang mở — nuôi cầu nối cảnh báo AI cho trợ lý (chạy ở mọi trang).
   const incidentsQuery = useQuery({
@@ -42,14 +55,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Realtime room derived from the authenticated user; notifications trigger a refetch.
   useEffect(() => {
     if (!token) return;
+    let readinessTimer: ReturnType<typeof setTimeout> | undefined;
     const socket: Socket = io(BASE, {
       transports: ["websocket"],
       auth: { token },
+    });
+    socket.on("sensor_event", () => {
+      queryClient.invalidateQueries({ queryKey: ["devices", warehouseId] });
+      queryClient.invalidateQueries({ queryKey: ["timeline", warehouseId] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-batches", warehouseId] });
+
+      // Backend debounce readiness 300ms; đợi qua cửa sổ đó để không refetch giá trị cũ.
+      if (readinessTimer) clearTimeout(readinessTimer);
+      readinessTimer = setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["warehouse-readiness", warehouseId] });
+      }, 400);
     });
     socket.on("notification", () => {
       queryClient.invalidateQueries({ queryKey: ["open-incidents", warehouseId] });
     });
     return () => {
+      if (readinessTimer) clearTimeout(readinessTimer);
       socket.disconnect();
     };
   }, [token, warehouseId, queryClient]);

@@ -1,26 +1,45 @@
+import { NativeModules, PermissionsAndroid, Platform } from "react-native";
+import { selectRecordingBackend } from "./audio-platform-state";
+
 /**
  * Ghi âm giọng nói → WAV PCM 16-bit, 16kHz, mono, base64 — đúng định dạng PhoWhisper cần.
  *
- * CHỈ chạy trên Expo Web (React Native Web): dùng thẳng browser API
- * (getUserMedia + MediaRecorder + Web Audio decodeAudioData), y hệt frontend web.
- * Trên native (iOS/Android) các API này không có → `isRecordingSupported()` trả false,
- * màn báo cáo tự ẩn nút ghi âm và người dùng gõ tay.
- *
- * Vì sao không dùng expo-audio: nó ghi ra .m4a/AAC mà soundfile (ai-service) KHÔNG đọc
- * được nếu thiếu ffmpeg, và trên web nó cũng chỉ bọc lại MediaRecorder. Dùng thẳng
- * Web Audio cho WAV chuẩn là đường chắc chắn nhất cho bản demo (chạy trên trình duyệt).
+ * Android APK dùng native AudioRecord. Expo Web giữ đường MediaRecorder + Web Audio.
+ * iOS chưa có recorder native nên vẫn dùng nhập tay.
  */
 
 const TARGET_SR = 16_000;
 
-/** Có đủ API trình duyệt để ghi âm + mã hoá WAV không (chỉ đúng trên web). */
-export function isRecordingSupported(): boolean {
+interface NativeVoiceRecorder {
+  start: () => Promise<void>;
+  stop: () => Promise<string>;
+}
+
+function nativeVoiceRecorder(): NativeVoiceRecorder | null {
+  const recorder = NativeModules.VoiceRecorder as Partial<NativeVoiceRecorder> | undefined;
+  return typeof recorder?.start === "function" && typeof recorder.stop === "function"
+    ? (recorder as NativeVoiceRecorder)
+    : null;
+}
+
+function isWebRecordingSupported(): boolean {
   if (typeof navigator === "undefined" || typeof window === "undefined") return false;
   const w = window as unknown as { AudioContext?: unknown; webkitAudioContext?: unknown };
   return (
     Boolean(navigator.mediaDevices?.getUserMedia) &&
     typeof MediaRecorder !== "undefined" &&
     Boolean(w.AudioContext ?? w.webkitAudioContext)
+  );
+}
+
+/** Có recorder phù hợp với đúng runtime hiện tại hay không. */
+export function isRecordingSupported(): boolean {
+  return (
+    selectRecordingBackend(
+      Platform.OS,
+      Boolean(nativeVoiceRecorder()),
+      isWebRecordingSupported(),
+    ) !== "UNSUPPORTED"
   );
 }
 
@@ -121,6 +140,43 @@ export interface AudioRecording {
 
 /** Bắt đầu ghi âm; trả handle có stop() → WAV base64. Ném lỗi nếu không mở được mic. */
 export async function startRecording(): Promise<AudioRecording> {
+  const nativeRecorder = nativeVoiceRecorder();
+  const backend = selectRecordingBackend(
+    Platform.OS,
+    Boolean(nativeRecorder),
+    isWebRecordingSupported(),
+  );
+
+  if (backend === "ANDROID_NATIVE") {
+    const permission = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+      {
+        title: "Cho phép ghi âm mô tả",
+        message:
+          "SafeStock cần dùng micro khi bạn bấm ghi âm để chuyển lời nói thành nội dung báo cáo.",
+        buttonPositive: "Cho phép",
+        buttonNegative: "Không cho phép",
+      },
+    );
+    if (permission !== PermissionsAndroid.RESULTS.GRANTED) {
+      throw new Error("Quyền micro chưa được cấp.");
+    }
+
+    await nativeRecorder!.start();
+    let stopped = false;
+    return {
+      stop: async () => {
+        if (stopped) return "";
+        stopped = true;
+        return nativeRecorder!.stop();
+      },
+    };
+  }
+
+  if (backend !== "WEB") {
+    throw new Error("Thiết bị này chưa hỗ trợ ghi âm.");
+  }
+
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   const chunks: Blob[] = [];
   const recorder = new MediaRecorder(stream);

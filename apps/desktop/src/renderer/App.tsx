@@ -143,8 +143,18 @@ export function App() {
           pushLog(`WebSocket rejected: ${message}`, "alert");
         },
         onSensorEvent: (p) => {
+          const deviceCode = p.deviceCode;
+          const value = p.value;
+          if (deviceCode && typeof value === "number") {
+            setSliderValues((prev) => ({ ...prev, [deviceCode]: value }));
+            setDevices((prev) =>
+              prev.map((device) =>
+                device.code === deviceCode ? { ...device, currentValue: value } : device,
+              ),
+            );
+          }
           pushLog(
-            `[scenario] ${p.deviceCode ?? "?"} = ${p.value ?? "?"}${p.unit ?? ""} (${p.eventType ?? ""})`,
+            `[realtime] ${p.deviceCode ?? "?"} = ${p.value ?? "?"}${p.unit ?? ""} (${p.eventType ?? ""})`,
             "sensor",
           );
           // Kịch bản đổi cảm biến → readiness/incident có thể đổi → refetch (debounce nhẹ).
@@ -197,11 +207,7 @@ export function App() {
         eventType: cfg.eventType,
         value,
       });
-      // POST thủ công KHÔNG phát sensor_event qua WS (chỉ runner phát) → echo cục bộ.
-      pushLog(`${formatDeviceName(device.code, device.type)} → ${value}${cfg.unit}`, "sensor");
-      // Backend debounce recalc 300ms + scan 1200ms → chờ rồi refetch để thấy phản ứng.
-      scheduleReactionRefresh(warehouse.id);
-      setTimeout(() => refreshReactions(warehouse.id), 1500);
+      // Backend phát sensor_event cho cả chỉnh tay; callback realtime cập nhật UI và phản ứng.
     } catch (err) {
       pushLog(`Gửi lỗi: ${(err as Error).message}`, "alert");
     }

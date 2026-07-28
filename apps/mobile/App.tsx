@@ -1,12 +1,44 @@
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FlatList, Pressable, SafeAreaView, Text, TextInput, View } from "react-native";
+import {
+  AppState,
+  FlatList,
+  Pressable,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { useNetInfo } from "@react-native-community/netinfo";
 import { io, type Socket } from "socket.io-client";
-import { fetchNotifications, login, type AuthUser, type Notification } from "./api";
+import {
+  ApiError,
+  fetchNotifications,
+  login,
+  refreshSession,
+  type AuthUser,
+  type LoginResult,
+  type Notification,
+} from "./api";
 import { MissionDetailScreen } from "./MissionDetail";
 import { ReportScreen } from "./ReportScreen";
-import { API_BASE } from "./config";
+import { DashboardScreen } from "./DashboardScreen";
+import { InventoryScreen } from "./InventoryScreen";
+import { MonthlyReportScreen } from "./MonthlyReportScreen";
+import { requireApiBase } from "./config";
 import { c, styles } from "./styles";
+import { tabsForRole, type MobileTab } from "./dashboard-state";
+import {
+  clearStoredSession,
+  loadStoredSession,
+  saveStoredSession,
+} from "./session-store";
+import {
+  clearOfflineCache,
+  readOfflineCache,
+  writeOfflineCache,
+} from "./offline-cache";
 import {
   assessDanger,
   disasterOf,
@@ -16,27 +48,208 @@ import {
 } from "./disaster";
 
 export default function App() {
-  const [session, setSession] = useState<{ token: string; user: AuthUser } | null>(null);
-  const logout = () => setSession(null);
+  const [session, setSession] = useState<LoginResult | null>(null);
+  const [restoringSession, setRestoringSession] = useState(true);
+  const refreshToken = session?.refreshToken;
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      const stored = await loadStoredSession();
+      if (!stored) {
+        if (active) setRestoringSession(false);
+        return;
+      }
+      try {
+        const renewed = await refreshSession(stored.refreshToken);
+        await saveStoredSession(renewed);
+        if (active) setSession(renewed);
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 401) {
+          await clearStoredSession();
+        } else if (active) {
+          // Mất LAN khi mở app: giữ session đã lưu để đọc cache; mutation vẫn fail-closed.
+          setSession(stored);
+        }
+      } finally {
+        if (active) setRestoringSession(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!refreshToken) return;
+    let refreshing = false;
+    const renew = async () => {
+      if (refreshing) return;
+      refreshing = true;
+      try {
+        const renewed = await refreshSession(refreshToken);
+        await saveStoredSession(renewed);
+        setSession(renewed);
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 401) {
+          await clearStoredSession();
+          setSession(null);
+        }
+      } finally {
+        refreshing = false;
+      }
+    };
+    const interval = setInterval(() => void renew(), 12 * 60 * 1000);
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") void renew();
+    });
+    return () => {
+      clearInterval(interval);
+      subscription.remove();
+    };
+  }, [refreshToken]);
+
+  async function handleLogin(result: LoginResult) {
+    await saveStoredSession(result);
+    setSession(result);
+  }
+
+  async function logout() {
+    const userId = session?.user.id;
+    await clearStoredSession();
+    if (userId) await clearOfflineCache(userId);
+    setSession(null);
+  }
+
+  if (restoringSession) {
+    return (
+      <SafeAreaView style={styles.screen}>
+        <StatusBar style="light" />
+        <View style={styles.center}>
+          <Text style={styles.logo}>SafeStock</Text>
+          <Text style={styles.emptyText}>Đang khôi phục phiên an toàn…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar style="light" />
       {!session ? (
-        <LoginScreen onLogin={(token, user) => setSession({ token, user })} />
-      ) : session.user.role === "REPORTER" ? (
-        // Trưởng thôn: màn báo cáo tình huống (gõ/ghi âm → gửi cơ quan điều phối).
-        <ReportScreen token={session.token} user={session.user} onLogout={logout} />
+        <LoginScreen onLogin={handleLogin} />
       ) : (
-        // Đội cứu hộ (RESCUE) và role khác: nhận thông báo điều phối realtime.
-        <NotificationsScreen token={session.token} user={session.user} onLogout={logout} />
+        <MobileRoleShell
+          token={session.accessToken}
+          user={session.user}
+          onLogout={logout}
+        />
       )}
     </SafeAreaView>
   );
 }
 
+function MobileRoleShell({
+  token,
+  user,
+  onLogout,
+}: {
+  token: string;
+  user: AuthUser;
+  onLogout: () => void;
+}) {
+  const tabs = tabsForRole(user.role);
+  const [tab, setTab] = useState<MobileTab>(
+    user.role === "REPORTER" ? "report" : "home",
+  );
+
+  return (
+    <View style={shellStyles.shell}>
+      {tab !== "alerts" && tab !== "report" ? (
+        <View style={shellStyles.sessionBar}>
+          <Text style={shellStyles.sessionText} numberOfLines={1}>
+            {user.fullName ?? user.email} · {user.role}
+          </Text>
+          <Pressable onPress={onLogout} accessibilityRole="button">
+            <Text style={shellStyles.logout}>Đăng xuất</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      <View style={shellStyles.content}>
+        {tab === "home" ? (
+          <DashboardScreen token={token} user={user} view="home" />
+        ) : tab === "readiness" ? (
+          <DashboardScreen token={token} user={user} view="readiness" />
+        ) : tab === "inventory" ? (
+          <InventoryScreen token={token} user={user} />
+        ) : tab === "monthly-report" ? (
+          <MonthlyReportScreen token={token} user={user} />
+        ) : tab === "report" ? (
+          <ReportScreen token={token} user={user} onLogout={onLogout} />
+        ) : (
+          <NotificationsScreen token={token} user={user} onLogout={onLogout} />
+        )}
+      </View>
+      <View style={shellStyles.tabBar}>
+        {tabs.map((item) => (
+          <Pressable
+            key={item}
+            onPress={() => setTab(item)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === item }}
+            style={shellStyles.tab}
+          >
+            <Text
+              style={[
+                shellStyles.tabIcon,
+                tab === item && shellStyles.tabIconActive,
+              ]}
+            >
+              {tabIcon(item)}
+            </Text>
+            <Text
+              style={[
+                shellStyles.tabLabel,
+                tab === item && shellStyles.tabLabelActive,
+              ]}
+            >
+              {tabLabel(item)}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function tabLabel(tab: MobileTab): string {
+  return {
+    home: "Tổng quan",
+    readiness: "Sẵn sàng",
+    inventory: "Kho",
+    "monthly-report": "Kiểm kê",
+    alerts: "Cảnh báo",
+    report: "Báo cáo",
+  }[tab];
+}
+
+function tabIcon(tab: MobileTab): string {
+  return {
+    home: "01",
+    readiness: "02",
+    inventory: "03",
+    "monthly-report": "04",
+    alerts: "04",
+    report: "01",
+  }[tab];
+}
+
 /** Màn đăng nhập chung — trưởng thôn (báo cáo) hoặc đội cứu hộ (nhận điều phối). */
-function LoginScreen({ onLogin }: { onLogin: (token: string, user: AuthUser) => void }) {
+function LoginScreen({
+  onLogin,
+}: {
+  onLogin: (result: LoginResult) => Promise<void>;
+}) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +260,7 @@ function LoginScreen({ onLogin }: { onLogin: (token: string, user: AuthUser) => 
     setError(null);
     try {
       const res = await login(email.trim(), password);
-      onLogin(res.accessToken, res.user);
+      await onLogin(res);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Đăng nhập thất bại");
     } finally {
@@ -110,22 +323,49 @@ function NotificationsScreen({
   const [items, setItems] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [cacheStoredAt, setCacheStoredAt] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
   const [selectedMissionId, setSelectedMissionId] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
+  const netInfo = useNetInfo();
 
   const load = useCallback(async () => {
-    setLoading(true);
     setError(null);
+    let hasCachedData = false;
     try {
-      setItems(await fetchNotifications(token));
+      const cached = await readOfflineCache<Notification[]>(
+        user.id,
+        "notifications",
+      );
+      if (cached) {
+        hasCachedData = true;
+        setItems(cached.data);
+        setCacheStoredAt(cached.storedAt);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+    } catch {
+      setLoading(true);
+    }
+    try {
+      const notifications = await fetchNotifications(token);
+      setItems(notifications);
+      setCacheStoredAt(null);
+      await writeOfflineCache(user.id, "notifications", notifications);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Lỗi tải dữ liệu");
+      setError(
+        hasCachedData
+          ? "Đang dùng dữ liệu đã lưu vì không kết nối được máy chủ LAN."
+          : e instanceof Error
+            ? e.message
+            : "Lỗi tải dữ liệu",
+      );
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, user.id]);
 
   useEffect(() => {
     load();
@@ -133,7 +373,14 @@ function NotificationsScreen({
 
   // The backend derives the realtime room from the authenticated user.
   useEffect(() => {
-    const socket = io(API_BASE, {
+    let socketBase: string;
+    try {
+      socketBase = requireApiBase();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "APK chưa có địa chỉ máy chủ LAN.");
+      return;
+    }
+    const socket = io(socketBase, {
       transports: ["websocket"],
       auth: { token },
     });
@@ -146,7 +393,12 @@ function NotificationsScreen({
     socket.on("connect_error", () => setConnected(false));
     socket.on("notification", (n: Notification) => {
       // Đưa lên đầu, đánh dấu MỚI, chống trùng nếu cùng id (updateAndPush).
-      setItems((prev) => [n, ...prev.filter((x) => x.id !== n.id)]);
+      setItems((prev) => {
+        const next = [n, ...prev.filter((x) => x.id !== n.id)];
+        void writeOfflineCache(user.id, "notifications", next);
+        return next;
+      });
+      setCacheStoredAt(null);
       setNewIds((prev) => new Set(prev).add(n.id));
     });
 
@@ -154,12 +406,13 @@ function NotificationsScreen({
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [token]);
+  }, [token, user.id]);
 
   if (selectedMissionId) {
     return (
       <MissionDetailScreen
         token={token}
+        userId={user.id}
         missionId={selectedMissionId}
         onBack={() => setSelectedMissionId(null)}
         onResolved={() => {
@@ -190,13 +443,38 @@ function NotificationsScreen({
         </View>
       </View>
 
+      {cacheStoredAt || netInfo.isConnected === false ? (
+        <View
+          style={{
+            borderBottomWidth: 1,
+            borderBottomColor: c.amber,
+            backgroundColor: "rgba(245,158,11,0.12)",
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+          }}
+          accessibilityRole="alert"
+        >
+          <Text style={{ color: c.amber, fontSize: 12, fontWeight: "700" }}>
+            Ngoại tuyến · chỉ đọc
+            {cacheStoredAt
+              ? ` · dữ liệu lưu lúc ${formatCacheTime(cacheStoredAt)}`
+              : ""}
+          </Text>
+        </View>
+      ) : null}
+      {error && items.length > 0 ? (
+        <View style={{ paddingHorizontal: 16, paddingTop: 10 }}>
+          <Text style={{ color: c.amber, fontSize: 12 }}>{error}</Text>
+        </View>
+      ) : null}
+
       {loading ? (
         <View style={{ padding: 16 }}>
           {[0, 1, 2].map((i) => (
             <View key={i} style={styles.skeleton} />
           ))}
         </View>
-      ) : error ? (
+      ) : error && items.length === 0 ? (
         <View style={styles.center}>
           <Text style={styles.emptyIcon}>⚠️</Text>
           <Text style={styles.emptyTitle}>Không tải được</Text>
@@ -250,6 +528,16 @@ function Card({
     return <MissionCard item={item} summary={summary} isNew={isNew} onPress={onPress} />;
   }
   return <InfoCard item={item} isNew={isNew} onPress={onPress} />;
+}
+
+function formatCacheTime(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "không rõ"
+    : date.toLocaleTimeString("vi-VN", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
 }
 
 /** Thẻ nhiệm vụ nổi bật — dành cho đội cứu hộ nắm bắt nhanh trong 1 cái liếc. */
@@ -344,3 +632,55 @@ function InfoCard({
     </Pressable>
   );
 }
+
+const shellStyles = StyleSheet.create({
+  shell: { flex: 1, backgroundColor: c.bg },
+  content: { flex: 1 },
+  sessionBar: {
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: c.border,
+    backgroundColor: c.bg,
+  },
+  sessionText: { flex: 1, color: c.muted, fontSize: 10, fontWeight: "700" },
+  logout: { color: c.amber, fontSize: 11, fontWeight: "800" },
+  tabBar: {
+    minHeight: 66,
+    flexDirection: "row",
+    borderTopWidth: 1,
+    borderTopColor: c.border,
+    backgroundColor: c.surface,
+    paddingHorizontal: 6,
+    paddingBottom: 4,
+  },
+  tab: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
+  },
+  tabIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: c.border,
+    color: c.muted,
+    textAlign: "center",
+    lineHeight: 22,
+    fontSize: 9,
+    fontWeight: "900",
+  },
+  tabIconActive: {
+    borderColor: c.amber,
+    backgroundColor: c.amber,
+    color: "#111827",
+  },
+  tabLabel: { color: c.muted, fontSize: 9, fontWeight: "700" },
+  tabLabelActive: { color: c.amber },
+});

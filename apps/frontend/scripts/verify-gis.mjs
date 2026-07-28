@@ -7,12 +7,17 @@ const GEOJSON_PATH = "public/geo/communes.geojson";
 const TILE_ROOT = "public/tiles";
 const EXPECTED = new Map([
   ["Đồng Xuân", 19392118],
-  ["Xuân Lãnh", 19392094],
-  ["Xuân Phước", 19392092],
   ["Xuân Thọ", 19392091],
-  ["Xuân Đài", 19392095],
+  ["Tuy An Bắc", 19392102],
+  ["Tuy An Tây", 19392099],
+  ["Xuân Lãnh", 19392094],
+  ["Phú Mỡ", 19392110],
+  ["Xuân Phước", 19392092],
 ]);
-const BBOX_LIMIT = [108.9, 13.2, 109.3, 13.7];
+// Boundary envelope for the six adjacent communes (Phú Mỡ extends west of
+// the original five-commune tile envelope). Tiles remain limited to the
+// committed offline coverage below.
+const BBOX_LIMIT = [108.6, 13.1, 109.3, 13.7];
 const TILE_BBOX = [108.9483, 13.2393, 109.2551, 13.6202];
 const ZOOM_MIN = 10;
 const ZOOM_MAX = 15;
@@ -34,6 +39,10 @@ const geojson = JSON.parse(fs.readFileSync(GEOJSON_PATH, "utf8"));
 assert(geojson.type === "FeatureCollection", "GeoJSON phải là FeatureCollection");
 assert(geojson.features.length === EXPECTED.size, `GeoJSON phải có đúng ${EXPECTED.size} feature`);
 assert(geojson.license === "ODbL 1.0", "GeoJSON phải khai báo license ODbL 1.0");
+assert(
+  geojson.features.some(({ properties }) => properties?.name === "Đồng Xuân"),
+  "GeoJSON phải chứa xã vận hành Đồng Xuân",
+);
 
 const seen = new Set();
 for (const feature of geojson.features) {
@@ -57,6 +66,7 @@ for (const feature of geojson.features) {
   assert(points >= 100, `${name}: geometry quá ít điểm (${points})`);
   seen.add(name);
 }
+assert(seen.size === EXPECTED.size, "GeoJSON thiếu hoặc thừa đơn vị trong cụm giáp ranh");
 
 const lon2x = (lon, zoom) => Math.floor(((lon + 180) / 360) * 2 ** zoom);
 const lat2y = (lat, zoom) => {

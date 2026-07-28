@@ -1,20 +1,11 @@
-// Metro config cho monorepo pnpm — Expo mặc định không thấy node_modules ở root
-// và không theo được symlink của pnpm. Ta: (1) watch cả workspace root,
-// (2) cho resolver tìm module ở cả mobile lẫn root, (3) bật symlink.
 const { getDefaultConfig } = require("expo/metro-config");
-const path = require("path");
 
-const projectRoot = __dirname;
-const workspaceRoot = path.resolve(projectRoot, "../..");
-
-const config = getDefaultConfig(projectRoot);
-
-config.watchFolders = [workspaceRoot];
-config.resolver.nodeModulesPaths = [
-  path.resolve(projectRoot, "node_modules"),
-  path.resolve(workspaceRoot, "node_modules"),
-];
-config.resolver.unstable_enableSymlinks = true;
-config.resolver.disableHierarchicalLookup = false;
+// Expo SDK 52+ tự nhận diện pnpm workspace. Dev server giữ workspace root để
+// Expo không nhân đôi apps/mobile trong entry URL. Gradle Windows lại truyền
+// ./index.js tương đối với app khi embed release, nên release cần app root.
+const config = getDefaultConfig(__dirname);
+if (process.env.NODE_ENV === "production") {
+  config.server.unstable_serverRoot = __dirname;
+}
 
 module.exports = config;

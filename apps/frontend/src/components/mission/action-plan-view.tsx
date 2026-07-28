@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { ColorIcon } from "@/components/shared/color-icon";
-import type { ActionPlan, ClusterWarehouse } from "@/lib/mission-api";
+import type { ActionPlan } from "@/lib/mission-api";
 import type { LatLng } from "@/lib/geo";
 
 const IncidentMap = dynamic(() => import("./incident-map").then((m) => m.IncidentMap), {
@@ -135,34 +135,28 @@ export function ActionPlanView({
         >
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {plan.warehouses.map((w) => (
-              <div key={w.name} className="rounded-md border bg-[var(--surface-2)] p-3">
+              <div key={w.id} className="rounded-md border bg-[var(--surface-2)] p-3">
                 <p className="text-sm font-medium">{w.name}</p>
                 <p className="tabular mt-1 text-xs text-[var(--text-muted)]">
-                  {w.distanceKm} km · ~{w.etaMinutes} phút
+                  {w.routeStatus === "ROUTED" && w.distanceKm != null
+                    ? `${w.distanceKm} km · ~${w.etaMinutes} phút`
+                    : `Chưa tính được tuyến (${w.routeStatus})`}
                 </p>
+                <ul className="mt-2 space-y-1 text-xs text-[var(--text-muted)]">
+                  {w.contributions.map((item) => (
+                    <li key={item.sku}>
+                      {item.itemName}: <b>{item.quantity}</b> {item.unit}
+                    </li>
+                  ))}
+                </ul>
               </div>
             ))}
           </div>
           {incidentPoint ? (
             <div className="mt-3">
               <IncidentMap
-                // plan.warehouses không có kind (CENTRAL/HAMLET) — dùng chung màu kho thôn, không ảnh hưởng số liệu
-                warehouses={plan.warehouses.map((w): ClusterWarehouse => ({
-                  id: w.name,
-                  name: w.name,
-                  kind: "HAMLET",
-                  lat: w.lat,
-                  lng: w.lng,
-                }))}
+                warehouses={plan.warehouses}
                 incidentPoint={incidentPoint}
-                officialDistances={
-                  new Map(
-                    plan.warehouses.map((w) => [
-                      w.name,
-                      { distanceKm: w.distanceKm, etaMinutes: w.etaMinutes },
-                    ]),
-                  )
-                }
               />
             </div>
           ) : null}

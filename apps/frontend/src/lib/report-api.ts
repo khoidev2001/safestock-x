@@ -16,6 +16,9 @@ export interface StockReport {
 }
 
 export interface ReportRow {
+  batchId?: string | null;
+  batchCode?: string | null;
+  shelfCode?: string | null;
   sku: string;
   itemName: string;
   quantity: number;

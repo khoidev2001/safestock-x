@@ -9,7 +9,11 @@ import { useAuth } from "@/lib/auth-store";
 import { getNotifications, markAllRead } from "@/lib/mission-api";
 import { useMissionFocus } from "@/lib/mission-focus-store";
 
-export function NotificationBell({ onOpenMission }: { onOpenMission?: () => void }) {
+export function NotificationBell({
+  onOpenMission,
+}: {
+  onOpenMission?: (missionId: string) => void;
+}) {
   const role = useAuth((s) => s.user?.role);
   const token = useAuth((s) => s.token);
   const focusMission = useMissionFocus((s) => s.focusMission);
@@ -18,7 +22,7 @@ export function NotificationBell({ onOpenMission }: { onOpenMission?: () => void
 
   function openMission(missionId: string) {
     focusMission(missionId);
-    onOpenMission?.();
+    onOpenMission?.(missionId);
     setOpen(false);
   }
 
