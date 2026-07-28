@@ -18,9 +18,12 @@
 7. Dùng mô hình hành chính 2 cấp (tỉnh + xã); không đưa mô hình hành chính cũ vào corpus.
 8. Chạy linter/parser và `build_knowledge_index.py --check` sau mọi thay đổi. Index JSON là artifact sinh tự động, không sửa tay.
 
-## Phạm vi bản v1
+## Phạm vi hiện tại
 
 - Định mức nước và tiếp cận nước an toàn: Sphere Handbook 2018 bản PDF gốc.
+- Nước sạch, vệ sinh, lưu trữ nước và phòng bệnh tại điểm sơ tán: Sphere Handbook 2018.
+- An toàn lương thực, bảo quản/phân phối và nhận biết nguy cơ dinh dưỡng cần chuyển chuyên môn: Sphere Handbook 2018.
+- Nơi ở khẩn cấp, lựa chọn điểm sơ tán, đồ dùng thiết yếu và nguyên tắc bảo vệ: Sphere Handbook 2018.
 - Ứng phó mưa lớn/lũ/lũ quét/sạt lở: cổng thông tin PCTT Việt Nam.
 - Sơ cứu và chuẩn bị trong thiên tai: IFRC International First Aid Guidelines 2020.
 - Các chủ đề chưa có tài liệu gốc đủ chắc sẽ trả “chưa có trong tài liệu tham khảo”, không dùng trí nhớ mô hình để bù.

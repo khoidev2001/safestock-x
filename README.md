@@ -2,27 +2,31 @@
 
 Nền tảng đánh giá mức sẵn sàng kho và điều phối vật tư cứu hộ. Hệ thống kết hợp quản lý tồn, Readiness theo blocker, Mission-to-Kit, mô phỏng cảm biến, AI local và web vận hành.
 
-> Trạng thái thực tế 2026-07-21: lõi backend/rule engine đã có nhiều phần thật, nhưng MVP end-to-end chưa hoàn thành và chưa an toàn để mở Internet production. Mobile chưa triển khai.
+> Trạng thái đối chiếu mới nhất: P09 routing offline, workflow kho ngày thường trên web/mobile, APK Android `0.5.0` có voice native → PhoWhisper, báo cáo kiểm kê tháng, dashboard/readiness/QR và bốn feature AI bắt buộc đã có code và kiểm thử mục tiêu. MVP end-to-end vẫn chưa an toàn để mở Internet production; browser, fresh-install/device/LAN acceptance trên Galaxy S23 Ultra, dependency hardening và full judged flow còn là release gate. Xem [báo cáo đánh giá dự thi](docs/bao-cao-danh-gia-san-sang-du-thi.md).
 
 ## Nguồn sự thật
 
 - [PRD + checklist + kế hoạch cuối](docs/PRD.md): phạm vi, trạng thái thật, backlog và Definition of Done.
+- [PM re-review quản lý kho ngày thường](docs/PM-REVIEW-QUAN-LY-KHO-NGAY-THUONG.md):
+  điểm trước/sau, finding đã khắc phục và release gate còn chờ.
+- [Bàn giao chênh lệch so với GitHub](docs/BAN-GIAO-CHENH-LECH-SO-VOI-GITHUB.md):
+  danh sách chức năng/file/schema để dev khác tiếp nhận.
 - [Hướng dẫn cài đặt và chạy](docs/HUONG-DAN-CAI-DAT-VA-CHAY.md)
 - [Hướng dẫn kiểm thử](docs/HUONG-DAN-TEST.md)
 - [Bộ dữ liệu seed](docs/SEED-DATASET.md)
 - [Quy tắc đóng góp](docs/CONTRIBUTING.md)
 - [Coding standards](skills/CODING-STANDARDS.md)
 
-Các `BUILD-PLAN`, `WORK-LOG`, feature review và roadmap cũ đã được lưu tại `docs/archive/`; không dùng chúng để kết luận tiến độ hiện tại.
+Các plan, work-log và báo cáo lịch sử đã được loại khỏi gói source dự thi; Git history không phải nguồn trạng thái. Báo cáo đánh giá và source/test hiện tại là bằng chứng đối chiếu.
 
 ## Kiến trúc monorepo
 
 | Thư mục | Vai trò | Trạng thái ngắn |
 |---|---|---|
-| `apps/backend` | NestJS, Prisma, PostgreSQL, Redis, Socket.IO | Nhiều module thật; còn lỗi scope/integrity P0 |
-| `apps/frontend` | Next.js web vận hành và dashboard | Build pass; workflow đa role/inventory/simulator còn thiếu |
-| `apps/ai-service` | FastAPI + Gemini/Ollama | Parse/explain/action-plan/assistant có; test/hardening thiếu |
-| `apps/mobile` | React Native + Expo | Chưa scaffold |
+| `apps/backend` | NestJS, Prisma, PostgreSQL, Redis, Socket.IO | Lõi nghiệp vụ + AI gateway chạy; integrity/idempotency/scope kho ngày thường đã khóa |
+| `apps/frontend` | Next.js web vận hành và dashboard | Production build pass; workflow kho/loan/QR, Insights AI và công cụ semantic/chuẩn hóa đã có |
+| `apps/ai-service` | FastAPI + Gemini/Ollama | RAG, semantic rank, extractive daily briefing và live Ollama smoke đã chạy |
+| `apps/mobile` | React Native + Expo | APK `0.5.0` có voice native/PhoWhisper, SecureStore, offline-read, dashboard, QR, nghiệp vụ kho và báo cáo tháng; còn device/LAN gate |
 | `packages/shared-types` | Contract dùng chung | Build pass |
 | `packages/scenario-definitions` | Kịch bản cảm biến deterministic | Build pass |
 | `infrastructure` | Docker và Windows pilot scripts | Có nền; chưa nghiệm thu production/offline đầy đủ |
@@ -49,7 +53,24 @@ pnpm ai:dev
 - Backend health: `http://localhost:3100/api/health`
 - Frontend: `http://localhost:3200`
 - AI health: `http://localhost:8000/health`
+- Local routing (OSRM, khi đã dựng graph Đồng Xuân): `http://localhost:5000/route/v1/driving/...`
 - Simulator legacy: `http://localhost:3100/sim.html`
+
+### Dựng OSRM local cho Đồng Xuân
+
+```powershell
+pnpm osrm:fetch
+pnpm osrm:build -- --source infrastructure/osrm/data/dong-xuan.osm --graph-version dong-xuan-YYYY-MM-DD
+pnpm osrm:up
+pnpm osrm:verify-live
+pnpm osrm:verify-offline
+```
+
+`osrm:build` chạy pipeline MLD `extract → partition → customize`, sinh manifest
+version/checksum. `osrm:up` luôn chạy preflight trước và không khởi động nếu artifact
+bị thiếu hoặc sai checksum. `osrm:verify-offline` chạy một acceptance riêng với
+Docker `--network none`. Sau khi build, đặt đúng `LOCAL_ROUTING_GRAPH_VERSION` từ
+manifest vào `.env` cục bộ.
 
 ## Chạy simulator demo cô lập
 

@@ -261,7 +261,14 @@ Số liệu định lượng phải do backend tính. AI chỉ diễn giải, kh
 
 ### T10 - Workflow liên vai trò
 
-Hiện giao diện chưa có danh sách để tài khoản khác mở lại mission vừa tạo sau khi đăng xuất. Vì vậy kiểm thử trọn luồng `ADMIN -> RESCUE -> WAREHOUSE` nên thực hiện qua API hoặc script tích hợp, không đánh giá giao diện đã hoàn chỉnh cho ca này.
+Backend đã có mission list/scope và web đã có **Hộp nhiệm vụ** với URL `?mission=...`. Phần này chỉ được tính browser acceptance hoàn chỉnh sau khi chạy đủ các phiên độc lập:
+
+1. Đăng nhập ADMIN, mở **Nhiệm vụ**, chọn một thẻ trong **Đang xử lý** và ghi nhận URL có `?mission=`.
+2. Nhấn F5 rồi mở URL đó ở tab mới; chi tiết phải vẫn là cùng mission, không hiện empty giả.
+3. Đăng xuất, đăng nhập RESCUE; mở mission từ notification hoặc inbox, không copy ID, rồi xác nhận/từ chối theo trạng thái.
+4. Đăng xuất, đăng nhập WAREHOUSE; mission được phân bổ cho kho phải nằm trong inbox, việc cần kho xử lý đứng trước.
+5. Sau khi kho prepare, trở lại RESCUE/ADMIN bằng phiên độc lập và tìm lại mission từ inbox/notification.
+6. ID không thuộc actor phải hiện lỗi 403/404 rõ, không biến thành danh sách rỗng hoặc thành công giả.
 
 Luồng đúng:
 
@@ -307,7 +314,7 @@ pnpm --filter @safestock/frontend build
 
 Baseline hiện tại:
 
-- Backend: 25 test suite, 168 test pass.
+- Backend: 51 test suite, 366 test pass ở refresh 2026-07-26.
 - Backend production build pass.
 - Frontend typecheck và production build pass.
 
