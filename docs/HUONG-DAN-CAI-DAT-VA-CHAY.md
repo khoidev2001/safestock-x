@@ -118,12 +118,17 @@ Chỉ chạy bước này khi tạo database mới hoặc chủ động muốn l
 
 ```powershell
 pnpm --filter @safestock/backend prisma:generate
-pnpm be:db
+SAFESTOCK_ADMIN_PASSWORD='<secret>' \
+SAFESTOCK_CENTRAL_WAREHOUSE_PASSWORD='<secret>' \
+SAFESTOCK_RESCUE_PASSWORD='<secret>' \
+SAFESTOCK_REPORTER_PASSWORD='<secret>' \
+SAFESTOCK_HAMLET_WAREHOUSE_PASSWORD='<secret>' \
+pnpm --filter @safestock/backend seed -- --confirm-demo-reset
 ```
 
 > **Cảnh báo:** lệnh seed gọi `resetDatabase()` trong [`apps/backend/prisma/seed.ts`](../apps/backend/prisma/seed.ts). Nó xóa dữ liệu nghiệp vụ, người dùng và mật khẩu hiện có trước khi tạo lại bộ dữ liệu demo. Không chạy `pnpm be:db` trên database đang vận hành hoặc đã có dữ liệu cần giữ.
 
-Tài khoản local sau seed được ghi trong [Hướng dẫn kiểm thử](HUONG-DAN-TEST.md). Các mật khẩu đó chỉ dành cho development. Trước khi mở domain Internet, đăng nhập ADMIN, vào **Tài khoản** và đổi toàn bộ mật khẩu demo.
+Các định danh tài khoản local sau seed được ghi trong [Hướng dẫn kiểm thử](HUONG-DAN-TEST.md); mật khẩu chỉ truyền qua biến môi trường runtime và không được ghi vào tài liệu. Trước khi mở domain Internet, đăng nhập ADMIN, vào **Tài khoản** và đổi toàn bộ mật khẩu demo.
 
 ## 6. Chuẩn bị Ollama và AI Service
 

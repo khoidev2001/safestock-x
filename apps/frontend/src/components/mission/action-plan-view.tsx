@@ -22,11 +22,22 @@ const SEVERITY = [
 export function ActionPlanView({
   plan,
   incidentPoint,
+  isReporterMission = false,
 }: {
   plan: ActionPlan;
   incidentPoint?: LatLng | null;
+  isReporterMission?: boolean;
 }) {
   const sev = SEVERITY[Math.min(4, Math.max(0, plan.severityLevel - 1))];
+  // Reporter ETA must have valid persisted provenance. Generic legacy plans remain visible.
+  const warehouses = isReporterMission
+    ? plan.warehouses.filter(
+        (warehouse) =>
+          (warehouse.source === "google" || warehouse.source === "haversine") &&
+          typeof warehouse.calculatedAt === "string" &&
+          Number.isFinite(Date.parse(warehouse.calculatedAt)),
+      )
+    : plan.warehouses;
 
   return (
     <div className="space-y-4">
@@ -128,18 +139,32 @@ export function ActionPlanView({
       </Panel>
 
       {/* 4. Điều phối kho (ETA) */}
-      {plan.warehouses.length > 0 && (
+      {warehouses.length > 0 && (
         <Panel
           icon={<ColorIcon name="location" size={19} tone="blue" />}
-          title="Điều phối kho (thời gian tới điểm nạn)"
+          title="Điều phối kho (ước tính thời gian logistics)"
         >
+          <p className="mb-3 text-xs text-[var(--text-muted)]">
+            Đây là thời gian ước tính để kho chuẩn bị và vận chuyển vật tư, không phải thời gian đội
+            cứu hộ đến hiện trường.
+          </p>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {plan.warehouses.map((w) => (
+            {warehouses.map((w) => (
               <div key={w.name} className="rounded-md border bg-[var(--surface-2)] p-3">
                 <p className="text-sm font-medium">{w.name}</p>
                 <p className="tabular mt-1 text-xs text-[var(--text-muted)]">
-                  {w.distanceKm} km · ~{w.etaMinutes} phút
+                  {w.distanceKm} km · ~{w.etaMinutes} phút ·{" "}
+                  {w.source === "google"
+                    ? "tuyến đường Google"
+                    : w.source === "haversine"
+                      ? "đường thẳng (haversine)"
+                      : "nguồn cũ"}
                 </p>
+                {w.calculatedAt && (
+                  <p className="mt-1 text-[11px] text-[var(--text-muted)]">
+                    Tính lúc {new Date(w.calculatedAt).toLocaleString("vi-VN")}
+                  </p>
+                )}
               </div>
             ))}
           </div>
@@ -147,7 +172,7 @@ export function ActionPlanView({
             <div className="mt-3">
               <IncidentMap
                 // plan.warehouses không có kind (CENTRAL/HAMLET) — dùng chung màu kho thôn, không ảnh hưởng số liệu
-                warehouses={plan.warehouses.map((w): ClusterWarehouse => ({
+                warehouses={warehouses.map((w): ClusterWarehouse => ({
                   id: w.name,
                   name: w.name,
                   kind: "HAMLET",
@@ -157,7 +182,7 @@ export function ActionPlanView({
                 incidentPoint={incidentPoint}
                 officialDistances={
                   new Map(
-                    plan.warehouses.map((w) => [
+                    warehouses.map((w) => [
                       w.name,
                       { distanceKm: w.distanceKm, etaMinutes: w.etaMinutes },
                     ]),
@@ -167,6 +192,16 @@ export function ActionPlanView({
             </div>
           ) : null}
         </Panel>
+      )}
+      {isReporterMission && plan.warehouses.length > 0 && warehouses.length === 0 && (
+        <p className="rounded-md border border-dashed p-4 text-sm text-[var(--text-muted)]">
+          Chưa có ETA logistics có đủ nguồn và thời điểm tính từ máy chủ.
+        </p>
+      )}
+      {isReporterMission && plan.warehouses.length === 0 && (
+        <p className="rounded-md border border-dashed p-4 text-sm text-[var(--text-muted)]">
+          Chưa có ước tính logistics từ kho.
+        </p>
       )}
 
       {/* 5. Phương án theo giai đoạn */}

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { ColorIcon, type ColorIconName, type ColorIconTone } from "@/components/shared/color-icon";
 import { useAuth } from "@/lib/auth-store";
 import { navGroups, navItems, type NavItem } from "@/lib/dashboard-nav";
@@ -18,19 +19,25 @@ const roleLabels: Record<string, string> = {
   ADMIN: "Quản trị xã",
   WAREHOUSE: "Phụ trách kho",
   RESCUE: "Đội cứu hộ",
+  REPORTER: "Trưởng thôn",
 };
 
 export function DashboardShell({ children, warehouseName }: DashboardShellProps) {
+  const queryClient = useQueryClient();
   const router = useRouter();
   const pathname = usePathname();
   const { user, clear } = useAuth();
-  const visibleNav = navItems.filter((item) => !item.adminOnly || user?.role === "ADMIN");
+  const visibleNav = navItems.filter((item) => {
+    if (user?.role === "RESCUE") return item.path === "/mission";
+    return !item.adminOnly || user?.role === "ADMIN";
+  });
 
   function isActive(path: string) {
     return pathname === path || pathname.startsWith(`${path}/`);
   }
 
   function logout() {
+    queryClient.clear();
     clear();
     router.replace("/login");
   }

@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ColorIcon } from "@/components/shared/color-icon";
 import { useState } from "react";
-import { getClusterWarehouses } from "@/lib/mission-api";
+import { listAllWarehouses } from "@/lib/warehouse-api";
 import {
   createUser,
   deleteUser,
@@ -14,7 +14,8 @@ import {
 import { Pagination, usePagination } from "@/components/shared/pagination";
 
 const ROLES = [
-  { value: "WAREHOUSE", label: "Phụ trách kho / Trưởng thôn" },
+  { value: "WAREHOUSE", label: "Phụ trách kho" },
+  { value: "REPORTER", label: "Trưởng thôn báo cáo" },
   { value: "RESCUE", label: "Đội cứu hộ" },
   { value: "ADMIN", label: "Quản trị xã" },
 ] as const;
@@ -26,8 +27,8 @@ export function AdminUsersView({ warehouseId }: { warehouseId: string }) {
   const qc = useQueryClient();
   const usersQuery = useQuery({ queryKey: ["admin-users"], queryFn: listUsers });
   const whQuery = useQuery({
-    queryKey: ["cluster-warehouses", warehouseId],
-    queryFn: () => getClusterWarehouses(warehouseId),
+    queryKey: ["all-warehouses", warehouseId],
+    queryFn: listAllWarehouses,
   });
 
   const [form, setForm] = useState({
@@ -43,11 +44,11 @@ export function AdminUsersView({ warehouseId }: { warehouseId: string }) {
   const create = useMutation({
     mutationFn: () =>
       createUser({
-        email: form.email,
+        email: ["WAREHOUSE", "REPORTER"].includes(form.role) ? undefined : form.email,
         password: form.password,
         fullName: form.fullName,
         role: form.role as AdminUser["role"],
-        warehouseId: form.role === "WAREHOUSE" && form.warehouseId ? form.warehouseId : undefined,
+        warehouseId: ["WAREHOUSE", "REPORTER"].includes(form.role) && form.warehouseId ? form.warehouseId : undefined,
       }),
     onSuccess: () => {
       setForm({ email: "", password: "", fullName: "", role: "WAREHOUSE", warehouseId: "" });
@@ -69,6 +70,10 @@ export function AdminUsersView({ warehouseId }: { warehouseId: string }) {
   });
 
   const warehouses = whQuery.data ?? [];
+  const assignableWarehouses =
+    ["REPORTER", "WAREHOUSE"].includes(form.role)
+      ? warehouses.filter((warehouse) => warehouse.kind === "HAMLET")
+      : warehouses;
   const nameById = new Map(warehouses.map((w) => [w.id, w.name]));
   const users = usersQuery.data ?? [];
   const pagination = usePagination(users);
@@ -88,11 +93,19 @@ export function AdminUsersView({ warehouseId }: { warehouseId: string }) {
               className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
             />
           </Field>
-          <Field label="Email / tên đăng nhập">
+          <Field label="Tên đăng nhập">
             <input
+              disabled={["WAREHOUSE", "REPORTER"].includes(form.role)}
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+              placeholder={
+                form.role === "REPORTER"
+                  ? "Tự sinh theo kho: <thôn>_baocao"
+                  : form.role === "WAREHOUSE"
+                    ? "Tự sinh theo kho: kho<thôn>"
+                    : "Nhập tên đăng nhập"
+              }
             />
           </Field>
           <Field label="Mật khẩu">
@@ -108,7 +121,14 @@ export function AdminUsersView({ warehouseId }: { warehouseId: string }) {
           <Field label="Vai trò">
             <select
               value={form.role}
-              onChange={(e) => setForm({ ...form, role: e.target.value })}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  role: e.target.value,
+                  email: ["WAREHOUSE", "REPORTER"].includes(e.target.value) ? "" : form.email,
+                  warehouseId: "",
+                })
+              }
               className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
             >
               {ROLES.map((r) => (
@@ -118,15 +138,15 @@ export function AdminUsersView({ warehouseId }: { warehouseId: string }) {
               ))}
             </select>
           </Field>
-          {form.role === "WAREHOUSE" && (
-            <Field label="Kho phụ trách (để trống = toàn xã)">
+          {(["WAREHOUSE", "REPORTER"] as string[]).includes(form.role) && (
+            <Field label="Kho phụ trách">
               <select
                 value={form.warehouseId}
                 onChange={(e) => setForm({ ...form, warehouseId: e.target.value })}
                 className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
               >
-                <option value="">— Toàn xã (kho tổng) —</option>
-                {warehouses.map((w) => (
+                <option value="">Chọn kho</option>
+                {assignableWarehouses.map((w) => (
                   <option key={w.id} value={w.id}>
                     {w.name} {w.kind === "HAMLET" ? "(thôn)" : "(tổng)"}
                   </option>
@@ -137,7 +157,13 @@ export function AdminUsersView({ warehouseId }: { warehouseId: string }) {
           <button
             type="button"
             onClick={() => create.mutate()}
-            disabled={create.isPending || !form.email || form.password.length < 8 || !form.fullName}
+            disabled={
+              create.isPending ||
+              (!["WAREHOUSE", "REPORTER"].includes(form.role) && !form.email) ||
+              (["WAREHOUSE", "REPORTER"].includes(form.role) && !form.warehouseId) ||
+              form.password.length < 8 ||
+              !form.fullName
+            }
             className="w-full rounded-md bg-[var(--color-accent)] px-4 py-2.5 text-sm font-semibold text-[var(--color-accent-fg)] transition hover:brightness-95 active:translate-y-px disabled:opacity-60"
           >
             {create.isPending ? "Đang tạo…" : "Tạo tài khoản"}
@@ -161,7 +187,7 @@ export function AdminUsersView({ warehouseId }: { warehouseId: string }) {
                     <span className="text-xs text-[var(--text-muted)]">· {u.email}</span>
                   </p>
                   <p className="text-xs text-[var(--text-muted)]">
-                    {roleLabels.get(u.role) ?? u.role}
+                    {roleLabels.get(u.role as (typeof ROLES)[number]["value"]) ?? u.role}
                     {u.warehouseId
                       ? ` · ${nameById.get(u.warehouseId) ?? "kho thôn"}`
                       : u.role === "WAREHOUSE"

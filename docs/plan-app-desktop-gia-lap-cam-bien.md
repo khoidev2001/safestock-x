@@ -107,7 +107,7 @@ Dùng **`electron-vite`** (scaffold sạch main/preload/renderer, HMR renderer).
 ### 4.3. Tái dùng có sẵn (tránh viết lại)
 
 - **API client:** port [apps/frontend/src/lib/api.ts](../apps/frontend/src/lib/api.ts) — bỏ `resolveApiBase()` phụ thuộc `window.location`, thay bằng base URL cố định `http://localhost:3100` (cho phép cấu hình qua ô nhập IP để demo LAN). Giữ nguyên `apiFetch` + auto-refresh 401.
-- **Login:** `POST /api/auth/login` body `{ email: "admin", password: "admin123@" }` → lưu `accessToken`/`refreshToken`/`user`. Header gọi API: `Authorization: Bearer <accessToken>`.
+- **Login:** `POST /api/auth/login` với định danh ADMIN và mật khẩu runtime → lưu `accessToken`/`refreshToken`/`user`. Header gọi API: `Authorization: Bearer <accessToken>`.
 - **WebSocket:** gửi access token qua Socket.IO handshake `auth`; backend xác thực và tự cấp room role/kho từ assignment hiện tại, client chỉ nghe `sensor_event` và `notification`.
 - **Danh mục thiết bị/kịch bản:** lấy động — `GET /api/simulator/first-warehouse` → `warehouseId`; `GET /api/simulator/warehouses/:id/devices` → render slider theo device thật; `GET /api/simulator/scenarios` → dropdown kịch bản. Không hard-code device code.
 

@@ -132,7 +132,7 @@ Phase 1 (ngay, độc lập map) → Phase 2 (khi có toạ độ kho) → Phase
 - ✅ Admin CRUD user: `POST/GET/PATCH/DELETE /admin/users` (quyền ADMIN_USERS). Verify: admin tạo trưởng thôn gán warehouseId OK; RESCUE tạo user → 403.
 - ✅ Chặn IDOR service layer: `assertBatchInScope` áp cho export/import/bulkExport/adjust/reconcile. Verify HTTP thật: trưởng thôn xuất batch kho tổng → **403**; xuất batch kho mình → **201**.
 - ✅ Excel báo cáo: `exceljs` parser (thuần, test) + `MonthlyStockReport` model + `/reports/upload` (trưởng thôn) + `/reports/:id/approve` (admin → reconcile từng SKU) + reject.
-- ✅ Seed: 2 user trưởng thôn (`truongthon1/2@safestock.vn` / `truongthon123`) gắn kho thôn.
+- ✅ Seed: user REPORTER/WAREHOUSE theo `locationKey` gắn đúng kho thôn; mật khẩu lấy từ secret runtime.
 - ✅ 18 test suite / 141 test pass (thêm 4 test scope chống IDOR).
 
 **✅ Verify Excel end-to-end HTTP thật (2026-07-17):** trưởng thôn upload .xlsx → PENDING (201); admin duyệt → APPROVED + reconcile áp từng SKU → tồn kho thôn đổi đúng (WATER 80→120, LIFE 19→15 theo số báo cáo).

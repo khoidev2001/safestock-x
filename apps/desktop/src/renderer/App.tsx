@@ -43,8 +43,6 @@ interface LogLine {
   tone?: "info" | "sensor" | "alert";
 }
 
-const ADMIN_EMAIL = "admin";
-const ADMIN_PASSWORD = "admin123@";
 
 export function App() {
   const [host, setHost] = useState("localhost:3100");
@@ -52,6 +50,8 @@ export function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
 
   const [warehouse, setWarehouse] = useState<Warehouse | null>(null);
   const [devices, setDevices] = useState<VirtualDevice[]>([]);
@@ -94,8 +94,11 @@ export function App() {
     setBusy(true);
     setLoginError(null);
     try {
+      if (!loginEmail.trim() || !loginPassword) {
+        throw new Error("Vui lòng nhập tên đăng nhập và mật khẩu");
+      }
       setBase(host);
-      const u = await login(ADMIN_EMAIL, ADMIN_PASSWORD);
+      const u = await login(loginEmail.trim(), loginPassword);
       setUser(u);
       setAuthed(true);
       pushLog(`Đăng nhập thành công (${u.role}).`);
@@ -245,6 +248,7 @@ export function App() {
     setIncidents([]);
     setWsConnected(false);
     setLog([]);
+    setLoginPassword("");
   }
 
   const adjustableDevices = devices.filter((d) => ADJUSTABLE_TYPES.includes(d.type));
@@ -278,12 +282,30 @@ export function App() {
               placeholder="localhost:3100 hoặc 192.168.1.x"
             />
           </label>
+          <label className="field">
+            <span>Tên đăng nhập</span>
+            <input
+              value={loginEmail}
+              onChange={(e) => setLoginEmail(e.target.value)}
+              autoComplete="username"
+              autoCapitalize="none"
+            />
+          </label>
+          <label className="field">
+            <span>Mật khẩu</span>
+            <input
+              value={loginPassword}
+              onChange={(e) => setLoginPassword(e.target.value)}
+              type="password"
+              autoComplete="current-password"
+            />
+          </label>
           <p className="hint">
-            Đăng nhập tài khoản admin ({ADMIN_EMAIL}) — app chỉ dùng để demo/test.
+            Nhập tài khoản có quyền mô phỏng; thông tin đăng nhập chỉ dùng trong phiên hiện tại.
           </p>
           {loginError && <p className="error">{loginError}</p>}
           <button className="btn primary" onClick={handleLogin} disabled={busy}>
-            {busy ? "Đang kết nối…" : "Đăng nhập admin"}
+            {busy ? "Đang kết nối…" : "Đăng nhập"}
           </button>
         </section>
       ) : (

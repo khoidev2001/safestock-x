@@ -19,8 +19,10 @@
 <body>
   <h1>Ứng phó nhanh — Mô phỏng cảm biến (bản tối thiểu B3)</h1>
   <div class="row">
+    <label>Tên đăng nhập: <input type="text" id="login" autocomplete="username" /></label>
+    <label>Mật khẩu: <input type="password" id="password" autocomplete="current-password" /></label>
     <label>Token: <input type="text" id="tok" size="24" placeholder="dán accessToken" /></label>
-    <button onclick="doLogin()">Login admin</button>
+    <button onclick="doLogin()">Đăng nhập</button>
     <span id="wid">wid: —</span>
   </div>
 
@@ -57,10 +59,15 @@ function log(msg, color) {
 }
 
 async function doLogin() {
-  const r = await fetch(`${API}/api/auth/login`, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:"admin",password:"admin123@"})});
+  const email = document.getElementById("login").value.trim();
+  const password = document.getElementById("password").value;
+  if (!email || !password) return log("Nhập tên đăng nhập và mật khẩu", "#f66");
+  const r = await fetch(`${API}/api/auth/login`, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password})});
   const d = await r.json();
+  if (!r.ok || !d.accessToken) return log("Đăng nhập thất bại", "#f66");
   token = d.accessToken;
   document.getElementById("tok").value = token.slice(0,20)+"...";
+  document.getElementById("password").value = "";
   await init();
 }
 

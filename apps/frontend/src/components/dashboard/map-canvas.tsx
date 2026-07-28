@@ -4,151 +4,49 @@ import L from "leaflet";
 import { useEffect, useMemo, useState } from "react";
 import {
   GeoJSON,
-  LayerGroup,
-  LayersControl,
   MapContainer,
   Marker,
   Popup,
   TileLayer,
-  Tooltip,
   useMap,
   useMapEvents,
 } from "react-leaflet";
 import type { AdminWarehouse } from "@/lib/warehouse-api";
+import { warehouseLocationLabel } from "@/lib/warehouse-location";
+import {
+  buildLabelCandidates,
+  computeCommuneLabels,
+  type GeoData,
+  type LabelCandidate,
+  type PlaceFeature,
+  selectVisibleLabels,
+} from "./map-labels";
+import { markerIconHtml, type MapMarkerKind } from "./map-markers";
 
-// Zoom sâu nhất cho phép — đủ để thấy từng mái nhà và ngõ nhỏ.
-const MAX_DETAIL_ZOOM = 19;
-
-// Nguồn tile Esri: ảnh vệ tinh + 2 lớp nhãn trong suốt (đường & địa danh).
+// World Imagery exposes deeper cache levels, but the Đồng Xuân area only has native
+// detail through level 18. Stopping here avoids Esri's “Map data not yet available” tile.
+const MAX_SATELLITE_ZOOM = 18;
 const ESRI_IMAGERY =
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-const ESRI_TRANSPORT =
-  "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}";
-const CARTO_ATTR =
-  '&copy; <a href="https://carto.com/attributions">CARTO</a>';
-// Nền kiểu Google Maps vẽ Ô NHÀ (building footprint) + đường, KHÔNG chữ nào —
-// nhờ vậy không còn nhãn "huyện" nào lọt vào; tên địa danh do ta tự vẽ (đã lọc).
-const CARTO_VOYAGER_NOLABELS =
-  "https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png";
-
-// Các lớp nền bản đồ — mặc định Vệ tinh + nhãn đường (thấy nhà & đường rõ nhất).
-const OSM_ATTR =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>';
-const BASE_LAYERS = [
-  {
-    id: "streets",
-    // Nền vector kiểu Google Maps: vẽ ô nhà (building footprint) + đường, KHÔNG
-    // có chữ nào nên không lọt nhãn "huyện"; tên địa danh do ta tự vẽ (đã lọc).
-    name: "Bản đồ nhà & đường (giống Google)",
-    url: CARTO_VOYAGER_NOLABELS,
-    attribution: `${OSM_ATTR} · ${CARTO_ATTR}`,
-    maxZoom: MAX_DETAIL_ZOOM,
-    offline: false,
-  },
-  {
-    id: "hybrid",
-    // Ảnh vệ tinh thật (thấy mái nhà, cây cối) + chỉ chồng lớp ĐƯỜNG (không chồng
-    // lớp tên địa danh của Esri để tránh nhãn "huyện"); tên do ta tự vẽ.
-    name: "Vệ tinh + đường",
-    url: ESRI_IMAGERY,
-    overlayUrls: [ESRI_TRANSPORT],
-    attribution: "&copy; Esri, Maxar, Earthstar Geographics · đường &copy; Esri",
-    maxZoom: MAX_DETAIL_ZOOM,
-    offline: false,
-  },
-  {
-    id: "offline",
-    // Offline: tile đã tải sẵn 5 xã cụm Đồng Xuân (zoom 10-15) ở public/tiles.
-    // Mất mạng vẫn hiện. Ngoài vùng/zoom đã tải → tile trắng (errorTileUrl xử lý).
-    name: "Offline (5 xã, không cần mạng)",
-    url: "/tiles/{z}/{x}/{y}.png",
-    attribution: `${OSM_ATTR} · &copy; <a href="https://www.maptiler.com/">MapTiler</a> · offline cụm Đồng Xuân`,
-    maxZoom: 15,
-    // Tile tải từ endpoint raster 256px, cùng lưới XYZ chuẩn với Leaflet/OSM.
-    offline: true,
-  },
-  {
-    id: "osm",
-    name: "Đường phố (OSM, cần mạng)",
-    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    attribution: OSM_ATTR,
-    maxZoom: MAX_DETAIL_ZOOM,
-    offline: false,
-  },
-  {
-    id: "topo",
-    name: "Địa hình (Topo)",
-    url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
-    attribution: `${OSM_ATTR} · <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)`,
-    maxZoom: 17,
-    offline: false,
-  },
-  {
-    id: "satellite",
-    name: "Vệ tinh (không nhãn)",
-    url: ESRI_IMAGERY,
-    attribution: "&copy; Esri, Maxar, Earthstar Geographics",
-    maxZoom: MAX_DETAIL_ZOOM,
-    offline: false,
-  },
-];
-
-// Tile xám 1x1 (base64) cho ô ngoài vùng offline — thay vì ô vỡ.
-const BLANK_TILE =
-  "data:image/gif;base64,R0lGODlhAQABAIAAAOfn5wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==";
-
-// Tâm cụm xã Đồng Xuân (fallback khi chưa kho nào có toạ độ).
 const DEFAULT_CENTER: [number, number] = [13.38, 109.05];
 
-function pinIcon(color: string, size = 30): L.DivIcon {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="${color}" stroke="white" stroke-width="1.5"><path d="M12 21s-7-6.5-7-11.5A7 7 0 0 1 19 9.5C19 14.5 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5" fill="white"/></svg>`;
-  return L.divIcon({
-    html: svg,
-    className: "",
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size],
-    popupAnchor: [0, -size],
-  });
-}
-
-interface GeoData {
-  type: "FeatureCollection";
-  features: unknown[];
-}
-
-// Địa danh/POI tự vẽ (đã lọc bỏ "huyện") — mỗi mục 1 ghim + tên tô màu.
-interface PlaceFeature {
-  properties: { name: string; group: string; kind?: string };
-  geometry: { type: "Point"; coordinates: [number, number] };
-}
 interface PlacesData {
   type: "FeatureCollection";
   features: PlaceFeature[];
 }
 
-// Màu ghim theo nhóm POI — đồng bộ với chú giải dưới bản đồ.
-const PLACE_COLORS: Record<string, string> = {
-  place: "#7a2e12", // thôn/xóm/làng — quan trọng nhất cho cứu hộ
-  health: "#d64545", // y tế
-  school: "#2f6fd6", // trường học
-  civic: "#7b41c9", // hành chính/công (UBND, công an, bưu điện…)
-  commerce: "#1f7a52", // chợ, cây xăng, cửa hàng, ngân hàng
-  worship: "#a06a1f", // cơ sở tôn giáo
-  poi: "#555b66", // khác
-};
-// Zoom tối thiểu để hiện ghim địa danh — tránh dày đặc khi nhìn toàn tỉnh.
-const PLACE_MIN_ZOOM = 13;
-
 export interface MapCanvasProps {
   warehouses: AdminWarehouse[];
+  persistedWarehouses: AdminWarehouse[];
   devMode: boolean;
-  pickingId: string | null; // kho đang chờ đặt toạ độ (dev mode, click map)
+  pickingId: string | null;
   onMarkerMove: (id: string, lat: number, lng: number) => void;
   onPickOnMap: (lat: number, lng: number) => void;
 }
 
 export function MapCanvas({
   warehouses,
+  persistedWarehouses,
   devMode,
   pickingId,
   onMarkerMove,
@@ -156,228 +54,225 @@ export function MapCanvas({
 }: MapCanvasProps) {
   const [geo, setGeo] = useState<GeoData | null>(null);
   const [places, setPlaces] = useState<PlacesData | null>(null);
-  const [preferredBaseLayer, setPreferredBaseLayer] = useState<"offline" | "streets">(() =>
-    typeof navigator !== "undefined" && navigator.onLine ? "streets" : "offline",
+  const markerIcons = useMemo(() => createMarkerIcons(), []);
+  const selectedMarkerIcons = useMemo(() => createMarkerIcons(true), []);
+  const communeLabels = useMemo(() => (geo ? computeCommuneLabels(geo) : []), [geo]);
+  const candidates = useMemo(
+    () =>
+      buildLabelCandidates({
+        communes: communeLabels,
+        places: places?.features ?? [],
+        warehouses,
+      }),
+    [communeLabels, places, warehouses],
   );
-  const centralIcon = useMemo(() => pinIcon("var(--color-accent, #2f9e6e)"), []);
-  const hamletIcon = useMemo(() => pinIcon("var(--text-muted, #8a8f98)", 26), []);
+  const persistedPoints = useMemo(
+    () =>
+      persistedWarehouses
+        .filter((warehouse) => warehouse.lat != null && warehouse.lng != null)
+        .map((warehouse) => ({ lat: warehouse.lat as number, lng: warehouse.lng as number })),
+    [persistedWarehouses],
+  );
 
   useEffect(() => {
-    // Ưu tiên ranh giới toàn tỉnh (102 xã/phường); fallback về cụm 5 xã cũ.
     const load = async () => {
-      for (const src of ["/geo/daklak-communes.geojson", "/geo/communes.geojson"]) {
+      for (const source of ["/geo/daklak-communes.geojson", "/geo/communes.geojson"]) {
         try {
-          const r = await fetch(src);
-          if (r.ok) {
-            setGeo(await r.json());
+          const response = await fetch(source);
+          if (response.ok) {
+            setGeo(await response.json());
             return;
           }
         } catch {
-          /* thử nguồn kế tiếp */
+          // Thử dữ liệu fallback khi nguồn chính chưa sẵn sàng.
         }
       }
       setGeo(null);
     };
-    load();
+    void load();
   }, []);
 
   useEffect(() => {
-    // Địa danh tự vẽ (đã bỏ "huyện"). Không có file cũng không sao — chỉ là lớp phủ.
     fetch("/geo/daklak-places.geojson")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setPlaces(d))
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => setPlaces(data))
       .catch(() => setPlaces(null));
   }, []);
-
-  useEffect(() => {
-    const selectOnlineMap = () => setPreferredBaseLayer("streets");
-    const selectOfflineMap = () => setPreferredBaseLayer("offline");
-
-    window.addEventListener("online", selectOnlineMap);
-    window.addEventListener("offline", selectOfflineMap);
-    return () => {
-      window.removeEventListener("online", selectOnlineMap);
-      window.removeEventListener("offline", selectOfflineMap);
-    };
-  }, []);
-
-  const located = warehouses.filter((w) => w.lat != null && w.lng != null);
-  const boundsPoints = located.map((w) => ({ lat: w.lat as number, lng: w.lng as number }));
 
   return (
     <div className="h-[calc(100dvh-190px)] min-h-[520px] overflow-hidden rounded-md border">
       <MapContainer
         center={DEFAULT_CENTER}
         zoom={12}
-        maxZoom={MAX_DETAIL_ZOOM}
+        maxZoom={MAX_SATELLITE_ZOOM}
         scrollWheelZoom
         style={{ height: "100%", width: "100%" }}
       >
-        <LayersControl position="topright">
-          {BASE_LAYERS.map((layer) => (
-            <LayersControl.BaseLayer
-              key={layer.id}
-              name={layer.name}
-              checked={layer.id === preferredBaseLayer}
-            >
-              <LayerGroup>
-                <TileLayer
-                  url={layer.url}
-                  attribution={layer.attribution}
-                  maxZoom={layer.maxZoom}
-                  // Ảnh vệ tinh Esri chỉ có ảnh tới zoom 19; zoom sâu hơn thì
-                  // phóng to lại ô 19 thay vì hiện ô trắng.
-                  maxNativeZoom={layer.offline ? undefined : 19}
-                  tileSize={256}
-                  zoomOffset={0}
-                  errorTileUrl={layer.offline ? BLANK_TILE : undefined}
-                />
-                {layer.overlayUrls?.map((overlayUrl) => (
-                  <TileLayer
-                    key={overlayUrl}
-                    url={overlayUrl}
-                    maxZoom={layer.maxZoom}
-                    maxNativeZoom={19}
-                    tileSize={256}
-                    zoomOffset={0}
-                  />
-                ))}
-              </LayerGroup>
-            </LayersControl.BaseLayer>
-          ))}
-          {/* Địa danh tự vẽ: ghim + tên tô màu (đã bỏ mọi nhãn "huyện"). */}
-          <LayersControl.Overlay checked name="Địa danh (ghim + tên tô màu)">
-            <LayerGroup>{places ? <PlacePins places={places} /> : null}</LayerGroup>
-          </LayersControl.Overlay>
-          {/* Ranh giới + tên xã/phường — bật sẵn, tắt được khi cần. */}
-          <LayersControl.Overlay checked name="Ranh giới xã/phường">
-            <LayerGroup>
-              {geo ? <CommuneBoundaries geo={geo} /> : null}
-            </LayerGroup>
-          </LayersControl.Overlay>
-        </LayersControl>
-        <FitBounds points={boundsPoints} />
+        <TileLayer
+          url={ESRI_IMAGERY}
+          attribution="&copy; Esri, Maxar, Earthstar Geographics"
+          maxZoom={MAX_SATELLITE_ZOOM}
+          maxNativeZoom={MAX_SATELLITE_ZOOM}
+          tileSize={256}
+          zoomOffset={0}
+        />
+        {geo ? (
+          <GeoJSON
+            data={geo as never}
+            style={() => ({
+              color: "#e05a2b",
+              weight: 1.4,
+              fillColor: "#f0a020",
+              fillOpacity: 0.04,
+              dashArray: "4 3",
+            })}
+          />
+        ) : null}
+        <InitialFitBounds points={persistedPoints} />
         {devMode && pickingId ? <ClickPicker onPick={onPickOnMap} /> : null}
-        {located.map((w) => (
-          <Marker
-            key={w.id}
-            position={[w.lat as number, w.lng as number]}
-            icon={w.kind === "CENTRAL" ? centralIcon : hamletIcon}
-            draggable={devMode}
-            eventHandlers={
-              devMode
-                ? {
-                    dragend: (e) => {
-                      const p = (e.target as L.Marker).getLatLng();
-                      onMarkerMove(w.id, p.lat, p.lng);
-                    },
-                  }
-                : undefined
-            }
-          >
-            <Tooltip
-              permanent
-              direction="top"
-              offset={[0, -26]}
-              className={`wh-label ${w.kind === "CENTRAL" ? "wh-label-central" : ""}`}
-            >
-              {w.name.replace(/^Kho (thôn|cứu trợ trung tâm) /, "")}
-            </Tooltip>
-            <Popup>
-              <strong>{w.name}</strong>
-              <br />
-              {w.kind === "CENTRAL" ? "Kho tổng xã" : "Kho thôn"}
-              <br />
-              <span className="tabular">
-                {(w.lat as number).toFixed(5)}, {(w.lng as number).toFixed(5)}
-              </span>
-              {devMode ? (
-                <>
-                  <br />
-                  <em>Kéo marker để đổi vị trí</em>
-                </>
-              ) : null}
-            </Popup>
-          </Marker>
-        ))}
+        <DeclutteredMarkers
+          candidates={candidates}
+          devMode={devMode}
+          markerIcons={markerIcons}
+          selectedMarkerIcons={selectedMarkerIcons}
+          pickingId={pickingId}
+          onMarkerMove={onMarkerMove}
+        />
       </MapContainer>
     </div>
   );
 }
 
-// Zoom tối thiểu để hiện nhãn tên xã — dưới mức này chỉ hiện viền (tránh 102
-// nhãn chồng nhau ở mức nhìn toàn tỉnh, giống cách Google Maps lộ dần nhãn).
-const COMMUNE_LABEL_MIN_ZOOM = 10;
-
-// Ranh giới xã/phường + nhãn tên (kiểu Google Maps: viền + chữ ở tâm xã).
-function CommuneBoundaries({ geo }: { geo: GeoData }) {
+function DeclutteredMarkers({
+  candidates,
+  devMode,
+  markerIcons,
+  selectedMarkerIcons,
+  pickingId,
+  onMarkerMove,
+}: {
+  candidates: LabelCandidate[];
+  devMode: boolean;
+  markerIcons: Record<MapMarkerKind, L.DivIcon>;
+  selectedMarkerIcons: Record<MapMarkerKind, L.DivIcon>;
+  pickingId: string | null;
+  onMarkerMove: (id: string, lat: number, lng: number) => void;
+}) {
   const map = useMap();
-  const labels = useMemo(() => computeCommuneLabels(geo), [geo]);
-  const [showLabels, setShowLabels] = useState(() => map.getZoom() >= COMMUNE_LABEL_MIN_ZOOM);
+  const [viewState, setViewState] = useState(() => readMapView(map));
   useMapEvents({
-    zoomend: () => setShowLabels(map.getZoom() >= COMMUNE_LABEL_MIN_ZOOM),
+    moveend: () => setViewState(readMapView(map)),
+    resize: () => setViewState(readMapView(map)),
+    zoomend: () => setViewState(readMapView(map)),
   });
+
+  const collisionCandidates = useMemo(
+    () =>
+      candidates.map((candidate) =>
+        candidate.warehouse?.id === pickingId ? { ...candidate, priority: 2000 } : candidate,
+      ),
+    [candidates, pickingId],
+  );
+  const visible = useMemo(
+    () =>
+      selectVisibleLabels(
+        collisionCandidates,
+        (lat, lng) => map.latLngToContainerPoint([lat, lng]),
+        viewState.zoom,
+        { width: viewState.width, height: viewState.height },
+      ),
+    [collisionCandidates, map, viewState],
+  );
+  const warehouseCandidates = candidates.filter((candidate) => candidate.category === "warehouse");
+
   return (
     <>
-      <GeoJSON
-        data={geo as never}
-        style={() => ({
-          color: "#e05a2b",
-          weight: 1.4,
-          fillColor: "#f0a020",
-          fillOpacity: 0.04,
-          // Đường viền nét đứt mảnh cho giống bản đồ hành chính.
-          dashArray: "4 3",
-        })}
-      />
-      {showLabels
-        ? labels.map((lbl) => (
+      {warehouseCandidates.map((candidate) => {
+        const warehouse = candidate.warehouse;
+        if (!warehouse || !candidate.markerKind) return null;
+        const selected = devMode && pickingId === warehouse.id;
+        return (
+          <Marker
+            key={`marker:${candidate.id}`}
+            position={[candidate.lat, candidate.lng]}
+            icon={
+              selected
+                ? selectedMarkerIcons[candidate.markerKind]
+                : markerIcons[candidate.markerKind]
+            }
+            draggable={selected}
+            zIndexOffset={selected ? 1000 : warehouse.kind === "CENTRAL" ? 500 : 400}
+            eventHandlers={
+              selected
+                ? {
+                    dragend: (event) => {
+                      const point = (event.target as L.Marker).getLatLng();
+                      onMarkerMove(warehouse.id, point.lat, point.lng);
+                    },
+                  }
+                : undefined
+            }
+          >
+            <Popup>
+              <strong>{warehouse.name}</strong>
+              <br />
+              {warehouse.kind === "CENTRAL" ? "Kho tổng xã" : "Kho thôn"}
+              <br />
+              <span className="tabular">
+                {candidate.lat.toFixed(5)}, {candidate.lng.toFixed(5)}
+              </span>
+              <br />
+              {warehouseLocationLabel(warehouse)}
+              {warehouse.locationSourceUrl ? (
+                <>
+                  <br />
+                  <a href={warehouse.locationSourceUrl} target="_blank" rel="noreferrer">
+                    Xem nguồn vị trí
+                  </a>
+                </>
+              ) : null}
+              {selected ? (
+                <>
+                  <br />
+                  <em>Kéo marker hoặc bấm vị trí khác trên bản đồ</em>
+                </>
+              ) : null}
+            </Popup>
+          </Marker>
+        );
+      })}
+
+      {visible.map((candidate) => {
+        if (candidate.category === "commune") {
+          return (
             <Marker
-              key={lbl.key}
-              position={[lbl.lat, lbl.lng]}
-              icon={communeLabelIcon(lbl.name)}
+              key={candidate.id}
+              position={[candidate.lat, candidate.lng]}
+              icon={communeLabelIcon(candidate.label)}
               interactive={false}
               keyboard={false}
             />
-          ))
-        : null}
-    </>
-  );
-}
+          );
+        }
 
-// Ghim địa danh tự vẽ: chấm màu + tên tô màu, chỉ hiện khi zoom đủ gần để không
-// rối. Giới hạn số ghim hiển thị theo khung nhìn để giữ mượt khi có hàng nghìn mục.
-function PlacePins({ places }: { places: PlacesData }) {
-  const map = useMap();
-  const [zoom, setZoom] = useState(() => map.getZoom());
-  const [bounds, setBounds] = useState(() => map.getBounds());
-  useMapEvents({
-    zoomend: () => {
-      setZoom(map.getZoom());
-      setBounds(map.getBounds());
-    },
-    moveend: () => setBounds(map.getBounds()),
-  });
-  const visible = useMemo(() => {
-    if (zoom < PLACE_MIN_ZOOM) return [];
-    const out: PlaceFeature[] = [];
-    for (const f of places.features) {
-      const [lng, lat] = f.geometry.coordinates;
-      if (bounds.contains([lat, lng])) out.push(f);
-      if (out.length >= 400) break; // trần an toàn cho hiệu năng
-    }
-    return out;
-  }, [places, zoom, bounds]);
+        if (candidate.category === "place" && candidate.markerKind) {
+          return (
+            <Marker
+              key={candidate.id}
+              position={[candidate.lat, candidate.lng]}
+              icon={placeLabelIcon(candidate.label, candidate.markerKind)}
+              interactive={false}
+              keyboard={false}
+            />
+          );
+        }
 
-  return (
-    <>
-      {visible.map((f, i) => {
-        const [lng, lat] = f.geometry.coordinates;
+        if (!candidate.markerKind) return null;
         return (
           <Marker
-            key={`${f.properties.name}-${i}`}
-            position={[lat, lng]}
-            icon={placePinIcon(f.properties.name, f.properties.group)}
+            key={`label:${candidate.id}`}
+            position={[candidate.lat, candidate.lng]}
+            icon={warehouseLabelIcon(candidate.label, candidate.markerKind)}
             interactive={false}
             keyboard={false}
           />
@@ -387,118 +282,100 @@ function PlacePins({ places }: { places: PlacesData }) {
   );
 }
 
-// DivIcon cho địa danh: chấm tròn màu nhóm + tên tô cùng màu, halo trắng.
-function placePinIcon(name: string, group: string): L.DivIcon {
-  const color = PLACE_COLORS[group] ?? PLACE_COLORS.poi;
-  const safe = name.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
-  const nameClass = group === "place" ? "place-name place-name-place" : "place-name";
+function readMapView(map: L.Map): { width: number; height: number; zoom: number } {
+  const size = map.getSize();
+  return { width: size.x, height: size.y, zoom: map.getZoom() };
+}
+
+function createMarkerIcons(selected = false): Record<MapMarkerKind, L.DivIcon> {
+  return {
+    "central-warehouse": mapDivIcon("central-warehouse", 34, 34, selected),
+    "hamlet-warehouse": mapDivIcon("hamlet-warehouse", 30, 30, selected),
+    place: mapDivIcon("place", 22, 22, selected),
+    health: mapDivIcon("health", 22, 22, selected),
+    school: mapDivIcon("school", 22, 22, selected),
+    civic: mapDivIcon("civic", 22, 22, selected),
+    commerce: mapDivIcon("commerce", 22, 22, selected),
+    worship: mapDivIcon("worship", 22, 22, selected),
+    poi: mapDivIcon("poi", 22, 22, selected),
+  };
+}
+
+function mapDivIcon(
+  kind: MapMarkerKind,
+  width: number,
+  height: number,
+  selected: boolean,
+): L.DivIcon {
   return L.divIcon({
-    html: `<span class="place-pin"><span class="place-dot" style="background:${color}"></span><span class="${nameClass}" style="color:${color}">${safe}</span></span>`,
-    className: "place-pin-wrap",
+    html: markerIconHtml(kind, width),
+    className: selected ? "map-marker-icon-wrap map-marker-icon-selected" : "map-marker-icon-wrap",
+    iconSize: [width, height],
+    iconAnchor: [width / 2, height / 2],
+    popupAnchor: [0, -height / 2],
+  });
+}
+
+function warehouseLabelIcon(label: string, kind: MapMarkerKind): L.DivIcon {
+  return L.divIcon({
+    html: `<span class="map-warehouse-label map-warehouse-label-${kind}">${escapeHtml(label)}</span>`,
+    className: "map-label-icon-wrap",
     iconSize: [0, 0],
     iconAnchor: [0, 0],
   });
 }
 
-// Nhãn tên xã là DivIcon (không phải tooltip) để căn giữa ngay tại tâm xã.
-function communeLabelIcon(name: string): L.DivIcon {
-  const safe = name.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+function placeLabelIcon(label: string, kind: MapMarkerKind): L.DivIcon {
   return L.divIcon({
-    html: `<span class="commune-label">${safe}</span>`,
-    className: "commune-label-wrap",
+    html: `<span class="map-place-label map-place-label-${kind}">${markerIconHtml(kind, 22)}<span>${escapeHtml(label)}</span></span>`,
+    className: "map-label-icon-wrap",
     iconSize: [0, 0],
     iconAnchor: [0, 0],
   });
 }
 
-// Tính điểm đặt nhãn cho mỗi xã: tâm của polygon lớn nhất (đại diện diện tích).
-function computeCommuneLabels(
-  geo: GeoData,
-): { key: string; name: string; lat: number; lng: number }[] {
-  const out: { key: string; name: string; lat: number; lng: number }[] = [];
-  const features = (geo.features ?? []) as Array<{
-    properties?: { name?: string; fullName?: string; osmId?: number };
-    geometry?: { type: string; coordinates: unknown };
-  }>;
-  for (let i = 0; i < features.length; i++) {
-    const f = features[i];
-    const name = f.properties?.name ?? f.properties?.fullName;
-    if (!name || !f.geometry) continue;
-    const center = polygonLabelPoint(f.geometry);
-    if (!center) continue;
-    out.push({
-      key: String(f.properties?.osmId ?? `${name}-${i}`),
-      name,
-      lat: center[1],
-      lng: center[0],
-    });
-  }
-  return out;
+function communeLabelIcon(label: string): L.DivIcon {
+  return L.divIcon({
+    html: `<span class="map-commune-label">${escapeHtml(label)}</span>`,
+    className: "map-label-icon-wrap",
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+  });
 }
 
-// Lấy tâm (trung bình đỉnh) của ring lớn nhất trong Polygon/MultiPolygon.
-function polygonLabelPoint(geometry: {
-  type: string;
-  coordinates: unknown;
-}): [number, number] | null {
-  type Ring = [number, number][];
-  let rings: Ring[] = [];
-  if (geometry.type === "Polygon") {
-    rings = (geometry.coordinates as Ring[]).slice(0, 1);
-  } else if (geometry.type === "MultiPolygon") {
-    rings = (geometry.coordinates as Ring[][]).map((poly) => poly[0]);
-  } else {
-    return null;
-  }
-  let best: Ring | null = null;
-  let bestArea = -1;
-  for (const ring of rings) {
-    const area = Math.abs(ringSignedArea(ring));
-    if (area > bestArea) {
-      bestArea = area;
-      best = ring;
-    }
-  }
-  if (!best || best.length === 0) return null;
-  let sx = 0;
-  let sy = 0;
-  for (const [x, y] of best) {
-    sx += x;
-    sy += y;
-  }
-  return [sx / best.length, sy / best.length];
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => {
+    const entities: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    };
+    return entities[character];
+  });
 }
 
-function ringSignedArea(ring: [number, number][]): number {
-  let a = 0;
-  for (let i = 0; i < ring.length - 1; i++) {
-    a += ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1];
-  }
-  return a / 2;
-}
-
-function FitBounds({ points }: { points: { lat: number; lng: number }[] }) {
+function InitialFitBounds({ points }: { points: { lat: number; lng: number }[] }) {
   const map = useMap();
-  const key = points.map((p) => `${p.lat.toFixed(4)},${p.lng.toFixed(4)}`).join("|");
+  const [hasFitted, setHasFitted] = useState(false);
+  const key = points.map((point) => `${point.lat.toFixed(4)},${point.lng.toFixed(4)}`).join("|");
   useEffect(() => {
-    if (points.length === 0) return;
+    if (hasFitted || points.length === 0) return;
     if (points.length === 1) {
-      // Một kho: zoom sâu để thấy rõ nhà & đường quanh kho.
       map.setView([points[0].lat, points[0].lng], 17);
-      return;
+    } else {
+      map.fitBounds(L.latLngBounds(points.map((point) => [point.lat, point.lng])), {
+        padding: [30, 30],
+        maxZoom: 17,
+      });
     }
-    map.fitBounds(L.latLngBounds(points.map((p) => [p.lat, p.lng])), {
-      padding: [30, 30],
-      // Cho phép ôm sát cụm kho tới mức thấy từng con đường, nhưng không
-      // vượt quá 17 khi các kho nằm quá gần nhau (tránh zoom quá đà).
-      maxZoom: 17,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+    setHasFitted(true);
+  }, [hasFitted, key, map, points]);
   return null;
 }
 
 function ClickPicker({ onPick }: { onPick: (lat: number, lng: number) => void }) {
-  useMapEvents({ click: (e) => onPick(e.latlng.lat, e.latlng.lng) });
+  useMapEvents({ click: (event) => onPick(event.latlng.lat, event.latlng.lng) });
   return null;
 }

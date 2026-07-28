@@ -1,20 +1,33 @@
-import { Body, Controller, Get, Param, Post, Query, Request, UseGuards } from "@nestjs/common";
-import { MissionStatus, NotificationKind, UserRole } from "@prisma/client";
-import { IncidentType, Permission } from "@safestock/shared-types";
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  Request,
+  Res,
+  NotFoundException,
+  UseGuards,
+} from "@nestjs/common";
+import { MissionStatus } from "@prisma/client";
+import { Permission, UserRole } from "@safestock/shared-types";
+import type { Response } from "express";
 import { AuthenticatedRequest } from "../auth/authenticated-request";
 import { JwtAuthGuard } from "../auth/guards";
 import { PermissionGuard } from "../rbac/permission.guard";
 import { RequirePermission } from "../rbac/permissions.decorator";
 import { AiClientService } from "../ai/ai-client.service";
-import { NotificationService } from "../notification/notification.service";
 import {
   AdminNoteDto,
-  CompleteMissionDto,
   GeneratePlanDto,
+  OwnReportListQueryDto,
   ParseDto,
-  RejectMissionDto,
+  ReviewReportDto,
+  AdminReviewWarehouseRequestDto,
   SubmitReportDto,
   TranscribeDto,
+  WarehouseRequestNoteDto,
 } from "./dto";
 import { IncidentInput } from "./mission.compute";
 import { MissionService } from "./mission.service";
@@ -25,61 +38,105 @@ export class MissionController {
   constructor(
     private missions: MissionService,
     private ai: AiClientService,
-    private notifications: NotificationService,
   ) {}
 
   /** Parse mô tả → tình huống JSON (proxy AI, có cache). */
-  @RequirePermission(Permission.MISSION_CREATE)
+  @RequirePermission(Permission.INCIDENT_REPORT_ANALYZE)
   @Post("parse")
   parse(@Body() dto: ParseDto) {
     return this.ai.parse(dto.description);
   }
 
-  /** Giọng nói (WAV base64) → text tiếng Việt bằng PhoWhisper local (proxy AI). */
-  @RequirePermission(Permission.MISSION_CREATE)
+  /** Giọng nói (WAV base64) → text tiếng Việt bằng PhoWhisper local. */
+  @RequirePermission(Permission.INCIDENT_REPORT_TRANSCRIBE)
   @Post("transcribe")
-  transcribe(@Body() dto: TranscribeDto) {
-    return this.ai.transcribe(dto.audioBase64, dto.mimeType ?? "audio/wav");
+  transcribe(@Request() req: AuthenticatedRequest, @Body() dto: TranscribeDto) {
+    return this.missions.transcribeReportAudio(
+      req.user.userId,
+      dto.audioBase64,
+      dto.mimeType ?? "audio/wav",
+    );
   }
 
-  /**
-   * Trưởng thôn (mobile) gửi báo cáo tình huống từ hiện trường → tạo DRAFT "hộp thư"
-   * (lưu mô tả thô, CHƯA phân tích) → báo ADMIN. Admin mở tin trên web sẽ tự điền +
-   * tự phân tích AI (nhu cầu vật tư, tình huống, địa điểm). Trả { missionId }.
-   */
+  /** Trưởng thôn gửi báo cáo thô, kèm WAV riêng tư tuỳ chọn. */
   @RequirePermission(Permission.INCIDENT_REPORT_SUBMIT)
   @Post("report")
-  async report(@Request() req: AuthenticatedRequest, @Body() dto: SubmitReportDto) {
-    const warehouseId = await this.missions.resolveReportWarehouseId(
-      req.user.warehouseId,
-      dto.warehouseId,
-    );
-    const incidentPoint =
-      dto.incidentLat != null && dto.incidentLng != null
-        ? { lat: dto.incidentLat, lng: dto.incidentLng }
-        : undefined;
-    const mission = await this.missions.createReportDraft({
-      warehouseId,
-      description: dto.description,
-      userId: req.user.userId,
-      incidentPoint,
-    });
-    const excerpt = dto.description.length > 140 ? `${dto.description.slice(0, 140)}…` : dto.description;
-    await this.notifications.create({
-      recipientRole: UserRole.ADMIN,
-      kind: NotificationKind.INCIDENT_REPORTED,
-      title: "Báo cáo mới từ trưởng thôn",
-      body: excerpt,
-      missionId: mission.id,
-      warehouseId,
-    });
-    return { missionId: mission.id };
+  report(@Request() req: AuthenticatedRequest, @Body() dto: SubmitReportDto) {
+    return this.missions.submitReport(req.user.userId, dto);
   }
 
-  /**
-   * Lập phương án: nếu có description → parse trước; nếu có incident → dùng luôn.
-   * Rồi tính nhu cầu + phân bổ greedy + gợi ý kho lân cận.
-   */
+  /** Danh sách báo cáo do actor REPORTER hiện tại tạo. */
+  @RequirePermission(Permission.INCIDENT_REPORT_VIEW_OWN)
+  @Get("reports/own")
+  ownReports(@Request() req: AuthenticatedRequest, @Query() query: OwnReportListQueryDto) {
+    return this.missions.listOwnReports(req.user.userId, query.cursor, query.limit);
+  }
+
+  /** Chi tiết báo cáo do actor REPORTER hiện tại tạo. */
+  @RequirePermission(Permission.INCIDENT_REPORT_VIEW_OWN)
+  @Get("reports/own/:id")
+  ownReport(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.missions.getOwnReport(req.user.userId, id);
+  }
+
+  /** Chi tiết báo cáo cho ADMIN cùng tổ chức. */
+  @RequirePermission(Permission.INCIDENT_REPORT_ANALYZE)
+  @Get("reports/:id")
+  operatorReport(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.missions.getOperatorReport(req.user.userId, id);
+  }
+
+  /** Phân tích in-place, giữ nguyên Mission ID và report gốc. */
+  @RequirePermission(Permission.INCIDENT_REPORT_ANALYZE)
+  @Post("reports/:id/analyze")
+  analyzeReport(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.missions.analyzeReport(req.user.userId, id);
+  }
+
+  /** ADMIN duyệt và phát hành phần vật tư theo từng kho. */
+  @RequirePermission(Permission.MISSION_APPROVE)
+  @Post("reports/:id/approve")
+  approveReport(
+    @Request() req: AuthenticatedRequest,
+    @Param("id") id: string,
+    @Body() dto: ReviewReportDto,
+  ) {
+    return this.missions.approveReport(id, req.user.userId, dto);
+  }
+
+  /** Trả WAV riêng tư cho ADMIN cùng tổ chức, không tạo URL công khai. */
+  @RequirePermission(Permission.INCIDENT_REPORT_AUDIO_READ)
+  @Get("reports/:id/audio")
+  async reportAudio(
+    @Request() req: AuthenticatedRequest,
+    @Param("id") id: string,
+    @Res() response: Response,
+  ): Promise<void> {
+    const audio = await this.missions.getReportAudio(req.user.userId, id);
+    response.status(200);
+    response.set({
+      "Content-Type": "audio/wav",
+      "Content-Length": String(audio.sizeBytes),
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
+      "Content-Disposition": `attachment; filename="report-${safeFilenamePart(id)}.wav"`,
+    });
+    response.send(audio.bytes);
+  }
+
+  @RequirePermission(Permission.MISSION_VIEW)
+  @Get("warehouse-requests")
+  warehouseRequests(@Request() req: AuthenticatedRequest) {
+    return this.missions.listWarehouseRequests(req.user.userId);
+  }
+
+  @RequirePermission(Permission.MISSION_VIEW)
+  @Get("warehouse-requests/:requestId")
+  warehouseRequest(@Request() req: AuthenticatedRequest, @Param("requestId") requestId: string) {
+    return this.missions.getWarehouseRequest(req.user.userId, requestId);
+  }
+
+  /** Lập phương án: parse rồi phân bổ, hoặc dùng tình huống đã parse sẵn. */
   @RequirePermission(Permission.MISSION_CREATE)
   @Post("generate-plan")
   async generatePlan(@Request() req: AuthenticatedRequest, @Body() dto: GeneratePlanDto) {
@@ -91,47 +148,59 @@ export class MissionController {
     return this.missions.generatePlan(dto.warehouseId, incident, req.user.userId, incidentPoint);
   }
 
-  /** Danh sách nhiệm vụ, lọc theo trạng thái (vd ?status=DEFERRED,REJECTED). */
+  /** Danh sách nhiệm vụ generic, lọc theo trạng thái. */
   @RequirePermission(Permission.MISSION_VIEW)
   @Get()
-  list(@Query("status") status?: string) {
+  list(@Request() req: AuthenticatedRequest, @Query("status") status?: string) {
+    if (req.user.role === UserRole.REPORTER) {
+      throw new NotFoundException("Không tìm thấy nhiệm vụ");
+    }
     const statuses = status
-      ? (status.split(",").filter((s) => s in MissionStatus) as MissionStatus[])
+      ? (status.split(",").filter((s) => Object.values(MissionStatus).includes(s as MissionStatus)) as MissionStatus[])
       : undefined;
-    return this.missions.listMissions(statuses);
+    return this.missions.listMissions(req.user.userId, statuses);
   }
 
   @RequirePermission(Permission.MISSION_VIEW)
   @Get(":id")
-  get(@Param("id") id: string) {
-    return this.missions.getMission(id);
+  get(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    if (req.user.role === UserRole.REPORTER) {
+      throw new NotFoundException("Không tìm thấy nhiệm vụ");
+    }
+    return this.missions.getMission(id, req.user.userId);
   }
 
-  /** Kho tổng + thôn trong cụm xã (có toạ độ) — cho map ghim điểm nạn trước khi lập phương án. */
+  /** Kho tổng + thôn trong cụm xã (có tọa độ). */
   @RequirePermission(Permission.MISSION_VIEW)
   @Get(":warehouseId/warehouses")
-  clusterWarehouses(@Param("warehouseId") warehouseId: string) {
-    return this.missions.listClusterWarehouses(warehouseId);
+  clusterWarehouses(@Request() req: AuthenticatedRequest, @Param("warehouseId") warehouseId: string) {
+    if (req.user.role === UserRole.REPORTER) {
+      throw new NotFoundException("Không tìm thấy nhiệm vụ");
+    }
+    return this.missions.listClusterWarehouses(warehouseId, req.user.userId);
   }
 
-  /**
-   * Sinh Incident Action Plan (8 mục): backend chấm severity/forecasts bằng rule,
-   * LLM viết diễn giải, fallback template khi mất mạng. Lưu vào mission.actionPlan.
-   */
+  /** Sinh Incident Action Plan với ETA logistics có provenance. */
   @RequirePermission(Permission.MISSION_VIEW)
   @Post(":id/action-plan")
-  actionPlan(@Param("id") id: string) {
-    return this.missions.generateActionPlan(id);
+  actionPlan(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    if (req.user.role === UserRole.REPORTER) {
+      throw new NotFoundException("Không tìm thấy nhiệm vụ");
+    }
+    return this.missions.generateActionPlan(id, req.user.userId);
   }
 
-  /** Sinh giải thích tiếng Việt cho phương án (proxy AI). */
+  /** Sinh giải thích tiếng Việt cho phương án. */
   @RequirePermission(Permission.MISSION_VIEW)
   @Post(":id/explain")
-  async explain(@Param("id") id: string) {
-    const mission = await this.missions.getMission(id);
+  async explain(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    if (req.user.role === UserRole.REPORTER) {
+      throw new NotFoundException("Không tìm thấy nhiệm vụ");
+    }
+    const mission = await this.missions.getMission(id, req.user.userId);
     const context = this.buildExplainContext(mission);
     const explanation = await this.ai.explain(context);
-    await this.missions.setExplanation(id, explanation);
+    await this.missions.setExplanation(id, explanation, req.user.userId);
     return { explanation };
   }
 
@@ -141,74 +210,58 @@ export class MissionController {
     return this.missions.approve(id, req.user.userId);
   }
 
-  // ===== Workflow liên role (BE-L) =====
+  // ===== Workflow liên role =====
 
-  /** ADMIN gửi phương án cho đội cứu hộ (DRAFT → PENDING_RESCUE). */
-  @RequirePermission(Permission.MISSION_CREATE)
-  @Post(":id/dispatch")
-  dispatch(@Param("id") id: string) {
-    return this.missions.dispatch(id);
-  }
-
-  /** RESCUE xác nhận lấy vật tư (PENDING_RESCUE → PENDING_WAREHOUSE). */
-  @RequirePermission(Permission.MISSION_CONFIRM)
-  @Post(":id/confirm")
-  confirm(@Param("id") id: string) {
-    return this.missions.confirmByRescue(id);
-  }
-
-  /** RESCUE từ chối nhiệm vụ kèm lý do (PENDING_RESCUE → REJECTED), báo ADMIN. */
-  @RequirePermission(Permission.MISSION_CONFIRM)
-  @Post(":id/reject")
-  reject(@Param("id") id: string, @Body() dto: RejectMissionDto) {
-    return this.missions.rejectByRescue(id, dto.reason);
-  }
-
-  /** ADMIN tiếp nhận đơn từ chối → tạm hoãn (REJECTED → DEFERRED), báo RESCUE. */
-  @RequirePermission(Permission.MISSION_CREATE)
-  @Post(":id/defer")
-  defer(@Param("id") id: string, @Body() dto: AdminNoteDto) {
-    return this.missions.deferByAdmin(id, dto.note);
-  }
-
-  /** ADMIN gửi lại nhiệm vụ tạm hoãn cho RESCUE (DEFERRED → PENDING_RESCUE). */
-  @RequirePermission(Permission.MISSION_CREATE)
-  @Post(":id/resend")
-  resend(@Param("id") id: string, @Body() dto: AdminNoteDto) {
-    return this.missions.resendByAdmin(id, dto.note);
-  }
-
-  /** ADMIN huỷ nhiệm vụ (REJECTED|DEFERRED → CANCELLED), báo RESCUE kèm lý do. */
   @RequirePermission(Permission.MISSION_CREATE)
   @Post(":id/cancel")
-  cancel(@Param("id") id: string, @Body() dto: AdminNoteDto) {
-    return this.missions.cancelByAdmin(id, dto.note);
+  cancel(@Request() req: AuthenticatedRequest, @Param("id") id: string, @Body() dto: AdminNoteDto) {
+    return this.missions.cancelByAdmin(id, dto.note, req.user.userId);
   }
 
-  /** WAREHOUSE chuẩn bị + xuất kho (PENDING_WAREHOUSE → READY). */
-  @RequirePermission(Permission.MISSION_FULFILL)
-  @Post(":id/prepare")
-  prepare(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
-    return this.missions.prepareByWarehouse(id, req.user.userId, req.user.warehouseId);
-  }
-
-  /** RESCUE xác nhận đã giao hiện trường + kết quả (READY → COMPLETED). */
-  @RequirePermission(Permission.MISSION_CONFIRM)
-  @Post(":id/complete")
-  complete(
+  @RequirePermission(Permission.MISSION_WAREHOUSE_REQUEST_ACCEPT)
+  @Post("warehouse-requests/:requestId/accept")
+  acceptWarehouseRequest(
     @Request() req: AuthenticatedRequest,
-    @Param("id") id: string,
-    @Body() dto: CompleteMissionDto,
+    @Param("requestId") requestId: string,
+    @Body() dto: WarehouseRequestNoteDto,
   ) {
-    return this.missions.completeByRescue(id, dto.outcome, req.user.userId, dto.note);
+    return this.missions.acceptWarehouseRequest(requestId, req.user.userId, dto.note);
   }
 
-  // ---- helpers ----
+  @RequirePermission(Permission.MISSION_FULFILL)
+  @Post("warehouse-requests/:requestId/prepare")
+  prepareWarehouseRequest(
+    @Request() req: AuthenticatedRequest,
+    @Param("requestId") requestId: string,
+    @Body() dto: WarehouseRequestNoteDto,
+  ) {
+    return this.missions.prepareWarehouseRequest(requestId, req.user.userId, dto.note);
+  }
+
+  @RequirePermission(Permission.MISSION_FULFILL)
+  @Post("warehouse-requests/:requestId/discrepancy")
+  reportWarehouseDiscrepancy(
+    @Request() req: AuthenticatedRequest,
+    @Param("requestId") requestId: string,
+    @Body() dto: WarehouseRequestNoteDto,
+  ) {
+    return this.missions.reportWarehouseDiscrepancy(requestId, req.user.userId, dto.note ?? "");
+  }
+
+  @RequirePermission(Permission.MISSION_APPROVE)
+  @Post("warehouse-requests/:requestId/review")
+  reviewWarehouseRequest(
+    @Request() req: AuthenticatedRequest,
+    @Param("requestId") requestId: string,
+    @Body() dto: AdminReviewWarehouseRequestDto,
+  ) {
+    return this.missions.reviewWarehouseRequest(requestId, req.user.userId, dto);
+  }
 
   private async resolveIncident(dto: GeneratePlanDto): Promise<IncidentInput> {
     if (dto.incident) {
       return {
-        incidentType: dto.incident.incidentType as IncidentType,
+        incidentType: dto.incident.incidentType as IncidentInput["incidentType"],
         affectedPeople: dto.incident.affectedPeople,
         durationHours: dto.incident.durationHours,
         children: dto.incident.children ?? 0,
@@ -216,9 +269,7 @@ export class MissionController {
         medicalSupportCases: dto.incident.medicalSupportCases ?? 0,
       };
     }
-    if (dto.description) {
-      return this.ai.parse(dto.description);
-    }
+    if (dto.description) return this.ai.parse(dto.description);
     throw new Error("Cần description hoặc incident");
   }
 
@@ -235,8 +286,8 @@ export class MissionController {
     }[];
   }): string {
     const lines = mission.requirements.map(
-      (r) =>
-        `${r.itemName}: cần ${r.required} ${r.unit}, cấp được ${r.allocated}, thiếu ${r.shortage}`,
+      (requirement) =>
+        `${requirement.itemName}: cần ${requirement.required} ${requirement.unit}, cấp được ${requirement.allocated}, thiếu ${requirement.shortage}`,
     );
     return [
       `Tình huống ${mission.incidentType}, ${mission.affectedPeople} người.`,
@@ -244,4 +295,9 @@ export class MissionController {
       ...lines,
     ].join("\n");
   }
+}
+
+function safeFilenamePart(id: string): string {
+  const normalized = id.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+  return normalized || "unknown";
 }

@@ -17,6 +17,11 @@ describe("Mission workflow (E2E)", () => {
   let http: ReturnType<typeof request>;
 
   const tokens: Record<string, string> = {};
+  const credentials = {
+    admin: { email: process.env.SAFESTOCK_E2E_ADMIN_LOGIN, password: process.env.SAFESTOCK_E2E_ADMIN_PASSWORD },
+    rescue: { email: process.env.SAFESTOCK_E2E_RESCUE_LOGIN, password: process.env.SAFESTOCK_E2E_RESCUE_PASSWORD },
+    warehouse: { email: process.env.SAFESTOCK_E2E_WAREHOUSE_LOGIN, password: process.env.SAFESTOCK_E2E_WAREHOUSE_PASSWORD },
+  };
 
   // Kho trung tâm + tình huống nhỏ để chắc chắn dispatchable.
   let warehouseId: string;
@@ -57,6 +62,11 @@ describe("Mission workflow (E2E)", () => {
   }
 
   beforeAll(async () => {
+    for (const [role, credential] of Object.entries(credentials)) {
+      if (!credential.email || !credential.password) {
+        throw new Error(`Thiếu biến môi trường credential E2E cho role ${role}`);
+      }
+    }
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix("api");
@@ -65,9 +75,9 @@ describe("Mission workflow (E2E)", () => {
     prisma = app.get(PrismaService);
     http = request(app.getHttpServer());
 
-    tokens.admin = await login("admin", "admin123@");
-    tokens.rescue = await login("rescue@safestock.vn", "rescue123");
-    tokens.warehouse = await login("staff@safestock.vn", "staff123");
+    tokens.admin = await login(credentials.admin.email!, credentials.admin.password!);
+    tokens.rescue = await login(credentials.rescue.email!, credentials.rescue.password!);
+    tokens.warehouse = await login(credentials.warehouse.email!, credentials.warehouse.password!);
 
     const central = await prisma.warehouse.findFirstOrThrow({ where: { kind: "CENTRAL" } });
     warehouseId = central.id;

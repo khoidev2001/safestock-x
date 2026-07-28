@@ -1,12 +1,13 @@
 import { Request } from "express";
 import { UserRole } from "@safestock/shared-types";
 
-/** Thông tin người dùng gắn vào request sau khi JwtStrategy.validate chạy. */
+/** Danh tính hiện tại từ cơ sở dữ liệu sau khi JwtStrategy xác thực token. */
 export interface AuthUser {
   userId: string;
   email: string;
   role: UserRole;
-  warehouseId?: string | null; // scope kho (trưởng thôn); null = toàn xã
+  organizationId: string;
+  warehouseId: string | null;
 }
 
 /** Request đã xác thực — thay cho `req: any` (CODING-STANDARDS §6.1). */

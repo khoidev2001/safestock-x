@@ -15,6 +15,7 @@ export interface WebSocketPrincipal {
   role: UserRole;
   organizationId: string;
   warehouseIds: string[];
+  warehouseId: string | null;
 }
 
 interface AuthenticatedSocketData {
@@ -82,18 +83,29 @@ export class WebSocketAuthService {
     if (!user || isSimulationSystemActorEmail(user.email)) {
       throw new Error(UNAUTHORIZED_MESSAGE);
     }
-    if (user.warehouse && user.warehouse.organizationId !== user.organizationId) {
+    if (!Object.values(UserRole).includes(user.role as UserRole)) {
+      throw new Error(UNAUTHORIZED_MESSAGE);
+    }
+    const role = user.role as UserRole;
+    const requiresWarehouse = role === UserRole.WAREHOUSE || role === UserRole.REPORTER;
+    if (
+      requiresWarehouse &&
+      (!user.warehouseId ||
+        !user.warehouse ||
+        user.warehouse.organizationId !== user.organizationId)
+    ) {
       throw new Error(UNAUTHORIZED_MESSAGE);
     }
 
     return {
       userId: user.id,
       email: user.email,
-      role: user.role as UserRole,
+      role,
       organizationId: user.organizationId,
-      warehouseIds: user.warehouseId
-        ? [user.warehouseId]
+      warehouseIds: requiresWarehouse
+        ? [user.warehouseId as string]
         : user.organization.warehouses.map((warehouse) => warehouse.id),
+      warehouseId: requiresWarehouse ? user.warehouseId : null,
     };
   }
 

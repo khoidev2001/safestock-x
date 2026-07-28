@@ -9,23 +9,21 @@ import { useMissionFocus } from "@/lib/mission-focus-store";
 import type { LatLng } from "@/lib/geo";
 import { ApiError } from "@/lib/api";
 import {
-  cancelMission,
-  completeMission,
-  confirmMission,
-  deferMission,
-  dispatchMission,
-  generateActionPlan,
+  analyzeOperatorReport,
+  approveOperatorReport,
   generatePlan,
   getClusterWarehouses,
   getMission,
+  getOperatorReport,
+  getOperatorReportAudio,
   parseIncident,
-  prepareMission,
-  resendMission,
+  reviewWarehouseRequest,
   transcribeAudio,
-  type ClusterWarehouse,
-  type DeliveryOutcome,
   type GenerateInput,
   type Mission,
+  type MissionViewResource,
+  type OperatorReportDetail,
+  type WarehouseMissionRequest,
 } from "@/lib/mission-api";
 import { blobToWavBase64 } from "@/lib/audio-wav";
 import { ActionPlanView } from "./action-plan-view";
@@ -83,28 +81,12 @@ const INCIDENT_TYPES = [
   { value: "OTHER", label: "Khác" },
 ];
 
-/** Tâm bản đồ mặc định (khớp incident-map) — dùng khi cụm chưa có kho nào. */
-const DEFAULT_CENTER: LatLng = { lat: 13.38, lng: 109.045 };
-
-/**
- * Chưa nhập vị trí sự cố → chọn ngẫu nhiên một điểm gần một kho trong cụm
- * (lệch ~1–4 km) để khoảng cách/ETA vẫn thực tế. Không có kho → quanh tâm bản đồ.
- */
-function randomIncidentPoint(warehouses?: ClusterWarehouse[]): LatLng {
-  const base =
-    warehouses && warehouses.length > 0
-      ? warehouses[Math.floor(Math.random() * warehouses.length)]
-      : DEFAULT_CENTER;
-  // ~0.01–0.04° ≈ 1–4 km, hướng ngẫu nhiên quanh kho.
-  const angle = Math.random() * 2 * Math.PI;
-  const dist = 0.01 + Math.random() * 0.03;
-  return { lat: base.lat + Math.sin(angle) * dist, lng: base.lng + Math.cos(angle) * dist };
-}
-
 export function MissionView({ warehouseId }: { warehouseId: string }) {
   const role = useAuth((s) => s.user?.role);
+  const actorId = useAuth((s) => s.user?.id);
   const queryClient = useQueryClient();
   const [missionId, setMissionId] = useState<string | null>(null);
+  const [isReporterMission, setIsReporterMission] = useState(false);
   const [form, setForm] = useState({
     incidentType: "FLOOD",
     affectedPeople: 100,
@@ -118,40 +100,92 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
   const [workflowError, setWorkflowError] = useState<string | null>(null);
   const [description, setDescription] = useState("");
   const [parseError, setParseError] = useState<string | null>(null);
+  const [reviewLocation, setReviewLocation] = useState("");
+  const [reviewNote, setReviewNote] = useState("");
+  const [reviewRequests, setReviewRequests] = useState<Record<string, number>>({});
+  const isRescue = role === "RESCUE";
 
   // Mở đúng nhiệm vụ khi bấm thông báo (chuông) — kể cả mission đã REJECTED/DEFERRED.
   const focusMissionId = useMissionFocus((s) => s.focusMissionId);
+  const focusKind = useMissionFocus((s) => s.focusKind);
   const clearFocus = useMissionFocus((s) => s.clearFocus);
   useEffect(() => {
     if (focusMissionId) {
       setMissionId(focusMissionId);
+      setIsReporterMission(focusKind === "operator-report");
+      if (focusKind === "operator-report") setIncidentPoint(null);
       clearFocus();
     }
-  }, [focusMissionId, clearFocus]);
+  }, [focusMissionId, focusKind, clearFocus]);
 
   const warehousesQuery = useQuery({
     queryKey: ["cluster-warehouses", warehouseId],
     queryFn: () => getClusterWarehouses(warehouseId),
+    enabled: Boolean(warehouseId) && !isRescue,
   });
 
-  const missionQuery = useQuery({
-    queryKey: ["mission", missionId],
-    queryFn: () => getMission(missionId as string),
+  const missionQueryKey = isReporterMission
+    ? ["operator-report", missionId]
+    : ["mission", missionId];
+  const missionQuery = useQuery<MissionViewResource>({
+    queryKey: missionQueryKey,
+    queryFn: () =>
+      isReporterMission ? getOperatorReport(missionId as string) : getMission(missionId as string),
     enabled: Boolean(missionId),
     refetchInterval: 5000, // Cập nhật trạng thái khi bộ phận khác hoàn tất phần việc.
   });
+  const operatorReport = isReporterMission
+    ? (missionQuery.data as OperatorReportDetail | undefined)
+    : undefined;
+  const mission: Mission | undefined = operatorReport
+    ? {
+        ...operatorReport,
+        locationText: operatorReport.location,
+        requirements: operatorReport.requirements.map((requirement) => ({
+          ...requirement,
+          allocations: null,
+          neighborSuggestion: null,
+        })),
+      }
+    : (missionQuery.data as Mission | undefined);
+
+  useEffect(() => {
+    const mission = missionQuery.data;
+    if (!isReporterMission || !mission) return;
+    setDescription(mission.reportText ?? "");
+    setForm((current) => ({
+      incidentType: mission.incidentType || current.incidentType,
+      affectedPeople: mission.affectedPeople,
+      durationHours: mission.durationHours,
+      children: mission.children ?? 0,
+      elderly: mission.elderly ?? 0,
+      medicalSupportCases: mission.medicalSupportCases ?? 0,
+    }));
+    setIncidentPoint(null);
+    setReviewLocation("location" in mission ? (mission.location ?? "") : "");
+    if ("adminNote" in mission) setReviewNote(mission.adminNote ?? "");
+    if ("requirements" in mission) {
+      const next: Record<string, number> = {};
+      for (const requirement of mission.requirements) {
+        for (const allocation of requirement.allocations ?? []) {
+          if (!allocation.warehouseId || !allocation.qty) continue;
+          const key = `${allocation.warehouseId}:${requirement.sku}`;
+          next[key] = (next[key] ?? 0) + allocation.qty;
+        }
+      }
+      setReviewRequests(next);
+    }
+  }, [isReporterMission, missionQuery.data]);
 
   const genPlan = useMutation({
-    mutationFn: () => {
-      const point = incidentPoint ?? randomIncidentPoint(warehousesQuery.data);
-      if (!incidentPoint) setIncidentPoint(point);
-      return generatePlan({
+    mutationFn: () =>
+      generatePlan({
         warehouseId,
         incident: form,
-        incidentLat: point.lat,
-        incidentLng: point.lng,
-      });
-    },
+        ...(incidentPoint
+          ? { incidentLat: incidentPoint.lat, incidentLng: incidentPoint.lng }
+          : {}),
+      }),
     onSuccess: (m: Mission) => {
       setMissionId(m.id);
       setPlanError(null);
@@ -162,10 +196,14 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
       ),
   });
 
-  // AI phân tích lời kể → tính nhu cầu vật tư + lập phương án NGAY trong một bước.
-  // Mô tả chưa kèm toạ độ → chọn ngẫu nhiên một điểm gần kho để ước tính khoảng cách/ETA.
-  const analyze = useMutation({
+  // Reporter analysis is an in-place operation. The generic manual/demo path below
+  // intentionally retains parseIncident + generatePlan + optional demo coordinates.
+  const analyze = useMutation<MissionViewResource>({
     mutationFn: async () => {
+      if (isReporterMission) {
+        if (!missionId) throw new Error("Không có Mission báo cáo để phân tích.");
+        return analyzeOperatorReport(missionId);
+      }
       const p = await parseIncident(description);
       const incident = {
         incidentType: p.incidentType,
@@ -176,19 +214,23 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
         medicalSupportCases: p.medicalSupportCases,
       };
       setForm(incident); // phản chiếu lên form để cán bộ vẫn xem/sửa lại được sau
-      const point = incidentPoint ?? randomIncidentPoint(warehousesQuery.data);
-      if (!incidentPoint) setIncidentPoint(point);
       return generatePlan({
         warehouseId,
         incident,
-        incidentLat: point.lat,
-        incidentLng: point.lng,
+        ...(incidentPoint
+          ? { incidentLat: incidentPoint.lat, incidentLng: incidentPoint.lng }
+          : {}),
       });
     },
-    onSuccess: (m: Mission) => {
+    onSuccess: (m) => {
+      if (isReporterMission && m.id !== missionId) {
+        setParseError("Máy chủ trả về Mission khác với báo cáo đang mở.");
+        return;
+      }
       setMissionId(m.id);
       setParseError(null);
       setPlanError(null);
+      void queryClient.invalidateQueries({ queryKey: missionQueryKey });
     },
     onError: (err) => {
       setParseError(
@@ -199,24 +241,107 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
     },
   });
 
-  const genActionPlan = useMutation({
-    mutationFn: () => generateActionPlan(missionId as string),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["mission", missionId] }),
+  const reportAudioQuery = useQuery({
+    queryKey: ["operator-report-audio", actorId, missionId],
+    queryFn: () => getOperatorReportAudio(missionId as string),
+    enabled: isReporterMission && Boolean(missionId) && missionQuery.data?.audio?.present === true,
+    retry: false,
+    gcTime: 0,
   });
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
+  useEffect(() => {
+    const previousUrl = audioUrlRef.current;
+    if (previousUrl) URL.revokeObjectURL(previousUrl);
+    audioUrlRef.current = null;
 
-  const step = useMutation({
-    mutationFn: (fn: (id: string) => Promise<Mission>) => fn(missionId as string),
+    if (!isReporterMission || !missionQuery.data?.audio?.present || !reportAudioQuery.data) {
+      setAudioUrl(null);
+      return;
+    }
+
+    const nextUrl = URL.createObjectURL(reportAudioQuery.data);
+    audioUrlRef.current = nextUrl;
+    setAudioUrl(nextUrl);
+
+    return () => {
+      if (audioUrlRef.current === nextUrl) {
+        URL.revokeObjectURL(nextUrl);
+        audioUrlRef.current = null;
+      }
+    };
+  }, [isReporterMission, missionQuery.data?.audio?.present, reportAudioQuery.data]);
+  const downloadAudio = () => {
+    if (!audioUrl) return;
+    const link = document.createElement("a");
+    link.href = audioUrl;
+    link.download = `${missionId ?? "report"}.wav`;
+    link.click();
+  };
+
+  const reporterAnalysisAvailable =
+    isReporterMission &&
+    mission?.status === "DRAFT" &&
+    (mission.processingState === "SUBMITTED" || mission.processingState === "ANALYSIS_FAILED");
+  const effectiveMissionQueryError = missionQuery.error;
+  const isReporterDetail = isReporterMission && Boolean(missionId);
+  const detailLoading = missionQuery.isLoading && isReporterDetail;
+  const detailError = effectiveMissionQueryError && isReporterDetail;
+
+  useEffect(() => {
+    if (!isReporterMission) return;
+    if (mission?.processingState === "ANALYZED") {
+      setParseError(null);
+    }
+  }, [isReporterMission, mission?.processingState]);
+
+  const reportAudioPanel = isReporterMission ? (
+    <ReportAudioPanel
+      metadata={mission?.audio}
+      audioUrl={audioUrl}
+      loading={reportAudioQuery.isLoading}
+      error={reportAudioQuery.error}
+      onDownload={downloadAudio}
+    />
+  ) : null;
+
+  const approveReport = useMutation({
+    mutationFn: () => {
+      if (!missionId) throw new Error("Không có báo cáo để duyệt.");
+      const requests = Object.entries(reviewRequests)
+        .filter(([, quantity]) => Number.isInteger(quantity) && quantity > 0)
+        .map(([key, quantity]) => {
+          const [warehouseId, sku] = key.split(":");
+          return { warehouseId, sku, quantity };
+        });
+      return approveOperatorReport(missionId, {
+        location: reviewLocation,
+        adminNote: reviewNote,
+        requests,
+      });
+    },
     onSuccess: () => {
       setWorkflowError(null);
-      return queryClient.invalidateQueries({ queryKey: ["mission", missionId] });
+      void queryClient.invalidateQueries({ queryKey: missionQueryKey });
     },
-    onError: (err) =>
-      setWorkflowError(
-        err instanceof ApiError ? err.message : "Chưa thể cập nhật nhiệm vụ. Vui lòng thử lại.",
-      ),
+    onError: (error) =>
+      setWorkflowError(error instanceof Error ? error.message : "Chưa thể duyệt phương án."),
   });
 
-  const mission = missionQuery.data;
+  const reviewWarehouse = useMutation({
+    mutationFn: (input: { requestId: string; requestedQuantity: number; adminNote?: string }) =>
+      reviewWarehouseRequest(input.requestId, {
+        requestedQuantity: input.requestedQuantity,
+        adminNote: input.adminNote,
+      }),
+    onSuccess: () => {
+      setWorkflowError(null);
+      void queryClient.invalidateQueries({ queryKey: missionQueryKey });
+    },
+    onError: (error) =>
+      setWorkflowError(error instanceof Error ? error.message : "Chưa thể cập nhật yêu cầu kho."),
+  });
+
   const isAdmin = role === "ADMIN";
   const officialDistances = mission?.actionPlan
     ? new Map(
@@ -229,13 +354,141 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
   const effectiveIncidentPoint =
     mission?.incidentLat != null && mission?.incidentLng != null
       ? { lat: mission.incidentLat, lng: mission.incidentLng }
+    : isReporterMission
+      ? null
       : incidentPoint;
+  const reporterWorkflowAvailable = !isReporterMission || mission?.processingState === "ANALYZED";
+
+  if (detailLoading) {
+    return (
+      <p role="status" className="app-panel p-6 text-sm text-[var(--text-muted)]">
+        Đang tải báo cáo gốc…
+      </p>
+    );
+  }
+  if (detailError) {
+    return (
+      <p role="alert" className="app-panel p-6 text-sm text-[var(--color-critical)]">
+        Không thể tải báo cáo gốc. Vui lòng thử lại.
+      </p>
+    );
+  }
 
   return (
     <div className="grid gap-4 xl:grid-cols-[380px_1fr]">
       {/* Cột trái: nhập tình huống (chỉ ADMIN lập) */}
       <div className="space-y-4">
-        {isAdmin && (
+        {isReporterMission && mission && (
+          <section className="app-panel p-5">
+            <h2 className="font-semibold">Báo cáo gốc của trưởng thôn</h2>
+            <p className="mt-2 whitespace-pre-wrap rounded-md border bg-[var(--surface-2)] p-3 text-sm">
+              {mission.reportText || "Không có nội dung văn bản."}
+            </p>
+            {mission.locationText && (
+              <p className="mt-2 text-sm text-[var(--text-muted)]">
+                Địa điểm: {mission.locationText}
+              </p>
+            )}
+            <dl className="mt-3 grid grid-cols-2 gap-2 rounded-md border bg-[var(--surface-2)] p-3 text-xs">
+              <ReportField
+                label="Loại tình huống"
+                value={
+                  INCIDENT_TYPES.find((item) => item.value === form.incidentType)?.label ??
+                  form.incidentType
+                }
+              />
+              <ReportField label="Số người ảnh hưởng" value={form.affectedPeople} />
+              <ReportField label="Thời gian dự kiến" value={`${form.durationHours} giờ`} />
+              <ReportField
+                label="Mức độ nghiêm trọng"
+                value={
+                  operatorReport?.severityLevel != null
+                    ? `${operatorReport.severityLevel}/5`
+                    : "Chờ phân tích"
+                }
+              />
+              <ReportField label="Ưu tiên" value={operatorReport?.priority ?? "Chưa có"} />
+              <ReportField label="Trẻ em" value={form.children} />
+              <ReportField label="Người cao tuổi" value={form.elderly} />
+              <ReportField label="Ca cần hỗ trợ y tế" value={form.medicalSupportCases} />
+            </dl>
+            <p className="mt-2 text-xs text-[var(--text-muted)]">
+              Trạng thái xử lý: {mission.processingState ?? "Chưa xác định"}
+            </p>
+            {reportAudioPanel}
+            {parseError && (
+              <p role="alert" className="mt-3 text-sm text-[var(--color-critical)]">
+                {parseError}
+              </p>
+            )}
+            {mission.processingState === "ANALYSIS_FAILED" && !parseError && (
+              <p role="alert" className="mt-3 text-sm text-[var(--color-critical)]">
+                Lần phân tích trước chưa thành công. Có thể thử phân tích lại báo cáo gốc.
+              </p>
+            )}
+            {reporterAnalysisAvailable && (
+              <button
+                type="button"
+                onClick={() => analyze.mutate()}
+                disabled={analyze.isPending}
+                className="mt-4 rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-fg)] disabled:opacity-60"
+              >
+                {analyze.isPending ? "Đang phân tích báo cáo…" : "Phân tích báo cáo gốc"}
+              </button>
+            )}
+            {mission.processingState === "ANALYZING" && (
+              <p role="status" className="mt-3 text-sm text-[var(--text-muted)]">
+                Báo cáo đang được phân tích…
+              </p>
+            )}
+            {mission.processingState === "ANALYZED" && (
+              <p className="mt-3 text-sm text-[var(--color-ready)]">
+                Đã phân tích báo cáo gốc trong Mission này.
+              </p>
+            )}
+            {operatorReport && operatorReport.warehouseLogisticsEstimates.length > 0 && (
+              <div className="mt-3 rounded-md border bg-[var(--surface-2)] p-3">
+                <p className="text-xs font-semibold">Ước tính logistics từ kho đã chuẩn bị</p>
+                <ul className="mt-2 space-y-1 text-xs text-[var(--text-muted)]">
+                  {operatorReport.warehouseLogisticsEstimates.map((estimate) => (
+                    <li key={`${estimate.warehouseName}-${estimate.calculatedAt}`}>
+                      {estimate.warehouseName}: {estimate.etaMinutes} phút · {estimate.distanceKm} km ·{" "}
+                      {estimate.source === "google" ? "Google" : "đường thẳng"} · tính lúc{" "}
+                      {new Date(estimate.calculatedAt).toLocaleString("vi-VN")}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {operatorReport && (
+              <dl className="mt-3 grid grid-cols-2 gap-2 rounded-md border p-3 text-xs">
+                <ReportField label="Cập nhật lúc" value={formatReportDate(operatorReport.updatedAt)} />
+                <ReportField label="Duyệt lúc" value={formatReportDate(operatorReport.approvedAt)} />
+                <ReportField label="Hoàn thành lúc" value={formatReportDate(operatorReport.completedAt)} />
+                <ReportField label="Ghi chú điều phối" value={operatorReport.adminNote ?? "Không có"} />
+                <ReportField label="Lý do từ chối" value={operatorReport.rejectionReason ?? "Không có"} />
+                <ReportField label="Kết quả giao" value={operatorReport.deliveryOutcome ?? "Chưa có"} />
+                <ReportField label="Ghi chú giao" value={operatorReport.deliveryNote ?? "Không có"} />
+              </dl>
+            )}
+            {operatorReport?.processingState === "ANALYZED" && operatorReport.status === "DRAFT" && (
+              <AdminReportReview
+                location={reviewLocation}
+                note={reviewNote}
+                report={operatorReport}
+                quantities={reviewRequests}
+                busy={approveReport.isPending}
+                onLocation={setReviewLocation}
+                onNote={setReviewNote}
+                onQuantity={(key, value) =>
+                  setReviewRequests((current) => ({ ...current, [key]: value }))
+                }
+                onApprove={() => approveReport.mutate()}
+              />
+            )}
+          </section>
+        )}
+        {isAdmin && !isReporterMission && (
           <section className="app-panel p-5">
             <h2 className="font-semibold">Tình huống khẩn cấp</h2>
             <p className="mt-1 text-sm text-[var(--text-muted)]">
@@ -319,15 +572,15 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
             </button>
             {!incidentPoint && (
               <p className="mt-2 text-xs text-[var(--text-muted)]">
-                Chưa đánh dấu vị trí — hệ thống sẽ tự chọn một điểm gần kho. Bấm trên bản đồ để đặt
-                chính xác.
+                Chưa có tọa độ — ETA logistics chỉ xuất hiện khi backend có dữ liệu vị trí đã lưu.
+                Bấm trên bản đồ nếu cần đặt chính xác.
               </p>
             )}
             {planError && <p className="mt-2 text-xs text-[var(--color-critical)]">{planError}</p>}
           </section>
         )}
 
-        {isAdmin && (
+        {isAdmin && !isReporterMission && (
           <section className="app-panel p-5">
             <h3 className="text-sm font-semibold">Vị trí sự cố và các kho</h3>
             <p className="mt-1 text-sm text-[var(--text-muted)]">
@@ -381,17 +634,7 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
                 <RoleActions
                   mission={mission}
                   role={role}
-                  onGenerateActionPlan={() => genActionPlan.mutate()}
-                  onDispatch={() => step.mutate(dispatchMission)}
-                  onConfirm={() => step.mutate(confirmMission)}
-                  onPrepare={() => step.mutate(prepareMission)}
-                  onDefer={() => step.mutate(deferMission)}
-                  onResend={(note) => step.mutate((id) => resendMission(id, note))}
-                  onCancel={(note) => step.mutate((id) => cancelMission(id, note))}
-                  onComplete={(outcome, note) =>
-                    step.mutate((id) => completeMission(id, outcome, note))
-                  }
-                  busy={genActionPlan.isPending || step.isPending}
+                  workflowEnabled={reporterWorkflowAvailable}
                 />
               </div>
               {workflowError && (
@@ -400,11 +643,27 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
             </section>
 
             {mission.actionPlan ? (
-              <ActionPlanView plan={mission.actionPlan} incidentPoint={effectiveIncidentPoint} />
+              <ActionPlanView
+                plan={mission.actionPlan}
+                incidentPoint={effectiveIncidentPoint}
+                isReporterMission={isReporterMission}
+              />
             ) : (
               <div className="rounded-md border border-dashed bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-muted)]">
                 Chọn <b>Lập kế hoạch cứu hộ</b> để tạo các bước thực hiện chi tiết.
               </div>
+            )}
+            {(operatorReport?.warehouseRequests.length ?? mission.warehouseRequests?.length ?? 0) > 0 && (
+              <PickupPlan
+                requests={operatorReport?.warehouseRequests ?? mission.warehouseRequests ?? []}
+                sourceHamlet={operatorReport?.sourceHamlet.name ?? mission.warehouse?.name ?? "Chưa xác định"}
+                location={operatorReport?.location ?? mission.locationText ?? null}
+                isAdmin={isAdmin}
+                busy={reviewWarehouse.isPending}
+                onReview={(requestId, requestedQuantity, adminNote) =>
+                  reviewWarehouse.mutate({ requestId, requestedQuantity, adminNote })
+                }
+              />
             )}
           </>
         )}
@@ -413,42 +672,242 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
   );
 }
 
-const actionBtn =
-  "flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition active:translate-y-px disabled:opacity-60";
-const primaryStyle = { background: "var(--color-accent)", color: "var(--color-accent-fg)" };
+function ReportField({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div>
+      <dt className="text-[var(--text-muted)]">{label}</dt>
+      <dd className="mt-0.5 font-medium">{value}</dd>
+    </div>
+  );
+}
+
+function formatReportDate(value: string | null): string {
+  return value ? new Date(value).toLocaleString("vi-VN") : "Chưa có";
+}
+
+function AdminReportReview({
+  report,
+  location,
+  note,
+  quantities,
+  busy,
+  onLocation,
+  onNote,
+  onQuantity,
+  onApprove,
+}: {
+  report: OperatorReportDetail;
+  location: string;
+  note: string;
+  quantities: Record<string, number>;
+  busy: boolean;
+  onLocation: (value: string) => void;
+  onNote: (value: string) => void;
+  onQuantity: (key: string, value: number) => void;
+  onApprove: () => void;
+}) {
+  const recommendations = new Map<string, { warehouseId: string; warehouseName: string; sku: string; itemName: string; unit: string; maximum: number }>();
+  for (const requirement of report.requirements) {
+    for (const allocation of requirement.allocations ?? []) {
+      if (!allocation.warehouseId || !allocation.warehouseName || !allocation.qty) continue;
+      const key = `${allocation.warehouseId}:${requirement.sku}`;
+      const current = recommendations.get(key);
+      recommendations.set(key, {
+        warehouseId: allocation.warehouseId,
+        warehouseName: allocation.warehouseName,
+        sku: requirement.sku,
+        itemName: requirement.itemName,
+        unit: requirement.unit,
+        maximum: (current?.maximum ?? 0) + allocation.qty,
+      });
+    }
+  }
+  return (
+    <div className="mt-4 rounded-md border bg-[var(--surface-2)] p-4">
+      <h3 className="text-sm font-semibold">Admin kiểm tra và duyệt phương án</h3>
+      <p className="mt-1 text-xs text-[var(--text-muted)]">
+        Nhu cầu do AI đề xuất. Chỉ khi duyệt, hệ thống mới gửi đúng phần việc tới từng kho và đội cứu hộ.
+      </p>
+      <label className="mt-3 block text-xs font-medium">
+        Vị trí cụ thể
+        <input className="mt-1 w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm" maxLength={300} onChange={(event) => onLocation(event.target.value)} value={location} />
+      </label>
+      <div className="mt-3 space-y-2">
+        {[...recommendations.entries()].map(([key, item]) => (
+          <label className="grid grid-cols-[1fr_110px] items-center gap-3 rounded-md border bg-[var(--surface)] p-3 text-sm" key={key}>
+            <span>{item.warehouseName} · {item.itemName} (tối đa {item.maximum} {item.unit})</span>
+            <input className="rounded-md border px-2 py-1.5" max={item.maximum} min={0} onChange={(event) => onQuantity(key, Number(event.target.value))} type="number" value={quantities[key] ?? item.maximum} />
+          </label>
+        ))}
+      </div>
+      <label className="mt-3 block text-xs font-medium">
+        Ghi chú cho các đơn vị
+        <textarea className="mt-1 w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm" maxLength={1000} onChange={(event) => onNote(event.target.value)} rows={2} value={note} />
+      </label>
+      <button className="mt-3 rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-fg)] disabled:opacity-50" disabled={busy || recommendations.size === 0} onClick={onApprove} type="button">
+        {busy ? "Đang duyệt…" : "Duyệt và gửi đội cứu hộ, các kho"}
+      </button>
+    </div>
+  );
+}
+
+function PickupPlan({
+  requests,
+  sourceHamlet,
+  location,
+  isAdmin,
+  busy,
+  onReview,
+}: {
+  requests: WarehouseMissionRequest[];
+  sourceHamlet: string;
+  location: string | null;
+  isAdmin: boolean;
+  busy: boolean;
+  onReview: (requestId: string, requestedQuantity: number, adminNote: string) => void;
+}) {
+  const grouped = new Map<string, { name: string; items: WarehouseMissionRequest[] }>();
+  for (const request of requests) {
+    const current = grouped.get(request.warehouseId) ?? { name: request.warehouse.name, items: [] };
+    current.items.push(request);
+    grouped.set(request.warehouseId, current);
+  }
+  return (
+    <section className="app-panel p-5">
+      <h2 className="font-semibold">Thông tin lấy vật tư cho đội cứu hộ</h2>
+      <p className="mt-2 text-sm">Thôn báo cáo: <b>{sourceHamlet}</b></p>
+      {location && <p className="mt-1 text-sm">Vị trí cụ thể: {location}</p>}
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        {[...grouped.entries()].map(([warehouseId, group]) => (
+          <div className="rounded-md border bg-[var(--surface-2)] p-4" key={warehouseId}>
+            <p className="font-semibold">{group.name}</p>
+            <ul className="mt-2 space-y-1 text-sm">
+              {group.items.map((item) => (
+                <li key={item.id}>
+                  {item.itemName}: {item.requestedQuantity} {item.unit} · {item.status === "PREPARED" ? "đã sẵn sàng" : item.status === "ACCEPTED" ? "đang chuẩn bị" : "chờ kho tiếp nhận"}
+                  {isAdmin && item.warehouseNote && item.status !== "PREPARED" ? (
+                    <WarehouseReviewControls
+                      request={item}
+                      busy={busy}
+                      onReview={onReview}
+                    />
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function WarehouseReviewControls({
+  request,
+  busy,
+  onReview,
+}: {
+  request: WarehouseMissionRequest;
+  busy: boolean;
+  onReview: (requestId: string, requestedQuantity: number, adminNote: string) => void;
+}) {
+  const [quantity, setQuantity] = useState(String(request.requestedQuantity));
+  const [note, setNote] = useState(request.adminNote ?? "");
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <input
+        aria-label={`Số lượng duyệt lại ${request.itemName}`}
+        className="w-24 rounded border px-2 py-1 text-xs"
+        min={1}
+        onChange={(event) => setQuantity(event.target.value)}
+        type="number"
+        value={quantity}
+      />
+      <input
+        aria-label={`Ghi chú duyệt lại ${request.itemName}`}
+        className="min-w-48 flex-1 rounded border px-2 py-1 text-xs"
+        maxLength={1000}
+        onChange={(event) => setNote(event.target.value)}
+        placeholder="Ghi chú cho kho"
+        value={note}
+      />
+      <button
+        className="rounded border px-2 py-1 text-xs font-semibold disabled:opacity-50"
+        disabled={busy || !Number.isInteger(Number(quantity)) || Number(quantity) < 1}
+        onClick={() => onReview(request.id, Number(quantity), note)}
+        type="button"
+      >
+        Duyệt lại yêu cầu
+      </button>
+    </div>
+  );
+}
+
+function ReportAudioPanel({
+  metadata,
+  audioUrl,
+  loading,
+  error,
+  onDownload,
+}: {
+  metadata: Mission["audio"];
+  audioUrl: string | null;
+  loading: boolean;
+  error: unknown;
+  onDownload: () => void;
+}) {
+  if (!metadata?.present) {
+    return (
+      <p className="mt-3 text-xs text-[var(--text-muted)]">Báo cáo này không có bản ghi âm.</p>
+    );
+  }
+  if (loading)
+    return (
+      <p role="status" className="mt-3 text-xs text-[var(--text-muted)]">
+        Đang tải bản ghi âm riêng tư…
+      </p>
+    );
+  if (error)
+    return (
+      <p role="alert" className="mt-3 text-xs text-[var(--color-critical)]">
+        Không thể tải bản ghi âm riêng tư.
+      </p>
+    );
+  if (!audioUrl)
+    return <p className="mt-3 text-xs text-[var(--text-muted)]">Bản ghi âm chưa sẵn sàng.</p>;
+  return (
+    <div className="mt-3 space-y-2">
+      <audio
+        controls
+        preload="metadata"
+        src={audioUrl}
+        className="w-full"
+        aria-label="Bản ghi âm gốc của báo cáo"
+      />
+      <button
+        type="button"
+        onClick={onDownload}
+        className="rounded-md border px-3 py-1.5 text-xs font-semibold"
+      >
+        Tải WAV gốc
+      </button>
+    </div>
+  );
+}
 
 /** Nút hành động hiện theo role + trạng thái — người dùng chỉ thấy việc của mình. */
 function RoleActions({
   mission,
   role,
-  onGenerateActionPlan,
-  onDispatch,
-  onConfirm,
-  onPrepare,
-  onDefer,
-  onResend,
-  onCancel,
-  onComplete,
-  busy,
+  workflowEnabled,
 }: {
   mission: Mission;
   role: string | undefined;
-  onGenerateActionPlan: () => void;
-  onDispatch: () => void;
-  onConfirm: () => void;
-  onPrepare: () => void;
-  onDefer: () => void;
-  onResend: (note: string) => void;
-  onCancel: (note: string) => void;
-  onComplete: (outcome: DeliveryOutcome, note: string) => void;
-  busy: boolean;
+  workflowEnabled: boolean;
 }) {
   const isAdmin = role === "ADMIN";
   const showReason =
     (mission.status === "REJECTED" || mission.status === "DEFERRED") && mission.rejectionReason;
-  // Admin huỷ được khi nhiệm vụ đang chạy nhưng kho CHƯA xuất vật tư.
-  const adminCanCancelActive =
-    isAdmin && ["PENDING_RESCUE", "RESCUE_CONFIRMED", "PENDING_WAREHOUSE"].includes(mission.status);
 
   return (
     <div className="space-y-4">
@@ -461,72 +920,25 @@ function RoleActions({
         </div>
       )}
 
-      {mission.status === "COMPLETED" && mission.deliveryOutcome && (
-        <DeliveryResultBanner outcome={mission.deliveryOutcome} note={mission.deliveryNote} />
-      )}
-
       <div className="flex flex-wrap gap-2">
-        {isAdmin && mission.status === "DRAFT" && (
-          <>
-            {!mission.actionPlan && (
-              <button
-                className={actionBtn}
-                style={primaryStyle}
-                onClick={onGenerateActionPlan}
-                disabled={busy}
-              >
-                <ColorIcon name="mission" size={18} tone="orange" /> Lập kế hoạch cứu hộ
-              </button>
-            )}
-            {mission.actionPlan && (
-              <button
-                className={actionBtn}
-                style={primaryStyle}
-                onClick={onDispatch}
-                disabled={busy || mission.readinessAssessment?.status === "NOT_DISPATCHABLE"}
-                title={
-                  mission.readinessAssessment?.status === "NOT_DISPATCHABLE"
-                    ? "Cần xử lý phần vật tư còn thiếu trước khi gửi"
-                    : undefined
-                }
-              >
-                <ColorIcon name="send" size={18} tone="blue" /> Gửi cho đội cứu hộ
-              </button>
-            )}
-          </>
+        {!workflowEnabled && (
+          <p className="text-sm text-[var(--text-muted)]">
+            Phân tích báo cáo gốc trước khi thực hiện các bước điều phối.
+          </p>
+        )}
+        {workflowEnabled && isAdmin && mission.status === "DRAFT" && (
+          <p className="text-sm text-[var(--text-muted)]">
+            Admin duyệt trực tiếp ở bảng kiểm tra phương án; thao tác duyệt sẽ phát hành tới đội cứu hộ và các kho.
+          </p>
         )}
 
-        {role === "RESCUE" && mission.status === "PENDING_RESCUE" && (
-          <button className={actionBtn} style={primaryStyle} onClick={onConfirm} disabled={busy}>
-            Xác nhận nhận nhiệm vụ
-          </button>
+        {workflowEnabled && role === "RESCUE" && (
+          <p className="text-sm text-[var(--text-muted)]">
+            Đội cứu hộ chỉ xem phương án và tự tới các kho được chỉ định để lấy vật tư.
+          </p>
         )}
 
-        {role === "WAREHOUSE" && mission.status === "PENDING_WAREHOUSE" && (
-          <button className={actionBtn} style={primaryStyle} onClick={onPrepare} disabled={busy}>
-            Chuẩn bị và xuất kho
-          </button>
-        )}
-
-        {/* RESCUE xác nhận đã giao tới hiện trường + kết quả (READY → COMPLETED) */}
-        {role === "RESCUE" && mission.status === "READY" && (
-          <RescueCompleteActions onComplete={onComplete} busy={busy} />
-        )}
-
-        {/* ADMIN huỷ nhiệm vụ khi đang chạy (kho chưa xuất vật tư) */}
-        {adminCanCancelActive && <AdminCancelActive onCancel={onCancel} busy={busy} />}
-
-        {/* ADMIN xử lý đơn từ chối: tiếp nhận (tạm hoãn) hoặc huỷ */}
-        {isAdmin && mission.status === "REJECTED" && (
-          <AdminRejectionActions onDefer={onDefer} onCancel={onCancel} busy={busy} />
-        )}
-
-        {/* ADMIN gửi lại nhiệm vụ tạm hoãn (kèm ghi chú) hoặc huỷ */}
-        {isAdmin && mission.status === "DEFERRED" && (
-          <AdminDeferredActions onResend={onResend} onCancel={onCancel} busy={busy} />
-        )}
-
-        {!actionableFor(mission.status, role) && (
+        {workflowEnabled && !actionableFor(mission.status, role) && (
           <p className="text-sm text-[var(--text-muted)]">{statusHint(mission.status, role)}</p>
         )}
       </div>
@@ -545,301 +957,19 @@ function actionableFor(status: string, role: string | undefined): boolean {
       "REJECTED",
       "DEFERRED",
     ].includes(status);
-  if (role === "RESCUE") return ["PENDING_RESCUE", "READY"].includes(status);
-  if (role === "WAREHOUSE") return status === "PENDING_WAREHOUSE";
+  if (role === "RESCUE") return false;
+  if (role === "WAREHOUSE") return false;
   return false;
-}
-
-/** REJECTED + ADMIN: tiếp nhận (tạm hoãn) hoặc huỷ (kèm lý do). */
-function AdminRejectionActions({
-  onDefer,
-  onCancel,
-  busy,
-}: {
-  onDefer: () => void;
-  onCancel: (note: string) => void;
-  busy: boolean;
-}) {
-  const [cancelling, setCancelling] = useState(false);
-  const [note, setNote] = useState("");
-
-  if (cancelling) {
-    return (
-      <div className="w-full space-y-2">
-        <textarea
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          rows={2}
-          placeholder="Lý do huỷ nhiệm vụ (gửi cho đội cứu hộ)"
-          className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
-        />
-        <div className="flex gap-2">
-          <button
-            className={actionBtn}
-            style={{ background: "var(--color-critical)", color: "#fff" }}
-            onClick={() => onCancel(note)}
-            disabled={busy}
-          >
-            Xác nhận huỷ
-          </button>
-          <button
-            className={`${actionBtn} border`}
-            onClick={() => setCancelling(false)}
-            disabled={busy}
-          >
-            Quay lại
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <>
-      <button className={actionBtn} style={primaryStyle} onClick={onDefer} disabled={busy}>
-        <ColorIcon name="workflow" size={18} tone="blue" /> Tiếp nhận (tạm hoãn)
-      </button>
-      <button
-        className={`${actionBtn} border border-[var(--color-critical)] text-[var(--color-critical)]`}
-        onClick={() => setCancelling(true)}
-        disabled={busy}
-      >
-        Huỷ nhiệm vụ
-      </button>
-    </>
-  );
-}
-
-/** DEFERRED + ADMIN: ghi chú phản hồi rồi gửi lại, hoặc huỷ. */
-function AdminDeferredActions({
-  onResend,
-  onCancel,
-  busy,
-}: {
-  onResend: (note: string) => void;
-  onCancel: (note: string) => void;
-  busy: boolean;
-}) {
-  const [note, setNote] = useState("");
-  const [cancelling, setCancelling] = useState(false);
-
-  return (
-    <div className="w-full space-y-2">
-      <textarea
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        rows={2}
-        placeholder={
-          cancelling
-            ? "Lý do huỷ nhiệm vụ"
-            : "Ghi chú phản hồi cho đội cứu hộ (vd: đã điều thêm nhân lực/vật tư)"
-        }
-        className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
-      />
-      <div className="flex flex-wrap gap-2">
-        {cancelling ? (
-          <>
-            <button
-              className={actionBtn}
-              style={{ background: "var(--color-critical)", color: "#fff" }}
-              onClick={() => onCancel(note)}
-              disabled={busy}
-            >
-              Xác nhận huỷ
-            </button>
-            <button
-              className={`${actionBtn} border`}
-              onClick={() => setCancelling(false)}
-              disabled={busy}
-            >
-              Quay lại
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              className={actionBtn}
-              style={primaryStyle}
-              onClick={() => onResend(note)}
-              disabled={busy}
-            >
-              <ColorIcon name="send" size={18} tone="blue" /> Gửi lại cho đội cứu hộ
-            </button>
-            <button
-              className={`${actionBtn} border border-[var(--color-critical)] text-[var(--color-critical)]`}
-              onClick={() => setCancelling(true)}
-              disabled={busy}
-            >
-              Huỷ nhiệm vụ
-            </button>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-const OUTCOME_META: Record<DeliveryOutcome, { label: string; tone: string }> = {
-  DELIVERED: { label: "Đã giao đủ", tone: "var(--color-ready)" },
-  PARTIAL: { label: "Giao một phần", tone: "var(--color-attention)" },
-  FAILED: { label: "Không giao được", tone: "var(--color-critical)" },
-};
-
-/** Băng kết quả giao khi nhiệm vụ đã COMPLETED. */
-function DeliveryResultBanner({
-  outcome,
-  note,
-}: {
-  outcome: DeliveryOutcome;
-  note?: string | null;
-}) {
-  const meta = OUTCOME_META[outcome];
-  return (
-    <div className="rounded-md border p-3" style={{ borderColor: meta.tone }}>
-      <div className="flex items-center gap-2">
-        <ColorIcon name="success" size={18} tone="green" />
-        <p className="text-sm font-semibold" style={{ color: meta.tone }}>
-          Kết quả giao: {meta.label}
-        </p>
-      </div>
-      {note && <p className="mt-1 text-sm text-[var(--text-muted)]">{note}</p>}
-    </div>
-  );
-}
-
-/** READY + RESCUE: chọn kết quả giao (đủ/một phần/thất bại) + ghi chú → hoàn thành. */
-function RescueCompleteActions({
-  onComplete,
-  busy,
-}: {
-  onComplete: (outcome: DeliveryOutcome, note: string) => void;
-  busy: boolean;
-}) {
-  const [outcome, setOutcome] = useState<DeliveryOutcome>("DELIVERED");
-  const [note, setNote] = useState("");
-  const [confirming, setConfirming] = useState(false);
-
-  if (!confirming) {
-    return (
-      <button
-        className={actionBtn}
-        style={primaryStyle}
-        onClick={() => setConfirming(true)}
-        disabled={busy}
-      >
-        <ColorIcon name="success" size={18} tone="green" /> Xác nhận đã giao
-      </button>
-    );
-  }
-
-  return (
-    <div className="w-full space-y-2">
-      <div className="flex flex-wrap gap-2">
-        {(Object.keys(OUTCOME_META) as DeliveryOutcome[]).map((o) => (
-          <button
-            key={o}
-            type="button"
-            onClick={() => setOutcome(o)}
-            className="rounded-full border px-3 py-1.5 text-xs font-medium transition"
-            style={
-              outcome === o
-                ? { borderColor: OUTCOME_META[o].tone, color: OUTCOME_META[o].tone }
-                : undefined
-            }
-          >
-            {OUTCOME_META[o].label}
-          </button>
-        ))}
-      </div>
-      <textarea
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        rows={2}
-        placeholder="Ghi chú kết quả giao (vd: thiếu 20 áo phao, giao tại điểm tập kết xã)"
-        className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
-      />
-      <div className="flex gap-2">
-        <button
-          className={actionBtn}
-          style={primaryStyle}
-          onClick={() => onComplete(outcome, note)}
-          disabled={busy}
-        >
-          Hoàn thành nhiệm vụ
-        </button>
-        <button
-          className={`${actionBtn} border`}
-          onClick={() => setConfirming(false)}
-          disabled={busy}
-        >
-          Quay lại
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/** ADMIN huỷ nhiệm vụ đang chạy (kho chưa xuất) — bấm huỷ rồi nhập lý do xác nhận. */
-function AdminCancelActive({
-  onCancel,
-  busy,
-}: {
-  onCancel: (note: string) => void;
-  busy: boolean;
-}) {
-  const [cancelling, setCancelling] = useState(false);
-  const [note, setNote] = useState("");
-
-  if (!cancelling) {
-    return (
-      <button
-        className={`${actionBtn} border border-[var(--color-critical)] text-[var(--color-critical)]`}
-        onClick={() => setCancelling(true)}
-        disabled={busy}
-      >
-        Huỷ nhiệm vụ
-      </button>
-    );
-  }
-
-  return (
-    <div className="w-full space-y-2">
-      <textarea
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        rows={2}
-        placeholder="Lý do huỷ nhiệm vụ (gửi cho đội cứu hộ và kho)"
-        className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
-      />
-      <div className="flex gap-2">
-        <button
-          className={actionBtn}
-          style={{ background: "var(--color-critical)", color: "#fff" }}
-          onClick={() => onCancel(note)}
-          disabled={busy}
-        >
-          Xác nhận huỷ
-        </button>
-        <button
-          className={`${actionBtn} border`}
-          onClick={() => setCancelling(false)}
-          disabled={busy}
-        >
-          Quay lại
-        </button>
-      </div>
-    </div>
-  );
 }
 
 function statusHint(status: string, role: string | undefined): string {
   if (status === "READY") return "Kho đã chuẩn bị xong và sẵn sàng giao vật tư cho đội cứu hộ.";
-  if (status === "PENDING_RESCUE") return "Đang chờ đội cứu hộ xác nhận.";
+  if (status === "APPROVED") return "Phương án đã duyệt; các kho đang tiếp nhận và chuẩn bị vật tư.";
+  if (status === "PENDING_RESCUE") return "Đội cứu hộ đã nhận thông tin và tự tới các kho được chỉ định.";
   if (status === "PENDING_WAREHOUSE") return "Đang chờ kho chuẩn bị vật tư.";
   if (status === "DRAFT" && role !== "ADMIN") return "Bộ phận điều phối đang lập kế hoạch.";
-  if (status === "REJECTED") return "Đội cứu hộ đã từ chối. Chờ bộ phận điều phối xử lý.";
-  if (status === "DEFERRED")
-    return "Nhiệm vụ đang tạm hoãn, chờ bộ phận điều phối cập nhật và gửi lại.";
+  if (status === "REJECTED") return "Bản ghi lịch sử đã bị từ chối trước đây.";
+  if (status === "DEFERRED") return "Bản ghi lịch sử đã được tạm hoãn trước đây.";
   if (status === "CANCELLED") return "Nhiệm vụ đã huỷ.";
   if (status === "COMPLETED") return "Nhiệm vụ đã hoàn thành. Xem kết quả giao ở trên.";
   return "Không có hành động cho vai trò của bạn ở bước này.";

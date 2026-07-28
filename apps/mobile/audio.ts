@@ -107,19 +107,24 @@ async function blobToWavBase64(blob: Blob): Promise<string> {
     const resampled = resampleTo16k(mono, decoded.sampleRate);
     return arrayBufferToBase64(encodeWav(resampled, TARGET_SR));
   } finally {
-    void ctx.close();
+    await ctx.close().catch(() => undefined);
   }
 }
 
-/**
- * Điều khiển ghi âm 1 lần: start() mở mic, stop() dừng và trả WAV base64 (hoặc "" nếu trống).
- * Người gọi tự quản trạng thái UI (idle/recording/transcribing).
- */
-export interface AudioRecording {
-  stop: () => Promise<string>;
+export interface RecordedAudio {
+  base64: string;
+  mimeType: "audio/wav";
 }
 
-/** Bắt đầu ghi âm; trả handle có stop() → WAV base64. Ném lỗi nếu không mở được mic. */
+/**
+ * Điều khiển ghi âm 1 lần: start() mở mic, stop() dừng và trả WAV cùng MIME.
+ * Người gọi giữ riêng clip gốc với transcript có thể chỉnh sửa.
+ */
+export interface AudioRecording {
+  stop: () => Promise<RecordedAudio | null>;
+}
+
+/** Bắt đầu ghi âm; stop() trả WAV 16kHz hoặc null khi clip trống. */
 export async function startRecording(): Promise<AudioRecording> {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   const chunks: Blob[] = [];
@@ -131,13 +136,14 @@ export async function startRecording(): Promise<AudioRecording> {
 
   return {
     stop: () =>
-      new Promise<string>((resolve, reject) => {
+      new Promise<RecordedAudio | null>((resolve, reject) => {
         recorder.onstop = async () => {
           stream.getTracks().forEach((t) => t.stop());
           const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
-          if (blob.size === 0) return resolve("");
+          if (blob.size === 0) return resolve(null);
           try {
-            resolve(await blobToWavBase64(blob));
+            const base64 = await blobToWavBase64(blob);
+            resolve({ base64, mimeType: "audio/wav" });
           } catch (err) {
             reject(err);
           }

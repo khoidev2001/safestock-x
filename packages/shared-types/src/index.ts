@@ -77,7 +77,8 @@ export enum Permission {
   MISSION_CREATE = "mission:create",
   MISSION_REQUEST = "mission:request",
   MISSION_APPROVE = "mission:approve",
-  MISSION_CONFIRM = "mission:confirm", // RESCUE xác nhận lấy vật tư
+  MISSION_WAREHOUSE_REQUEST_ACCEPT = "mission:warehouse_request_accept",
+  MISSION_CONFIRM = "mission:confirm", // legacy compatibility; RESCUE không được cấp quyền mới
   MISSION_FULFILL = "mission:fulfill", // WAREHOUSE chuẩn bị + xuất
   NOTIFICATION_VIEW = "notification:view",
   READINESS_VIEW = "readiness:view",
@@ -90,6 +91,10 @@ export enum Permission {
   REPORT_SUBMIT = "report:submit", // trưởng thôn gửi báo cáo kiểm kê tháng
   REPORT_APPROVE = "report:approve", // admin xã duyệt báo cáo
   INCIDENT_REPORT_SUBMIT = "incident:report_submit", // trưởng thôn báo cáo tình huống khẩn cấp
+  INCIDENT_REPORT_VIEW_OWN = "incident:report_view_own",
+  INCIDENT_REPORT_TRANSCRIBE = "incident:report_transcribe",
+  INCIDENT_REPORT_ANALYZE = "incident:report_analyze",
+  INCIDENT_REPORT_AUDIO_READ = "incident:report_audio_read",
 }
 
 /**
@@ -106,6 +111,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.INVENTORY_ADJUST,
     Permission.INVENTORY_RECONCILE,
     Permission.MISSION_VIEW,
+    Permission.MISSION_WAREHOUSE_REQUEST_ACCEPT,
     Permission.MISSION_FULFILL, // chuẩn bị + xuất kho theo phương án
     Permission.READINESS_VIEW,
     Permission.SIMULATION_VIEW,
@@ -115,14 +121,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.REPORT_SUBMIT, // trưởng thôn gửi báo cáo tháng
   ],
   [UserRole.RESCUE]: [
-    // Cứu hộ: xem + XÁC NHẬN lấy vật tư.
-    Permission.INVENTORY_READ,
+    // Cứu hộ: chỉ xem phương án và thông tin lấy vật tư.
     Permission.MISSION_VIEW,
-    Permission.MISSION_REQUEST,
-    Permission.MISSION_CONFIRM, // xác nhận lấy
-    Permission.READINESS_VIEW,
-    Permission.SIMULATION_VIEW,
-    Permission.LOAN_MANAGE,
     Permission.NOTIFICATION_VIEW,
   ],
   [UserRole.ADMIN]: [
@@ -130,9 +130,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     ...Object.values(Permission),
   ],
   [UserRole.REPORTER]: [
-    // Trưởng thôn: báo cáo tình huống + dùng ghi âm (transcribe) + xem thông báo phản hồi.
     Permission.INCIDENT_REPORT_SUBMIT,
-    Permission.MISSION_CREATE, // để gọi /missions/transcribe (đang yêu cầu quyền này)
+    Permission.INCIDENT_REPORT_TRANSCRIBE,
+    Permission.INCIDENT_REPORT_VIEW_OWN,
     Permission.NOTIFICATION_VIEW,
   ],
 };

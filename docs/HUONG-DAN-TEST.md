@@ -113,13 +113,10 @@ Mở giao diện: [http://localhost:3200](http://localhost:3200).
 
 ## 4. Tài khoản test
 
-| Tài khoản | Mật khẩu | Dùng để test |
-|---|---|---|
-| `admin` | `admin123@` | Toàn xã, bản đồ, người dùng, lập Mission |
-| `staff@safestock.vn` | `staff123` | Vận hành kho trung tâm |
-| `rescue@safestock.vn` | `rescue123` | Vai trò đội cứu hộ |
-| `truongthon1@safestock.vn` | `truongthon123` | Kho thôn Long Châu |
-| `truongthon2@safestock.vn` ... `truongthon17@safestock.vn` | `truongthon123` | Các kho thôn còn lại theo thứ tự seed |
+- Dùng ADMIN, RESCUE và kho trung tâm đã được quản trị viên cấp; không lưu mật khẩu trong tài liệu.
+- REPORTER theo mẫu `<locationKey bỏ dấu gạch nối>_baocao`.
+- WAREHOUSE thôn theo mẫu `kho<locationKey bỏ dấu gạch nối>`.
+- Ví dụ Tân Bình: `tanbinh_baocao` và `khotanbinh`.
 
 ## 5. Smoke test 10 phút
 
@@ -146,7 +143,7 @@ Nếu một trong S01-S05 thất bại, chưa nên tiếp tục demo Mission.
 
 1. Đăng nhập `admin`: phải thấy menu **Người dùng** và **Bản đồ kho** có chế độ ghim.
 2. Đăng xuất, đăng nhập `staff@safestock.vn`: không được thấy chức năng quản trị người dùng.
-3. Đăng nhập `truongthon1@safestock.vn`: dữ liệu phải thuộc **Kho thôn Long Châu**, không được sửa kho thôn khác.
+3. Đăng nhập REPORTER theo tài khoản được cấp, ví dụ `longchau_baocao`: dữ liệu phải thuộc **Kho thôn Long Châu**, không được sửa kho thôn khác.
 4. Đăng nhập `rescue@safestock.vn`: không được có quyền quản trị hoặc xuất kho tùy ý.
 
 Đạt khi quyền và phạm vi kho thay đổi đúng theo vai trò, không chỉ ẩn nút mà API cũng trả `403` cho thao tác trái quyền.
@@ -299,17 +296,13 @@ Kiểm tra upload:
 Không cần Playwright. Chạy:
 
 ```powershell
-pnpm --filter @safestock/backend test -- --runInBand
+pnpm --filter @safestock/backend exec jest --runInBand
 pnpm --filter @safestock/backend build
 pnpm --filter @safestock/frontend exec tsc --noEmit
 pnpm --filter @safestock/frontend build
 ```
 
-Baseline hiện tại:
-
-- Backend: 25 test suite, 168 test pass.
-- Backend production build pass.
-- Frontend typecheck và production build pass.
+Kết quả cần ghi lại theo lần chạy thực tế; không dùng mật khẩu hoặc dữ liệu bí mật trong tài liệu.
 
 ## 8. Reset sau khi test
 

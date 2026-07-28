@@ -22,6 +22,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const queryClient = useQueryClient();
   const token = useAuth((state) => state.token);
+  const role = useAuth((state) => state.user?.role);
   const hasHydrated = useAuth((state) => state.hasHydrated);
 
   const warehouseQuery = useWarehouse();
@@ -62,7 +63,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <DashboardShell warehouseName={warehouseQuery.data?.name}>
       {children}
-      {warehouseId ? (
+      {warehouseId && role !== "RESCUE" ? (
         <FloatingAssistant isHidden={pathname === "/assistant"} warehouseId={warehouseId} />
       ) : null}
     </DashboardShell>

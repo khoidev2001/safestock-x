@@ -23,7 +23,7 @@ export class AuthService {
       isSimulationSystemActorEmail(user.email) ||
       !(await bcrypt.compare(password, user.passwordHash))
     ) {
-      throw new UnauthorizedException("Email hoặc mật khẩu sai");
+      throw new UnauthorizedException("Tên đăng nhập hoặc mật khẩu sai");
     }
     return this.issueTokens(user.id, user.email, user.role as UserRole, user.warehouseId);
   }

@@ -29,6 +29,10 @@ export interface WarehouseEta {
   etaMinutes: number;
   lat: number;
   lng: number;
+  /** Provider used for this warehouse logistics estimate. */
+  source?: "google" | "haversine";
+  /** ISO-8601 timestamp recorded when the estimate was calculated. */
+  calculatedAt?: string;
 }
 
 /** Phần LLM viết (khớp ActionPlanNarrative của ai-service). */

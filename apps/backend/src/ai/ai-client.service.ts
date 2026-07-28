@@ -42,10 +42,13 @@ export class AiClientService {
     return result.answer;
   }
 
-  /** Nhận dạng giọng nói (WAV base64) → text tiếng Việt bằng PhoWhisper local. Không cache (audio khác nhau mỗi lần). */
-  async transcribe(audioBase64: string, mimeType: string): Promise<string> {
-    const result = await this.post<{ text: string }>("/transcribe", { audioBase64, mimeType });
-    return result.text;
+  /** Nhận dạng giọng nói (WAV base64) → text tiếng Việt bằng PhoWhisper local. Không cache. */
+  async transcribe(audioBase64: string, mimeType: string): Promise<{ text: string }> {
+    const result = await this.post<unknown>("/transcribe", { audioBase64, mimeType });
+    if (!isTranscriptionResult(result)) {
+      throw new HttpException("AI service trả dữ liệu phiên âm không hợp lệ", 502);
+    }
+    return result;
   }
 
   /**
@@ -81,4 +84,13 @@ export class AiClientService {
       throw new HttpException("Không kết nối được AI service", 503);
     }
   }
+}
+
+function isTranscriptionResult(value: unknown): value is { text: string } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "text" in value &&
+    typeof value.text === "string"
+  );
 }

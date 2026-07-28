@@ -40,11 +40,25 @@ describe("simulation system actor protection", () => {
   });
 
   it("admin không thể tạo reserved identity", async () => {
-    const prisma = { user: { findUnique: jest.fn() } };
+    const prisma = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          role: UserRole.ADMIN,
+          organizationId: "organization-1",
+        }),
+      },
+      warehouse: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: "warehouse-1",
+          kind: "CENTRAL",
+          locationKey: null,
+        }),
+      },
+    };
     const service = new AdminUserService(prisma as never);
 
     await expect(
-      service.create({
+      service.create("admin-1", {
         email,
         password: "known-password",
         fullName: "[SYSTEM] Loadcell warehouse-1",
@@ -52,19 +66,25 @@ describe("simulation system actor protection", () => {
         warehouseId: "warehouse-1",
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
-    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(prisma.user.findUnique).toHaveBeenCalledTimes(1);
   });
 
   it.each(["update", "remove"] as const)("admin không thể %s actor hệ thống", async (method) => {
     const prisma = {
-      user: { findUnique: jest.fn().mockResolvedValue({ id: "system-actor", email }) },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          role: UserRole.ADMIN,
+          organizationId: "organization-1",
+        }),
+        findFirst: jest.fn().mockResolvedValue({ id: "system-actor", email }),
+      },
     };
     const service = new AdminUserService(prisma as never);
 
     const operation =
       method === "update"
-        ? service.update("system-actor", { fullName: "Changed" })
-        : service.remove("system-actor");
+        ? service.update("admin-1", "system-actor", { fullName: "Changed" })
+        : service.remove("admin-1", "system-actor");
     await expect(operation).rejects.toBeInstanceOf(ForbiddenException);
   });
 });

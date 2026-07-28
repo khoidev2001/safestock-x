@@ -1,10 +1,12 @@
 import { createServer, Server as HttpServer } from "http";
 import { AddressInfo } from "net";
 import { JwtService } from "@nestjs/jwt";
+import { NotificationKind } from "@prisma/client";
 import { UserRole } from "@safestock/shared-types";
 import { Server } from "socket.io";
 import { io as connectClient, Socket as ClientSocket } from "socket.io-client";
 import { NotificationGateway } from "../../notification/notification.gateway";
+import { NotificationDelivery } from "../../notification/notification.service";
 import { SimulationGateway } from "../../simulation/simulation.gateway";
 import { WebSocketAuthService } from "../websocket-auth.service";
 
@@ -20,19 +22,14 @@ describe("authenticated Socket.IO rooms", () => {
   let server: Server;
   let baseUrl: string;
   let runner: { onEvent?: (warehouseId: string, payload: unknown) => void };
-  let notifications: { push?: (role: UserRole, payload: unknown) => void };
+  let notifications: { push?: (delivery: NotificationDelivery) => void };
 
   beforeEach(async () => {
     users.clear();
     users.set("user-a", warehouseUser("user-a", "wh-a"));
     users.set("user-b", warehouseUser("user-b", "wh-b"));
-    users.set("admin", {
-      ...warehouseUser("admin", "wh-unused"),
-      role: UserRole.ADMIN,
-      warehouseId: null,
-      warehouse: null,
-      organization: { warehouses: [{ id: "wh-a" }, { id: "wh-b" }] },
-    });
+    users.set("admin", adminUser("admin", "org-a"));
+    users.set("admin-b", adminUser("admin-b", "org-b"));
     prisma.user.findUnique.mockClear();
     prisma.user.findUnique.mockImplementation(({ where }: { where: { id: string } }) =>
       Promise.resolve(users.get(where.id) ?? null),
@@ -129,11 +126,76 @@ describe("authenticated Socket.IO rooms", () => {
 
     warehouseClient.emit("join-role", { role: UserRole.ADMIN });
     await delay(30);
-    notifications.push?.(UserRole.ADMIN, { id: "admin-only" });
+    notifications.push?.({
+      role: UserRole.ADMIN,
+      organizationId: "org-a",
+      warehouseId: null,
+      recipientUserId: null,
+      kind: NotificationKind.INCIDENT_DETECTED,
+      notification: { id: "admin-only" },
+    });
     await delay(50);
 
     expect(warehouseNotifications).toEqual([]);
     expect(adminNotifications).toEqual(["admin-only"]);
+  });
+
+  it("delivers organization-tagged notifications only to the same organization and role", async () => {
+    const [adminA, adminB] = await Promise.all([
+      connect(baseUrl, await jwt.signAsync({ sub: "admin" }, { secret: SECRET })),
+      connect(baseUrl, await jwt.signAsync({ sub: "admin-b" }, { secret: SECRET })),
+    ]);
+    clients.push(adminA, adminB);
+    const receivedA: string[] = [];
+    const receivedB: string[] = [];
+    adminA.on("notification", (payload: { id: string }) => receivedA.push(payload.id));
+    adminB.on("notification", (payload: { id: string }) => receivedB.push(payload.id));
+
+    notifications.push?.({
+      role: UserRole.ADMIN,
+      organizationId: "org-a",
+      warehouseId: null,
+      recipientUserId: null,
+      kind: NotificationKind.INCIDENT_REPORTED,
+      notification: { id: "org-a-report" },
+    });
+    await delay(50);
+
+    expect(receivedA).toEqual(["org-a-report"]);
+    expect(receivedB).toEqual([]);
+  });
+
+  it("retains legacy-neutral delivery but drops orphan incident reports", async () => {
+    const [adminA, adminB] = await Promise.all([
+      connect(baseUrl, await jwt.signAsync({ sub: "admin" }, { secret: SECRET })),
+      connect(baseUrl, await jwt.signAsync({ sub: "admin-b" }, { secret: SECRET })),
+    ]);
+    clients.push(adminA, adminB);
+    const receivedA: string[] = [];
+    const receivedB: string[] = [];
+    adminA.on("notification", (payload: { id: string }) => receivedA.push(payload.id));
+    adminB.on("notification", (payload: { id: string }) => receivedB.push(payload.id));
+
+    notifications.push?.({
+      role: UserRole.ADMIN,
+      organizationId: null,
+      warehouseId: null,
+      recipientUserId: null,
+      kind: NotificationKind.INCIDENT_DETECTED,
+      notification: { id: "legacy-neutral" },
+    });
+    notifications.push?.({
+      role: UserRole.ADMIN,
+      organizationId: null,
+      warehouseId: null,
+      recipientUserId: null,
+      kind: NotificationKind.INCIDENT_REPORTED,
+      notification: { id: "orphan-report" },
+    });
+    await delay(50);
+
+    expect(receivedA).toEqual(["legacy-neutral"]);
+    expect(receivedB).toEqual(["legacy-neutral"]);
   });
 });
 
@@ -146,6 +208,18 @@ function warehouseUser(id: string, warehouseId: string) {
     warehouseId: warehouseId as string | null,
     warehouse: { organizationId: "org-a" } as { organizationId: string } | null,
     organization: { warehouses: [{ id: warehouseId }] },
+  };
+}
+
+function adminUser(id: string, organizationId: string): ReturnType<typeof warehouseUser> {
+  return {
+    id,
+    email: `${id}@example.test`,
+    role: UserRole.ADMIN,
+    organizationId,
+    warehouseId: null,
+    warehouse: null,
+    organization: { warehouses: [] },
   };
 }
 

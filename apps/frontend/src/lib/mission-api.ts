@@ -1,7 +1,9 @@
-import { apiFetch } from "./api";
+import { apiFetch, apiFetchBlob } from "./api";
 
 export type MissionStatus =
   | "DRAFT"
+  | "APPROVED"
+  | "IN_PROGRESS"
   | "PENDING_RESCUE"
   | "RESCUE_CONFIRMED"
   | "PENDING_WAREHOUSE"
@@ -11,6 +13,15 @@ export type MissionStatus =
   | "DEFERRED"
   | "CANCELLED";
 
+export type ReportProcessingState = "SUBMITTED" | "ANALYZING" | "ANALYZED" | "ANALYSIS_FAILED";
+
+export interface ReportAudioMetadata {
+  present: boolean;
+  mimeType?: string | null;
+  sizeBytes?: number | null;
+  durationSeconds?: number | null;
+}
+
 export interface MissionRequirement {
   sku: string;
   itemName: string;
@@ -18,7 +29,12 @@ export interface MissionRequirement {
   allocated: number;
   shortage: number;
   unit: string;
-  allocations: { batchId: string; qty: number; warehouseName?: string }[] | null;
+  allocations: {
+    batchId: string;
+    qty: number;
+    warehouseId?: string;
+    warehouseName?: string;
+  }[] | null;
   neighborSuggestion: { name: string; distanceKm: number; available: number }[] | null;
 }
 
@@ -48,12 +64,18 @@ export interface Mission {
   incidentType: string;
   affectedPeople: number;
   durationHours: number;
+  children?: number;
+  elderly?: number;
+  medicalSupportCases?: number;
   status: MissionStatus;
   fulfillment: number;
-  // Mô tả thô của trưởng thôn (mobile) khi mission là "hộp thư" báo cáo — web tự điền + phân tích.
+  /** Trạng thái xử lý riêng của báo cáo trưởng thôn; null/absent với nhiệm vụ thường. */
+  processingState?: ReportProcessingState | null;
   reportText?: string | null;
+  audio?: ReportAudioMetadata | null;
   incidentLat: number | null;
   incidentLng: number | null;
+  locationText?: string | null;
   actionPlan: ActionPlan | null;
   readinessAssessment: MissionReadinessAssessment | null;
   requirements: MissionRequirement[];
@@ -61,8 +83,56 @@ export interface Mission {
   adminNote?: string | null;
   deliveryOutcome?: DeliveryOutcome | null;
   deliveryNote?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  approvedAt?: string | null;
   completedAt?: string | null;
+  warehouse?: { id: string; name: string };
+  warehouseRequests?: WarehouseMissionRequest[];
 }
+
+export interface OperatorReportDetail extends Omit<
+  Mission,
+  "reportText" | "processingState" | "audio" | "requirements"
+> {
+  reportText: string;
+  location: string | null;
+  affectedPeople: number;
+  durationHours: number;
+  priority: string;
+  severityLevel: number | null;
+  processingState: ReportProcessingState;
+  audio: ReportAudioMetadata;
+  warehouseLogisticsEstimates: {
+    label: "WAREHOUSE_LOGISTICS";
+    warehouseName: string;
+    distanceKm: number;
+    etaMinutes: number;
+    source: "google" | "haversine";
+    calculatedAt: string;
+  }[];
+  createdAt: string;
+  updatedAt: string;
+  approvedAt: string | null;
+  completedAt: string | null;
+  rejectionReason: string | null;
+  adminNote: string | null;
+  deliveryOutcome: DeliveryOutcome | null;
+  deliveryNote: string | null;
+  requirements: {
+    sku: string;
+    itemName: string;
+    required: number;
+    allocated: number;
+    shortage: number;
+    unit: string;
+    allocations?: MissionRequirement["allocations"];
+  }[];
+  sourceHamlet: { warehouseId: string; name: string };
+  warehouseRequests: WarehouseMissionRequest[];
+}
+
+export type MissionViewResource = Mission | OperatorReportDetail;
 
 export interface ActionPlan {
   severityLevel: number;
@@ -78,7 +148,16 @@ export interface ActionPlan {
     shortage: number;
     fromWarehouses: string[];
   }[];
-  warehouses: { name: string; distanceKm: number; etaMinutes: number; lat: number; lng: number }[];
+  warehouses: {
+    name: string;
+    distanceKm: number;
+    etaMinutes: number;
+    lat: number;
+    lng: number;
+    /** Google road-route or straight-line fallback provenance, when persisted. */
+    source?: "google" | "haversine" | null;
+    calculatedAt?: string | null;
+  }[];
   forecasts: { label: string; probability: number }[];
   narrative: {
     objectives: string[];
@@ -157,6 +236,32 @@ export const transcribeAudio = (audioBase64: string, mimeType = "audio/wav") =>
 
 export const getMission = (id: string) => apiFetch<Mission>(`/api/missions/${id}`);
 
+/** Chi tiết báo cáo gốc dành cho operator, không dùng route Mission generic. */
+export const getOperatorReport = (id: string) =>
+  apiFetch<OperatorReportDetail>(`/api/missions/reports/${encodeURIComponent(id)}`);
+
+/** Phân tích tại chỗ báo cáo gốc, giữ nguyên Mission ID. */
+export const analyzeOperatorReport = (id: string) =>
+  apiFetch<OperatorReportDetail>(`/api/missions/reports/${encodeURIComponent(id)}/analyze`, {
+    method: "POST",
+  });
+
+/** Tải WAV riêng tư qua phiên đăng nhập hiện tại; không trả public URL. */
+export const getOperatorReportAudio = (id: string) =>
+  apiFetchBlob(`/api/missions/reports/${encodeURIComponent(id)}/audio`);
+
+export interface ApproveOperatorReportInput {
+  location?: string;
+  adminNote?: string;
+  requests: { warehouseId: string; sku: string; quantity: number }[];
+}
+
+export const approveOperatorReport = (id: string, input: ApproveOperatorReportInput) =>
+  apiFetch<OperatorReportDetail>(`/api/missions/reports/${encodeURIComponent(id)}/approve`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+
 export const listMissions = (statuses?: MissionStatus[]) =>
   apiFetch<Mission[]>(`/api/missions${statuses?.length ? `?status=${statuses.join(",")}` : ""}`);
 
@@ -169,16 +274,34 @@ export const generateActionPlan = (id: string) =>
 // Workflow liên role
 export const dispatchMission = (id: string) =>
   apiFetch<Mission>(`/api/missions/${id}/dispatch`, { method: "POST" });
-export const confirmMission = (id: string) =>
-  apiFetch<Mission>(`/api/missions/${id}/confirm`, { method: "POST" });
-export const prepareMission = (id: string) =>
-  apiFetch<Mission>(`/api/missions/${id}/prepare`, { method: "POST" });
+export interface WarehouseMissionRequest {
+  id: string;
+  missionId: string;
+  warehouseId: string;
+  sku: string;
+  itemName: string;
+  unit: string;
+  requestedQuantity: number;
+  preparedQuantity: number;
+  status: "PENDING" | "ACCEPTED" | "PREPARED";
+  warehouseNote: string | null;
+  adminNote: string | null;
+  warehouse: { name: string };
+  mission: { id: string; status: MissionStatus; incidentType: string; location: string | null; reportText: string | null; warehouse: { name: string } };
+}
 
-// RESCUE xác nhận kết quả giao hiện trường (READY → COMPLETED)
-export const completeMission = (id: string, outcome: DeliveryOutcome, note?: string) =>
-  apiFetch<Mission>(`/api/missions/${id}/complete`, {
+export const listWarehouseRequests = () =>
+  apiFetch<WarehouseMissionRequest[]>("/api/missions/warehouse-requests");
+export const acceptWarehouseRequest = (id: string, note?: string) =>
+  apiFetch<WarehouseMissionRequest>(`/api/missions/warehouse-requests/${id}/accept`, { method: "POST", body: JSON.stringify({ note }) });
+export const prepareWarehouseRequest = (id: string, note?: string) =>
+  apiFetch<WarehouseMissionRequest>(`/api/missions/warehouse-requests/${id}/prepare`, { method: "POST", body: JSON.stringify({ note }) });
+export const reportWarehouseDiscrepancy = (id: string, note: string) =>
+  apiFetch<WarehouseMissionRequest>(`/api/missions/warehouse-requests/${id}/discrepancy`, { method: "POST", body: JSON.stringify({ note }) });
+export const reviewWarehouseRequest = (id: string, input: { requestedQuantity: number; adminNote?: string }) =>
+  apiFetch<WarehouseMissionRequest>(`/api/missions/warehouse-requests/${id}/review`, {
     method: "POST",
-    body: JSON.stringify({ outcome, note }),
+    body: JSON.stringify(input),
   });
 
 // Admin xử lý đơn từ chối của đội cứu hộ

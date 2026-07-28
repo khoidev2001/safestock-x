@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { ColorIcon } from "@/components/shared/color-icon";
 import { getNavItem } from "@/lib/dashboard-nav";
+import { useAuth } from "@/lib/auth-store";
 import { useWarehouse } from "@/lib/use-warehouse";
 
 interface DashboardPageProps {
@@ -25,19 +26,22 @@ export function DashboardPage({ children, standalone = false }: DashboardPagePro
   const nav = getNavItem(pathname);
   const warehouseQuery = useWarehouse();
   const warehouseId = warehouseQuery.data?.id;
+  const standaloneWarehouseId = useAuth((state) => state.user?.warehouseId) ?? "";
 
   return (
     <div className="space-y-5">
       <PageHeading
         subtitle={nav?.subtitle ?? ""}
         title={nav?.title ?? ""}
-        warehouseName={warehouseQuery.data?.name ?? "Đang tải kho"}
+        warehouseName={
+          standalone ? (warehouseQuery.data?.name ?? "Phạm vi toàn tổ chức") : (warehouseQuery.data?.name ?? "Đang tải kho")
+        }
       />
 
-      {warehouseQuery.isError ? (
+      {!standalone && warehouseQuery.isError ? (
         <WarehouseError />
       ) : standalone ? (
-        children("")
+        children(standaloneWarehouseId)
       ) : warehouseId ? (
         children(warehouseId)
       ) : (

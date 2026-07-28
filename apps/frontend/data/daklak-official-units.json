@@ -1,0 +1,621 @@
+{
+  "version": "2026-07-26",
+  "provinceCode": "66",
+  "provinceName": "Tỉnh Đắk Lắk",
+  "canonicalSource": "https://sapnhap.bando.com.vn/",
+  "legalSource": "https://vanban.chinhphu.vn/?pageid=27160&docid=213993",
+  "units": [
+    {
+      "code": "22045",
+      "name": "Phường Bình Kiến",
+      "mapId": "diaphanhanhchinhcapxa_2025.2892",
+      "formedFrom": "Xã An Phú, Xã Hòa Kiến, Xã Bình Kiến, Phường 9 (phần còn lại sau khi sáp nhập vào phường Tuy Hòa)"
+    },
+    {
+      "code": "24305",
+      "name": "Phường Buôn Hồ",
+      "mapId": "diaphanhanhchinhcapxa_2025.2843",
+      "formedFrom": "Phường Đạt Hiếu, Phường An Bình, Phường An Lạc, Phường Thiện An, Phường Thống Nhất, Phường Đoàn Kết"
+    },
+    {
+      "code": "24133",
+      "name": "Phường Buôn Ma Thuột",
+      "mapId": "diaphanhanhchinhcapxa_2025.2823",
+      "formedFrom": "Phường Thành Công, Phường Tân Tiến, Phường Tân Thành, Phường Tự An, Phường Tân Lợi, Xã Cư Êbur"
+    },
+    {
+      "code": "24340",
+      "name": "Phường Cư Bao",
+      "mapId": "diaphanhanhchinhcapxa_2025.2846",
+      "formedFrom": "Phường Bình Tân, Xã Bình Thuận, Xã Cư Bao"
+    },
+    {
+      "code": "22258",
+      "name": "Phường Đông Hòa",
+      "mapId": "diaphanhanhchinhcapxa_2025.2917",
+      "formedFrom": "Phường Hòa Vinh, Phường Hòa Xuân Tây, Xã Hòa Tân Đông"
+    },
+    {
+      "code": "24169",
+      "name": "Phường Ea Kao",
+      "mapId": "diaphanhanhchinhcapxa_2025.2872",
+      "formedFrom": "Phường Ea Tam, Xã Ea Kao"
+    },
+    {
+      "code": "22261",
+      "name": "Phường Hòa Hiệp",
+      "mapId": "diaphanhanhchinhcapxa_2025.2918",
+      "formedFrom": "Phường Hòa Hiệp Trung, Phường Hòa Hiệp Nam, Phường Hòa Hiệp Bắc (phần còn lại sau khi sáp nhập vào phường Phú Yên)"
+    },
+    {
+      "code": "22240",
+      "name": "Phường Phú Yên",
+      "mapId": "diaphanhanhchinhcapxa_2025.2891",
+      "formedFrom": "Phường Phú Đông, Phường Phú Lâm, Phường Phú Thạnh, Xã Hòa Thành (thị xã Đông Hòa), Phường Hòa Hiệp Bắc, Xã Hòa Bình 1 (phần còn lại sau khi sáp nhập vào xã Tây Hòa)"
+    },
+    {
+      "code": "22051",
+      "name": "Phường Sông Cầu",
+      "mapId": "diaphanhanhchinhcapxa_2025.2893",
+      "formedFrom": "Phường Xuân Yên, Phường Xuân Phú, Xã Xuân Phương, Xã Xuân Thịnh"
+    },
+    {
+      "code": "24163",
+      "name": "Phường Tân An",
+      "mapId": "diaphanhanhchinhcapxa_2025.2871",
+      "formedFrom": "Phường Tân An, Xã Ea Tu, Xã Hòa Thuận"
+    },
+    {
+      "code": "24121",
+      "name": "Phường Tân Lập",
+      "mapId": "diaphanhanhchinhcapxa_2025.2870",
+      "formedFrom": "Phường Tân Hòa, Phường Tân Lập, Xã Hòa Thắng (thành phố Buôn Ma Thuột)"
+    },
+    {
+      "code": "24154",
+      "name": "Phường Thành Nhất",
+      "mapId": "diaphanhanhchinhcapxa_2025.2822",
+      "formedFrom": "Phường Khánh Xuân, Phường Thành Nhất"
+    },
+    {
+      "code": "22015",
+      "name": "Phường Tuy Hòa",
+      "mapId": "diaphanhanhchinhcapxa_2025.2890",
+      "formedFrom": "Phường 1, Phường 2, Phường 4, Phường 5, Phường 7, Phường 9, Xã Hòa An (huyện Phú Hòa) (phần còn lại sau khi sáp nhập vào xã Phú Hòa 1), Xã Hòa Trị (phần còn lại sau khi sáp nhập vào xã Phú Hòa 2)"
+    },
+    {
+      "code": "22076",
+      "name": "Phường Xuân Đài",
+      "mapId": "diaphanhanhchinhcapxa_2025.2897",
+      "formedFrom": "Phường Xuân Thành, Phường Xuân Đài"
+    },
+    {
+      "code": "24235",
+      "name": "Xã Buôn Đôn",
+      "mapId": "diaphanhanhchinhcapxa_2025.2838",
+      "formedFrom": "Krông Na"
+    },
+    {
+      "code": "24301",
+      "name": "Xã Cuôr Đăng",
+      "mapId": "diaphanhanhchinhcapxa_2025.2842",
+      "formedFrom": "Xã Ea Drơng, Xã Cuôr Đăng"
+    },
+    {
+      "code": "24280",
+      "name": "Xã Cư M’gar",
+      "mapId": "diaphanhanhchinhcapxa_2025.2874",
+      "formedFrom": "Xã Ea H’đing, Xã Ea Kpam, Xã Cư M’gar"
+    },
+    {
+      "code": "24436",
+      "name": "Xã Cư M’ta",
+      "mapId": "diaphanhanhchinhcapxa_2025.2856",
+      "formedFrom": "Xã Cư Króa, Xã Cư M’ta"
+    },
+    {
+      "code": "24313",
+      "name": "Xã Cư Pơng",
+      "mapId": "diaphanhanhchinhcapxa_2025.2886",
+      "formedFrom": "Xã Ea Sin, Xã Cư Pơng"
+    },
+    {
+      "code": "24415",
+      "name": "Xã Cư Prao",
+      "mapId": "diaphanhanhchinhcapxa_2025.2889",
+      "formedFrom": "Xã Ea Pil, Xã Cư Prao"
+    },
+    {
+      "code": "24478",
+      "name": "Xã Cư Pui",
+      "mapId": "diaphanhanhchinhcapxa_2025.2861",
+      "formedFrom": "Xã Hòa Phong (huyện Krông Bông), Xã Cư Pui"
+    },
+    {
+      "code": "24406",
+      "name": "Xã Cư Yang",
+      "mapId": "diaphanhanhchinhcapxa_2025.2853",
+      "formedFrom": "Xã Cư Bông, Xã Cư Yang"
+    },
+    {
+      "code": "24454",
+      "name": "Xã Dang Kang",
+      "mapId": "diaphanhanhchinhcapxa_2025.2860",
+      "formedFrom": "Xã Hòa Thành (huyện Krông Bông), Xã Cư Kty, Xã Dang Kang"
+    },
+    {
+      "code": "24346",
+      "name": "Xã Dliê Ya",
+      "mapId": "diaphanhanhchinhcapxa_2025.2887",
+      "formedFrom": "Xã Ea Tóh, Xã Ea Tân, Xã Dliê Ya"
+    },
+    {
+      "code": "24561",
+      "name": "Xã Dray Bhăng",
+      "mapId": "diaphanhanhchinhcapxa_2025.2878",
+      "formedFrom": "Xã Hòa Hiệp, Xã Dray Bhăng, Xã Ea Bhốk"
+    },
+    {
+      "code": "24568",
+      "name": "Xã Dur Kmăl",
+      "mapId": "diaphanhanhchinhcapxa_2025.2879",
+      "formedFrom": "Xã Băng A Drênh, Xã Dur Kmăl"
+    },
+    {
+      "code": "24595",
+      "name": "Xã Đắk Liêng",
+      "mapId": "diaphanhanhchinhcapxa_2025.2880",
+      "formedFrom": "Xã Buôn Tría, Xã Buôn Triết, Xã Đắk Liêng"
+    },
+    {
+      "code": "24598",
+      "name": "Xã Đắk Phơi",
+      "mapId": "diaphanhanhchinhcapxa_2025.2881",
+      "formedFrom": "Xã Đắk Nuê, Xã Đắk Phơi"
+    },
+    {
+      "code": "22081",
+      "name": "Xã Đồng Xuân",
+      "mapId": "diaphanhanhchinhcapxa_2025.2898",
+      "formedFrom": "Thị trấn La Hai, Xã Xuân Sơn Nam, Xã Xuân Sơn Bắc, Xã Xuân Long, Xã Xuân Quang 2"
+    },
+    {
+      "code": "22222",
+      "name": "Xã Đức Bình",
+      "mapId": "diaphanhanhchinhcapxa_2025.2912",
+      "formedFrom": "Xã Sơn Giang, Xã Đức Bình Đông, Xã Đức Bình Tây, Xã Ea Bia"
+    },
+    {
+      "code": "22225",
+      "name": "Xã Ea Bá",
+      "mapId": "diaphanhanhchinhcapxa_2025.2913",
+      "formedFrom": "Xã Ea Bá, Xã Ea Bar (huyện Sông Hinh) (phần còn lại sau khi sáp nhập vào xã Ea Ly)"
+    },
+    {
+      "code": "24229",
+      "name": "Xã Ea Bung",
+      "mapId": "diaphanhanhchinhcapxa_2025.2837",
+      "formedFrom": "Xã Ya Tờ Mốt, Xã Ea Bung"
+    },
+    {
+      "code": "24181",
+      "name": "Xã Ea Drăng",
+      "mapId": "diaphanhanhchinhcapxa_2025.2883",
+      "formedFrom": "Thị trấn Ea Drăng, Xã Ea Ral, Xã Dliê Yang"
+    },
+    {
+      "code": "24328",
+      "name": "Xã Ea Drông",
+      "mapId": "diaphanhanhchinhcapxa_2025.2845",
+      "formedFrom": "Xã Ea Siên, Xã Ea Drông"
+    },
+    {
+      "code": "24184",
+      "name": "Xã Ea H'Leo",
+      "mapId": "diaphanhanhchinhcapxa_2025.2830",
+      "formedFrom": "giữ nguyên"
+    },
+    {
+      "code": "24187",
+      "name": "Xã Ea Hiao",
+      "mapId": "diaphanhanhchinhcapxa_2025.2884",
+      "formedFrom": "Xã Ea Sol, Xã Ea Hiao"
+    },
+    {
+      "code": "24373",
+      "name": "Xã Ea Kar",
+      "mapId": "diaphanhanhchinhcapxa_2025.2849",
+      "formedFrom": "Thị trấn Ea Kar, Xã Cư Huê, Xã Ea Đar, Xã Ea Kmút, Xã Cư Ni, Xã Xuân Phú"
+    },
+    {
+      "code": "24208",
+      "name": "Xã Ea Khăl",
+      "mapId": "diaphanhanhchinhcapxa_2025.2832",
+      "formedFrom": "Xã Ea Nam, Xã Ea Tir, Xã Ea Khăl"
+    },
+    {
+      "code": "24265",
+      "name": "Xã Ea Kiết",
+      "mapId": "diaphanhanhchinhcapxa_2025.2839",
+      "formedFrom": "Xã Ea Kuêh, Xã Ea Kiết"
+    },
+    {
+      "code": "24496",
+      "name": "Xã Ea Kly",
+      "mapId": "diaphanhanhchinhcapxa_2025.2865",
+      "formedFrom": "Xã Krông Búk, Xã Ea Kly"
+    },
+    {
+      "code": "24376",
+      "name": "Xã Ea Knốp",
+      "mapId": "diaphanhanhchinhcapxa_2025.2850",
+      "formedFrom": "Thị trấn Ea Knốp, Xã Ea Tih, Xã Ea Sô, Xã Ea Sar"
+    },
+    {
+      "code": "24505",
+      "name": "Xã Ea Knuếc",
+      "mapId": "diaphanhanhchinhcapxa_2025.2875",
+      "formedFrom": "Xã Hòa Đông, Xã Ea Kênh, Xã Ea Knuếc"
+    },
+    {
+      "code": "24544",
+      "name": "Xã Ea Ktur",
+      "mapId": "diaphanhanhchinhcapxa_2025.2877",
+      "formedFrom": "Xã Ea Tiêu, Xã Ea Ktur, Xã Ea Bhốk (phần còn lại sau khi sáp nhập vào xã Dray Bhăng)"
+    },
+    {
+      "code": "22237",
+      "name": "Xã Ea Ly",
+      "mapId": "diaphanhanhchinhcapxa_2025.2911",
+      "formedFrom": "Xã Ea Lâm, Xã Ea Ly, Xã Ea Bar (huyện Sông Hinh)"
+    },
+    {
+      "code": "24286",
+      "name": "Xã Ea M’Droh",
+      "mapId": "diaphanhanhchinhcapxa_2025.2840",
+      "formedFrom": "Xã Quảng Hiệp, Xã Ea M’nang, Xã Ea M’Droh"
+    },
+    {
+      "code": "24559",
+      "name": "Xã Ea Na",
+      "mapId": "diaphanhanhchinhcapxa_2025.2828",
+      "formedFrom": "Xã Ea Bông, Xã Dray Sáp, Xã Ea Na"
+    },
+    {
+      "code": "24540",
+      "name": "Xã Ea Ning",
+      "mapId": "diaphanhanhchinhcapxa_2025.2876",
+      "formedFrom": "Xã Cư Êwi, Xã Ea Hu, Xã Ea Ning"
+    },
+    {
+      "code": "24250",
+      "name": "Xã Ea Nuôl",
+      "mapId": "diaphanhanhchinhcapxa_2025.2825",
+      "formedFrom": "Xã Ea Bar (huyện Buôn Đôn), Xã Cuôr Knia, Xã Ea Nuôl"
+    },
+    {
+      "code": "24403",
+      "name": "Xã Ea Ô",
+      "mapId": "diaphanhanhchinhcapxa_2025.2852",
+      "formedFrom": "Xã Cư Elang, Xã Ea Ô"
+    },
+    {
+      "code": "24400",
+      "name": "Xã Ea Păl",
+      "mapId": "diaphanhanhchinhcapxa_2025.2851",
+      "formedFrom": "Xã Cư Prông, Xã Ea Păl"
+    },
+    {
+      "code": "24502",
+      "name": "Xã Ea Phê",
+      "mapId": "diaphanhanhchinhcapxa_2025.2866",
+      "formedFrom": "Xã Ea Kuăng, Xã Ea Hiu, Xã Ea Phê"
+    },
+    {
+      "code": "24433",
+      "name": "Xã Ea Riêng",
+      "mapId": "diaphanhanhchinhcapxa_2025.2855",
+      "formedFrom": "Xã Ea H’Mlay, Xã Ea M’Doal, Xã Ea Riêng"
+    },
+    {
+      "code": "24217",
+      "name": "Xã Ea Rốk",
+      "mapId": "diaphanhanhchinhcapxa_2025.2835",
+      "formedFrom": "Xã Ia Jlơi, Xã Cư Kbang, Xã Ea Rốk"
+    },
+    {
+      "code": "24211",
+      "name": "Xã Ea Súp",
+      "mapId": "diaphanhanhchinhcapxa_2025.2833",
+      "formedFrom": "Thị trấn Ea Súp, Xã Cư M’Lan, Xã Ea Lê"
+    },
+    {
+      "code": "24445",
+      "name": "Xã Ea Trang",
+      "mapId": "diaphanhanhchinhcapxa_2025.2858",
+      "formedFrom": "giữ nguyên"
+    },
+    {
+      "code": "24277",
+      "name": "Xã Ea Tul",
+      "mapId": "diaphanhanhchinhcapxa_2025.2841",
+      "formedFrom": "Xã Ea Tar, Xã Cư Dliê Mnông, Xã Ea Tul"
+    },
+    {
+      "code": "24241",
+      "name": "Xã Ea Wer",
+      "mapId": "diaphanhanhchinhcapxa_2025.2826",
+      "formedFrom": "Xã Ea Huar, Xã Tân Hòa, Xã Ea Wer"
+    },
+    {
+      "code": "24193",
+      "name": "Xã Ea Wy",
+      "mapId": "diaphanhanhchinhcapxa_2025.2831",
+      "formedFrom": "Xã Cư A Mung, Xã Cư Mốt, Xã Ea Wy"
+    },
+    {
+      "code": "22285",
+      "name": "Xã Hòa Mỹ",
+      "mapId": "diaphanhanhchinhcapxa_2025.2919",
+      "formedFrom": "Xã Hòa Mỹ Đông, Xã Hòa Mỹ Tây"
+    },
+    {
+      "code": "24175",
+      "name": "Xã Hòa Phú",
+      "mapId": "diaphanhanhchinhcapxa_2025.2824",
+      "formedFrom": "Xã Hòa Phú (thành phố Buôn Ma Thuột), Xã Hòa Xuân, Xã Hòa Khánh"
+    },
+    {
+      "code": "24472",
+      "name": "Xã Hòa Sơn",
+      "mapId": "diaphanhanhchinhcapxa_2025.2862",
+      "formedFrom": "Xã Yang Reh, Xã Ea Trul, Xã Hòa Sơn"
+    },
+    {
+      "code": "22276",
+      "name": "Xã Hòa Thịnh",
+      "mapId": "diaphanhanhchinhcapxa_2025.2921",
+      "formedFrom": "Xã Hòa Đồng, Xã Hòa Thịnh"
+    },
+    {
+      "code": "22291",
+      "name": "Xã Hòa Xuân",
+      "mapId": "diaphanhanhchinhcapxa_2025.2920",
+      "formedFrom": "Xã Hòa Tâm, Xã Hòa Xuân Đông, Xã Hòa Xuân Nam"
+    },
+    {
+      "code": "24214",
+      "name": "Xã Ia Lốp",
+      "mapId": "diaphanhanhchinhcapxa_2025.2834",
+      "formedFrom": "giữ nguyên"
+    },
+    {
+      "code": "24221",
+      "name": "Xã Ia Rvê",
+      "mapId": "diaphanhanhchinhcapxa_2025.2836",
+      "formedFrom": "giữ nguyên"
+    },
+    {
+      "code": "24444",
+      "name": "Xã Krông Á",
+      "mapId": "diaphanhanhchinhcapxa_2025.2857",
+      "formedFrom": "Xã Cư San, Xã Krông Á"
+    },
+    {
+      "code": "24538",
+      "name": "Xã Krông Ana",
+      "mapId": "diaphanhanhchinhcapxa_2025.2827",
+      "formedFrom": "Thị trấn Buôn Trấp, Xã Bình Hòa, Xã Quảng Điền"
+    },
+    {
+      "code": "24448",
+      "name": "Xã Krông Bông",
+      "mapId": "diaphanhanhchinhcapxa_2025.2859",
+      "formedFrom": "Thị trấn Krông Kmar, Xã Hòa Lễ, Xã Khuê Ngọc Điền"
+    },
+    {
+      "code": "24310",
+      "name": "Xã Krông Búk",
+      "mapId": "diaphanhanhchinhcapxa_2025.2885",
+      "formedFrom": "Xã Cư Né, Xã Chứ Kbô"
+    },
+    {
+      "code": "24343",
+      "name": "Xã Krông Năng",
+      "mapId": "diaphanhanhchinhcapxa_2025.2847",
+      "formedFrom": "Thị trấn Krông Năng, Xã Phú Lộc, Xã Ea Hồ"
+    },
+    {
+      "code": "24604",
+      "name": "Xã Krông Nô",
+      "mapId": "diaphanhanhchinhcapxa_2025.2882",
+      "formedFrom": "giữ nguyên"
+    },
+    {
+      "code": "24490",
+      "name": "Xã Krông Pắc",
+      "mapId": "diaphanhanhchinhcapxa_2025.2864",
+      "formedFrom": "Thị trấn Phước An, Xã Hòa An (huyện Krông Pắc), Xã Ea Yông, Xã Hòa Tiến"
+    },
+    {
+      "code": "24580",
+      "name": "Xã Liên Sơn Lắk",
+      "mapId": "diaphanhanhchinhcapxa_2025.2869",
+      "formedFrom": "Thị trấn Liên Sơn, Xã Yang Tao, Xã Bông Krang"
+    },
+    {
+      "code": "24412",
+      "name": "Xã M’Drắk",
+      "mapId": "diaphanhanhchinhcapxa_2025.2854",
+      "formedFrom": "Thị trấn M’Drắk, Xã Krông Jing, Xã Ea Lai"
+    },
+    {
+      "code": "24607",
+      "name": "Xã Nam Ka",
+      "mapId": "diaphanhanhchinhcapxa_2025.2829",
+      "formedFrom": "Xã Ea Rbin, Xã Nam Ka"
+    },
+    {
+      "code": "22147",
+      "name": "Xã Ô Loan",
+      "mapId": "diaphanhanhchinhcapxa_2025.2906",
+      "formedFrom": "Xã An Hiệp, Xã An Hòa Hải, Xã An Cư"
+    },
+    {
+      "code": "22319",
+      "name": "Xã Phú Hòa 1",
+      "mapId": "diaphanhanhchinhcapxa_2025.2923",
+      "formedFrom": "Thị trấn Phú Hòa, Xã Hòa Thắng (huyện Phú Hòa), Xã Hòa Định Đông, Xã Hòa Định Tây, Xã Hòa Hội, Xã Hòa An (huyện Phú Hòa)"
+    },
+    {
+      "code": "22303",
+      "name": "Xã Phú Hòa 2",
+      "mapId": "diaphanhanhchinhcapxa_2025.2922",
+      "formedFrom": "Xã Hòa Quang Nam, Xã Hòa Quang Bắc, Xã Hòa Trị"
+    },
+    {
+      "code": "22096",
+      "name": "Xã Phú Mỡ",
+      "mapId": "diaphanhanhchinhcapxa_2025.2899",
+      "formedFrom": "Xã Xuân Quang 1, Xã Phú Mỡ"
+    },
+    {
+      "code": "24364",
+      "name": "Xã Phú Xuân",
+      "mapId": "diaphanhanhchinhcapxa_2025.2848",
+      "formedFrom": "Xã Ea Púk, Xã Ea Dăh, Xã Phú Xuân"
+    },
+    {
+      "code": "24316",
+      "name": "Xã Pơng Drang",
+      "mapId": "diaphanhanhchinhcapxa_2025.2844",
+      "formedFrom": "Thị trấn Pơng Drang, Xã Ea Ngai, Xã Tân Lập"
+    },
+    {
+      "code": "24259",
+      "name": "Xã Quảng Phú",
+      "mapId": "diaphanhanhchinhcapxa_2025.2873",
+      "formedFrom": "Thị trấn Quảng Phú, Thị trấn Ea Pốk, Xã Cư Suê, Xã Quảng Tiến"
+    },
+    {
+      "code": "22207",
+      "name": "Xã Sông Hinh",
+      "mapId": "diaphanhanhchinhcapxa_2025.2914",
+      "formedFrom": "Thị trấn Hai Riêng, Xã Ea Trol, Xã Sông Hinh, Xã Ea Bia (phần còn lại sau khi sáp nhập vào xã Đức Bình)"
+    },
+    {
+      "code": "22165",
+      "name": "Xã Sơn Hòa",
+      "mapId": "diaphanhanhchinhcapxa_2025.2901",
+      "formedFrom": "Thị trấn Củng Sơn, Xã Suối Bạc, Xã Sơn Hà, Xã Sơn Nguyên, Xã Sơn Phước"
+    },
+    {
+      "code": "22250",
+      "name": "Xã Sơn Thành",
+      "mapId": "diaphanhanhchinhcapxa_2025.2915",
+      "formedFrom": "Xã Hòa Phú (huyện Tây Hòa), Xã Sơn Thành Đông, Xã Sơn Thành Tây"
+    },
+    {
+      "code": "22192",
+      "name": "Xã Suối Trai",
+      "mapId": "diaphanhanhchinhcapxa_2025.2910",
+      "formedFrom": "Xã Ea Chà Rang, Xã Krông Pa, Xã Suối Trai"
+    },
+    {
+      "code": "24352",
+      "name": "Xã Tam Giang",
+      "mapId": "diaphanhanhchinhcapxa_2025.2888",
+      "formedFrom": "Xã Ea Tam, Xã Cư Klông, Xã Tam Giang"
+    },
+    {
+      "code": "24526",
+      "name": "Xã Tân Tiến",
+      "mapId": "diaphanhanhchinhcapxa_2025.2867",
+      "formedFrom": "Xã Ea Yiêng, Xã Ea Uy, Xã Tân Tiến"
+    },
+    {
+      "code": "22255",
+      "name": "Xã Tây Hòa",
+      "mapId": "diaphanhanhchinhcapxa_2025.2916",
+      "formedFrom": "Thị trấn Phú Thứ, Xã Hòa Phong (huyện Tây Hòa), Xã Hòa Tân Tây, Xã Hòa Bình 1"
+    },
+    {
+      "code": "22171",
+      "name": "Xã Tây Sơn",
+      "mapId": "diaphanhanhchinhcapxa_2025.2908",
+      "formedFrom": "Xã Sơn Hội, Xã Cà Lúi, Xã Phước Tân"
+    },
+    {
+      "code": "22114",
+      "name": "Xã Tuy An Bắc",
+      "mapId": "diaphanhanhchinhcapxa_2025.2903",
+      "formedFrom": "Thị trấn Chí Thạnh, Xã An Dân, Xã An Định"
+    },
+    {
+      "code": "22120",
+      "name": "Xã Tuy An Đông",
+      "mapId": "diaphanhanhchinhcapxa_2025.2904",
+      "formedFrom": "Xã An Ninh Đông, Xã An Ninh Tây, Xã An Thạch"
+    },
+    {
+      "code": "22153",
+      "name": "Xã Tuy An Nam",
+      "mapId": "diaphanhanhchinhcapxa_2025.2907",
+      "formedFrom": "Xã An Thọ, Xã An Mỹ, Xã An Chấn"
+    },
+    {
+      "code": "22132",
+      "name": "Xã Tuy An Tây",
+      "mapId": "diaphanhanhchinhcapxa_2025.2905",
+      "formedFrom": "Xã An Nghiệp, Xã An Xuân, Xã An Lĩnh"
+    },
+    {
+      "code": "22177",
+      "name": "Xã Vân Hòa",
+      "mapId": "diaphanhanhchinhcapxa_2025.2909",
+      "formedFrom": "Xã Sơn Long, Xã Sơn Xuân, Xã Sơn Định"
+    },
+    {
+      "code": "24529",
+      "name": "Xã Vụ Bổn",
+      "mapId": "diaphanhanhchinhcapxa_2025.2868",
+      "formedFrom": "giữ nguyên"
+    },
+    {
+      "code": "22060",
+      "name": "Xã Xuân Cảnh",
+      "mapId": "diaphanhanhchinhcapxa_2025.2896",
+      "formedFrom": "Xã Xuân Bình, Xã Xuân Cảnh"
+    },
+    {
+      "code": "22090",
+      "name": "Xã Xuân Lãnh",
+      "mapId": "diaphanhanhchinhcapxa_2025.2900",
+      "formedFrom": "Xã Đa Lộc, Xã Xuân Lãnh"
+    },
+    {
+      "code": "22057",
+      "name": "Xã Xuân Lộc",
+      "mapId": "diaphanhanhchinhcapxa_2025.2895",
+      "formedFrom": "Xã Xuân Hải, Xã Xuân Lộc"
+    },
+    {
+      "code": "22111",
+      "name": "Xã Xuân Phước",
+      "mapId": "diaphanhanhchinhcapxa_2025.2902",
+      "formedFrom": "Xã Xuân Quang 3, Xã Xuân Phước"
+    },
+    {
+      "code": "22075",
+      "name": "Xã Xuân Thọ",
+      "mapId": "diaphanhanhchinhcapxa_2025.2894",
+      "formedFrom": "Xã Xuân Lâm, Xã Xuân Thọ 1, Xã Xuân Thọ 2"
+    },
+    {
+      "code": "24484",
+      "name": "Xã Yang Mao",
+      "mapId": "diaphanhanhchinhcapxa_2025.2863",
+      "formedFrom": "Xã Cư Drăm, Xã Yang Mao"
+    }
+  ]
+}

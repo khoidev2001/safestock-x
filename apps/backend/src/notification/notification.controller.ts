@@ -1,5 +1,6 @@
 import { Controller, Get, Param, Post, Query, Request, UseGuards } from "@nestjs/common";
-import { Permission, UserRole } from "@safestock/shared-types";
+import { UserRole } from "@prisma/client";
+import { Permission } from "@safestock/shared-types";
 import { AuthenticatedRequest } from "../auth/authenticated-request";
 import { JwtAuthGuard } from "../auth/guards";
 import { PermissionGuard } from "../rbac/permission.guard";
@@ -12,19 +13,37 @@ import { NotificationService } from "./notification.service";
 export class NotificationController {
   constructor(private notifications: NotificationService) {}
 
-  /** Thông báo của role người dùng hiện tại. */
+  /** Thông báo của role và organization hiện tại từ database. */
   @Get()
   list(@Request() req: AuthenticatedRequest, @Query("unread") unread?: string) {
-    return this.notifications.list(req.user.role as UserRole, unread === "true");
+    return this.notifications.list(
+      {
+        role: req.user.role as UserRole,
+        organizationId: req.user.organizationId,
+        userId: req.user.userId,
+        warehouseId: req.user.warehouseId,
+      },
+      unread === "true",
+    );
   }
 
   @Post(":id/read")
-  markRead(@Param("id") id: string) {
-    return this.notifications.markRead(id);
+  markRead(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.notifications.markRead(id, {
+      role: req.user.role as UserRole,
+      organizationId: req.user.organizationId,
+      userId: req.user.userId,
+      warehouseId: req.user.warehouseId,
+    });
   }
 
   @Post("read-all")
   markAllRead(@Request() req: AuthenticatedRequest) {
-    return this.notifications.markAllRead(req.user.role as UserRole);
+    return this.notifications.markAllRead({
+      role: req.user.role as UserRole,
+      organizationId: req.user.organizationId,
+      userId: req.user.userId,
+      warehouseId: req.user.warehouseId,
+    });
   }
 }

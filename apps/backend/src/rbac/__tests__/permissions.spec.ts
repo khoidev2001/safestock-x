@@ -17,12 +17,14 @@ describe("RBAC role permissions", () => {
     expect(roleHasPermission(UserRole.WAREHOUSE, Permission.ADMIN_USERS)).toBe(false);
   });
 
-  it("should limit RESCUE to view + request + confirm + loan", () => {
-    expect(roleHasPermission(UserRole.RESCUE, Permission.INVENTORY_READ)).toBe(true);
-    expect(roleHasPermission(UserRole.RESCUE, Permission.MISSION_REQUEST)).toBe(true);
-    expect(roleHasPermission(UserRole.RESCUE, Permission.MISSION_CONFIRM)).toBe(true);
-    expect(roleHasPermission(UserRole.RESCUE, Permission.LOAN_MANAGE)).toBe(true);
-    expect(roleHasPermission(UserRole.RESCUE, Permission.SIMULATION_VIEW)).toBe(true);
+  it("should limit RESCUE to read-only mission view and notifications", () => {
+    expect(roleHasPermission(UserRole.RESCUE, Permission.MISSION_VIEW)).toBe(true);
+    expect(roleHasPermission(UserRole.RESCUE, Permission.NOTIFICATION_VIEW)).toBe(true);
+    expect(roleHasPermission(UserRole.RESCUE, Permission.INVENTORY_READ)).toBe(false);
+    expect(roleHasPermission(UserRole.RESCUE, Permission.MISSION_REQUEST)).toBe(false);
+    expect(roleHasPermission(UserRole.RESCUE, Permission.MISSION_CONFIRM)).toBe(false);
+    expect(roleHasPermission(UserRole.RESCUE, Permission.LOAN_MANAGE)).toBe(false);
+    expect(roleHasPermission(UserRole.RESCUE, Permission.SIMULATION_VIEW)).toBe(false);
     expect(roleHasPermission(UserRole.RESCUE, Permission.SIMULATION_MUTATE)).toBe(false);
   });
 
@@ -32,15 +34,28 @@ describe("RBAC role permissions", () => {
     expect(roleHasPermission(UserRole.RESCUE, Permission.MISSION_FULFILL)).toBe(false);
   });
 
+  it("should give REPORTER only narrow incident report access", () => {
+    expect(ROLE_PERMISSIONS[UserRole.REPORTER]).toEqual([
+      Permission.INCIDENT_REPORT_SUBMIT,
+      Permission.INCIDENT_REPORT_TRANSCRIBE,
+      Permission.INCIDENT_REPORT_VIEW_OWN,
+      Permission.NOTIFICATION_VIEW,
+    ]);
+    expect(roleHasPermission(UserRole.REPORTER, Permission.MISSION_CREATE)).toBe(false);
+    expect(roleHasPermission(UserRole.REPORTER, Permission.MISSION_VIEW)).toBe(false);
+    expect(roleHasPermission(UserRole.REPORTER, Permission.INCIDENT_REPORT_ANALYZE)).toBe(false);
+    expect(roleHasPermission(UserRole.REPORTER, Permission.INCIDENT_REPORT_AUDIO_READ)).toBe(false);
+  });
+
   it("should give ADMIN every permission", () => {
     for (const permission of Object.values(Permission)) {
       expect(roleHasPermission(UserRole.ADMIN, permission)).toBe(true);
     }
   });
 
-  it("should map exactly 3 roles", () => {
+  it("should map every supported role", () => {
     expect(Object.keys(ROLE_PERMISSIONS).sort()).toEqual(
-      [UserRole.ADMIN, UserRole.RESCUE, UserRole.WAREHOUSE].sort(),
+      [UserRole.ADMIN, UserRole.REPORTER, UserRole.RESCUE, UserRole.WAREHOUSE].sort(),
     );
   });
 });

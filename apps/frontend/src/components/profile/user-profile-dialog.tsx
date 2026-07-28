@@ -125,7 +125,7 @@ export function UserProfileDialog({
   }
 
   function logout() {
-    queryClient.removeQueries({ queryKey: ["user-profile"] });
+    queryClient.clear();
     onLogout();
   }
 

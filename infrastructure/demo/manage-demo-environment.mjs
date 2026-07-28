@@ -75,7 +75,7 @@ switch (action) {
     assertDemoContainersRunning();
     run("pnpm", ["--filter", "@safestock/backend", "prisma:generate"]);
     run("pnpm", ["--filter", "@safestock/backend", "prisma:push"]);
-    run("pnpm", ["--filter", "@safestock/backend", "seed"]);
+    run("pnpm", ["--filter", "@safestock/backend", "seed", "--", "--confirm-demo-reset"]);
     break;
   case "backend": {
     assertDemoContainersRunning();

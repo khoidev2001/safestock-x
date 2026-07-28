@@ -100,21 +100,41 @@ enum WarehouseKind {
   HAMLET // kho thôn — mỗi thôn 1 kho nhỏ
 }
 
+enum WarehouseLocationMethod {
+  CULTURAL_HOUSE_GOOGLE_MAPS
+  CULTURAL_HOUSE_OSM
+  CULTURAL_HOUSE_OFFICIAL
+  MANUAL_ADMIN
+  LEGACY_UNSPECIFIED
+}
+
 model Warehouse {
-  id             String               @id @default(cuid())
-  organizationId String
-  organization   Organization         @relation(fields: [organizationId], references: [id])
-  name           String
-  location       String?
-  kind           WarehouseKind        @default(HAMLET) // kho tổng hay kho thôn
-  communeId      String               @default("default-commune") // nhóm kho cùng xã — AI query cả cụm
-  lat            Float? // toạ độ ghim tay (không geocode)
-  lng            Float?
-  distanceKm     Float                @default(0) // fallback thủ công khi chưa có lat/lng
-  createdAt      DateTime             @default(now())
-  zones          WarehouseZone[]
-  leaders        User[] // trưởng thôn scope kho này
-  reports        MonthlyStockReport[]
+  id                 String                   @id @default(cuid())
+  organizationId     String
+  organization       Organization             @relation(fields: [organizationId], references: [id])
+  name               String
+  location           String?
+  kind               WarehouseKind            @default(HAMLET) // kho tổng hay kho thôn
+  communeId          String                   @default("default-commune") // nhóm kho cùng xã — AI query cả cụm
+  lat                Float?
+  lng                Float?
+  locationKey        String?
+  locationMethod     WarehouseLocationMethod?
+  locationSourceName String?
+  locationSourceUrl  String?
+  locationSourceRef  String?
+  locationCheckedAt  DateTime?
+  locationMethodNote String?
+  locationUpdatedAt  DateTime?
+  distanceKm         Float                    @default(0) // fallback thủ công khi chưa có lat/lng
+  createdAt          DateTime                 @default(now())
+  zones              WarehouseZone[]
+  leaders            User[] // trưởng thôn scope kho này
+  reports            MonthlyStockReport[]
+  missions           Mission[]
+  missionRequests    MissionWarehouseRequest[]
+
+  @@unique([organizationId, locationKey])
 }
 
 enum ReportStatus {
@@ -452,34 +472,70 @@ enum DeliveryOutcome {
   FAILED // không giao được (đường tắc, điểm nạn di dời…)
 }
 
+enum ReportProcessingState {
+  SUBMITTED
+  ANALYZING
+  ANALYZED
+  ANALYSIS_FAILED
+}
+
+enum MissionWarehouseRequestStatus {
+  PENDING
+  ACCEPTED
+  PREPARED
+}
+
 // Nhiệm vụ cứu hộ — sinh từ tình huống, gồm nhu cầu + phương án phân bổ.
 model Mission {
-  id                  String               @id @default(cuid())
-  warehouseId         String
-  incidentType        String
-  location            String?
-  affectedPeople      Int
-  durationHours       Int
-  priority            String
-  parsedInput         Json // JSON tình huống đã parse (từ AI hoặc nhập tay)
-  reportText          String? // mô tả thô của trưởng thôn (mobile) — web đọc lại để tự điền + phân tích
-  status              MissionStatus        @default(DRAFT)
-  fulfillment         Float                @default(0) // mức đáp ứng % (min qua các loại)
-  readinessAssessment Json? // blocker + trạng thái + mức đáp ứng tại lúc lập phương án
-  explanation         String? // giải thích AI (tiếng Việt)
-  rejectionReason     String? // lý do đội cứu hộ từ chối (thiếu nhân lực/vật tư/xin trì hoãn) — admin đọc sau
-  adminNote           String? // ghi chú admin khi tạm hoãn/gửi lại/huỷ — đội cứu hộ đọc
-  deliveryOutcome     DeliveryOutcome? // kết quả giao hiện trường (đội cứu hộ xác nhận khi hoàn tất)
-  deliveryNote        String? // ghi chú kết quả giao (vd: thiếu 20 áo phao, đường tắc phải giao điểm khác)
-  completedAt         DateTime? // thời điểm đội cứu hộ xác nhận đã giao
-  actionPlan          Json? // Incident Action Plan (8 mục, ActionPlanResponse từ AI)
-  incidentLat         Float? // toạ độ điểm nạn (ghim tay) — tính khoảng cách kho gần nhất
-  incidentLng         Float?
-  createdByUserId     String?
-  approvedByUserId    String?
-  createdAt           DateTime             @default(now())
-  approvedAt          DateTime?
-  requirements        MissionRequirement[]
+  id                    String                 @id @default(cuid())
+  warehouseId           String
+  warehouse             Warehouse              @relation(fields: [warehouseId], references: [id])
+  incidentType          String
+  location              String?
+  affectedPeople        Int
+  durationHours         Int
+  priority              String
+  parsedInput           Json // JSON tình huống đã parse (từ AI hoặc nhập tay)
+  reportText            String? // mô tả thô của trưởng thôn (mobile) — web đọc lại để tự điền + phân tích
+  status                MissionStatus          @default(DRAFT)
+  fulfillment           Float                  @default(0) // mức đáp ứng % (min qua các loại)
+  readinessAssessment   Json? // blocker + trạng thái + mức đáp ứng tại lúc lập phương án
+  explanation           String? // giải thích AI (tiếng Việt)
+  rejectionReason       String? // lý do đội cứu hộ từ chối (thiếu nhân lực/vật tư/xin trì hoãn) — admin đọc sau
+  adminNote             String? // ghi chú admin khi tạm hoãn/gửi lại/huỷ — đội cứu hộ đọc
+  deliveryOutcome       DeliveryOutcome? // kết quả giao hiện trường (đội cứu hộ xác nhận khi hoàn tất)
+  deliveryNote          String? // ghi chú kết quả giao (vd: thiếu 20 áo phao, đường tắc phải giao điểm khác)
+  completedAt           DateTime? // thời điểm đội cứu hộ xác nhận đã giao
+  actionPlan            Json? // Incident Action Plan (8 mục, ActionPlanResponse từ AI)
+  incidentLat           Float? // toạ độ điểm nạn (ghim tay) — tính khoảng cách kho gần nhất
+  incidentLng           Float?
+  createdByUserId       String?
+  approvedByUserId      String?
+  reportProcessingState ReportProcessingState?
+  analysisClaimToken    String?
+  analysisClaimedAt     DateTime?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @default(now()) @updatedAt
+  approvedAt            DateTime?
+  requirements          MissionRequirement[]
+  audio                 MissionAudio?
+  warehouseRequests     MissionWarehouseRequest[]
+
+  @@index([createdByUserId, createdAt, id])
+  @@index([warehouseId, createdAt, id])
+  @@index([reportProcessingState, analysisClaimedAt])
+  @@index([warehouseId, reportProcessingState, analysisClaimedAt])
+}
+
+model MissionAudio {
+  id              String   @id @default(cuid())
+  missionId       String   @unique
+  mission         Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  bytes           Bytes    @db.ByteA
+  mimeType        String
+  sizeBytes       Int
+  durationSeconds Float?
+  createdAt       DateTime @default(now())
 }
 
 // Nhu cầu vật tư của nhiệm vụ (sinh từ định mức).
@@ -497,6 +553,38 @@ model MissionRequirement {
   neighborSuggestion Json? // gợi ý mượn kho lân cận nếu thiếu [{name, distanceKm, available}]
 
   @@index([missionId])
+}
+
+// Phần vật tư mà từng kho phải chuẩn bị cho một Mission đã được ADMIN duyệt.
+model MissionWarehouseRequest {
+  id                 String                        @id @default(cuid())
+  missionId          String
+  mission            Mission                       @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  warehouseId        String
+  warehouse          Warehouse                     @relation(fields: [warehouseId], references: [id])
+  sku                String
+  itemName           String
+  unit               String
+  requestedQuantity  Int
+  preparedQuantity   Int                           @default(0)
+  preparedAllocations Json?
+  allocations        Json
+  status             MissionWarehouseRequestStatus @default(PENDING)
+  warehouseNote      String?
+  adminNote           String?
+  acceptedByUserId   String?
+  preparedByUserId   String?
+  preparationClaimToken String?
+  preparationClaimedAt DateTime?
+  acceptedAt         DateTime?
+  preparedAt         DateTime?
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @default(now()) @updatedAt
+
+  @@unique([missionId, warehouseId, sku])
+  @@index([warehouseId, status, createdAt])
+  @@index([missionId, status])
+  @@index([preparationClaimToken])
 }
 
 // ===== Phase E: Incident Intelligence =====
@@ -587,18 +675,26 @@ enum NotificationKind {
   MISSION_CANCELLED // admin huỷ nhiệm vụ (kèm lý do) → báo đội cứu hộ
   MISSION_COMPLETED // đội cứu hộ xác nhận đã giao (kèm kết quả) → báo admin + kho
   INCIDENT_REPORTED // trưởng thôn báo cáo tình huống từ hiện trường → báo admin
+  WAREHOUSE_REQUESTED // ADMIN duyệt phần vật tư của một kho
+  WAREHOUSE_REQUEST_ACCEPTED // kho tiếp nhận phần việc → báo admin
+  WAREHOUSE_REQUEST_REVIEW // kho báo thiếu/sai cần admin xem lại
 }
 
 model Notification {
-  id            String           @id @default(cuid())
-  recipientRole UserRole // gửi theo role (WAREHOUSE/RESCUE/ADMIN)
-  missionId     String?
-  warehouseId   String?
-  kind          NotificationKind
-  title         String
-  body          String
-  read          Boolean          @default(false)
-  createdAt     DateTime         @default(now())
+  id             String           @id @default(cuid())
+  recipientRole  UserRole // gửi theo role (WAREHOUSE/RESCUE/ADMIN)
+  organizationId String?
+  missionId      String?
+  warehouseId    String?
+  recipientUserId String?
+  kind           NotificationKind
+  title          String
+  body           String
+  read           Boolean          @default(false)
+  createdAt      DateTime         @default(now())
 
   @@index([recipientRole, read])
+  @@index([recipientRole, kind, organizationId, read, createdAt], map: "Notification_incident_access_idx")
+  @@index([recipientUserId, read, createdAt])
+  @@index([warehouseId, recipientRole, read, createdAt])
 }

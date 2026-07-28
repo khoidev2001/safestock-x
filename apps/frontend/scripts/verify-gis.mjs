@@ -4,6 +4,9 @@ import fs from "node:fs";
 import path from "node:path";
 
 const GEOJSON_PATH = "public/geo/communes.geojson";
+const DAKLAK_COMMUNES_PATH = "public/geo/daklak-communes.geojson";
+const DAKLAK_OFFICIAL_UNITS_PATH = "data/daklak-official-units.json";
+const PLACES_PATH = "public/geo/daklak-places.geojson";
 const TILE_ROOT = "public/tiles";
 const EXPECTED = new Map([
   ["Đồng Xuân", 19392118],
@@ -16,6 +19,12 @@ const BBOX_LIMIT = [108.9, 13.2, 109.3, 13.7];
 const TILE_BBOX = [108.9483, 13.2393, 109.2551, 13.6202];
 const ZOOM_MIN = 10;
 const ZOOM_MAX = 15;
+const EXPECTED_PLACE_COUNT = 3536;
+const REQUIRED_AMBIGUOUS_PLACES = new Map([
+  ["n12479667961", "Thôn Cư Bang · Xã Cư Pơng"],
+  ["n6420214999", "QT Ngọc Dung ( Nguyễn Thị Dung ) · Xã Cư Pơng"],
+  ["n7983611885", "QT Ngọc Thanh ( Trần Thị Ngọc Thanh ) thôn Cư Bang xã Cư Pơng · Xã Cư Pơng"],
+]);
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -93,6 +102,124 @@ for (let zoom = ZOOM_MIN; zoom <= ZOOM_MAX; zoom++) {
   }
 }
 
+const daklakCommunes = JSON.parse(fs.readFileSync(DAKLAK_COMMUNES_PATH, "utf8"));
+const officialUnits = JSON.parse(fs.readFileSync(DAKLAK_OFFICIAL_UNITS_PATH, "utf8"));
+assert(
+  daklakCommunes.type === "FeatureCollection" && daklakCommunes.features.length === 102,
+  "daklak-communes.geojson phải có đủ 102 xã/phường",
+);
+assert(
+  officialUnits.provinceCode === "66" && officialUnits.units?.length === 102,
+  "Danh mục chuẩn Đắk Lắk phải có đúng 102 xã/phường",
+);
+const officialByName = new Map(
+  officialUnits.units.map((unit) => [unit.name.normalize("NFC"), unit]),
+);
+const localNames = new Set();
+for (const feature of daklakCommunes.features) {
+  const properties = feature.properties ?? {};
+  const fullName = properties.fullName?.normalize("NFC");
+  const official = officialByName.get(fullName);
+  assert(official, `${properties.fullName ?? "Feature"}: tên không khớp danh mục chuẩn hiện hành`);
+  assert(!localNames.has(fullName), `${fullName}: bị trùng đơn vị hành chính`);
+  assert(properties.officialCode === official.code, `${fullName}: sai hoặc thiếu mã hành chính`);
+  assert(
+    properties.officialMapId === official.mapId,
+    `${fullName}: sai hoặc thiếu ID bản đồ chuẩn`,
+  );
+  assert(
+    ["Polygon", "MultiPolygon"].includes(feature.geometry?.type),
+    `${fullName}: geometry không phải polygon`,
+  );
+  let coordinateCount = 0;
+  walkCoordinates(feature.geometry.coordinates, ([lng, lat]) => {
+    assert(Number.isFinite(lng) && Number.isFinite(lat), `${fullName}: tọa độ không hữu hạn`);
+    assert(lng >= 107.4 && lng <= 110.0, `${fullName}: kinh độ ngoài phạm vi Đắk Lắk`);
+    assert(lat >= 11.7 && lat <= 13.7, `${fullName}: vĩ độ ngoài phạm vi Đắk Lắk`);
+    coordinateCount++;
+  });
+  assert(coordinateCount >= 20, `${fullName}: geometry quá ít điểm (${coordinateCount})`);
+  localNames.add(fullName);
+}
+assert(
+  localNames.size === officialByName.size,
+  "Ranh giới cục bộ bị thiếu hoặc thừa đơn vị so với danh mục chuẩn",
+);
+
+const places = JSON.parse(fs.readFileSync(PLACES_PATH, "utf8"));
+assert(
+  places.type === "FeatureCollection" && places.features.length === EXPECTED_PLACE_COUNT,
+  `daklak-places.geojson phải có đúng ${EXPECTED_PLACE_COUNT} địa danh`,
+);
+const placeProperties = places.features.map((feature) => feature.properties ?? {});
+const communeNameByOsmId = new Map(
+  daklakCommunes.features.map((feature) => [
+    feature.properties?.osmId,
+    feature.properties?.fullName,
+  ]),
+);
+const placesByOsmId = new Map(placeProperties.map((properties) => [properties.osmId, properties]));
+for (const [osmId, displayName] of REQUIRED_AMBIGUOUS_PLACES) {
+  assert(
+    placesByOsmId.get(osmId)?.displayName === displayName,
+    `Thiếu hoặc sai ngữ cảnh địa danh chồng lấn ${osmId}`,
+  );
+}
+
+assert(
+  placeProperties.every((properties) => typeof properties.osmId === "string"),
+  "Mỗi địa danh phải giữ osmId nguồn để kiểm tra giữ lại dữ liệu",
+);
+
+assert(
+  placeProperties.every(
+    (properties) =>
+      typeof properties.displayName === "string" &&
+      typeof properties.communeName === "string" &&
+      Number.isFinite(properties.communeOsmId) &&
+      properties.displayName.endsWith(` · ${properties.communeName}`),
+  ),
+  "Mỗi địa danh phải có displayName và ngữ cảnh xã/phường hợp lệ",
+);
+assert(
+  placeProperties.every(
+    (properties) => communeNameByOsmId.get(properties.communeOsmId) === properties.communeName,
+  ),
+  "Ngữ cảnh địa danh phải dùng tên xã/phường chính thức hiện hành",
+);
+assert(
+  placeProperties.some(
+    (properties) =>
+      properties.name === "Phước Lộc" && properties.displayName === "Thôn Phước Lộc · Xã Tam Giang",
+  ),
+  "Thiếu ngữ cảnh Xã Tam Giang cho Phước Lộc",
+);
+assert(
+  placeProperties.some(
+    (properties) =>
+      properties.name === "Phước Lộc" && properties.displayName === "Thôn Phước Lộc · Xã Đức Bình",
+  ),
+  "Thiếu ngữ cảnh Xã Đức Bình cho Phước Lộc",
+);
+assert(
+  placeProperties.some(
+    (properties) =>
+      properties.name === "Phước Lộc" &&
+      properties.displayName === "Thôn Phước Lộc · Xã Xuân Phước",
+  ),
+  "Thiếu ngữ cảnh Xã Xuân Phước cho Phước Lộc",
+);
+assert(
+  placeProperties.some(
+    (properties) =>
+      properties.group === "health" &&
+      properties.name === "Trung tâm Y tế Đồng Xuân" &&
+      properties.displayName === "Trung tâm Y tế Đồng Xuân · Xã Đồng Xuân",
+  ),
+  "Thiếu ngữ cảnh Xã Đồng Xuân cho POI y tế",
+);
+
 console.log(
-  `GIS hợp lệ: ${seen.size} relation OSM, đủ ${tileCount} tile PNG 256x256 theo BBOX (zoom ${ZOOM_MIN}-${ZOOM_MAX}).`,
+  `GIS hợp lệ: ${seen.size} relation OSM, đủ ${tileCount} tile PNG 256x256 theo BBOX ` +
+    `(zoom ${ZOOM_MIN}-${ZOOM_MAX}), ${places.features.length} địa danh có displayName.`,
 );

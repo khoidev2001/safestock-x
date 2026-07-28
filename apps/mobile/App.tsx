@@ -60,16 +60,19 @@ function LoginScreen({ onLogin }: { onLogin: (token: string, user: AuthUser) => 
       <Text style={styles.logo}>SafeStock</Text>
       <Text style={[styles.subtitle, { marginBottom: 28 }]}>Ứng phó hiện trường</Text>
 
-      <Text style={styles.label}>Email</Text>
+      <Text style={styles.label}>Tên đăng nhập</Text>
       <TextInput
         style={styles.input}
         value={email}
         onChangeText={setEmail}
         autoCapitalize="none"
-        keyboardType="email-address"
-        placeholder="email@safestock.vn"
+        autoCorrect={false}
+        keyboardType="default"
+        textContentType="username"
+        autoComplete="username"
+        placeholder="Nhập tên đăng nhập"
         placeholderTextColor={c.muted}
-        aria-label="Email đăng nhập"
+        accessibilityLabel="Tên đăng nhập"
       />
 
       <Text style={styles.label}>Mật khẩu</Text>

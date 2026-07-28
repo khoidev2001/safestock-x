@@ -30,8 +30,18 @@ describe("Mission prepare atomic (E2E PostgreSQL)", () => {
   let foreignWarehouseId: string;
   let fixtureBatchIds: string[];
   const fixtures: Fixture[] = [];
+  const credentials = {
+    warehouse: { email: process.env.SAFESTOCK_E2E_WAREHOUSE_LOGIN, password: process.env.SAFESTOCK_E2E_WAREHOUSE_PASSWORD },
+    admin: { email: process.env.SAFESTOCK_E2E_ADMIN_LOGIN, password: process.env.SAFESTOCK_E2E_ADMIN_PASSWORD },
+    rescue: { email: process.env.SAFESTOCK_E2E_RESCUE_LOGIN, password: process.env.SAFESTOCK_E2E_RESCUE_PASSWORD },
+  };
 
   beforeAll(async () => {
+    for (const [role, credential] of Object.entries(credentials)) {
+      if (!credential.email || !credential.password) {
+        throw new Error(`Thiếu biến môi trường credential E2E cho role ${role}`);
+      }
+    }
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix("api");
@@ -44,19 +54,19 @@ describe("Mission prepare atomic (E2E PostgreSQL)", () => {
 
     const login = await http
       .post("/api/auth/login")
-      .send({ email: "staff@safestock.vn", password: "staff123" })
+      .send({ email: credentials.warehouse.email, password: credentials.warehouse.password })
       .expect(201);
     token = login.body.accessToken as string;
     adminToken = (
-      await http.post("/api/auth/login").send({ email: "admin", password: "admin123@" }).expect(201)
+      await http.post("/api/auth/login").send({ email: credentials.admin.email, password: credentials.admin.password }).expect(201)
     ).body.accessToken as string;
     rescueToken = (
       await http
         .post("/api/auth/login")
-        .send({ email: "rescue@safestock.vn", password: "rescue123" })
+        .send({ email: credentials.rescue.email, password: credentials.rescue.password })
         .expect(201)
     ).body.accessToken as string;
-    const actor = await prisma.user.findUniqueOrThrow({ where: { email: "staff@safestock.vn" } });
+    const actor = await prisma.user.findUniqueOrThrow({ where: { email: credentials.warehouse.email } });
     actorId = actor.id;
     warehouseId = actor.warehouseId as string;
 

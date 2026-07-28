@@ -111,7 +111,7 @@ let dropped = 0;
 
 for (let i = 0; i < features.length; i++) {
   const f = features[i];
-  const name = f.properties?.name ?? f.properties?.fullName ?? `#${i}`;
+  const name = f.properties?.fullName ?? f.properties?.name ?? `#${i}`;
   let data;
   try {
     data = await overpass(buildQuery(bboxOf(f.geometry)));

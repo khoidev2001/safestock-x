@@ -69,8 +69,12 @@ export class ReadinessService {
       oldScore?.operationalStatus !== assessment.operationalStatus &&
       assessment.operationalStatus !== "READY"
     ) {
+      const warehouse = await this.prisma.warehouse.findUnique({
+        where: { id: warehouseId },
+        select: { organizationId: true },
+      });
       const reason = assessment.blockers[0]?.title ?? assessment.recommendedActions[0];
-      await this.notifications
+      if (warehouse) await this.notifications
         .create({
           recipientRole: UserRole.WAREHOUSE,
           kind: NotificationKind.READINESS_DEGRADED,
@@ -80,6 +84,7 @@ export class ReadinessService {
               : "Kho có việc cần xử lý",
           body: reason ?? `Điểm tham khảo hiện tại ${warehouseScore.score}/100`,
           warehouseId,
+          organizationId: warehouse.organizationId,
         })
         .catch((error) => {
           this.log.warn(`Gửi thông báo readiness lỗi (kho ${warehouseId}): ${error.message}`);

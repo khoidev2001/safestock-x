@@ -9,6 +9,10 @@
 import { io } from "socket.io-client";
 
 const API = process.env.API_URL ?? "http://localhost:3100";
+const ADMIN_LOGIN = process.env.SAFESTOCK_DEMO_ADMIN_LOGIN?.trim();
+const ADMIN_PASSWORD = process.env.SAFESTOCK_DEMO_ADMIN_PASSWORD;
+const RESCUE_LOGIN = process.env.SAFESTOCK_DEMO_RESCUE_LOGIN?.trim();
+const RESCUE_PASSWORD = process.env.SAFESTOCK_DEMO_RESCUE_PASSWORD;
 
 // ---- tiện ích in đẹp (không phụ thuộc thư viện) ----
 const C = {
@@ -60,20 +64,25 @@ async function api(method, path, body) {
 }
 
 async function main() {
+  if (!ADMIN_LOGIN || !ADMIN_PASSWORD || !RESCUE_LOGIN || !RESCUE_PASSWORD) {
+    throw new Error(
+      "Demo yêu cầu SAFESTOCK_DEMO_ADMIN_LOGIN, SAFESTOCK_DEMO_ADMIN_PASSWORD, SAFESTOCK_DEMO_RESCUE_LOGIN và SAFESTOCK_DEMO_RESCUE_PASSWORD.",
+    );
+  }
   console.log(`${C.bold}${C.blue}\n╔══════════════════════════════════════════════════╗`);
   console.log(`║   Ứng phó nhanh — DEMO BACKEND (terminal)          ║`);
   console.log(`╚══════════════════════════════════════════════════╝${C.reset}`);
 
   // ---- Bước 0: đăng nhập ----
   step(0, "Đăng nhập + kiểm tra phân quyền");
-  const login = await api("POST", "/api/auth/login", { email: "admin", password: "admin123@" });
+  const login = await api("POST", "/api/auth/login", { email: ADMIN_LOGIN, password: ADMIN_PASSWORD });
   token = login.accessToken;
   ok(`Đăng nhập ADMIN thành công (${login.user.role})`);
 
   // Kiểm phân quyền: RESCUE không xuất kho được
   const rescueLogin = await api("POST", "/api/auth/login", {
-    email: "rescue@safestock.vn",
-    password: "rescue123",
+    email: RESCUE_LOGIN,
+    password: RESCUE_PASSWORD,
   });
   const rescueRes = await fetch(`${API}/api/inventory/export`, {
     method: "POST",

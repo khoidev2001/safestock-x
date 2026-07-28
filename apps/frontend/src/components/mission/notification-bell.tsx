@@ -16,8 +16,15 @@ export function NotificationBell({ onOpenMission }: { onOpenMission?: () => void
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
 
-  function openMission(missionId: string) {
-    focusMission(missionId);
+  function openMission(missionId: string, kind: string) {
+    focusMission(
+      missionId,
+      kind === "INCIDENT_REPORTED" ||
+        kind === "WAREHOUSE_REQUEST_REVIEW" ||
+        kind === "WAREHOUSE_REQUEST_ACCEPTED"
+        ? "operator-report"
+        : "mission",
+    );
     onOpenMission?.();
     setOpen(false);
   }
@@ -91,7 +98,9 @@ export function NotificationBell({ onOpenMission }: { onOpenMission?: () => void
                     <button
                       key={n.id}
                       type="button"
-                      onClick={() => openMission(n.missionId as string)}
+                      onClick={() =>
+                        openMission(n.missionId as string, n.kind)
+                      }
                       className="block w-full border-b px-4 py-3 text-left transition last:border-0 hover:bg-[var(--surface-2)]"
                     >
                       <p className="text-sm font-medium">{n.title}</p>

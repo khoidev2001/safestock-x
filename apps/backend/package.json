@@ -11,6 +11,8 @@
     "prisma:push": "prisma db push --skip-generate",
     "prisma:studio": "prisma studio",
     "seed": "ts-node prisma/seed.ts",
+    "reporter:provision": "ts-node prisma/provision-reporter.ts",
+    "warehouse-locations:backfill": "ts-node prisma/backfill-hamlet-locations.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:e2e": "jest --config test/jest-e2e.config.js --runInBand",

@@ -11,7 +11,7 @@ export interface AdminUser {
 }
 
 export interface CreateUserInput {
-  email: string;
+  email?: string;
   password: string;
   fullName: string;
   role: UserRole;

@@ -170,103 +170,133 @@ button:disabled {
   font-variation-settings: "FILL" 1;
 }
 
-/* Nhãn tên kho luôn hiện trên bản đồ (kiểu ghim Google Maps).
-   Nền trắng mờ + viền để đọc rõ trên cả ảnh vệ tinh lẫn bản đồ đường phố. */
-.leaflet-tooltip.wh-label {
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(0, 0, 0, 0.15);
-  border-radius: 6px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-  color: #1a1a1a;
-  font-weight: 600;
-  font-size: 12px;
-  line-height: 1.1;
-  padding: 2px 7px;
-  white-space: nowrap;
-  /* Để nhãn không chặn click vào marker/tile bên dưới. */
-  pointer-events: none;
-}
-/* Kho tổng xã nổi bật hơn: viền và chữ theo màu nhấn. */
-.leaflet-tooltip.wh-label-central {
-  color: #1f7a52;
-  border-color: rgba(47, 158, 110, 0.55);
-  font-size: 12.5px;
-}
-/* Ẩn mũi tên mặc định của tooltip cho gọn. */
-.leaflet-tooltip.wh-label::before {
-  display: none;
-}
-
-/* Nhãn tên xã/phường đặt ở tâm xã (kiểu nhãn hành chính Google Maps).
-   Không nền, chữ có viền trắng (halo) để đọc rõ trên mọi lớp nền. */
-.commune-label-wrap {
+/* App-owned map markers and labels stay readable over satellite imagery. */
+.map-marker-icon-wrap,
+.map-label-icon-wrap {
   background: transparent !important;
   border: none !important;
-  /* Cho phép nhãn tràn ra khỏi hộp 0x0 và căn giữa quanh tâm. */
   overflow: visible;
-  width: 0;
-  height: 0;
-  pointer-events: none;
 }
-.commune-label {
+
+.map-label-icon-wrap {
+  height: 0 !important;
+  width: 0 !important;
+  pointer-events: none !important;
+}
+
+.map-marker-glyph {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 2px solid rgb(255 255 255 / 96%);
+  border-radius: 999px;
+  box-shadow:
+    0 1px 2px rgb(15 23 42 / 45%),
+    0 3px 8px rgb(15 23 42 / 28%);
+  line-height: 1;
+}
+
+.map-marker-glyph svg {
+  display: block;
+}
+
+.map-marker-icon-selected .map-marker-glyph {
+  outline: 3px solid #facc15;
+  outline-offset: 2px;
+  box-shadow:
+    0 0 0 5px rgb(250 204 21 / 28%),
+    0 3px 10px rgb(15 23 42 / 45%);
+}
+
+.map-commune-label,
+.map-warehouse-label,
+.map-place-label > span:last-child {
+  white-space: nowrap;
+  color: #172033;
+  text-shadow:
+    -1px -1px 0 rgb(255 255 255 / 98%),
+    1px -1px 0 rgb(255 255 255 / 98%),
+    -1px 1px 0 rgb(255 255 255 / 98%),
+    1px 1px 0 rgb(255 255 255 / 98%),
+    0 0 4px #fff,
+    0 0 7px #fff;
+  pointer-events: none;
+  user-select: none;
+}
+
+.map-commune-label {
   position: absolute;
   transform: translate(-50%, -50%);
-  white-space: nowrap;
+  color: #6b250e;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.025em;
+}
+
+.map-warehouse-label {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 28px));
+  border: 1px solid rgb(255 255 255 / 85%);
+  border-radius: 5px;
+  background: rgb(255 255 255 / 88%);
+  box-shadow: 0 1px 3px rgb(15 23 42 / 30%);
+  padding: 2px 6px;
+  color: #153c26;
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.02em;
-  color: #7a2e12;
-  text-shadow:
-    0 0 3px #fff,
-    0 0 3px #fff,
-    0 0 3px #fff,
-    0 0 3px #fff;
+  line-height: 1.15;
+  text-shadow: none;
+}
+
+.map-warehouse-label-central-warehouse {
+  color: #166534;
+  font-size: 13px;
+}
+
+.map-place-label {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transform: translate(-11px, -50%);
+  white-space: nowrap;
   pointer-events: none;
   user-select: none;
 }
 
-/* Ghim địa danh tự vẽ (thay tile nhãn có chữ "huyện"): chấm tròn màu theo nhóm
-   + tên tô màu, halo trắng để đọc rõ — kiểu nhãn POI của Google Maps. */
-.place-pin-wrap {
-  background: transparent !important;
-  border: none !important;
-  overflow: visible;
-  width: 0;
-  height: 0;
-  pointer-events: none;
-}
-.place-pin {
-  position: absolute;
-  left: 0;
-  top: 0;
-  transform: translate(-4px, -50%);
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  white-space: nowrap;
-  pointer-events: none;
-  user-select: none;
-}
-.place-dot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  border: 1.5px solid #fff;
-  box-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
-}
-.place-name {
+.map-place-label > span:last-child {
   font-size: 11.5px;
   font-weight: 600;
-  letter-spacing: 0.01em;
-  text-shadow:
-    0 0 3px #fff,
-    0 0 3px #fff,
-    0 0 3px #fff,
-    0 0 3px #fff;
+  letter-spacing: 0.005em;
 }
-/* Thôn/xóm/làng — địa danh quan trọng nhất cho điều phối cứu hộ: to & đậm hơn. */
-.place-name.place-name-place {
+
+.map-place-label-place > span:last-child {
+  color: #6b250e;
   font-size: 12.5px;
   font-weight: 700;
+}
+
+@media (min-width: 768px) {
+  .map-commune-label {
+    font-size: 15px;
+  }
+
+  .map-place-label-place > span:last-child {
+    font-size: 13px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .map-marker-icon-selected .map-marker-glyph {
+    animation: map-marker-pulse 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes map-marker-pulse {
+  50% {
+    outline-color: #f59e0b;
+    outline-offset: 4px;
+  }
 }

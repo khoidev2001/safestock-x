@@ -1,68 +1,134 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ColorIcon } from "@/components/shared/color-icon";
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { ColorIcon } from "@/components/shared/color-icon";
 import { useAuth } from "@/lib/auth-store";
 import {
   listAllWarehouses,
   updateWarehouseLocation,
   type AdminWarehouse,
 } from "@/lib/warehouse-api";
+import { warehouseLocationLabel } from "@/lib/warehouse-location";
+import { MapMarkerGlyph, mapMarkerLabel, type MapMarkerKind } from "./map-markers";
+import {
+  beginWarehouseSave,
+  clearMatchingSavedDraft,
+  finishWarehouseSave,
+  mergeWarehouseDraft,
+  type WarehouseDraft,
+} from "./map-view-state";
 
-const MapCanvas = dynamic(() => import("./map-canvas").then((m) => m.MapCanvas), {
+const MapCanvas = dynamic(() => import("./map-canvas").then((module) => module.MapCanvas), {
   ssr: false,
   loading: () => (
     <div className="h-[calc(100dvh-190px)] min-h-[520px] animate-pulse rounded-md border bg-[var(--surface)]" />
   ),
 });
 
-/** Bản đồ kho trong xã (Leaflet + OSM + ranh giới xã). ADMIN bật dev mode để ghim toạ độ. */
+/** Bản đồ kho trong xã. ADMIN bật chế độ chỉnh để ghim và lưu tọa độ kho. */
 export function MapView({ warehouseId }: { warehouseId: string }) {
-  const isAdmin = useAuth((s) => s.user?.role) === "ADMIN";
-  const qc = useQueryClient();
+  const isAdmin = useAuth((state) => state.user?.role) === "ADMIN";
+  const queryClient = useQueryClient();
   const [devMode, setDevMode] = useState(false);
   const [pickingId, setPickingId] = useState<string | null>(null);
-  // Toạ độ tạm (chưa lưu) theo id — cho phép kéo/click nhiều lần rồi Lưu.
-  const [draft, setDraft] = useState<Record<string, { lat: number; lng: number }>>({});
+  const [draft, setDraft] = useState<WarehouseDraft>({});
+  const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set());
+  const pendingIdsRef = useRef<Set<string>>(new Set());
+  const [saveFeedback, setSaveFeedback] = useState<
+    Record<string, { kind: "success" | "error"; message: string }>
+  >({});
 
-  const query = useQuery({ queryKey: ["all-warehouses", warehouseId], queryFn: listAllWarehouses });
+  const query = useQuery({
+    queryKey: ["all-warehouses", warehouseId],
+    queryFn: listAllWarehouses,
+  });
 
   const save = useMutation({
     mutationFn: ({ id, lat, lng }: { id: string; lat: number; lng: number }) =>
       updateWarehouseLocation(id, lat, lng),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["all-warehouses", warehouseId] });
+    onSuccess: (updated, variables) => {
+      queryClient.setQueryData<AdminWarehouse[]>(["all-warehouses", warehouseId], (current) =>
+        current?.map((warehouse) => (warehouse.id === updated.id ? updated : warehouse)),
+      );
+      setDraft((current) => clearMatchingSavedDraft(current, variables.id, variables));
+      setPickingId((current) => (current === variables.id ? null : current));
+      setSaveFeedback((current) => ({
+        ...current,
+        [variables.id]: {
+          kind: "success",
+          message: `Đã lưu vị trí kho ${updated.name}.`,
+        },
+      }));
+      void queryClient.invalidateQueries({
+        queryKey: ["all-warehouses", warehouseId],
+      });
+    },
+    onError: (reason: Error, variables) => {
+      setSaveFeedback((current) => ({
+        ...current,
+        [variables.id]: {
+          kind: "error",
+          message: reason.message || "Không thể lưu vị trí kho. Draft vẫn được giữ để thử lại.",
+        },
+      }));
+    },
+    onSettled: (_data, _error, variables) => {
+      pendingIdsRef.current = finishWarehouseSave(pendingIdsRef.current, variables.id);
+      setPendingIds(pendingIdsRef.current);
     },
   });
 
-  const warehouses = mergeDraft(query.data ?? [], draft);
-  const unlocated = warehouses.filter((w) => w.lat == null || w.lng == null);
+  const persistedWarehouses = query.data ?? [];
+  const warehouses = mergeWarehouseDraft(persistedWarehouses, draft);
+  const unlocated = warehouses.filter(
+    (warehouse) => warehouse.lat == null || warehouse.lng == null,
+  );
+  const dirtyIds = Object.keys(draft);
 
   function setDraftCoord(id: string, lat: number, lng: number) {
-    setDraft((d) => ({ ...d, [id]: { lat, lng } }));
-  }
-
-  function saveOne(id: string) {
-    const c = draft[id];
-    if (!c) return;
-    save.mutate({ id, lat: c.lat, lng: c.lng });
-    setDraft((d) => {
-      const next = { ...d };
+    setDraft((current) => ({ ...current, [id]: { lat, lng } }));
+    setSaveFeedback((current) => {
+      if (!current[id]) return current;
+      const next = { ...current };
       delete next[id];
       return next;
     });
-    if (pickingId === id) setPickingId(null);
   }
 
-  const dirtyIds = Object.keys(draft);
+  function saveOne(id: string) {
+    const coordinate = draft[id];
+    if (!coordinate) return;
+    const nextPending = beginWarehouseSave(pendingIdsRef.current, id);
+    if (!nextPending) return;
+    pendingIdsRef.current = nextPending;
+    setPendingIds(nextPending);
+    setSaveFeedback((current) => {
+      if (!current[id]) return current;
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+    save.mutate({ id, lat: coordinate.lat, lng: coordinate.lng });
+  }
+
+  function selectWarehouse(id: string) {
+    setPickingId((current) => (current === id ? null : id));
+    setSaveFeedback((current) => {
+      if (!current[id]) return current;
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+  }
 
   return (
     <div className="grid gap-4 xl:grid-cols-[1fr_320px]">
       <div className="space-y-3">
         <MapCanvas
           warehouses={warehouses}
+          persistedWarehouses={persistedWarehouses}
           devMode={devMode}
           pickingId={pickingId}
           onMarkerMove={setDraftCoord}
@@ -70,18 +136,17 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
             if (pickingId) setDraftCoord(pickingId, lat, lng);
           }}
         />
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-[var(--text-muted)]">
-          <Legend color="var(--color-accent, #2f9e6e)" label="Kho tổng xã" />
-          <Legend color="var(--text-muted, #8a8f98)" label="Kho thôn" />
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-[var(--text-muted)]">
+          <MapLegend kind="central-warehouse" />
+          <MapLegend kind="hamlet-warehouse" />
           <span className="text-[var(--border)]">|</span>
-          {/* Màu ghim địa danh — khớp PLACE_COLORS trong map-canvas. */}
-          <Legend color="#7a2e12" label="Thôn/xóm" />
-          <Legend color="#d64545" label="Y tế" />
-          <Legend color="#2f6fd6" label="Trường học" />
-          <Legend color="#7b41c9" label="Hành chính" />
-          <Legend color="#1f7a52" label="Chợ/cửa hàng" />
-          <Legend color="#a06a1f" label="Tôn giáo" />
-          <span>· Ranh giới 102 xã/phường tỉnh Đắk Lắk (OSM) · địa danh đã bỏ nhãn “huyện”</span>
+          <MapLegend kind="place" />
+          <MapLegend kind="health" />
+          <MapLegend kind="school" />
+          <MapLegend kind="civic" />
+          <MapLegend kind="commerce" />
+          <MapLegend kind="worship" />
+          <span>· Ranh giới xã/phường và địa danh do ứng dụng hiển thị trên ảnh vệ tinh</span>
         </div>
       </div>
 
@@ -95,8 +160,9 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
             <button
               type="button"
               onClick={() => {
-                setDevMode((v) => !v);
+                setDevMode((value) => !value);
                 setPickingId(null);
+                setSaveFeedback({});
               }}
               className={`mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition active:translate-y-px ${
                 devMode ? "bg-[var(--color-accent)] text-[var(--color-accent-fg)]" : "border"
@@ -107,37 +173,57 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
             </button>
           ) : (
             <p className="mt-2 text-xs text-[var(--text-muted)]">
-              Chỉ quản trị xã ghim được toạ độ kho.
+              Chỉ quản trị xã ghim được tọa độ kho.
             </p>
           )}
+          {query.isError ? (
+            <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              Không tải được danh sách kho: {query.error.message || "vui lòng thử lại."}
+              <button
+                type="button"
+                className="ml-1 font-semibold underline"
+                onClick={() => void query.refetch()}
+              >
+                Thử lại
+              </button>
+            </p>
+          ) : null}
         </section>
 
-        {devMode && (
+        {devMode && !query.isError ? (
           <section className="rounded-md border bg-[var(--surface)] p-4">
-            <h4 className="text-sm font-semibold">Ghim toạ độ</h4>
+            <h4 className="text-sm font-semibold">Ghim tọa độ</h4>
             <p className="mt-1 text-xs text-[var(--text-muted)]">
-              Kéo dấu ghim, hoặc chọn một kho rồi bấm vào vị trí tương ứng trên bản đồ. Sau đó chọn
-              Lưu.
+              Chọn một kho, bấm đúng vị trí trên ảnh vệ tinh hoặc kéo icon của kho đang chọn. Draft
+              chỉ mất sau khi backend xác nhận.
             </p>
             <ul className="mt-3 space-y-2">
-              {warehouses.map((w) => {
-                const dirty = dirtyIds.includes(w.id);
-                const picking = pickingId === w.id;
+              {warehouses.map((warehouse) => {
+                const dirty = dirtyIds.includes(warehouse.id);
+                const picking = pickingId === warehouse.id;
+                const saving = pendingIds.has(warehouse.id);
+                const feedback = saveFeedback[warehouse.id];
                 return (
-                  <li key={w.id} className="rounded-md border bg-[var(--surface-2)] px-3 py-2">
+                  <li
+                    key={warehouse.id}
+                    className="rounded-md border bg-[var(--surface-2)] px-3 py-2"
+                  >
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{w.name}</p>
+                        <p className="truncate text-sm font-medium">{warehouse.name}</p>
                         <p className="tabular text-xs text-[var(--text-muted)]">
-                          {w.lat != null && w.lng != null
-                            ? `${w.lat.toFixed(5)}, ${w.lng.toFixed(5)}`
+                          {warehouse.lat != null && warehouse.lng != null
+                            ? `${warehouse.lat.toFixed(5)}, ${warehouse.lng.toFixed(5)}`
                             : "chưa ghim"}
+                        </p>
+                        <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+                          {warehouseLocationLabel(warehouse)}
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
                         <button
                           type="button"
-                          onClick={() => setPickingId(picking ? null : w.id)}
+                          onClick={() => selectWarehouse(warehouse.id)}
                           className={`rounded-md px-2 py-1 text-xs font-medium transition ${
                             picking
                               ? "bg-[var(--color-accent)] text-[var(--color-accent-fg)]"
@@ -147,60 +233,76 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
                         >
                           {picking ? "Đang chọn…" : "Chọn"}
                         </button>
-                        {dirty && (
+                        {dirty ? (
                           <button
                             type="button"
-                            onClick={() => saveOne(w.id)}
-                            disabled={save.isPending}
+                            onClick={() => saveOne(warehouse.id)}
+                            disabled={saving}
                             className="inline-flex items-center gap-1 rounded-md bg-[var(--color-accent)] px-2 py-1 text-xs font-semibold text-[var(--color-accent-fg)] disabled:opacity-60"
                           >
-                            <ColorIcon name="save" size={15} tone="green" /> Lưu
+                            <ColorIcon
+                              className={saving ? "animate-spin" : undefined}
+                              name={saving ? "loading" : "save"}
+                              size={15}
+                              tone="green"
+                            />
+                            {saving ? "Đang lưu…" : "Lưu"}
                           </button>
-                        )}
+                        ) : null}
                       </div>
                     </div>
+                    {feedback?.kind === "error" ? (
+                      <p
+                        role="alert"
+                        className="mt-2 rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-700"
+                      >
+                        {feedback.message} Draft chưa bị xóa; hãy kiểm tra kết nối rồi bấm Lưu lại.
+                      </p>
+                    ) : null}
+                    {feedback?.kind === "success" ? (
+                      <p
+                        role="status"
+                        className="mt-2 rounded-md border border-green-200 bg-green-50 px-2 py-1.5 text-xs text-green-700"
+                      >
+                        {feedback.message}
+                      </p>
+                    ) : null}
                   </li>
                 );
               })}
             </ul>
           </section>
-        )}
+        ) : null}
 
-        {!devMode && unlocated.length > 0 && (
+        {!devMode && unlocated.length > 0 ? (
           <section className="rounded-md border bg-[var(--surface)] p-4">
             <h4 className="text-sm font-semibold text-[var(--color-attention)]">
-              Chưa ghim toạ độ ({unlocated.length})
+              Chưa ghim tọa độ ({unlocated.length})
             </h4>
             <ul className="mt-2 space-y-1 text-sm text-[var(--text-muted)]">
-              {unlocated.map((w) => (
-                <li key={w.id}>• {w.name}</li>
+              {unlocated.map((warehouse) => (
+                <li key={warehouse.id}>
+                  • {warehouse.name} — chưa xác minh được nhà văn hóa từ nguồn công khai
+                </li>
               ))}
             </ul>
-            {isAdmin && (
+            {isAdmin ? (
               <p className="mt-2 text-xs text-[var(--text-muted)]">
                 Bật chế độ ghim để đặt vị trí.
               </p>
-            )}
+            ) : null}
           </section>
-        )}
+        ) : null}
       </aside>
     </div>
   );
 }
 
-/** Ghép toạ độ tạm (draft) vào danh sách kho để map hiển thị ngay khi kéo/click. */
-function mergeDraft(
-  list: AdminWarehouse[],
-  draft: Record<string, { lat: number; lng: number }>,
-): AdminWarehouse[] {
-  return list.map((w) => (draft[w.id] ? { ...w, lat: draft[w.id].lat, lng: draft[w.id].lng } : w));
-}
-
-function Legend({ color, label }: { color: string; label: string }) {
+function MapLegend({ kind }: { kind: MapMarkerKind }) {
   return (
     <span className="flex items-center gap-1.5">
-      <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
-      {label}
+      <MapMarkerGlyph kind={kind} size={22} />
+      {mapMarkerLabel(kind)}
     </span>
   );
 }

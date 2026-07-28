@@ -9,7 +9,9 @@ import {
   type Warehouse,
   type WarehouseZone,
   type Shelf,
+  UserRole,
 } from "@prisma/client";
+import { loadHamletCulturalHouseLocations } from "./hamlet-location-data";
 import * as bcrypt from "bcryptjs";
 import {
   CENTRAL_BATCHES,
@@ -29,12 +31,95 @@ import {
 
 const prisma = new PrismaClient();
 const COMMUNE_ID = "dong-xuan";
+export const REPORTER_PASSWORD_ENV = "SAFESTOCK_REPORTER_PASSWORD";
+export const WAREHOUSE_PASSWORD_ENV = "SAFESTOCK_HAMLET_WAREHOUSE_PASSWORD";
+export const ADMIN_PASSWORD_ENV = "SAFESTOCK_ADMIN_PASSWORD";
+export const CENTRAL_WAREHOUSE_PASSWORD_ENV = "SAFESTOCK_CENTRAL_WAREHOUSE_PASSWORD";
+export const RESCUE_PASSWORD_ENV = "SAFESTOCK_RESCUE_PASSWORD";
+export const SEED_RESET_CONFIRMATION = "--confirm-demo-reset";
+
+export function assertSeedResetConfirmed(args: string[] = process.argv.slice(2)): void {
+  if (args.length !== 1 || args[0] !== SEED_RESET_CONFIRMATION) {
+    throw new Error(
+      `Seed bị từ chối: cần truyền chính xác ${SEED_RESET_CONFIRMATION} sau khi xác nhận database demo có thể bị reset`,
+    );
+  }
+}
+
+export function getRequiredSecret(
+  name: string,
+  environment: NodeJS.ProcessEnv = process.env,
+): string {
+  const value = environment[name];
+  if (!value || value.trim() === "") {
+    throw new Error(`${name} phải được cung cấp qua biến môi trường`);
+  }
+  return value;
+}
+
+export function reporterLoginForLocationKey(locationKey: string): string {
+  return `${normalizeLocationKey(locationKey)}_baocao`;
+}
+
+export function warehouseLoginForLocationKey(locationKey: string): string {
+  return `kho${normalizeLocationKey(locationKey)}`;
+}
+
+export function buildSeededReporterInput(params: {
+  organizationId: string;
+  warehouseId: string;
+  warehouseName: string;
+  locationKey: string;
+  passwordHash: string;
+}) {
+  return {
+    organizationId: params.organizationId,
+    email: reporterLoginForLocationKey(params.locationKey),
+    passwordHash: params.passwordHash,
+    fullName: `Trưởng thôn ${params.warehouseName.replace("Kho ", "")}`,
+    role: UserRole.REPORTER,
+    warehouseId: params.warehouseId,
+  };
+}
+
+export function buildSeededHamletLeaderInput(params: {
+  organizationId: string;
+  warehouseId: string;
+  warehouseName: string;
+  locationKey: string;
+  passwordHash: string;
+}) {
+  return {
+    organizationId: params.organizationId,
+    email: warehouseLoginForLocationKey(params.locationKey),
+    passwordHash: params.passwordHash,
+    fullName: `Trưởng ${params.warehouseName.replace("Kho ", "")}`,
+    role: UserRole.WAREHOUSE,
+    warehouseId: params.warehouseId,
+  };
+}
+
+export function requireReportingHamlet(warehouses: Warehouse[]): Warehouse {
+  const warehouse = warehouses[0];
+  if (!warehouse) {
+    throw new Error("Không thể tạo REPORTER khi không có kho thôn");
+  }
+  return warehouse;
+}
+
+function normalizeLocationKey(locationKey: string): string {
+  const normalized = locationKey.trim().toLowerCase().replace(/-/g, "");
+  if (!/^[a-z0-9]+$/.test(normalized)) throw new Error("locationKey kho thôn không hợp lệ");
+  return normalized;
+}
 
 async function resetDatabase() {
   await prisma.incidentAction.deleteMany();
   await prisma.incidentEvidence.deleteMany();
   await prisma.incident.deleteMany();
+  await prisma.missionWarehouseRequest.deleteMany();
   await prisma.missionRequirement.deleteMany();
+  await prisma.missionAudio.deleteMany();
   await prisma.mission.deleteMany();
   await prisma.notification.deleteMany();
   await prisma.monthlyStockReport.deleteMany();
@@ -64,12 +149,22 @@ async function resetDatabase() {
 }
 
 async function main() {
-  await resetDatabase();
+  assertSeedResetConfirmed();
 
   const validationErrors = validateSeedDataset();
   if (validationErrors.length > 0) {
     throw new Error(`Bộ dữ liệu seed không hợp lệ:\n- ${validationErrors.join("\n- ")}`);
   }
+  if (HAMLET_WAREHOUSES.length === 0) {
+    throw new Error("Bộ dữ liệu seed phải có ít nhất một kho thôn cho REPORTER");
+  }
+
+  const reporterPassword = requiredSecret(REPORTER_PASSWORD_ENV);
+  const hamletWarehousePassword = requiredSecret(WAREHOUSE_PASSWORD_ENV);
+  const adminPassword = requiredSecret(ADMIN_PASSWORD_ENV);
+  const centralWarehousePassword = requiredSecret(CENTRAL_WAREHOUSE_PASSWORD_ENV);
+  const rescuePassword = requiredSecret(RESCUE_PASSWORD_ENV);
+  await resetDatabase();
 
   const organization = await prisma.organization.create({
     data: { name: "Hội Chữ thập đỏ xã Đồng Xuân" },
@@ -80,21 +175,21 @@ async function main() {
       {
         organizationId: organization.id,
         email: "admin",
-        passwordHash: password("admin123@"),
+        passwordHash: password(adminPassword),
         fullName: "Quản trị hệ thống",
         role: "ADMIN",
       },
       {
         organizationId: organization.id,
         email: "staff@safestock.vn",
-        passwordHash: password("staff123"),
+        passwordHash: password(centralWarehousePassword),
         fullName: "Phụ trách kho trung tâm",
         role: "WAREHOUSE",
       },
       {
         organizationId: organization.id,
         email: "rescue@safestock.vn",
-        passwordHash: password("rescue123"),
+        passwordHash: password(rescuePassword),
         fullName: "Đội cứu hộ Đồng Xuân",
         role: "RESCUE",
       },
@@ -130,21 +225,10 @@ async function main() {
   const hamletLeaderIds = await createHamletLeaders(
     organization.id,
     hamletWarehouses,
-    password("truongthon123"),
+    password(hamletWarehousePassword),
   );
 
-  // Trưởng thôn báo cáo tình huống từ mobile (role REPORTER) — scope kho thôn đầu tiên.
-  const reportingHamlet = hamletWarehouses[0] ?? centralWarehouse;
-  await prisma.user.create({
-    data: {
-      organizationId: organization.id,
-      email: "truongthon@safestock.vn",
-      passwordHash: password("reporter123"),
-      fullName: `Trưởng thôn ${reportingHamlet.name.replace("Kho ", "")}`,
-      role: "REPORTER",
-      warehouseId: reportingHamlet.id,
-    },
-  });
+  await createHamletReporters(organization.id, hamletWarehouses, password(reporterPassword));
 
   const deviceByCode = await seedDevices(prisma, {
     centralWarehouse,
@@ -300,8 +384,13 @@ async function createCentralBatches(
 async function createHamletWarehouses(organizationId: string, itemBySku: Map<string, string>) {
   const warehouses: Warehouse[] = [];
   const batchRefs: SeedBatchRef[] = [];
+  const culturalHouseByKey = new Map(
+    loadHamletCulturalHouseLocations().locations.map((location) => [location.key, location]),
+  );
   for (let index = 0; index < HAMLET_WAREHOUSES.length; index++) {
     const definition = HAMLET_WAREHOUSES[index];
+    const culturalHouse = culturalHouseByKey.get(definition.key);
+    const approved = culturalHouse?.reviewStatus === "APPROVED" ? culturalHouse : null;
     const warehouse = await prisma.warehouse.create({
       data: {
         organizationId,
@@ -309,8 +398,16 @@ async function createHamletWarehouses(organizationId: string, itemBySku: Map<str
         location: `${definition.name.replace("Kho ", "")}, xã Đồng Xuân, tỉnh Đắk Lắk`,
         kind: "HAMLET",
         communeId: COMMUNE_ID,
-        lat: definition.lat,
-        lng: definition.lng,
+        lat: approved?.lat ?? null,
+        lng: approved?.lng ?? null,
+        locationKey: definition.key,
+        locationMethod: approved?.method,
+        locationSourceName: approved?.sourceName,
+        locationSourceUrl: approved?.sourceUrl,
+        locationSourceRef: approved?.sourceRef,
+        locationCheckedAt: approved ? new Date(approved.checkedAt) : null,
+        locationMethodNote: approved?.methodNote,
+        locationUpdatedAt: approved ? new Date(approved.checkedAt) : null,
       },
     });
     warehouses.push(warehouse);
@@ -366,18 +463,40 @@ async function createHamletLeaders(
   for (let index = 0; index < warehouses.length; index++) {
     const warehouse = warehouses[index];
     const user = await prisma.user.create({
-      data: {
+      data: buildSeededHamletLeaderInput({
         organizationId,
-        email: `truongthon${index + 1}@safestock.vn`,
-        passwordHash,
-        fullName: `Trưởng ${warehouse.name.replace("Kho ", "")}`,
-        role: "WAREHOUSE",
         warehouseId: warehouse.id,
-      },
+        warehouseName: warehouse.name,
+        locationKey: requiredWarehouseLocationKey(warehouse),
+        passwordHash,
+      }),
     });
     leaderIds.set(warehouse.id, user.id);
   }
   return leaderIds;
+}
+
+async function createHamletReporters(
+  organizationId: string,
+  warehouses: Warehouse[],
+  passwordHash: string,
+) {
+  for (const warehouse of warehouses) {
+    await prisma.user.create({
+      data: buildSeededReporterInput({
+        organizationId,
+        warehouseId: warehouse.id,
+        warehouseName: warehouse.name,
+        locationKey: requiredWarehouseLocationKey(warehouse),
+        passwordHash,
+      }),
+    });
+  }
+}
+
+function requiredWarehouseLocationKey(warehouse: Warehouse): string {
+  if (!warehouse.locationKey) throw new Error(`Kho ${warehouse.name} thiếu locationKey`);
+  return warehouse.locationKey;
 }
 
 async function seedNeighbors(warehouseId: string) {
@@ -418,9 +537,13 @@ function legacyStatus(definition: SeedBatchDefinition): ItemStatus {
   return ItemStatus.AVAILABLE;
 }
 
-main()
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+const requiredSecret = (name: string): string => getRequiredSecret(name);
+
+if (require.main === module) {
+  main()
+    .catch((error: unknown) => {
+      console.error(error instanceof Error ? error.message : "Seed thất bại");
+      process.exitCode = 1;
+    })
+    .finally(() => prisma.$disconnect());
+}

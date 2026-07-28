@@ -7,10 +7,13 @@
     "dev": "next dev -p 3200",
     "build": "next build",
     "start": "next start -p 3200",
+    "test": "node scripts/run-map-tests.mjs",
+    "test:map": "node scripts/run-map-tests.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "gis:download-boundaries": "node scripts/download-osm-communes.mjs",
     "gis:download-tiles": "node scripts/download-tiles.mjs",
+    "gis:enrich-places": "node scripts/enrich-daklak-places.mjs",
     "gis:verify": "node scripts/verify-gis.mjs"
   },
   "dependencies": {

@@ -4,11 +4,13 @@ import { MISSION_NORMS, NormRule } from "./mission.config";
 /** Tình huống đã parse (từ AI hoặc nhập tay). */
 export interface IncidentInput {
   incidentType: IncidentType;
+  location?: string | null;
   affectedPeople: number;
   durationHours: number;
   children: number;
   elderly: number;
   medicalSupportCases: number;
+  priority?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 }
 
 /** Nhu cầu 1 loại vật tư. */

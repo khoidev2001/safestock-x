@@ -3,6 +3,7 @@
 // Chạy: node scripts/download-daklak-communes.mjs
 import fs from "node:fs/promises";
 import path from "node:path";
+import officialManifest from "../data/daklak-official-units.json" with { type: "json" };
 
 const OUTPUT = "public/geo/daklak-communes.geojson";
 const USER_AGENT = "UngPhoNhanh-GIS/1.0 (Dak Lak boundary builder)";
@@ -11,31 +12,9 @@ const PROVINCE_HINT = "Đắk Lắk";
 const POLYGON_THRESHOLD = "0.0003";
 const RATE_LIMIT_MS = 1200; // tôn trọng giới hạn Nominatim (1 req/s)
 
-// 102 đơn vị hành chính cấp xã (Nghị quyết 1660/NQ-UBTVQH15). Nguồn: TTXVN.
-const UNITS = [
-  "Xã Hòa Phú", "Xã Ea Drông", "Xã Ea Súp", "Xã Ea Rốk", "Xã Ea Bung",
-  "Xã Ea Wer", "Xã Ea Nuôl", "Xã Ea Kiết", "Xã Ea M'droh", "Xã Quảng Phú",
-  "Xã Cuôr Đăng", "Xã Cư M'gar", "Xã Ea Tul", "Xã Pơng Drang", "Xã Krông Búk",
-  "Xã Cư Pơng", "Xã Ea Khảl", "Xã Ea Drăng", "Xã Ea Wy", "Xã Ea Hiao",
-  "Xã Krông Năng", "Xã Dliê Ya", "Xã Tam Giang", "Xã Phú Xuân", "Xã Krông Pắc",
-  "Xã Ea Knuếc", "Xã Tân Tiến", "Xã Ea Phê", "Xã Ea Kly", "Xã Ea Kar",
-  "Xã Ea Ô", "Xã Ea Knốp", "Xã Cư Yang", "Xã Ea Pắl", "Xã M'Drắk",
-  "Xã Ea Riêng", "Xã Cư M'ta", "Xã Krông Á", "Xã Cư Prao", "Xã Hòa Sơn",
-  "Xã Đang Kang", "Xã Krông Bông", "Xã Yang Mao", "Xã Cư Pui", "Xã Liên Sơn Lắk",
-  "Xã Đắk Liêng", "Xã Nam Ka", "Xã Đắk Phơi", "Xã Ea Ning", "Xã Dray Bhăng",
-  "Xã Ea Ktur", "Xã Krông Ana", "Xã Dur Kmăl", "Xã Ea Na", "Xã Xuân Thọ",
-  "Xã Xuân Cảnh", "Xã Xuân Lộc", "Xã Hòa Xuân", "Xã Tuy An Bắc", "Xã Tuy An Đông",
-  "Xã Ô Loan", "Xã Tuy An Nam", "Xã Tuy An Tây", "Xã Phú Hòa 1", "Xã Phú Hòa 2",
-  "Xã Tây Hòa", "Xã Hòa Thịnh", "Xã Hòa Mỹ", "Xã Sơn Thành", "Xã Sơn Hòa",
-  "Xã Vân Hòa", "Xã Tây Sơn", "Xã Suối Trai", "Xã Ea Ly", "Xã Ea Bá",
-  "Xã Đức Bình", "Xã Sông Hinh", "Xã Xuân Lãnh", "Xã Phú Mỡ", "Xã Xuân Phước",
-  "Xã Đồng Xuân", "Phường Buôn Ma Thuột", "Phường Tân An", "Phường Tân Lập",
-  "Phường Thành Nhất", "Phường Ea Kao", "Phường Buôn Hồ", "Phường Cư Bao",
-  "Phường Phú Yên", "Phường Tuy Hòa", "Phường Bình Kiến", "Phường Xuân Đài",
-  "Phường Sông Cầu", "Phường Đông Hòa", "Phường Hòa Hiệp", "Xã Buôn Đôn",
-  "Xã Ea H'leo", "Xã Ea Trang", "Xã Ia Lốp", "Xã Ia RVê", "Xã Krông Nô",
-  "Xã Vụ Bổn",
-];
+// Danh mục cấp xã chuẩn được đối chiếu từ sapnhap.bando.com.vn. Geometry vẫn
+// tải từ OSM để giữ đúng giấy phép ODbL của artifact phát hành.
+const UNITS = officialManifest.units;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -92,7 +71,8 @@ const failures = [];
 const seenIds = new Set();
 
 for (let i = 0; i < UNITS.length; i++) {
-  const fullName = UNITS[i];
+  const officialUnit = UNITS[i];
+  const fullName = officialUnit.name;
   const shortName = fullName.replace(/^(Xã|Phường|Thị trấn)\s+/, "");
   try {
     const hit = await resolveUnit(fullName);
@@ -120,6 +100,8 @@ for (let i = 0; i < UNITS.length; i++) {
         osmType: "relation",
         osmId: hit.osm_id,
         adminLevel: 6,
+        officialCode: officialUnit.code,
+        officialMapId: officialUnit.mapId,
       },
       geometry,
     });

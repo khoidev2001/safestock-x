@@ -42,6 +42,11 @@ export class IncidentService {
    * Gọi sau khi chạy scenario (hoặc định kỳ). Trả về sự cố mới tạo.
    */
   async scanWarehouse(warehouseId: string, sinceMinutes = 60) {
+    const warehouse = await this.prisma.warehouse.findUnique({
+      where: { id: warehouseId },
+      select: { organizationId: true },
+    });
+    if (!warehouse) throw new NotFoundException("Không tìm thấy kho");
     const since = new Date(Date.now() - sinceMinutes * 60 * 1000);
     const events = await this.prisma.sensorEvent.findMany({
       where: { warehouseId, createdAt: { gte: since } },
@@ -105,6 +110,7 @@ export class IncidentService {
         title: saved.title,
         body: `Mức độ ${SEVERITY_LABEL[saved.severity] ?? saved.severity} · độ tin cậy ${Math.round(saved.confidence * 100)}%`,
         warehouseId,
+        organizationId: warehouse.organizationId,
       });
       // AI giải thích + email chạy NỀN (fire-and-forget) — không chặn scan 90s, lỗi chỉ log.
       void this.enrichNewIncident(saved.id, notification.id).catch((error) => {
@@ -122,15 +128,25 @@ export class IncidentService {
    */
   async enrichNewIncident(incidentId: string, notificationId: string): Promise<void> {
     const incident = await this.getWithTimeline(incidentId);
+    const warehouse = await this.prisma.warehouse.findUnique({
+      where: { id: incident.warehouseId },
+      select: { organizationId: true },
+    });
     let explanation: string | null = null;
     try {
       explanation = await this.ai.explain(buildIncidentContext(incident));
       await this.setExplanation(incidentId, explanation);
-      await this.notifications.updateAndPush(notificationId, {
-        body: `Mức độ ${SEVERITY_LABEL[incident.severity] ?? incident.severity} · độ tin cậy ${Math.round(
-          incident.confidence * 100,
-        )}% — ${explanation}`,
-      });
+      if (warehouse) {
+        await this.notifications.updateAndPush(
+          notificationId,
+          {
+            body: `Mức độ ${SEVERITY_LABEL[incident.severity] ?? incident.severity} · độ tin cậy ${Math.round(
+              incident.confidence * 100,
+            )}% — ${explanation}`,
+          },
+          { role: UserRole.ADMIN, organizationId: warehouse.organizationId },
+        );
+      }
     } catch (error) {
       // Ollama/ai-service tắt → cảnh báo tức thì vẫn còn; email dùng bản rule-based.
       this.log.warn(`AI giải thích sự cố ${incidentId} lỗi: ${(error as Error).message}`);

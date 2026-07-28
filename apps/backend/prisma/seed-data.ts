@@ -224,7 +224,7 @@ export const CENTRAL_BATCHES: SeedBatchDefinition[] = [
 ];
 
 // Danh sách sau sắp xếp thôn được xã Đồng Xuân công bố ngày 01/07/2026.
-// Tọa độ để null có chủ đích; cán bộ sẽ ghim trực tiếp trên bản đồ sau.
+// Tọa độ nhà văn hóa được ghép theo key lúc seed; ứng viên chưa được duyệt tiếp tục để null.
 export const HAMLET_WAREHOUSES = [
   ["long-chau", "Long Châu"],
   ["long-thang", "Long Thăng"],

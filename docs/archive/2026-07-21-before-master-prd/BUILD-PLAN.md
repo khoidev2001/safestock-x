@@ -21,7 +21,7 @@
 | DB (production) | Supabase (Postgres) | Dev vẫn Docker Postgres local; đổi DATABASE_URL khi deploy |
 | Ảnh/file storage | Cloudflare R2 | Lát Attachment/ảnh — chưa tới |
 | Deploy web | Vercel + domain random | Backend KHÔNG chạy Vercel → Railway/Render |
-| Admin login | `admin` / `admin123@` (role ADMIN) | Đã seed |
+| Admin login | `admin` / mật khẩu cấp qua biến môi trường khi seed (role ADMIN) | Đã seed |
 | Auth | **JWT custom** (bcrypt + access/refresh, JwtGuard) — đã đồng bộ web + mobile (cùng backend/endpoint/token, web lưu cookie, mobile SecureStore) | Giữ nguyên. Better Auth đã cân nhắc + BỎ: chỉ thêm tính năng thừa cho MVP (social login, session revocation) — kho xã không cần; đổi = rework A1+A2 đã verify |
 | Roles | **WAREHOUSE** (phụ trách kho, gộp staff+manager) · **RESCUE** (đội cứu hộ) · **ADMIN** (quản trị/hậu kiểm) | Xã 1 người lo kho → 3 role |
 | Kiểm soát | **Hậu kiểm** (quyền chặt + audit 5W + double-confirm), KHÔNG duyệt 2 bước | Xã ít người, khẩn cấp cần nhanh |
@@ -63,10 +63,10 @@ pnpm --filter @safestock/backend seed          # seed dữ liệu mẫu
 ### Tài khoản seed
 | Login | Password | Role |
 |---|---|---|
-| `admin` | `admin123@` | ADMIN |
-| `staff@safestock.vn` | `staff123` | WAREHOUSE kho trung tâm |
-| `rescue@safestock.vn` | `rescue123` | RESCUE |
-| `truongthon1..17@safestock.vn` | `truongthon123` | WAREHOUSE theo từng thôn |
+| `admin` | Cấp qua biến môi trường khi seed | ADMIN |
+| `staff@safestock.vn` | Cấp qua biến môi trường khi seed | WAREHOUSE kho trung tâm |
+| `rescue@safestock.vn` | Cấp qua biến môi trường khi seed | RESCUE |
+| `<locationKey>_baocao` / `kho<locationKey>` | Cấp qua biến môi trường khi seed | REPORTER / WAREHOUSE theo từng thôn |
 
 ---
 
@@ -85,7 +85,7 @@ pnpm --filter @safestock/backend seed          # seed dữ liệu mẫu
 ### A1. Auth + Inventory ✅
 - [x] Auth: bcryptjs, JWT access(15m)/refresh(7d), login, refresh, /me
 - [x] JwtAuthGuard (passport-jwt) + RolesGuard + @Roles()
-- [x] seed admin/admin123@ + hash bcrypt thật
+- [x] seed tài khoản + hash bcrypt thật từ secret runtime
 - [x] Inventory read: cây kho (warehouse→zone→shelf), list batch, scan theo SKU
 - [x] Inventory write: import/export/transfer atomic ($transaction) + audit log; chặn xuất quá tồn
 - [x] ValidationPipe global (whitelist, transform)

@@ -1,6 +1,6 @@
 # Bộ dữ liệu chuẩn xã Đồng Xuân
 
-_Cập nhật: 2026-07-21 · Catalog version: `2026.07`_
+_Cập nhật: 2026-07-25 · Catalog version: `2026.07`_
 
 ## Mục tiêu
 
@@ -32,7 +32,11 @@ Một kho cứu trợ trung tâm và 17 kho thôn cùng `communeId = dong-xuan`:
 
 Danh sách bám theo công bố sắp xếp thôn ngày 01/07/2026 của [UBND xã Đồng Xuân](https://dongxuan.daklak.gov.vn/tin-tuc-su-kien/dong-xuan-cong-bo-nghi-quyet-quyet-dinh-ve-sap-xep-thon-va-cong-tac-can-bo-o-co-so.html).
 
-Tọa độ 17 kho thôn được để `null` có chủ đích. ADMIN dùng màn hình bản đồ để pin vị trí thực; seed không gán tọa độ suy đoán.
+Mỗi kho thôn lấy vị trí của **nhà văn hóa/nhà sinh hoạt cộng đồng của chính thôn đó**. Bộ dữ liệu 17 thôn lưu cả bản ghi đã đối chiếu và bản ghi chưa giải quyết, kèm URL nguồn, mã địa điểm, ngày kiểm tra và ghi chú. Chỉ bản ghi `APPROVED` có đủ tọa độ mới đủ điều kiện backfill; không dùng tâm thôn hoặc điểm đại diện để lấp chỗ trống.
+
+Đợt rà soát nguồn công khai ngày 26/07/2026 mới thu được 5 **ứng viên** mang tên phù hợp trên Google Maps (Long Bình, Kỳ Đu, Phước Huệ, Tân Bình, Triêm Đức), nhưng chưa có xác nhận chéo từ UBND xã hoặc kiểm tra thực địa. Vì vậy cả 17 bản ghi hiện vẫn là `UNRESOLVED`; seed/backfill không tự ghim bất kỳ kho nào từ các ứng viên này.
+
+Database đang có dữ liệu không được cập nhật bằng `seed`, vì lệnh này reset dữ liệu. Dùng command backfill riêng theo quy trình dry-run trước, chỉ áp vào kho có đồng thời `lat` và `lng` đang `null`; kho đã có tọa độ hoặc đang được ADMIN ghim luôn được bảo toàn. Nếu nhà văn hóa chưa đủ bằng chứng, kho tương ứng tiếp tục để trống thay vì gán tọa độ suy đoán.
 
 ## Danh mục vật tư
 
@@ -63,19 +67,23 @@ Nhóm vật tư tham chiếu nhu cầu cứu trợ khẩn cấp của [IFRC](htt
 
 ## Tài khoản
 
-| Login | Password | Quyền/phạm vi |
-|---|---|---|
-| `admin` | `admin123@` | ADMIN toàn xã, mặc định mở kho trung tâm |
-| `staff@safestock.vn` | `staff123` | WAREHOUSE kho trung tâm |
-| `rescue@safestock.vn` | `rescue123` | RESCUE |
-| `truongthon1@safestock.vn` ... `truongthon17@safestock.vn` | `truongthon123` | Mỗi tài khoản chỉ quản một kho thôn theo thứ tự danh sách trên |
+- ADMIN, kho trung tâm và RESCUE giữ định danh cấu hình hiện có; mật khẩu bắt buộc đi qua biến môi trường khi seed.
+- Mỗi kho thôn có REPORTER `<locationKey bỏ dấu gạch nối>_baocao` và WAREHOUSE `kho<locationKey bỏ dấu gạch nối>`.
+- Ví dụ Tân Bình: `tanbinh_baocao` và `khotanbinh`. Mật khẩu không được ghi trong tài liệu hoặc source.
 
 ## Chạy và kiểm tra
 
 ```bash
 # Dừng backend và các tác vụ ghi DB trước khi reseed.
-pnpm --filter @safestock/backend seed
-pnpm --filter @safestock/backend test -- --runInBand
+pnpm --filter @safestock/backend exec jest --runInBand
+
+# Database đang tồn tại: xem trước, không ghi dữ liệu.
+pnpm --filter @safestock/backend warehouse-locations:backfill
+
+# Chỉ chạy sau khi đã kiểm tra toàn bộ dry-run report.
+pnpm --filter @safestock/backend warehouse-locations:backfill -- --apply
 ```
 
-Seed reset toàn bộ dữ liệu demo trước khi nạp. Không chạy khi backend/frontend đang ghi vào DB và không chạy trên database cần giữ dữ liệu thật. Seed đã được kiểm tra chạy liên tiếp hai lần cho cùng kết quả: 18 kho, 20 user, 17 item, 126 batch, 126 inventory count, 68 device, 2 incident và 190 transaction.
+Seed reset toàn bộ dữ liệu demo trước khi nạp. Không chạy khi backend/frontend đang ghi vào DB và không chạy trên database cần giữ dữ liệu thật. Backfill không thay thế migration hoặc seed: mặc định chỉ báo kế hoạch, khi `--apply` chỉ cập nhật dòng có cả hai tọa độ đang trống và chạy lại phải không tạo thay đổi mới. Luôn lưu report của lần apply để hậu kiểm hoặc rollback có điều kiện; rollback không được xóa tọa độ đã được ADMIN cập nhật sau backfill.
+
+Seed đã được kiểm tra chạy liên tiếp hai lần cho cùng kết quả: 18 kho, 20 user, 17 item, 126 batch, 126 inventory count, 68 device, 2 incident và 190 transaction.
