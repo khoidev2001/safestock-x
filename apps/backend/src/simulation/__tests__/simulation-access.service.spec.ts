@@ -33,7 +33,7 @@ describe("SimulationAccessService", () => {
       role: UserRole.ADMIN,
       warehouseId: null,
     });
-    prisma.warehouse.findUnique.mockResolvedValue({ organizationId: "org-1" });
+    prisma.warehouse.findUnique.mockResolvedValue({ organizationId: "org-1", kind: "CENTRAL" });
 
     await expect(service.assertMutationAccess("admin-1", "warehouse-1")).resolves.toMatchObject({
       userId: "admin-1",
@@ -63,7 +63,7 @@ describe("SimulationAccessService", () => {
       role: UserRole.WAREHOUSE,
       warehouseId: "warehouse-a",
     });
-    prisma.warehouse.findUnique.mockResolvedValue({ organizationId: "org-1" });
+    prisma.warehouse.findUnique.mockResolvedValue({ organizationId: "org-1", kind: "CENTRAL" });
 
     await expect(
       service.assertWarehouseAccess("warehouse-user", "warehouse-b", Permission.SIMULATION_VIEW),
@@ -77,7 +77,7 @@ describe("SimulationAccessService", () => {
       role: UserRole.ADMIN,
       warehouseId: null,
     });
-    prisma.warehouse.findUnique.mockResolvedValue({ organizationId: "org-2" });
+    prisma.warehouse.findUnique.mockResolvedValue({ organizationId: "org-2", kind: "CENTRAL" });
 
     await expect(
       service.assertWarehouseAccess("admin-1", "warehouse-2", Permission.SIMULATION_VIEW),
@@ -90,5 +90,40 @@ describe("SimulationAccessService", () => {
     await expect(
       service.assertPermission("deleted-user", Permission.SIMULATION_VIEW),
     ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it("cho phép đọc scope kho thôn để UI nghiệp vụ hiển thị trạng thái không có IoT", async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: "admin-1",
+      organizationId: "org-1",
+      role: UserRole.ADMIN,
+      warehouseId: null,
+    });
+    prisma.warehouse.findUnique.mockResolvedValue({
+      organizationId: "org-1",
+      kind: "HAMLET",
+    });
+
+    await expect(
+      service.assertWarehouseAccess("admin-1", "hamlet-1", Permission.SIMULATION_VIEW),
+    ).resolves.toMatchObject({ warehouseKind: "HAMLET" });
+  });
+
+  it("chặn mutation simulator ở kho thôn dù ADMIN thuộc đúng organization", async () => {
+    config.get.mockReturnValue("true");
+    prisma.user.findUnique.mockResolvedValue({
+      id: "admin-1",
+      organizationId: "org-1",
+      role: UserRole.ADMIN,
+      warehouseId: null,
+    });
+    prisma.warehouse.findUnique.mockResolvedValue({
+      organizationId: "org-1",
+      kind: "HAMLET",
+    });
+
+    await expect(service.assertMutationAccess("admin-1", "hamlet-1")).rejects.toThrow(
+      "Simulator chỉ áp dụng cho kho trung tâm",
+    );
   });
 });

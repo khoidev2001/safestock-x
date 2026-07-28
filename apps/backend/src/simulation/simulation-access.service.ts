@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { WarehouseKind } from "@prisma/client";
 import { Permission, roleHasPermission, UserRole } from "@safestock/shared-types";
 import { PrismaService } from "../prisma/prisma.service";
 
@@ -8,6 +9,10 @@ export interface SimulationActor {
   organizationId: string;
   role: UserRole;
   warehouseId: string | null;
+}
+
+export interface SimulationWarehouseActor extends SimulationActor {
+  warehouseKind: WarehouseKind;
 }
 
 @Injectable()
@@ -52,11 +57,11 @@ export class SimulationAccessService {
     userId: string,
     warehouseId: string,
     permission: Permission,
-  ): Promise<SimulationActor> {
+  ): Promise<SimulationWarehouseActor> {
     const actor = await this.assertPermission(userId, permission);
     const warehouse = await this.prisma.warehouse.findUnique({
       where: { id: warehouseId },
-      select: { organizationId: true },
+      select: { organizationId: true, kind: true },
     });
 
     const wrongOrganization = warehouse?.organizationId !== actor.organizationId;
@@ -64,14 +69,21 @@ export class SimulationAccessService {
     if (!warehouse || wrongOrganization || wrongAssignment) {
       throw new ForbiddenException("Kho không thuộc phạm vi được phép");
     }
-
-    return actor;
+    return { ...actor, warehouseKind: warehouse.kind };
   }
 
   async assertMutationAccess(userId: string, warehouseId: string): Promise<SimulationActor> {
     if (!this.isMutationEnabled()) {
       throw new ForbiddenException("Simulator mutation đang bị tắt");
     }
-    return this.assertWarehouseAccess(userId, warehouseId, Permission.SIMULATION_MUTATE);
+    const actor = await this.assertWarehouseAccess(
+      userId,
+      warehouseId,
+      Permission.SIMULATION_MUTATE,
+    );
+    if (actor.warehouseKind !== WarehouseKind.CENTRAL) {
+      throw new ForbiddenException("Simulator chỉ áp dụng cho kho trung tâm");
+    }
+    return actor;
   }
 }

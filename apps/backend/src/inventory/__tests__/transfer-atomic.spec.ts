@@ -16,7 +16,12 @@ type Batch = {
 };
 
 function fakeState(
-  options: { forceCasFailure?: boolean; failTransaction?: boolean; openLoan?: boolean } = {},
+  options: {
+    forceCasFailure?: boolean;
+    failTransaction?: boolean;
+    openLoan?: boolean;
+    lockedDestination?: boolean;
+  } = {},
 ) {
   const shelves: Record<string, string> = {
     "shelf-a1": "warehouse-a",
@@ -45,6 +50,7 @@ function fakeState(
   };
   const transactions: Record<string, unknown>[] = [];
   const audits: Record<string, unknown>[] = [];
+  const locks: string[] = [];
   let childCounter = 0;
 
   const withShelf = (batch: Batch) => ({
@@ -60,6 +66,10 @@ function fakeState(
     loans: options.openLoan ? [{ quantity: 3, returnedOk: 0, returnedDamaged: 0, lost: 0 }] : [],
   });
   const tx = {
+    $executeRawUnsafe: async (statement: string) => {
+      locks.push(statement);
+      return 0;
+    },
     user: {
       findUnique: async ({ where }: { where: { id: string } }) =>
         where.id === "missing-user" ? null : { organizationId: "org-a" },
@@ -69,6 +79,7 @@ function fakeState(
         shelves[where.id]
           ? {
               id: where.id,
+              isLocked: options.lockedDestination && where.id === "shelf-a2",
               zone: {
                 warehouseId: shelves[where.id],
                 warehouse: warehouseScopes[shelves[where.id]],
@@ -146,7 +157,7 @@ function fakeState(
       }
     },
   };
-  return { prisma, batches, transactions, audits };
+  return { prisma, batches, transactions, audits, locks };
 }
 
 function serviceFor(
@@ -157,6 +168,18 @@ function serviceFor(
 }
 
 describe("InventoryService.transfer atomic", () => {
+  it("locks loan mutations before evaluating transfer availability", async () => {
+    const state = fakeState();
+    const service = serviceFor(state);
+
+    await service.transfer("user-1", "source", "shelf-a2", 4);
+
+    expect(state.locks).toEqual([
+      'LOCK TABLE "LoanRecord" IN SHARE MODE',
+      "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+    ]);
+  });
+
   it("tách partial transfer, giữ tổng quantity và ghi lineage audit", async () => {
     const state = fakeState();
     const recalculated: string[] = [];
@@ -177,7 +200,14 @@ describe("InventoryService.transfer atomic", () => {
       }),
     );
     expect(state.transactions).toEqual([
-      expect.objectContaining({ batchId: result.batch?.id, type: "TRANSFER", quantity: 4 }),
+      expect.objectContaining({
+        batchId: result.batch?.id,
+        type: "TRANSFER",
+        quantity: 4,
+        beforeQuantity: 0,
+        afterQuantity: 4,
+        quantityDelta: 4,
+      }),
     ]);
     expect(state.audits).toEqual([
       expect.objectContaining({
@@ -216,13 +246,18 @@ describe("InventoryService.transfer atomic", () => {
 
     await expect(
       service.transfer("user-1", "source", "shelf-b1", 4, undefined, "warehouse-a"),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).resolves.toEqual(expect.objectContaining({ transaction: expect.any(Object) }));
 
     expect(state.batches.source).toEqual(
-      expect.objectContaining({ shelfId: "shelf-a1", quantity: 10 }),
+      expect.objectContaining({ shelfId: "shelf-a1", quantity: 6 }),
     );
-    expect(state.transactions).toHaveLength(0);
-    expect(state.audits).toHaveLength(0);
+    expect(state.transactions).toEqual([
+      expect.objectContaining({
+        warehouseId: "warehouse-b",
+        fromWarehouseId: "warehouse-a",
+        toWarehouseId: "warehouse-b",
+      }),
+    ]);
   });
 
   it("scope null vẫn chặn điều chuyển ra ngoài organization/xã", async () => {
@@ -244,6 +279,20 @@ describe("InventoryService.transfer atomic", () => {
     ).rejects.toBeInstanceOf(ConflictException);
     expect(state.batches.source.quantity).toBe(10);
     expect(state.transactions).toHaveLength(0);
+  });
+
+  it("chặn điều chuyển vào kệ đích đang khóa ở backend", async () => {
+    const state = fakeState({ lockedDestination: true });
+    const service = serviceFor(state);
+
+    await expect(
+      service.transfer("user-1", "source", "shelf-a2", 4, undefined, "warehouse-a"),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(state.batches.source).toEqual(
+      expect.objectContaining({ shelfId: "shelf-a1", quantity: 10 }),
+    );
+    expect(state.transactions).toHaveLength(0);
+    expect(state.audits).toHaveLength(0);
   });
 
   it("chặn circulation ON_LOAN dù dữ liệu loan record đang lệch", async () => {
@@ -321,7 +370,11 @@ describe("InventoryService.transfer atomic", () => {
 describe("InventoryController.transfer", () => {
   it("forward warehouse scope từ JWT", async () => {
     const transfer = jest.fn().mockResolvedValue({ ok: true });
-    const controller = new InventoryController({ transfer } as never, {} as never);
+    const controller = new InventoryController(
+      { transfer } as never,
+      {} as never,
+      {} as never,
+    );
 
     await controller.transfer({ user: { userId: "user-1", warehouseId: "warehouse-a" } } as never, {
       batchId: "source",
@@ -330,6 +383,14 @@ describe("InventoryController.transfer", () => {
       note: "move",
     });
 
-    expect(transfer).toHaveBeenCalledWith("user-1", "source", "shelf-a2", 4, "move", "warehouse-a");
+    expect(transfer).toHaveBeenCalledWith(
+      "user-1",
+      "source",
+      "shelf-a2",
+      4,
+      "move",
+      "warehouse-a",
+      undefined,
+    );
   });
 });

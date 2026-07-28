@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException, Logger } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Logger,
+} from "@nestjs/common";
 import { LoanStatus, ReportStatus } from "@prisma/client";
 import { InventoryAdjustmentService } from "../../inventory/inventory-adjustment.service";
 import { ReportService } from "../report.service";
@@ -9,30 +14,81 @@ const warehouseId = "warehouse-1";
 const sku = "SKU-1";
 
 describe("ReportService.approve atomic", () => {
-  it.each([
-    ["below aggregate stock", 4, [4, 0]],
-    ["equal to aggregate stock", 12, [5, 7]],
-    ["above aggregate stock", 15, [5, 10]],
-  ])("allocates %s across every batch", async (_case, quantity, expected) => {
-    const state = makeState({ rows: [{ sku, quantity }] });
+  it("reconciles the exact batch declared by a batch-level count", async () => {
+    const state = makeState({
+      rows: [{ sku, batchId: "batch-b", quantity: 3 }],
+    });
+
+    const result = await state.service.approve(reportId, actorId);
+
+    expect(result.applied).toEqual([
+      { sku, batchId: "batch-b", countedQty: 3 },
+    ]);
+    expect(reconcileTargets(state)).toEqual([
+      { batchId: "batch-b", countedQty: 3 },
+    ]);
+  });
+
+  it("rejects a legacy SKU-level count when the SKU has multiple batches", async () => {
+    const state = makeState({ rows: [{ sku, quantity: 4 }] });
+
+    await expect(state.service.approve(reportId, actorId)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(state.adjustment.reconcileInTx).not.toHaveBeenCalled();
+    expect(state.tx.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a missing SKU instead of approving a report with skipped rows", async () => {
+    const state = makeState({
+      rows: [{ sku: "MISSING", quantity: 3 }],
+      batchesBySku: { MISSING: [] },
+    });
+
+    await expect(state.service.approve(reportId, actorId)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(state.adjustment.reconcileInTx).not.toHaveBeenCalled();
+    expect(state.tx.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it("accepts two rows for the same SKU when they identify distinct batches", async () => {
+    const state = makeState({
+      rows: [
+        { sku, batchId: "batch-a", quantity: 2 },
+        { sku, batchId: "batch-b", quantity: 4 },
+      ],
+    });
+
+    await expect(state.service.approve(reportId, actorId)).resolves.toEqual(
+      expect.objectContaining({
+        applied: [
+          { sku, batchId: "batch-a", countedQty: 2 },
+          { sku, batchId: "batch-b", countedQty: 4 },
+        ],
+      }),
+    );
+  });
+
+  it("accepts a legacy SKU-level row only when the SKU has exactly one batch", async () => {
+    const state = makeState({
+      rows: [{ sku, quantity: 4 }],
+      batchesBySku: { [sku]: [batch("batch-a", 5)] },
+    });
 
     const result = await state.service.approve(reportId, actorId);
 
     expect(result).toEqual({
       id: reportId,
       status: ReportStatus.APPROVED,
-      applied: [
-        { sku, batchId: "batch-a", countedQty: expected[0] },
-        { sku, batchId: "batch-b", countedQty: expected[1] },
-      ],
+      applied: [{ sku, batchId: "batch-a", countedQty: 4 }],
     });
-    expect(state.adjustment.reconcileInTx).toHaveBeenCalledTimes(2);
-    expect(state.adjustment.reconcileInTx).toHaveBeenNthCalledWith(
-      1,
+    expect(state.adjustment.reconcileInTx).toHaveBeenCalledTimes(1);
+    expect(state.adjustment.reconcileInTx).toHaveBeenCalledWith(
       state.tx,
       actorId,
       "batch-a",
-      expected[0],
+      4,
       true,
       expect.stringContaining("2026-07"),
       warehouseId,
@@ -41,22 +97,11 @@ describe("ReportService.approve atomic", () => {
         expectedBatch: { quantity: 5, circulation: "IN_STOCK" },
       },
     );
-    expect(state.adjustment.reconcileInTx).toHaveBeenNthCalledWith(
-      2,
-      state.tx,
-      actorId,
-      "batch-b",
-      expected[1],
-      true,
-      expect.stringContaining("2026-07"),
-      warehouseId,
-      {
-        requireStableSnapshot: true,
-        expectedBatch: { quantity: 7, circulation: "IN_STOCK" },
-      },
-    );
     expect(state.tx.itemBatch.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ orderBy: [{ createdAt: "asc" }, { id: "asc" }] }),
+      expect.objectContaining({
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        take: 2,
+      }),
     );
     expect(state.tx.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -68,7 +113,7 @@ describe("ReportService.approve atomic", () => {
           warehouseId,
           period: "2026-07",
           skuCount: 1,
-          reconciledBatchCount: 2,
+          reconciledBatchCount: 1,
           skippedSkus: [],
         }),
       }),
@@ -77,19 +122,18 @@ describe("ReportService.approve atomic", () => {
     expect(state.adjustment.recalculateWarehousesAfterCommit).toHaveBeenCalledWith([warehouseId]);
   });
 
-  it("allocates against physical in-stock while preserving open loans for reconciliation", async () => {
+  it("passes an exact batch snapshot with open loans to reconciliation", async () => {
     const state = makeState({
-      rows: [{ sku, quantity: 6 }],
+      rows: [{ sku, batchId: "batch-a", quantity: 6 }],
       batchesBySku: {
-        [sku]: [batch("batch-a", 8, [loan(3)]), batch("batch-b", 5, [loan(2)])],
+        [sku]: [batch("batch-a", 8, [loan(3)])],
       },
     });
 
     await state.service.approve(reportId, actorId);
 
     expect(reconcileTargets(state)).toEqual([
-      { batchId: "batch-a", countedQty: 5 },
-      { batchId: "batch-b", countedQty: 1 },
+      { batchId: "batch-a", countedQty: 6 },
     ]);
   });
 
@@ -102,15 +146,15 @@ describe("ReportService.approve atomic", () => {
       'LOCK TABLE "LoanRecord" IN SHARE MODE',
     );
     expect(state.tx.$executeRawUnsafe.mock.invocationCallOrder[0]).toBeLessThan(
-      state.tx.itemBatch.findMany.mock.invocationCallOrder[0],
+      state.tx.itemBatch.findFirst.mock.invocationCallOrder[0],
     );
   });
 
   it("processes SKUs in a stable order while preserving response row order", async () => {
     const state = makeState({
       rows: [
-        { sku: "SKU-Z", quantity: 2 },
-        { sku: "SKU-A", quantity: 1 },
+        { sku: "SKU-Z", batchId: "batch-z", quantity: 2 },
+        { sku: "SKU-A", batchId: "batch-a", quantity: 1 },
       ],
       batchesBySku: {
         "SKU-Z": [batch("batch-z", 2)],
@@ -120,44 +164,18 @@ describe("ReportService.approve atomic", () => {
 
     const result = await state.service.approve(reportId, actorId);
 
-    expect(state.tx.itemBatch.findMany.mock.calls.map((call) => call[0].where.item.sku)).toEqual([
+    expect(state.tx.itemBatch.findFirst.mock.calls.map((call) => call[0].where.item.sku)).toEqual([
       "SKU-A",
       "SKU-Z",
     ]);
     expect(result.applied.map((item) => item.sku)).toEqual(["SKU-Z", "SKU-A"]);
   });
 
-  it("records a missing SKU as skipped and still commits one report audit", async () => {
-    const state = makeState({
-      rows: [{ sku: "MISSING", quantity: 3 }],
-      batchesBySku: { MISSING: [] },
-    });
-
-    await expect(state.service.approve(reportId, actorId)).resolves.toEqual({
-      id: reportId,
-      status: ReportStatus.APPROVED,
-      applied: [
-        {
-          sku: "MISSING",
-          countedQty: 3,
-          skipped: expect.any(String),
-        },
-      ],
-    });
-    expect(state.adjustment.reconcileInTx).not.toHaveBeenCalled();
-    expect(state.tx.auditLog.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        action: "REPORT_APPROVE",
-        metadata: expect.objectContaining({ reconciledBatchCount: 0, skippedSkus: ["MISSING"] }),
-      }),
-    });
-  });
-
-  it("rejects duplicate persisted SKU rows before reconcile or audit writes", async () => {
+  it("rejects duplicate persisted batch rows before reconcile or audit writes", async () => {
     const state = makeState({
       rows: [
-        { sku, quantity: 3 },
-        { sku: ` ${sku.toLowerCase()} `, quantity: 4 },
+        { sku, batchId: "batch-a", quantity: 3 },
+        { sku: ` ${sku.toLowerCase()} `, batchId: "batch-a", quantity: 4 },
       ],
     });
 
@@ -204,7 +222,7 @@ describe("ReportService.approve atomic", () => {
 
   it("keeps approval successful when post-commit readiness fails", async () => {
     jest.spyOn(Logger.prototype, "warn").mockImplementation(() => undefined);
-    const state = makeState({ rows: [{ sku, quantity: 4 }] });
+    const state = makeState({ rows: [{ sku, batchId: "batch-a", quantity: 4 }] });
     const readiness = {
       recalculateWarehouse: jest.fn().mockRejectedValue(new Error("readiness unavailable")),
     };
@@ -273,7 +291,7 @@ describe("ReportService.reject atomic", () => {
   });
 });
 
-type ApprovalRow = { sku: string; quantity: number };
+type ApprovalRow = { sku: string; batchId?: string; quantity: number };
 type BatchFixture = ReturnType<typeof batch>;
 
 function makeState(
@@ -294,7 +312,7 @@ function makeState(
     submittedByUserId: "submitter-1",
     period: "2026-07",
     status,
-    rows: options.rows ?? [{ sku, quantity: 4 }],
+    rows: options.rows ?? [{ sku, batchId: "batch-a", quantity: 4 }],
     note: null,
     approvedByUserId: null,
     approvedAt: null,
@@ -317,6 +335,15 @@ function makeState(
       updateMany: jest.fn().mockResolvedValue({ count: options.claimCount ?? 1 }),
     },
     itemBatch: {
+      findFirst: jest
+        .fn()
+        .mockImplementation((args: { where: { id: string } }) =>
+          Promise.resolve(
+            Object.values(options.batchesBySku ?? { [sku]: defaultBatches })
+              .flat()
+              .find((candidate) => candidate.id === args.where.id) ?? null,
+          ),
+        ),
       findMany: jest
         .fn()
         .mockImplementation((args: { where: { item: { sku: string } } }) =>

@@ -21,6 +21,10 @@ venv/
 prisma/*.db
 *.tsbuildinfo
 
+# OSRM source/graph được build và kiểm checksum riêng; không đưa artifact lớn vào Git.
+/infrastructure/osrm/data/*
+!/infrastructure/osrm/data/README.md
+
 # Báo cáo xuất cục bộ; dữ liệu có thể chứa thông tin vận hành và được sinh lại khi cần
 /apps/backend/baocao-*.xlsx
 

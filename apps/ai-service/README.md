@@ -2,7 +2,7 @@
 
 FastAPI service dùng LLM để parse tình huống, viết diễn giải và hỗ trợ trợ lý ứng phó trực tiếp trong khung chat.
 
-Đã có: Gemini/Ollama provider, `/parse`, `/explain`, `/action-plan`, `/assistant`, `/knowledge/search`, `/transcribe`, Pydantic validation và fallback ở các luồng chính. `/assistant` trả lời câu hỏi kho, tình huống khẩn cấp và kiến thức cứu trợ bằng RAG có nguồn. Claude provider và `/explain-incident` chưa hoàn chỉnh.
+Đã có: Gemini/Ollama provider, `/parse`, `/explain`, `/action-plan`, `/assistant`, `/knowledge/search`, `/semantic/rank`, `/briefing/select`, `/transcribe`, Pydantic validation và fallback ở các luồng chính. `/assistant` trả lời câu hỏi kho, tình huống khẩn cấp và kiến thức cứu trợ bằng RAG có nguồn. Claude provider và `/explain-incident` chưa hoàn chỉnh.
 
 AI service không thuộc pnpm workspace và dùng virtual environment riêng.
 
@@ -33,7 +33,7 @@ cd apps/ai-service
 .\.venv\Scripts\python.exe scripts\build_knowledge_index.py --check
 ```
 
-`knowledge_index.json` (11 chunk, 768 chiều) được commit sẵn để không phải embed lại corpus khi demo. Runtime vẫn cần `nomic-embed-text` để vector hóa câu hỏi. Index schema v2 lưu corpus hash, hash từng chunk và SHA-256 digest của model Ollama; tag model đổi artifact sẽ trả `model_mismatch` thay vì trộn vector cũ/mới. `--check` không chạy suy luận; nó bắt corpus/index stale, sai model/transform/dimension.
+`knowledge_index.json` được commit sẵn để không phải embed lại corpus khi demo; số chunk hiện hành do trường `corpus.chunkCount` trong index quản lý. Runtime vẫn cần `nomic-embed-text` để vector hóa câu hỏi. Index schema v2 lưu corpus hash, hash từng chunk và SHA-256 digest của model Ollama; tag model đổi artifact sẽ trả `model_mismatch` thay vì trộn vector cũ/mới. `--check` không chạy suy luận; nó bắt corpus/index stale, sai model/transform/dimension.
 
 Endpoint kiểm chứng retrieval độc lập với LLM:
 
@@ -45,6 +45,11 @@ Content-Type: application/json
 ```
 
 Endpoint chỉ trả metadata, preview và nguồn; không trả vector/toàn bộ index. Thiếu index, Ollama embedding tắt hoặc dimension mismatch → `available=false` + reason code an toàn; `/assistant` vẫn tra snapshot và từ chối kiến thức không nguồn.
+
+## Semantic catalog và bản tin đầu ngày
+
+- `POST /semantic/rank` nhận query cùng danh sách `{id,text}`, vector hóa bằng embedding local, trả ID + cosine score; không nhận tồn kho, không trả vector và không tự mutation. Vector document được cache trong bộ nhớ. Backend dùng endpoint này cho tìm vật tư theo công dụng và gợi ý chuẩn hóa tên/SKU.
+- `POST /briefing/select` nhận các fact vận hành đã được backend kiểm chứng. Model chỉ được trả lại toàn bộ fact ID theo thứ tự ưu tiên; backend render nguyên văn. Fact thiếu/trùng/bịa ID bị từ chối và backend dùng template, nên bản tin không có đường để LLM tự thêm số hoặc kết luận.
 
 ## Nhận dạng giọng nói offline — PhoWhisper (`/transcribe`)
 
@@ -84,6 +89,6 @@ cd apps/ai-service
 .\.venv\Scripts\python.exe scripts\evaluate_ollama.py
 ```
 
-Bộ test hiện có **59 test**: voice mock, embedding HTTP current/legacy + model digest, parser/index/fingerprint,
-retrieval positive/negative/degrade, transient recovery, prompt injection, extractive evidence và assistant fallback. Bộ live
-13 ca đã pass trên `qwen3.5:4b` + `nomic-embed-text` ngày 2026-07-23; khi đổi model/corpus phải chạy lại.
+Bộ test hiện có **67 test**: voice mock, embedding HTTP current/legacy + model digest, parser/index/fingerprint,
+semantic catalog/cache/degrade, extractive briefing, retrieval positive/negative/degrade, transient recovery, prompt injection, extractive evidence và assistant fallback. Bộ live
+13 ca đã pass trên `qwen3.5:4b` + `nomic-embed-text` ngày 2026-07-23; **chưa rerun trong refresh 2026-07-26**. Khi đổi model/corpus phải chạy lại.

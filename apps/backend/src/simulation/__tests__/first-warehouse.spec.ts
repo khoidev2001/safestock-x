@@ -5,8 +5,14 @@ describe("SimulationService.firstWarehouse", () => {
     warehouse: {
       findFirst: jest.fn(),
     },
+    virtualDevice: {
+      findMany: jest.fn(),
+    },
   };
-  const access = { assertPermission: jest.fn() };
+  const access = {
+    assertPermission: jest.fn(),
+    assertWarehouseAccess: jest.fn(),
+  };
   const service = new SimulationService(
     prisma as never,
     {} as never,
@@ -18,7 +24,7 @@ describe("SimulationService.firstWarehouse", () => {
 
   beforeEach(() => jest.clearAllMocks());
 
-  it("mở đúng kho được gán cho tài khoản kho thôn", async () => {
+  it("vẫn mở kho được gán để tài khoản kho thôn dùng nghiệp vụ web/mobile", async () => {
     access.assertPermission.mockResolvedValue({
       userId: "user-warehouse",
       organizationId: "organization-1",
@@ -27,12 +33,25 @@ describe("SimulationService.firstWarehouse", () => {
     });
     prisma.warehouse.findFirst.mockResolvedValue({ id: "warehouse-assigned", name: "Kho thôn" });
 
-    await service.firstWarehouse("user-warehouse");
+    await expect(service.firstWarehouse("user-warehouse")).resolves.toEqual({
+      id: "warehouse-assigned",
+      name: "Kho thôn",
+    });
 
     expect(prisma.warehouse.findFirst).toHaveBeenCalledWith({
       where: { id: "warehouse-assigned", organizationId: "organization-1" },
       select: { id: true, name: true },
     });
+  });
+
+  it("trả danh sách thiết bị rỗng cho kho thôn thay vì làm hỏng dashboard", async () => {
+    access.assertWarehouseAccess.mockResolvedValue({
+      warehouseKind: "HAMLET",
+    });
+
+    await expect(service.listDevices("warehouse-user", "warehouse-hamlet")).resolves.toEqual([]);
+
+    expect(prisma.virtualDevice.findMany).not.toHaveBeenCalled();
   });
 
   it("mở kho trung tâm thuộc đúng đơn vị của tài khoản toàn xã", async () => {

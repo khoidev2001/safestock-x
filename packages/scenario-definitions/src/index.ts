@@ -88,7 +88,7 @@ const SCENARIOS: Scenario[] = [
     events: [
       { offsetMs: 2000, deviceCode: "door_main", eventType: "DOOR_OPEN", value: 1 },
       { offsetMs: 3000, deviceCode: "scale_A1", eventType: "WEIGHT_CHANGED", value: 44 }, // giảm ~4kg
-      { offsetMs: 3500, deviceCode: "gateway_01", eventType: "RFID_DETECTED", value: 19 }, // ITEM-019
+      { offsetMs: 3500, deviceCode: "rfid_main", eventType: "RFID_DETECTED", value: 19 }, // ITEM-019
       { offsetMs: 6000, deviceCode: "door_main", eventType: "DOOR_CLOSE", value: 0 },
     ],
   },
@@ -129,7 +129,7 @@ const SCENARIOS: Scenario[] = [
     name: "Vật tư sai vị trí",
     description: "Camera AI phát hiện vật tư ở sai khu (expected A, detected C).",
     durationMs: 15000,
-    events: [{ offsetMs: 5000, deviceCode: "scale_A2", eventType: "VISION_DETECTION", value: 1 }],
+    events: [{ offsetMs: 5000, deviceCode: "camera_main", eventType: "VISION_DETECTION", value: 1 }],
   },
   {
     key: "fire",
@@ -138,11 +138,11 @@ const SCENARIOS: Scenario[] = [
       "Khói tăng đột biến + nhiệt độ tăng nhanh trong ~10s, không kèm hoạt động cửa/RFID.",
     durationMs: 15000,
     events: [
-      { offsetMs: 2000, deviceCode: "smoke_B", eventType: "SMOKE_READING", value: 0 },
+      { offsetMs: 2000, deviceCode: "smoke_main", eventType: "SMOKE_READING", value: 0 },
       { offsetMs: 5000, deviceCode: "temp_B", eventType: "TEMP_READING", value: 28.5 }, // lệch seed 0.5°C để ép ghi baseline thật (seed = 28, không lệch thì bị lọc "không đổi")
-      { offsetMs: 8000, deviceCode: "smoke_B", eventType: "SMOKE_READING", value: 25 },
+      { offsetMs: 8000, deviceCode: "smoke_main", eventType: "SMOKE_READING", value: 25 },
       { offsetMs: 10000, deviceCode: "temp_B", eventType: "TEMP_READING", value: 42 },
-      { offsetMs: 11000, deviceCode: "smoke_B", eventType: "SMOKE_READING", value: 45 },
+      { offsetMs: 11000, deviceCode: "smoke_main", eventType: "SMOKE_READING", value: 45 },
       { offsetMs: 12000, deviceCode: "temp_B", eventType: "TEMP_READING", value: 55 },
     ],
   },

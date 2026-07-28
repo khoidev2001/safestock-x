@@ -1,6 +1,7 @@
 import { config } from "dotenv";
-const explicitEnvFile = process.env.SAFESTOCK_ENV_FILE?.trim();
-config(explicitEnvFile ? { path: explicitEnvFile } : undefined);
+import { resolveEnvFilePaths } from "../src/config/env-file-path";
+
+config({ path: resolveEnvFilePaths() });
 
 import {
   ItemCondition,
@@ -26,6 +27,8 @@ import {
   seedOperationalRecords,
   seedTransactionHistory,
 } from "./seed-support";
+import { getVerifiedNeighborContact } from "./verified-neighbor-contact";
+import { normalizeHamletName } from "../src/admin/hamlet-normalization";
 
 const prisma = new PrismaClient();
 const COMMUNE_ID = "dong-xuan";
@@ -127,6 +130,19 @@ async function main() {
     organization.id,
     itemBySku,
   );
+  await prisma.hamlet.createMany({
+    data: HAMLET_WAREHOUSES.map((warehouse) => ({
+      organizationId: organization.id,
+      communeId: COMMUNE_ID,
+      name: warehouse.name,
+      normalizedName: normalizeHamletName(warehouse.name),
+      aliases: [normalizeHamletName(warehouse.name)],
+      // Admin must pin and verify response points before dispatch; no fake seed coordinates.
+      lat: null,
+      lng: null,
+      verified: false,
+    })),
+  });
   const hamletLeaderIds = await createHamletLeaders(
     organization.id,
     hamletWarehouses,
@@ -150,7 +166,6 @@ async function main() {
     centralWarehouse,
     centralZones: zones,
     centralShelves: shelves,
-    hamletWarehouses,
   });
   await seedOperationalRecords(prisma, {
     centralWarehouse,
@@ -381,31 +396,24 @@ async function createHamletLeaders(
 }
 
 async function seedNeighbors(warehouseId: string) {
+  // External/manual metadata only: never an operational Organization/Warehouse or stock promise.
+  // Empty summary and distanceKm=0 intentionally mean "unverified", not live availability.
+  const externalBoundaryCommunes = [
+    "Xuân Thọ",
+    "Tuy An Bắc",
+    "Tuy An Tây",
+    "Xuân Lãnh",
+    "Phú Mỡ",
+    "Xuân Phước",
+  ];
   await prisma.neighborWarehouse.createMany({
-    data: [
-      {
-        warehouseId,
-        name: "Kho cứu trợ xã Xuân Sơn",
-        distanceKm: 8,
-        contactInfo: "Bộ đàm kênh 3 / 0905xxxxxx",
-        summary: [
-          { sku: "WATER-01", name: "Nước uống đóng chai", quantity: 2000 },
-          { sku: "FIRSTAID-01", name: "Bộ sơ cứu", quantity: 30 },
-          { sku: "LIFE-ADULT", name: "Áo phao người lớn", quantity: 10 },
-        ],
-      },
-      {
-        warehouseId,
-        name: "Kho cứu trợ khu vực Sông Cầu",
-        distanceKm: 35,
-        contactInfo: "Điện thoại 0262xxxxxxx",
-        summary: [
-          { sku: "LIFE-ADULT", name: "Áo phao người lớn", quantity: 200 },
-          { sku: "BOAT-01", name: "Xuồng cứu hộ", quantity: 12 },
-          { sku: "WATER-01", name: "Nước uống đóng chai", quantity: 500 },
-        ],
-      },
-    ],
+    data: externalBoundaryCommunes.map((commune) => ({
+      warehouseId,
+      name: `[EXTERNAL/MANUALLY REPORTED] Xã ${commune}`,
+      distanceKm: 0,
+      contactInfo: getVerifiedNeighborContact(commune),
+      summary: [],
+    })),
   });
 }
 

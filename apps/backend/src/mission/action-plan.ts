@@ -24,11 +24,25 @@ export interface AllocationSummary {
 }
 
 export interface WarehouseEta {
+  id: string;
   name: string;
-  distanceKm: number;
-  etaMinutes: number;
+  kind: "CENTRAL" | "HAMLET";
+  distanceKm: number | null;
+  etaMinutes: number | null;
   lat: number;
   lng: number;
+  routeStatus: "ROUTED" | "ENGINE_UNAVAILABLE" | "ROUTE_NOT_FOUND" | "TIMEOUT";
+  routeGeometry: { type: "LineString"; coordinates: [number, number][] } | null;
+  contributions: { sku: string; itemName: string; quantity: number; unit: string }[];
+  engine: "local-osrm";
+  graphVersion: string | null;
+  routeProvenance: {
+    engine: "local-osrm";
+    graphVersion: string | null;
+    calculatedAt: string;
+    origin: { lat: number; lng: number };
+    destination: { lat: number; lng: number };
+  };
 }
 
 /** Phần LLM viết (khớp ActionPlanNarrative của ai-service). */

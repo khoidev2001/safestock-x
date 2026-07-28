@@ -29,6 +29,10 @@ describe("LoanService — recalc Readiness sau mượn/hoàn (gap C)", () => {
         findUnique: jest.fn().mockResolvedValue({
           id: "batch-1",
           quantity: 5,
+          status: "AVAILABLE",
+          condition: "NEW",
+          expiryDate: null,
+          shelf: { isLocked: false },
           item: { consumable: false },
         }),
         update: jest.fn().mockResolvedValue({ id: "batch-1" }),
@@ -37,7 +41,10 @@ describe("LoanService — recalc Readiness sau mượn/hoàn (gap C)", () => {
         findUnique: jest.fn().mockResolvedValue(openLoan),
         findMany: jest.fn().mockResolvedValue([]),
         create: jest.fn().mockResolvedValue(openLoan),
-        update: jest.fn().mockResolvedValue({ ...openLoan, returnedOk: 1 }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      inventoryTransaction: {
+        create: jest.fn().mockResolvedValue({ id: "txn-return-1" }),
       },
       auditLog: { create: jest.fn().mockResolvedValue({ id: "audit-1" }) },
     };

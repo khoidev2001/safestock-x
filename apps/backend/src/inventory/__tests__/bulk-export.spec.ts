@@ -7,6 +7,7 @@ function fakePrisma(initial: Record<string, number>, warehouses: Record<string, 
   const audits: { entityId: string; metadata: { before: number; after: number } }[] = [];
 
   const tx = {
+    $executeRawUnsafe: async () => 0,
     itemBatch: {
       findUnique: async ({ where }: { where: { id: string } }) => {
         if (!(where.id in quantities)) return null;
@@ -27,6 +28,9 @@ function fakePrisma(initial: Record<string, number>, warehouses: Record<string, 
         quantities[where.id] -= data.quantity.decrement;
         return { count: 1 };
       },
+    },
+    loanRecord: {
+      findMany: async () => [],
     },
     inventoryTransaction: {
       create: async ({ data }: { data: (typeof transactions)[number] }) => {
@@ -91,7 +95,11 @@ describe("InventoryService.bulkExport", () => {
         type: "EXPORT",
         source: "BULK",
         quantity: 3,
+        beforeQuantity: 10,
+        afterQuantity: 7,
+        quantityDelta: -3,
         note: undefined,
+        warehouseId: "warehouse-a",
       },
       {
         batchId: "b2",
@@ -99,7 +107,11 @@ describe("InventoryService.bulkExport", () => {
         type: "EXPORT",
         source: "BULK",
         quantity: 2,
+        beforeQuantity: 8,
+        afterQuantity: 6,
+        quantityDelta: -2,
         note: undefined,
+        warehouseId: "warehouse-a",
       },
     ]);
     expect(state.audits.map((audit) => audit.metadata)).toEqual([
@@ -153,5 +165,21 @@ describe("InventoryService.bulkExport", () => {
     const service = fakeService(state.prisma);
 
     await expect(service.bulkExport("user-1", [])).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("từ chối hai dòng trùng batch để tránh trừ tồn mơ hồ", async () => {
+    const state = fakePrisma({ b1: 10 });
+    const service = fakeService(state.prisma);
+
+    await expect(
+      service.bulkExport("user-1", [
+        { batchId: "b1", quantity: 2 },
+        { batchId: "b1", quantity: 3 },
+      ]),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(state.quantities.b1).toBe(10);
+    expect(state.transactions).toHaveLength(0);
+    expect(state.audits).toHaveLength(0);
   });
 });

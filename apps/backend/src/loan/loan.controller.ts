@@ -14,13 +14,20 @@ export class LoanController {
   constructor(private loans: LoanService) {}
 
   @Get("warehouses/:id/open")
-  listOpen(@Param("id") id: string) {
-    return this.loans.listOpen(id);
+  listOpen(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.loans.listOpen(id, req.user.warehouseId, req.user.userId);
   }
 
   @Post()
   borrow(@Request() req: AuthenticatedRequest, @Body() dto: BorrowDto) {
-    return this.loans.borrow(req.user.userId, dto.batchId, dto.quantity, dto.missionId);
+    return this.loans.borrow(
+      req.user.userId,
+      dto.batchId,
+      dto.quantity,
+      dto.missionId,
+      req.user.warehouseId,
+      dto.requestId,
+    );
   }
 
   @Post(":id/return")
@@ -29,6 +36,14 @@ export class LoanController {
     @Param("id") id: string,
     @Body() dto: ReturnDto,
   ) {
-    return this.loans.returnItems(req.user.userId, id, dto.ok, dto.damaged, dto.lost);
+    return this.loans.returnItems(
+      req.user.userId,
+      id,
+      dto.ok,
+      dto.damaged,
+      dto.lost,
+      req.user.warehouseId,
+      dto.requestId,
+    );
   }
 }

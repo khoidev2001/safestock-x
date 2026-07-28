@@ -260,3 +260,41 @@ describe("detectIncidents — power outage", () => {
     expect(detectIncidents(signals).find((i) => i.kind === "POWER_OUTAGE")).toBeUndefined();
   });
 });
+
+describe("detectIncidents — misplaced item", () => {
+  it("should flag misplaced item when camera AI emits a positive detection", () => {
+    const signals: SensorSignal[] = [
+      sig({
+        deviceCode: "camera_main",
+        deviceType: "CAMERA_AI",
+        eventType: "VISION_DETECTION",
+        value: 1,
+      }),
+    ];
+
+    const misplaced = detectIncidents(signals).find((i) => i.kind === "MISPLACED_ITEM");
+
+    expect(misplaced).toBeDefined();
+    expect(misplaced?.severity).toBe("HIGH");
+    expect(misplaced?.evidence).toEqual([
+      expect.objectContaining({
+        deviceCode: "camera_main",
+        eventType: "VISION_DETECTION",
+        value: 1,
+      }),
+    ]);
+  });
+
+  it("should not flag misplaced item for a negative camera result", () => {
+    const signals: SensorSignal[] = [
+      sig({
+        deviceCode: "camera_main",
+        deviceType: "CAMERA_AI",
+        eventType: "VISION_DETECTION",
+        value: 0,
+      }),
+    ];
+
+    expect(detectIncidents(signals).find((i) => i.kind === "MISPLACED_ITEM")).toBeUndefined();
+  });
+});

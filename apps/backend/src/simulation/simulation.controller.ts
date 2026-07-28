@@ -41,7 +41,7 @@ export class SimulationController {
     return scenarios.map((s) => ({ key: s.key, name: s.name, description: s.description }));
   }
 
-  // Tài khoản kho thôn vào đúng kho được gán; tài khoản toàn xã vào kho trung tâm.
+  // IoT/simulator chỉ thuộc kho trung tâm; kho thôn vận hành thủ công qua web/mobile.
   @Get("first-warehouse")
   @RequirePermission(Permission.SIMULATION_VIEW)
   firstWarehouse(@Request() req: AuthenticatedRequest) {

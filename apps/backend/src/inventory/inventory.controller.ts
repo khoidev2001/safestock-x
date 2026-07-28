@@ -1,12 +1,26 @@
 import { Body, Controller, Get, Param, Post, Query, Request, UseGuards } from "@nestjs/common";
 import { Permission } from "@safestock/shared-types";
+import { TransactionSource } from "@prisma/client";
 import { AuthenticatedRequest } from "../auth/authenticated-request";
 import { JwtAuthGuard } from "../auth/guards";
 import { PermissionGuard } from "../rbac/permission.guard";
 import { RequirePermission } from "../rbac/permissions.decorator";
-import { AdjustDto, BulkExportDto, ReconcileDto, TransactionDto, TransferDto } from "./dto";
+import {
+  AdjustDto,
+  BatchPageQueryDto,
+  BulkExportDto,
+  NormalizeItemInputDto,
+  ReceiveBatchDto,
+  ReconcileDto,
+  SemanticSearchQueryDto,
+  SetConditionDto,
+  TransactionHistoryQueryDto,
+  TransactionDto,
+  TransferDto,
+} from "./dto";
 import { InventoryAdjustmentService } from "./inventory-adjustment.service";
 import { InventoryService } from "./inventory.service";
+import { InventorySemanticService } from "./inventory-semantic.service";
 
 @UseGuards(JwtAuthGuard, PermissionGuard)
 @RequirePermission(Permission.INVENTORY_READ)
@@ -15,21 +29,116 @@ export class InventoryController {
   constructor(
     private inv: InventoryService,
     private adjustment: InventoryAdjustmentService,
+    private semantic: InventorySemanticService,
   ) {}
 
   @Get("warehouses/:id/tree")
-  tree(@Param("id") id: string) {
-    return this.inv.tree(id);
+  tree(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.inv.tree(id, req.user.warehouseId, req.user.userId);
   }
 
   @Get("warehouses/:id/batches")
-  batches(@Param("id") id: string) {
-    return this.inv.listBatches(id);
+  batches(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.inv.listBatches(id, req.user.warehouseId, req.user.userId);
+  }
+
+  @Get("warehouses/:id/batches-page")
+  batchesPage(
+    @Request() req: AuthenticatedRequest,
+    @Param("id") id: string,
+    @Query() query: BatchPageQueryDto,
+  ) {
+    return this.inv.listBatchesPage(
+      id,
+      req.user.warehouseId,
+      req.user.userId,
+      query.cursor,
+      query.limit,
+    );
+  }
+
+  @Get("warehouses/:id/transactions")
+  transactions(
+    @Request() req: AuthenticatedRequest,
+    @Param("id") id: string,
+    @Query() query: TransactionHistoryQueryDto,
+  ) {
+    return this.inv.listTransactions(
+      id,
+      req.user.warehouseId,
+      req.user.userId,
+      query.limit,
+    );
+  }
+
+  @RequirePermission(Permission.INVENTORY_EXPORT)
+  @Get("warehouses/:id/transfer-destinations")
+  transferDestinations(
+    @Request() req: AuthenticatedRequest,
+    @Param("id") id: string,
+  ) {
+    return this.inv.transferDestinations(
+      id,
+      req.user.warehouseId,
+      req.user.userId,
+    );
+  }
+
+  @Get("warehouses/:id/semantic-search")
+  semanticSearch(
+    @Request() req: AuthenticatedRequest,
+    @Param("id") id: string,
+    @Query() query: SemanticSearchQueryDto,
+  ) {
+    return this.semantic.searchWarehouse(
+      id,
+      req.user.warehouseId,
+      query.query,
+      query.limit,
+      req.user.userId,
+    );
+  }
+
+  @RequirePermission(Permission.INVENTORY_IMPORT)
+  @Post("normalize-input")
+  normalizeInput(
+    @Request() req: AuthenticatedRequest,
+    @Body() dto: NormalizeItemInputDto,
+  ) {
+    return this.semantic.normalizeInput(req.user.userId, dto.name, dto.limit);
   }
 
   @Get("scan")
-  scan(@Query("sku") sku: string) {
-    return this.inv.scanBySku(sku);
+  scan(@Request() req: AuthenticatedRequest, @Query("sku") sku: string) {
+    return this.inv.scanBySku(sku, req.user.warehouseId, req.user.userId);
+  }
+
+  @Get("catalog")
+  catalog(@Request() req: AuthenticatedRequest) {
+    return this.inv.listCatalog(req.user.userId);
+  }
+
+  @RequirePermission(Permission.INVENTORY_IMPORT)
+  @Post("batches")
+  receiveBatch(
+    @Request() req: AuthenticatedRequest,
+    @Body() dto: ReceiveBatchDto,
+  ) {
+    return this.inv.receiveBatch(
+      req.user.userId,
+      {
+        itemId: dto.itemId,
+        newItem: dto.newItem,
+        shelfId: dto.shelfId,
+        batchCode: dto.batchCode,
+        quantity: dto.quantity,
+        expiryDate: dto.expiryDate ? new Date(dto.expiryDate) : null,
+        condition: dto.condition,
+        note: dto.note,
+      },
+      req.user.warehouseId,
+      dto.requestId,
+    );
   }
 
   @RequirePermission(Permission.INVENTORY_IMPORT)
@@ -40,8 +149,9 @@ export class InventoryController {
       dto.batchId,
       dto.quantity,
       dto.note,
-      undefined,
+      TransactionSource.MANUAL,
       req.user.warehouseId,
+      dto.requestId,
     );
   }
 
@@ -53,8 +163,9 @@ export class InventoryController {
       dto.batchId,
       dto.quantity,
       dto.note,
-      undefined,
+      TransactionSource.MANUAL,
       req.user.warehouseId,
+      dto.requestId,
     );
   }
 
@@ -68,6 +179,7 @@ export class InventoryController {
       dto.quantity,
       dto.note,
       req.user.warehouseId,
+      dto.requestId,
     );
   }
 
@@ -75,7 +187,13 @@ export class InventoryController {
   @RequirePermission(Permission.INVENTORY_BULK_EXPORT)
   @Post("bulk-export")
   bulkExport(@Request() req: AuthenticatedRequest, @Body() dto: BulkExportDto) {
-    return this.inv.bulkExport(req.user.userId, dto.items, dto.note, req.user.warehouseId);
+    return this.inv.bulkExport(
+      req.user.userId,
+      dto.items,
+      dto.note,
+      req.user.warehouseId,
+      dto.requestId,
+    );
   }
 
   // Sửa tay số lượng (Bp2). Lý do bắt buộc, hậu kiểm.
@@ -88,6 +206,20 @@ export class InventoryController {
       dto.newQuantity,
       dto.reason,
       req.user.warehouseId,
+      dto.requestId,
+    );
+  }
+
+  @RequirePermission(Permission.INVENTORY_ADJUST)
+  @Post("condition")
+  setCondition(@Request() req: AuthenticatedRequest, @Body() dto: SetConditionDto) {
+    return this.adjustment.setCondition(
+      req.user.userId,
+      dto.batchId,
+      dto.condition,
+      dto.note,
+      req.user.warehouseId,
+      dto.requestId,
     );
   }
 
@@ -102,6 +234,7 @@ export class InventoryController {
       dto.applyOverride ?? false,
       dto.note,
       req.user.warehouseId,
+      dto.requestId,
     );
   }
 }

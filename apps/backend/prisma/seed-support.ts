@@ -21,7 +21,6 @@ export async function seedDevices(
     centralWarehouse: Warehouse;
     centralZones: Map<string, WarehouseZone>;
     centralShelves: Map<string, Shelf>;
-    hamletWarehouses: Warehouse[];
   },
 ) {
   const deviceByCode = new Map<string, string>();
@@ -92,32 +91,21 @@ export async function seedDevices(
     unit: "bool",
     currentValue: 1,
   });
+  await register({
+    warehouseId: context.centralWarehouse.id,
+    type: "RFID_GATEWAY",
+    code: "rfid_main",
+    unit: "tag",
+    currentValue: 0,
+  });
+  await register({
+    warehouseId: context.centralWarehouse.id,
+    type: "CAMERA_AI",
+    code: "camera_main",
+    unit: "detection",
+    currentValue: 0,
+  });
 
-  for (let index = 0; index < context.hamletWarehouses.length; index++) {
-    const warehouse = context.hamletWarehouses[index];
-    const key = `hamlet_${index + 1}`;
-    await register({
-      warehouseId: warehouse.id,
-      type: "TEMPERATURE",
-      code: `temp_${key}`,
-      unit: "°C",
-      currentValue: 27 + (index % 4) * 0.5,
-    });
-    await register({
-      warehouseId: warehouse.id,
-      type: "HUMIDITY",
-      code: `humid_${key}`,
-      unit: "%",
-      currentValue: 58 + (index % 5),
-    });
-    await register({
-      warehouseId: warehouse.id,
-      type: "GATEWAY",
-      code: `gateway_${key}`,
-      unit: "bool",
-      currentValue: 1,
-    });
-  }
   return deviceByCode;
 }
 

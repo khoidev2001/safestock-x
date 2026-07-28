@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { NotificationKind, UserRole } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 
@@ -14,18 +14,33 @@ export interface CreateNotification {
 /** Hàm đẩy realtime (gateway gán vào) — service không phụ thuộc Socket.IO. */
 export type NotificationPusher = (role: UserRole, notification: unknown) => void;
 
+interface PersistedNotification {
+  recipientRole: UserRole;
+}
+
 @Injectable()
 export class NotificationService {
+  private readonly log = new Logger(NotificationService.name);
+
   /** Gateway gán để đẩy WebSocket; mặc định no-op (test không cần socket). */
   push: NotificationPusher = () => {};
 
   constructor(private prisma: PrismaService) {}
 
-  /** Tạo thông báo + đẩy realtime theo role. */
+  /** Tạo thông báo + đẩy realtime theo role; DB thành công không phụ thuộc WebSocket. */
   async create(input: CreateNotification) {
     const notification = await this.prisma.notification.create({ data: input });
-    this.push(input.recipientRole, notification);
+    this.pushPersisted(notification);
     return notification;
+  }
+
+  /** Đẩy một record đã commit; lỗi realtime chỉ được ghi log để client đọc lại qua API. */
+  pushPersisted(notification: PersistedNotification) {
+    try {
+      this.push(notification.recipientRole, notification);
+    } catch {
+      this.log.warn("Không đẩy được thông báo realtime; record đã được lưu để client đọc lại.");
+    }
   }
 
   /**
@@ -34,7 +49,7 @@ export class NotificationService {
    */
   async updateAndPush(id: string, data: { title?: string; body?: string }) {
     const notification = await this.prisma.notification.update({ where: { id }, data });
-    this.push(notification.recipientRole, notification);
+    this.pushPersisted(notification);
     return notification;
   }
 

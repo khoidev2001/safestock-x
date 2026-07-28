@@ -1,5 +1,8 @@
 import { ForbiddenException } from "@nestjs/common";
-import { assertBatchInScope } from "../warehouse-scope";
+import {
+  assertActorCanAccessBatch,
+  assertBatchInScope,
+} from "../warehouse-scope";
 
 // Prisma giả: chỉ cần itemBatch.findUnique trả warehouseId của batch.
 function fakePrisma(batchWarehouseId: string | null) {
@@ -30,5 +33,49 @@ describe("assertBatchInScope (chống IDOR)", () => {
     await expect(assertBatchInScope(fakePrisma(null), "kho-A", "b1")).rejects.toBeInstanceOf(
       ForbiddenException,
     );
+  });
+});
+
+describe("assertActorCanAccessBatch (organization boundary)", () => {
+  function scopedPrisma(actorOrganizationId: string, batchOrganizationId: string) {
+    return {
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          organizationId: actorOrganizationId,
+        }),
+      },
+      itemBatch: {
+        findUnique: jest.fn().mockResolvedValue({
+          shelf: {
+            zone: {
+              warehouseId: "warehouse-1",
+              warehouse: { organizationId: batchOrganizationId },
+            },
+          },
+        }),
+      },
+    } as never;
+  }
+
+  it("allows a batch in the actor organization", async () => {
+    await expect(
+      assertActorCanAccessBatch(
+        scopedPrisma("org-1", "org-1"),
+        "user-1",
+        null,
+        "batch-1",
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it("rejects an admin-style unassigned actor from another organization", async () => {
+    await expect(
+      assertActorCanAccessBatch(
+        scopedPrisma("org-1", "org-2"),
+        "user-1",
+        null,
+        "batch-foreign",
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });

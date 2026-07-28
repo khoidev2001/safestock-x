@@ -21,6 +21,8 @@ export enum TransactionType {
   TRANSFER = "TRANSFER",
   RETURN = "RETURN",
   ADJUST = "ADJUST",
+  COUNT = "COUNT",
+  CONDITION = "CONDITION",
   LOAN_OUT_INTERXA = "LOAN_OUT_INTERXA",
   LOAN_IN = "LOAN_IN",
 }
@@ -88,6 +90,7 @@ export enum Permission {
   AUDIT_VIEW = "audit:view",
   ADMIN_USERS = "admin:users",
   REPORT_SUBMIT = "report:submit", // trưởng thôn gửi báo cáo kiểm kê tháng
+  REPORT_VIEW = "report:view",
   REPORT_APPROVE = "report:approve", // admin xã duyệt báo cáo
   INCIDENT_REPORT_SUBMIT = "incident:report_submit", // trưởng thôn báo cáo tình huống khẩn cấp
 }
@@ -113,6 +116,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.WAREHOUSE_MANAGE,
     Permission.NOTIFICATION_VIEW,
     Permission.REPORT_SUBMIT, // trưởng thôn gửi báo cáo tháng
+    Permission.REPORT_VIEW,
   ],
   [UserRole.RESCUE]: [
     // Cứu hộ: xem + XÁC NHẬN lấy vật tư.
@@ -130,9 +134,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     ...Object.values(Permission),
   ],
   [UserRole.REPORTER]: [
-    // Trưởng thôn: báo cáo tình huống + dùng ghi âm (transcribe) + xem thông báo phản hồi.
+    // Trưởng thôn: báo cáo tình huống + dùng parse/transcribe + xem thông báo phản hồi.
     Permission.INCIDENT_REPORT_SUBMIT,
-    Permission.MISSION_CREATE, // để gọi /missions/transcribe (đang yêu cầu quyền này)
     Permission.NOTIFICATION_VIEW,
   ],
 };

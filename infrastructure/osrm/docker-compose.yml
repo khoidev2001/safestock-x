@@ -1,0 +1,39 @@
+name: safestock-routing
+
+services:
+  osrm:
+    image: ghcr.io/project-osrm/osrm-backend:v5.27.1@sha256:855614a38f464b0558a2ad6eaa7cb8c139f39887da9b38b485ce453c6e6e6124
+    container_name: ${OSRM_CONTAINER_NAME:-safestock_osrm}
+    restart: unless-stopped
+    command:
+      - osrm-routed
+      - --algorithm
+      - mld
+      - --max-table-size
+      - "1000"
+      - /data/dong-xuan.osrm
+    ports:
+      - "${OSRM_BIND_ADDRESS:-127.0.0.1}:${OSRM_PORT:-5000}:5000"
+    volumes:
+      - type: bind
+        source: ./data
+        target: /data
+        read_only: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -ec
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/5000;
+          printf 'GET /route/v1/driving/109.0333,13.3667;109.0800,13.4200?overview=false HTTP/1.0\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3;
+          grep -q '"code":"Ok"' <&3
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s

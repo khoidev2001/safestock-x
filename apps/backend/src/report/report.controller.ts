@@ -1,5 +1,6 @@
 import {
   Body,
+  BadRequestException,
   Controller,
   Get,
   Param,
@@ -18,6 +19,7 @@ import { JwtAuthGuard } from "../auth/guards";
 import { PermissionGuard } from "../rbac/permission.guard";
 import { RequirePermission } from "../rbac/permissions.decorator";
 import { ReportService } from "./report.service";
+import { RejectReportDto, SubmitStockReportDto } from "./dto";
 
 interface UploadedExcel {
   buffer: Buffer;
@@ -32,13 +34,31 @@ export class ReportController {
   /** Trưởng thôn upload Excel kiểm kê tháng → PENDING. multipart field "file", body: warehouseId, period. */
   @RequirePermission(Permission.REPORT_SUBMIT)
   @Post("upload")
-  @UseInterceptors(FileInterceptor("file"))
+  @UseInterceptors(
+    FileInterceptor("file", {
+      limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+      fileFilter: (_request, file, callback) => {
+        const validExtension = /\.xlsx$/i.test(file.originalname);
+        const validMime = [
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "application/octet-stream",
+        ].includes(file.mimetype);
+        callback(
+          validExtension && validMime
+            ? null
+            : new BadRequestException("Chỉ chấp nhận tệp Excel .xlsx"),
+          validExtension && validMime,
+        );
+      },
+    }),
+  )
   upload(
     @Request() req: AuthenticatedRequest,
-    @UploadedFile() file: UploadedExcel,
+    @UploadedFile() file: UploadedExcel | undefined,
     @Body("warehouseId") warehouseId: string,
     @Body("period") period: string,
   ) {
+    if (!file) throw new BadRequestException("Chưa chọn tệp Excel");
     return this.reports.submit(
       req.user.userId,
       warehouseId,
@@ -48,16 +68,16 @@ export class ReportController {
     );
   }
 
-  @RequirePermission(Permission.REPORT_APPROVE)
+  @RequirePermission(Permission.REPORT_VIEW)
   @Get()
-  list(@Query("status") status?: ReportStatus) {
-    return this.reports.list(status);
+  list(@Request() req: AuthenticatedRequest, @Query("status") status?: ReportStatus) {
+    return this.reports.list(req.user.userId, status, req.user.warehouseId);
   }
 
-  @RequirePermission(Permission.REPORT_APPROVE)
+  @RequirePermission(Permission.REPORT_VIEW)
   @Get(":id")
-  get(@Param("id") id: string) {
-    return this.reports.get(id);
+  get(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.reports.get(id, req.user.userId, req.user.warehouseId);
   }
 
   /** ADMIN duyệt → áp reconcile từng SKU. */
@@ -72,8 +92,30 @@ export class ReportController {
   reject(
     @Request() req: AuthenticatedRequest,
     @Param("id") id: string,
-    @Body("note") note?: string,
+    @Body() dto: RejectReportDto,
   ) {
-    return this.reports.reject(id, req.user.userId, note);
+    return this.reports.reject(id, req.user.userId, dto.note);
+  }
+
+  /** APK gửi snapshot kiểm kê JSON, không phụ thuộc bộ chọn tệp Excel. */
+  @RequirePermission(Permission.REPORT_SUBMIT)
+  @Post()
+  submitSnapshot(
+    @Request() req: AuthenticatedRequest,
+    @Body() dto: SubmitStockReportDto,
+  ) {
+    return this.reports.submitRows(
+      req.user.userId,
+      dto.warehouseId,
+      dto.period,
+      dto.rows.map((row) => ({
+        ...row,
+        expiryDate: row.expiryDate ?? null,
+        condition: row.condition ?? null,
+        note: row.note ?? null,
+      })),
+      req.user.warehouseId,
+      dto.requestId,
+    );
   }
 }

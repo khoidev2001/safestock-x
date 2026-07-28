@@ -46,6 +46,7 @@ describe("SimulationService — debounce quét sự cố", () => {
     prisma.virtualDevice.findUnique.mockResolvedValue(smokeDevice);
     prisma.virtualDevice.update.mockResolvedValue(smokeDevice);
     prisma.sensorEvent.create.mockResolvedValue({ id: "event-1" });
+    service.onEvent = undefined;
   });
 
   afterEach(() => jest.useRealTimers());
@@ -83,5 +84,26 @@ describe("SimulationService — debounce quét sự cố", () => {
 
     expect(prisma.sensorEvent.create).not.toHaveBeenCalled();
     expect(incidents.scanWarehouse).not.toHaveBeenCalled();
+  });
+
+  it("vẫn phát realtime khi slider đổi currentValue nhưng event bị lọc khỏi lịch sử", async () => {
+    const onEvent = jest.fn();
+    service.onEvent = onEvent;
+    prisma.virtualDevice.findUnique.mockResolvedValue({ ...smokeDevice, currentValue: 0 });
+
+    await service.emit("admin-1", {
+      warehouseId: "warehouse-central",
+      deviceCode: "smoke_main",
+      eventType: "SMOKE_READING",
+      value: 3,
+    });
+
+    expect(onEvent).toHaveBeenCalledWith("warehouse-central", {
+      deviceCode: "smoke_main",
+      eventType: "SMOKE_READING",
+      value: 3,
+      unit: "ppm",
+      saved: false,
+    });
   });
 });

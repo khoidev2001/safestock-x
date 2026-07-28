@@ -6,6 +6,7 @@ import {
   Prisma,
   UserRole,
   VirtualDeviceType,
+  WarehouseKind,
 } from "@prisma/client";
 import { READINESS_WEIGHTS } from "@safestock/shared-types";
 import { NotificationService } from "../notification/notification.service";
@@ -27,6 +28,14 @@ import { ReadinessResult, WeightedReadiness } from "./readiness.types";
 
 /** Cảm biến không cập nhật quá ngưỡng này coi như "chết" — hạ độ tin cậy (#25). */
 const SENSOR_FRESH_MS = 30 * 60 * 1000;
+const READINESS_FRESH_MS = 15 * 60 * 1000;
+
+export function isReadinessStale(
+  computedAt: Date,
+  now = new Date(),
+): boolean {
+  return now.getTime() - computedAt.getTime() > READINESS_FRESH_MS;
+}
 
 /** Điểm 1 kệ kèm breakdown + danh sách điểm lô con (để persist cấp lô nếu cần). */
 interface ShelfReadiness extends WeightedReadiness {
@@ -48,6 +57,25 @@ export class ReadinessService {
    * @param now mốc thời gian server (#31); mặc định thời điểm gọi.
    */
   async recalculateWarehouse(warehouseId: string, now: Date = new Date()) {
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        return await this.recalculateWarehouseOnce(warehouseId, now);
+      } catch (error) {
+        lastError = error;
+        const message = error instanceof Error ? error.message : String(error);
+        this.log.warn(
+          `Recalc readiness lỗi (kho ${warehouseId}, lần ${attempt}/3): ${message}`,
+        );
+      }
+    }
+    throw lastError;
+  }
+
+  private async recalculateWarehouseOnce(
+    warehouseId: string,
+    now: Date,
+  ) {
     const env = await this.loadZoneEnvironments(warehouseId, now);
     const shelves = await this.loadShelfContexts(warehouseId, env, now);
 
@@ -95,6 +123,26 @@ export class ReadinessService {
     };
   }
 
+  /**
+   * Hậu xử lý sau mutation không được đổi một giao dịch đã commit thành lỗi.
+   * Thử lại có giới hạn để lỗi DB tạm thời không làm readiness bị cũ mà im lặng.
+   */
+  async recalculateWarehouseBestEffort(
+    warehouseId: string,
+    context: string,
+  ): Promise<boolean> {
+    try {
+      await this.recalculateWarehouse(warehouseId);
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log.warn(
+        `Không thể làm mới readiness sau retry (${context}, kho ${warehouseId}): ${message}`,
+      );
+      return false;
+    }
+  }
+
   /** Đọc điểm đã lưu của 1 target bất kỳ (ZONE/SHELF/ITEM_BATCH) — không tính lại. */
   async getScore(targetType: "ZONE" | "SHELF" | "ITEM_BATCH", targetId: string) {
     return this.prisma.readinessScore.findUnique({
@@ -104,7 +152,7 @@ export class ReadinessService {
   }
 
   /** Đọc điểm đã lưu của 1 kho kèm vùng hành động + đề xuất (không tính lại). */
-  async getWarehouseScore(warehouseId: string) {
+  async getWarehouseScore(warehouseId: string, now = new Date()) {
     const score = await this.prisma.readinessScore.findUnique({
       where: {
         targetType_targetId: { targetType: "WAREHOUSE", targetId: warehouseId },
@@ -124,6 +172,8 @@ export class ReadinessService {
     });
     return {
       ...score,
+      isStale: isReadinessStale(score.computedAt, now),
+      ageMs: Math.max(0, now.getTime() - score.computedAt.getTime()),
       zone: resolveActionZone(score.score, thresholds),
       ...assessment,
     };
@@ -172,6 +222,12 @@ export class ReadinessService {
     warehouseId: string,
     now: Date,
   ): Promise<Map<string, ZoneEnvironment>> {
+    const warehouse = await this.prisma.warehouse.findUnique({
+      where: { id: warehouseId },
+      select: { kind: true },
+    });
+    if (warehouse?.kind === WarehouseKind.HAMLET) return new Map();
+
     const devices = await this.prisma.virtualDevice.findMany({
       where: {
         warehouseId,

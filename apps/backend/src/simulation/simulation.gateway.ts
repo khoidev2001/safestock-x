@@ -8,6 +8,7 @@ import {
 import { Server, Socket } from "socket.io";
 import { WebSocketAuthService } from "../auth/websocket-auth.service";
 import { RunnerService } from "./runner.service";
+import { SimulationService } from "./simulation.service";
 
 @WebSocketGateway({ cors: { origin: "*" } })
 export class SimulationGateway implements OnModuleInit, OnGatewayInit, OnGatewayConnection {
@@ -15,6 +16,7 @@ export class SimulationGateway implements OnModuleInit, OnGatewayInit, OnGateway
 
   constructor(
     private runner: RunnerService,
+    private simulation: SimulationService,
     private webSocketAuth: WebSocketAuthService,
   ) {}
 
@@ -34,8 +36,10 @@ export class SimulationGateway implements OnModuleInit, OnGatewayInit, OnGateway
   }
 
   onModuleInit() {
-    this.runner.onEvent = (warehouseId, payload) => {
+    const emit = (warehouseId: string, payload: unknown) => {
       this.server.to(`wh:${warehouseId}`).emit("sensor_event", payload);
     };
+    this.runner.onEvent = emit;
+    this.simulation.onEvent = emit;
   }
 }

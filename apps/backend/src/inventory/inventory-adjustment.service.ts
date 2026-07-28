@@ -5,12 +5,28 @@ import {
   Logger,
   NotFoundException,
 } from "@nestjs/common";
-import { CirculationStatus, LoanStatus, Prisma, TransactionSource } from "@prisma/client";
+import {
+  CirculationStatus,
+  ItemCondition,
+  LoanStatus,
+  Prisma,
+  TransactionSource,
+} from "@prisma/client";
 import { TransactionType } from "@safestock/shared-types";
 import { PrismaService } from "../prisma/prisma.service";
 import { ReadinessService } from "../readiness/readiness.service";
+import {
+  lockLoanBatch,
+  lockLoanTableForApproval,
+} from "../loan/loan-table-lock";
 import { sumOutstanding } from "./loan-math";
-import { assertBatchInScope } from "./warehouse-scope";
+import {
+  mutationFingerprint,
+  withMutationIdempotency,
+} from "./mutation-idempotency";
+import {
+  assertActorCanAccessBatch,
+} from "./warehouse-scope";
 
 type ReconcileInTxOptions = {
   requireStableSnapshot?: boolean;
@@ -53,19 +69,51 @@ export class InventoryAdjustmentService {
     newQuantity: number,
     reason: string,
     scopeWarehouseId?: string | null,
+    requestId?: string,
   ) {
     if (newQuantity < 0) {
       throw new BadRequestException("Số lượng không được âm");
     }
-    await assertBatchInScope(this.prisma, scopeWarehouseId, batchId);
-    const result = await this.prisma.$transaction(async (tx) => {
-      const before = await tx.itemBatch.findUnique({ where: { id: batchId } });
-      if (!before) throw new NotFoundException("Không tìm thấy lô vật tư");
-
-      await tx.itemBatch.update({
+    await assertActorCanAccessBatch(this.prisma, userId, scopeWarehouseId, batchId);
+    const result = await this.prisma.$transaction((tx) =>
+      withMutationIdempotency(
+        tx,
+        {
+          actorId: userId,
+          operation: "inventory.adjust",
+          requestId,
+          fingerprint: mutationFingerprint({ batchId, newQuantity, reason }),
+        },
+        async () => {
+          await lockLoanTableForApproval(tx);
+          await lockLoanBatch(tx, batchId);
+      const before = await tx.itemBatch.findUnique({
         where: { id: batchId },
+        include: { shelf: { select: { zone: { select: { warehouseId: true } } } } },
+      });
+      if (!before) throw new NotFoundException("Không tìm thấy lô vật tư");
+      const outstandingLoan = await this.sumOnLoan(tx, batchId);
+      if (newQuantity < outstandingLoan) {
+        throw new ConflictException(
+          `Tồn mới không được thấp hơn ${outstandingLoan} đơn vị đang cho mượn`,
+        );
+      }
+
+      const claimed = await tx.itemBatch.updateMany({
+        where: {
+          id: batchId,
+          quantity: before.quantity,
+          ...(scopeWarehouseId
+            ? { shelf: { zone: { warehouseId: scopeWarehouseId } } }
+            : {}),
+        },
         data: { quantity: newQuantity },
       });
+      if (claimed.count === 0) {
+        throw new ConflictException(
+          "Tồn kho vừa thay đổi; hãy tải lại trước khi điều chỉnh",
+        );
+      }
       await tx.inventoryTransaction.create({
         data: {
           batchId,
@@ -73,7 +121,11 @@ export class InventoryAdjustmentService {
           type: TransactionType.ADJUST,
           source: TransactionSource.MANUAL,
           quantity: Math.abs(newQuantity - before.quantity),
+          beforeQuantity: before.quantity,
+          afterQuantity: newQuantity,
+          quantityDelta: newQuantity - before.quantity,
           note: reason,
+          warehouseId: before.shelf?.zone.warehouseId,
         },
       });
       await tx.auditLog.create({
@@ -85,8 +137,84 @@ export class InventoryAdjustmentService {
           metadata: { before: before.quantity, after: newQuantity, reason },
         },
       });
-      return { batchId, before: before.quantity, after: newQuantity };
-    });
+          return { batchId, before: before.quantity, after: newQuantity };
+        },
+      ),
+    );
+    await this.recalcAfterTxn(batchId);
+    return result;
+  }
+
+  async setCondition(
+    userId: string,
+    batchId: string,
+    condition: ItemCondition,
+    note: string,
+    scopeWarehouseId?: string | null,
+    requestId?: string,
+  ) {
+    const normalizedNote = note.trim();
+    if (normalizedNote.length < 3) {
+      throw new BadRequestException("Ghi chú tình trạng phải có ít nhất 3 ký tự");
+    }
+    const result = await this.prisma.$transaction((tx) =>
+      withMutationIdempotency(
+        tx,
+        {
+          actorId: userId,
+          operation: "inventory.condition",
+          requestId,
+          fingerprint: mutationFingerprint({
+            batchId,
+            condition,
+            note: normalizedNote,
+          }),
+        },
+        async () => {
+      await lockLoanTableForApproval(tx);
+      await lockLoanBatch(tx, batchId);
+      await assertActorCanAccessBatch(tx, userId, scopeWarehouseId, batchId);
+      const before = await tx.itemBatch.findUnique({
+        where: { id: batchId },
+        include: { shelf: { select: { zone: { select: { warehouseId: true } } } } },
+      });
+      if (!before) throw new NotFoundException("Không tìm thấy lô vật tư");
+
+      await tx.itemBatch.update({
+        where: { id: batchId },
+        data: { condition },
+      });
+      await tx.inventoryTransaction.create({
+        data: {
+          batchId,
+          userId,
+          type: TransactionType.CONDITION,
+          source: TransactionSource.MANUAL,
+          quantity: 0,
+          beforeQuantity: before.quantity,
+          afterQuantity: before.quantity,
+          quantityDelta: 0,
+          note: normalizedNote,
+          warehouseId: before.shelf?.zone.warehouseId,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorId: userId,
+          action: "INVENTORY_CONDITION",
+          entity: "ItemBatch",
+          entityId: batchId,
+          metadata: {
+            before: before.condition,
+            after: condition,
+            note: normalizedNote,
+          },
+        },
+      });
+          return { batchId, before: before.condition, after: condition };
+        },
+      ),
+    );
     await this.recalcAfterTxn(batchId);
     return result;
   }
@@ -103,10 +231,37 @@ export class InventoryAdjustmentService {
     applyOverride: boolean,
     note?: string,
     scopeWarehouseId?: string | null,
+    requestId?: string,
   ) {
     if (countedQty < 0) throw new BadRequestException("Số kiểm kê không được âm");
     const result = await this.prisma.$transaction((tx) =>
-      this.reconcileInTx(tx, userId, batchId, countedQty, applyOverride, note, scopeWarehouseId),
+      withMutationIdempotency(
+        tx,
+        {
+          actorId: userId,
+          operation: "inventory.reconcile",
+          requestId,
+          fingerprint: mutationFingerprint({
+            batchId,
+            countedQty,
+            applyOverride,
+            note,
+          }),
+        },
+        async () => {
+          await lockLoanTableForApproval(tx);
+          await lockLoanBatch(tx, batchId);
+          return this.reconcileInTx(
+            tx,
+            userId,
+            batchId,
+            countedQty,
+            applyOverride,
+            note,
+            scopeWarehouseId,
+          );
+        },
+      ),
     );
     if (result.applied) await this.recalcAfterTxn(batchId);
     return result;
@@ -123,9 +278,12 @@ export class InventoryAdjustmentService {
     options: ReconcileInTxOptions = {},
   ) {
     if (countedQty < 0) throw new BadRequestException("Số kiểm kê không được âm");
-    await assertBatchInScope(tx, scopeWarehouseId, batchId);
+    await assertActorCanAccessBatch(tx, userId, scopeWarehouseId, batchId);
 
-    const batch = await tx.itemBatch.findUnique({ where: { id: batchId } });
+    const batch = await tx.itemBatch.findUnique({
+      where: { id: batchId },
+      include: { shelf: { select: { zone: { select: { warehouseId: true } } } } },
+    });
     if (!batch) throw new NotFoundException("Không tìm thấy lô vật tư");
 
     const onLoan = await this.sumOnLoan(tx, batchId);
@@ -157,25 +315,38 @@ export class InventoryAdjustmentService {
     await tx.inventoryCount.create({
       data: { batchId, countedQty, userId, note },
     });
+    await tx.inventoryTransaction.create({
+      data: {
+        batchId,
+        userId,
+        type: TransactionType.COUNT,
+        source: TransactionSource.MANUAL,
+        quantity: countedQty,
+        beforeQuantity: snapshotQuantity,
+        afterQuantity: newSystemQty,
+        quantityDelta: newSystemQty - snapshotQuantity,
+        note: note ?? (willApply ? "Kiểm kê và áp chênh lệch" : "Ghi nhận số đếm thực tế"),
+        warehouseId: batch.shelf?.zone.warehouseId,
+      },
+    });
 
-    if (willApply) {
-      await tx.auditLog.create({
-        data: {
-          actorId: userId,
-          action: "INVENTORY_RECONCILE",
-          entity: "ItemBatch",
-          entityId: batchId,
-          metadata: {
-            before: snapshotQuantity,
-            after: newSystemQty,
-            countedQty,
-            onLoan,
-            discrepancy,
-            note: note ?? null,
-          },
+    await tx.auditLog.create({
+      data: {
+        actorId: userId,
+        action: willApply ? "INVENTORY_RECONCILE" : "INVENTORY_COUNT",
+        entity: "ItemBatch",
+        entityId: batchId,
+        metadata: {
+          before: snapshotQuantity,
+          after: newSystemQty,
+          countedQty,
+          onLoan,
+          discrepancy,
+          applied: willApply,
+          note: note ?? null,
         },
-      });
-    }
+      },
+    });
 
     return { batchId, expectedInStock, countedQty, onLoan, discrepancy, applied: willApply };
   }

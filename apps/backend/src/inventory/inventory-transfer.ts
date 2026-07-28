@@ -7,6 +7,11 @@ import {
 import { CirculationStatus, LoanStatus, Prisma, TransactionSource } from "@prisma/client";
 import { TransactionType } from "@safestock/shared-types";
 import { randomUUID } from "node:crypto";
+import {
+  lockLoanBatch,
+  lockLoanTableForApproval,
+} from "../loan/loan-table-lock";
+import { sumOutstanding } from "./loan-math";
 import { assertWarehouseInScope } from "./warehouse-scope";
 
 type TransferInput = {
@@ -33,6 +38,9 @@ export async function transferInventoryInTx(
   if (!Number.isInteger(input.quantity) || input.quantity <= 0) {
     throw new BadRequestException("Số lượng điều chuyển phải là số nguyên dương");
   }
+
+  await lockLoanTableForApproval(tx);
+  await lockLoanBatch(tx, input.batchId);
 
   const [actor, sourceBatch, destinationShelf] = await Promise.all([
     tx.user.findUnique({
@@ -62,6 +70,7 @@ export async function transferInventoryInTx(
       where: { id: input.toShelfId },
       select: {
         id: true,
+        isLocked: true,
         zone: {
           select: {
             warehouseId: true,
@@ -81,11 +90,13 @@ export async function transferInventoryInTx(
     assertWarehouseInScope(input.scopeWarehouseId, undefined);
     throw new NotFoundException("Kệ đích không tồn tại");
   }
+  if (destinationShelf.isLocked) {
+    throw new ConflictException("Kệ đích đang bị khóa");
+  }
 
   const sourceWarehouseId = sourceBatch.shelf?.zone.warehouseId;
   const destinationWarehouseId = destinationShelf.zone.warehouseId;
   assertWarehouseInScope(input.scopeWarehouseId, sourceWarehouseId);
-  assertWarehouseInScope(input.scopeWarehouseId, destinationWarehouseId);
   const sourceWarehouse = sourceBatch.shelf?.zone.warehouse;
   const destinationWarehouse = destinationShelf.zone.warehouse;
   if (
@@ -97,10 +108,7 @@ export async function transferInventoryInTx(
     throw new ForbiddenException("Bạn chỉ được điều chuyển vật tư trong phạm vi xã của mình");
   }
 
-  const outstandingLoan = sourceBatch.loans.reduce(
-    (sum, loan) => sum + loan.quantity - loan.returnedOk - loan.returnedDamaged - loan.lost,
-    0,
-  );
+  const outstandingLoan = sumOutstanding(sourceBatch.loans);
   if (outstandingLoan > 0 || sourceBatch.circulation === CirculationStatus.ON_LOAN) {
     throw new ConflictException("Lô vật tư đang có số lượng cho mượn chưa hoàn trả");
   }
@@ -177,9 +185,15 @@ export async function transferInventoryInTx(
       batchId: movedBatch.id,
       userId: input.userId,
       type: TransactionType.TRANSFER,
-      source: TransactionSource.SCAN,
+      source: TransactionSource.MANUAL,
       quantity: input.quantity,
+      beforeQuantity: isSplit ? 0 : sourceBatch.quantity,
+      afterQuantity: isSplit ? input.quantity : sourceBatch.quantity,
+      quantityDelta: isSplit ? input.quantity : 0,
       note: input.note,
+      warehouseId: destinationWarehouseId,
+      fromWarehouseId: sourceWarehouseId,
+      toWarehouseId: destinationWarehouseId,
     },
   });
   await tx.auditLog.create({
@@ -205,7 +219,7 @@ export async function transferInventoryInTx(
           destinationQuantity: input.quantity,
           destinationShelfId: input.toShelfId,
         },
-        source: TransactionSource.SCAN,
+        source: TransactionSource.MANUAL,
         note: input.note ?? null,
         split: isSplit,
       },

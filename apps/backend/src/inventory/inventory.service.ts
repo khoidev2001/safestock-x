@@ -1,10 +1,55 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
-import { Prisma, TransactionSource } from "@prisma/client";
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from "@nestjs/common";
+import {
+  ItemCondition,
+  ItemStatus,
+  LoanStatus,
+  Prisma,
+  TransactionSource,
+} from "@prisma/client";
 import { TransactionType } from "@safestock/shared-types";
 import { PrismaService } from "../prisma/prisma.service";
 import { ReadinessService } from "../readiness/readiness.service";
+import {
+  lockLoanBatch,
+  lockLoanTableForApproval,
+} from "../loan/loan-table-lock";
+import { sumOutstanding } from "./loan-math";
 import { transferInventoryInTx } from "./inventory-transfer";
-import { assertBatchInScope } from "./warehouse-scope";
+import {
+  mutationFingerprint,
+  withMutationIdempotency,
+} from "./mutation-idempotency";
+import {
+  assertActorCanAccessWarehouse,
+  assertActorCanAccessBatch,
+  assertBatchInScope,
+  assertWarehouseInScope,
+} from "./warehouse-scope";
+
+export type ReceiveBatchInput = {
+  itemId?: string;
+  newItem?: {
+    sku: string;
+    name: string;
+    consumable: boolean;
+    categoryId?: string;
+    categoryName?: string;
+    unit?: string;
+  };
+  shelfId: string;
+  batchCode: string;
+  quantity: number;
+  expiryDate?: Date | null;
+  condition?: ItemCondition;
+  note?: string;
+};
 
 @Injectable()
 export class InventoryService {
@@ -29,7 +74,21 @@ export class InventoryService {
   }
 
   // Cây kho: warehouse → zones → shelves (+ số batch mỗi shelf)
-  async tree(warehouseId: string) {
+  async tree(
+    warehouseId: string,
+    scopeWarehouseId?: string | null,
+    actorUserId?: string,
+  ) {
+    if (actorUserId) {
+      await assertActorCanAccessWarehouse(
+        this.prisma,
+        actorUserId,
+        scopeWarehouseId,
+        warehouseId,
+      );
+    } else {
+      assertWarehouseInScope(scopeWarehouseId, warehouseId);
+    }
     const wh = await this.prisma.warehouse.findUnique({
       where: { id: warehouseId },
       include: {
@@ -44,24 +103,471 @@ export class InventoryService {
     return wh;
   }
 
-  async listBatches(warehouseId: string) {
+  async listBatches(
+    warehouseId: string,
+    scopeWarehouseId?: string | null,
+    actorUserId?: string,
+  ) {
+    if (actorUserId) {
+      await assertActorCanAccessWarehouse(
+        this.prisma,
+        actorUserId,
+        scopeWarehouseId,
+        warehouseId,
+      );
+    } else {
+      assertWarehouseInScope(scopeWarehouseId, warehouseId);
+    }
     return this.prisma.itemBatch.findMany({
       where: { shelf: { zone: { warehouseId } } },
-      include: { item: { include: { category: true } }, shelf: { include: { zone: true } } },
+      include: {
+        item: { include: { category: true } },
+        shelf: { include: { zone: true } },
+        loans: {
+          where: { status: { in: [LoanStatus.ON_LOAN, LoanStatus.PARTIALLY_RETURNED] } },
+          select: { quantity: true, returnedOk: true, returnedDamaged: true, lost: true },
+        },
+      },
       orderBy: { createdAt: "desc" },
     });
   }
 
   // Scan QR: FE quét ra SKU → trả batch + vị trí + trạng thái
-  async scanBySku(sku: string) {
+  async scanBySku(
+    sku: string,
+    scopeWarehouseId?: string | null,
+    actorUserId?: string,
+  ) {
+    const actor = actorUserId
+      ? await this.prisma.user.findUnique({
+          where: { id: actorUserId },
+          select: { organizationId: true },
+        })
+      : null;
+    if (actorUserId && !actor) throw new NotFoundException("Không tìm thấy người dùng");
     const item = await this.prisma.item.findUnique({
       where: { sku },
       include: {
         category: true,
-        batches: { include: { shelf: { include: { zone: true } } } },
+        batches: {
+          where: scopeWarehouseId
+            ? { shelf: { zone: { warehouseId: scopeWarehouseId } } }
+            : actor
+              ? {
+                  shelf: {
+                    zone: {
+                      warehouse: { organizationId: actor.organizationId },
+                    },
+                  },
+                }
+              : undefined,
+          include: { shelf: { include: { zone: true } } },
+        },
       },
     });
-    if (!item) throw new NotFoundException(`Không tìm thấy vật tư SKU=${sku}`);
+    if (!item || ((scopeWarehouseId || actor) && item.batches.length === 0)) {
+      throw new NotFoundException(`Không tìm thấy vật tư SKU=${sku} trong kho được phân công`);
+    }
+    return item;
+  }
+
+  async listTransactions(
+    warehouseId: string,
+    scopeWarehouseId: string | null | undefined,
+    actorUserId: string,
+    limit = 100,
+  ) {
+    await assertActorCanAccessWarehouse(
+      this.prisma,
+      actorUserId,
+      scopeWarehouseId,
+      warehouseId,
+    );
+    return this.prisma.inventoryTransaction.findMany({
+      where: {
+        OR: [
+          { warehouseId },
+          { fromWarehouseId: warehouseId },
+          { toWarehouseId: warehouseId },
+          {
+            warehouseId: null,
+            fromWarehouseId: null,
+            toWarehouseId: null,
+            batch: { shelf: { zone: { warehouseId } } },
+          },
+        ],
+      },
+      include: {
+        batch: {
+          select: {
+            id: true,
+            batchCode: true,
+            item: { select: { sku: true, name: true } },
+            shelf: {
+              select: {
+                code: true,
+                zone: { select: { code: true, name: true } },
+              },
+            },
+          },
+        },
+        user: { select: { fullName: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: Math.min(Math.max(limit, 1), 200),
+    });
+  }
+
+  async listBatchesPage(
+    warehouseId: string,
+    scopeWarehouseId: string | null | undefined,
+    actorUserId: string,
+    cursor?: string,
+    limit = 100,
+  ) {
+    await assertActorCanAccessWarehouse(
+      this.prisma,
+      actorUserId,
+      scopeWarehouseId,
+      warehouseId,
+    );
+    const pageSize = Math.min(Math.max(limit, 1), 200);
+    if (cursor) {
+      const scopedCursor = await this.prisma.itemBatch.findFirst({
+        where: {
+          id: cursor,
+          shelf: { zone: { warehouseId } },
+        },
+        select: { id: true },
+      });
+      if (!scopedCursor) {
+        throw new BadRequestException("Cursor tồn kho không hợp lệ cho kho này");
+      }
+    }
+    const rows = await this.prisma.itemBatch.findMany({
+      where: { shelf: { zone: { warehouseId } } },
+      include: {
+        item: { include: { category: true } },
+        shelf: { include: { zone: true } },
+        loans: {
+          where: {
+            status: {
+              in: [LoanStatus.ON_LOAN, LoanStatus.PARTIALLY_RETURNED],
+            },
+          },
+          select: {
+            quantity: true,
+            returnedOk: true,
+            returnedDamaged: true,
+            lost: true,
+          },
+        },
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      take: pageSize + 1,
+    });
+    const hasMore = rows.length > pageSize;
+    const data = hasMore ? rows.slice(0, pageSize) : rows;
+    return {
+      data,
+      nextCursor: hasMore ? data[data.length - 1]?.id ?? null : null,
+    };
+  }
+
+  async transferDestinations(
+    sourceWarehouseId: string,
+    scopeWarehouseId: string | null | undefined,
+    actorUserId: string,
+  ) {
+    await assertActorCanAccessWarehouse(
+      this.prisma,
+      actorUserId,
+      scopeWarehouseId,
+      sourceWarehouseId,
+    );
+    const source = await this.prisma.warehouse.findUnique({
+      where: { id: sourceWarehouseId },
+      select: { organizationId: true, communeId: true },
+    });
+    if (!source) throw new NotFoundException("Không tìm thấy kho nguồn");
+
+    return this.prisma.warehouse.findMany({
+      where: {
+        organizationId: source.organizationId,
+        communeId: source.communeId,
+      },
+      select: {
+        id: true,
+        name: true,
+        zones: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            shelves: {
+              where: { isLocked: false },
+              select: {
+                id: true,
+                code: true,
+                isLocked: true,
+              },
+              orderBy: { code: "asc" },
+            },
+          },
+          orderBy: { code: "asc" },
+        },
+      },
+      orderBy: { name: "asc" },
+    });
+  }
+
+  async listCatalog(actorUserId: string) {
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actorUserId },
+      select: { organizationId: true },
+    });
+    if (!actor) throw new NotFoundException("Không tìm thấy người thao tác");
+    return this.prisma.item.findMany({
+      where: {
+        batches: {
+          some: {
+            shelf: {
+              zone: {
+                warehouse: { organizationId: actor.organizationId },
+              },
+            },
+          },
+        },
+      },
+      include: { category: true },
+      orderBy: [{ category: { name: "asc" } }, { name: "asc" }],
+    });
+  }
+
+  async receiveBatch(
+    userId: string,
+    input: ReceiveBatchInput,
+    scopeWarehouseId?: string | null,
+    requestId?: string,
+  ) {
+    const batchCode = input.batchCode.trim();
+    if (!batchCode) throw new BadRequestException("Mã lô không được để trống");
+    if (!Number.isInteger(input.quantity) || input.quantity <= 0) {
+      throw new BadRequestException("Số lượng nhập phải là số nguyên dương");
+    }
+    if (Boolean(input.itemId) === Boolean(input.newItem)) {
+      throw new BadRequestException("Chọn một vật tư có sẵn hoặc khai báo vật tư mới");
+    }
+    if (input.expiryDate && Number.isNaN(input.expiryDate.getTime())) {
+      throw new BadRequestException("Hạn dùng không hợp lệ");
+    }
+    if (input.expiryDate && isBeforeUtcToday(input.expiryDate)) {
+      throw new BadRequestException("Không thể tiếp nhận lô đã hết hạn");
+    }
+
+    try {
+      const result = await this.prisma.$transaction((tx) =>
+        withMutationIdempotency(
+          tx,
+          {
+            actorId: userId,
+            operation: "inventory.receive-batch",
+            requestId,
+            fingerprint: mutationFingerprint(input),
+          },
+          async () => {
+            const [actor, shelf] = await Promise.all([
+              tx.user.findUnique({
+                where: { id: userId },
+                select: { organizationId: true },
+              }),
+              tx.shelf.findUnique({
+                where: { id: input.shelfId },
+                select: {
+                  id: true,
+                  isLocked: true,
+                  zone: {
+                    select: {
+                      warehouseId: true,
+                      warehouse: { select: { organizationId: true } },
+                    },
+                  },
+                },
+              }),
+            ]);
+            if (!actor) throw new NotFoundException("Không tìm thấy người thao tác");
+            if (!shelf) throw new NotFoundException("Không tìm thấy kệ nhận hàng");
+            assertWarehouseInScope(scopeWarehouseId, shelf.zone.warehouseId);
+            if (shelf.zone.warehouse.organizationId !== actor.organizationId) {
+              throw new ForbiddenException("Không được nhập hàng vào kho ngoài đơn vị");
+            }
+            if (shelf.isLocked) {
+              throw new ConflictException("Kệ nhận hàng đang bị khóa");
+            }
+
+            let item;
+            if (input.itemId) {
+              const existingItem = await tx.item.findUnique({
+                where: { id: input.itemId },
+                include: {
+                  batches: {
+                    where: {
+                      shelf: {
+                        zone: {
+                          warehouse: { organizationId: actor.organizationId },
+                        },
+                      },
+                    },
+                    select: { id: true },
+                    take: 1,
+                  },
+                },
+              });
+              if (!existingItem) throw new NotFoundException("Không tìm thấy vật tư");
+              if (existingItem.batches.length === 0) {
+                throw new ForbiddenException("Không được dùng vật tư ngoài đơn vị");
+              }
+              item = existingItem;
+            } else {
+              item = await this.createCatalogItemInTx(tx, userId, input.newItem!);
+            }
+
+            const batch = await tx.itemBatch.create({
+              data: {
+                itemId: item.id,
+                shelfId: shelf.id,
+                batchCode,
+                quantity: input.quantity,
+                condition: input.condition ?? ItemCondition.NEW,
+                expiryDate: input.expiryDate ?? null,
+                inspectedAt: new Date(),
+              },
+            });
+            const transaction = await tx.inventoryTransaction.create({
+              data: {
+                batchId: batch.id,
+                userId,
+                type: TransactionType.IMPORT,
+                source: TransactionSource.MANUAL,
+                quantity: input.quantity,
+                beforeQuantity: 0,
+                afterQuantity: input.quantity,
+                quantityDelta: input.quantity,
+                note: input.note,
+                warehouseId: shelf.zone.warehouseId,
+              },
+            });
+            await tx.auditLog.create({
+              data: {
+                actorId: userId,
+                action: "INVENTORY_RECEIVE_BATCH",
+                entity: "ItemBatch",
+                entityId: batch.id,
+                metadata: {
+                  itemId: item.id,
+                  sku: item.sku,
+                  shelfId: shelf.id,
+                  warehouseId: shelf.zone.warehouseId,
+                  batchCode,
+                  quantity: input.quantity,
+                  expiryDate: input.expiryDate?.toISOString() ?? null,
+                  condition: input.condition ?? ItemCondition.NEW,
+                  transactionId: transaction.id,
+                  note: input.note ?? null,
+                },
+              },
+            });
+            const receivedBatch = await tx.itemBatch.findUnique({
+              where: { id: batch.id },
+              include: {
+                item: { include: { category: true } },
+                shelf: { include: { zone: true } },
+              },
+            });
+            if (!receivedBatch) {
+              throw new NotFoundException("Không tìm thấy lô vừa tiếp nhận");
+            }
+
+            return {
+              batch: receivedBatch,
+              transaction,
+              warehouseId: shelf.zone.warehouseId,
+              qrPayload: `safestock://inventory?sku=${encodeURIComponent(item.sku)}&batch=${encodeURIComponent(batchCode)}`,
+            };
+          },
+        ),
+      );
+      await this.readiness.recalculateWarehouse(result.warehouseId).catch((error) => {
+        this.log.warn(`Recalc readiness sau tiếp nhận lô lỗi: ${error.message}`);
+      });
+      const { warehouseId: _warehouseId, ...response } = result;
+      return response;
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        throw new ConflictException("SKU, danh mục hoặc mã lô đã tồn tại");
+      }
+      throw error;
+    }
+  }
+
+  private async createCatalogItemInTx(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    input: NonNullable<ReceiveBatchInput["newItem"]>,
+  ) {
+    const sku = input.sku.trim().toUpperCase();
+    const name = input.name.trim();
+    if (!sku || !name) {
+      throw new BadRequestException("SKU và tên vật tư không được để trống");
+    }
+
+    let category;
+    if (input.categoryId) {
+      category = await tx.itemCategory.findUnique({ where: { id: input.categoryId } });
+      if (!category) throw new NotFoundException("Không tìm thấy danh mục");
+    } else {
+      const categoryName = input.categoryName?.trim();
+      const unit = input.unit?.trim();
+      if (!categoryName || !unit) {
+        throw new BadRequestException("Vật tư mới cần danh mục và đơn vị tính");
+      }
+      category = await tx.itemCategory.findUnique({ where: { name: categoryName } });
+      if (category && category.unit !== unit) {
+        throw new ConflictException(
+          `Danh mục ${categoryName} đang dùng đơn vị ${category.unit}`,
+        );
+      }
+      category ??= await tx.itemCategory.create({
+        data: { name: categoryName, unit },
+      });
+    }
+
+    const item = await tx.item.create({
+      data: {
+        sku,
+        name,
+        consumable: input.consumable,
+        categoryId: category.id,
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        actorId: userId,
+        action: "INVENTORY_CREATE_ITEM",
+        entity: "Item",
+        entityId: item.id,
+        metadata: {
+          sku,
+          name,
+          categoryId: category.id,
+          consumable: input.consumable,
+        },
+      },
+    });
     return item;
   }
 
@@ -72,8 +578,9 @@ export class InventoryService {
     note?: string,
     source: TransactionSource = TransactionSource.SCAN,
     scopeWarehouseId?: string | null,
+    requestId?: string,
   ) {
-    await assertBatchInScope(this.prisma, scopeWarehouseId, batchId);
+    await assertActorCanAccessBatch(this.prisma, userId, scopeWarehouseId, batchId);
     const result = await this.applyTxn(
       userId,
       batchId,
@@ -82,6 +589,7 @@ export class InventoryService {
       note,
       source,
       scopeWarehouseId,
+      requestId,
     );
     await this.recalcAfterTxn(batchId);
     return result;
@@ -94,8 +602,9 @@ export class InventoryService {
     note?: string,
     source: TransactionSource = TransactionSource.SCAN,
     scopeWarehouseId?: string | null,
+    requestId?: string,
   ) {
-    await assertBatchInScope(this.prisma, scopeWarehouseId, batchId);
+    await assertActorCanAccessBatch(this.prisma, userId, scopeWarehouseId, batchId);
     const result = await this.applyTxn(
       userId,
       batchId,
@@ -104,6 +613,7 @@ export class InventoryService {
       note,
       source,
       scopeWarehouseId,
+      requestId,
     );
     await this.recalcAfterTxn(batchId);
     return result;
@@ -118,9 +628,19 @@ export class InventoryService {
     items: { batchId: string; quantity: number }[],
     note?: string,
     scopeWarehouseId?: string | null,
+    requestId?: string,
   ) {
     const result = await this.prisma.$transaction((tx) =>
-      this.bulkExportInTx(tx, userId, items, note, scopeWarehouseId),
+      withMutationIdempotency(
+        tx,
+        {
+          actorId: userId,
+          operation: "inventory.bulk-export",
+          requestId,
+          fingerprint: mutationFingerprint({ items, note }),
+        },
+        () => this.bulkExportInTx(tx, userId, items, note, scopeWarehouseId),
+      ),
     );
     await Promise.all(items.map((item) => this.recalcAfterTxn(item.batchId)));
     return result;
@@ -140,11 +660,14 @@ export class InventoryService {
     if (items.length === 0) {
       throw new BadRequestException("Danh sách xuất lô rỗng");
     }
+    if (new Set(items.map((item) => item.batchId)).size !== items.length) {
+      throw new BadRequestException("Mỗi lô chỉ được xuất một dòng trong cùng phiếu");
+    }
     const orderedItems = items
       .map((item, index) => ({ item, index }))
       .sort((a, b) => a.item.batchId.localeCompare(b.item.batchId));
     for (const { item } of orderedItems) {
-      await assertBatchInScope(tx, scopeWarehouseId, item.batchId);
+      await assertActorCanAccessBatch(tx, userId, scopeWarehouseId, item.batchId);
     }
 
     const results = new Array<Awaited<ReturnType<typeof this.decrementInTx>>>(items.length);
@@ -219,16 +742,38 @@ export class InventoryService {
     quantity: number,
     note?: string,
     scopeWarehouseId?: string | null,
+    requestId?: string,
   ) {
-    const transfer = await this.prisma.$transaction((tx) =>
-      transferInventoryInTx(tx, {
-        userId,
-        batchId,
-        toShelfId,
-        quantity,
-        note,
-        scopeWarehouseId,
-      }),
+    // Một transfer hợp lệ có thể chờ row lock của transfer đồng thời trên cùng batch.
+    // Prisma mặc định chỉ chờ 2 giây để mở interactive transaction, ngắn hơn thời
+    // gian serialize thực tế trên Windows/PostgreSQL local. Giới hạn 10 giây vẫn
+    // fail-fast khi DB nghẽn, nhưng không biến một race hợp lệ thành lỗi hạ tầng giả.
+    const transfer = await this.prisma.$transaction(
+      (tx) =>
+        withMutationIdempotency(
+          tx,
+          {
+            actorId: userId,
+            operation: "inventory.transfer",
+            requestId,
+            fingerprint: mutationFingerprint({
+              batchId,
+              toShelfId,
+              quantity,
+              note,
+            }),
+          },
+          () =>
+            transferInventoryInTx(tx, {
+              userId,
+              batchId,
+              toShelfId,
+              quantity,
+              note,
+              scopeWarehouseId,
+            }),
+        ),
+      { maxWait: 10_000, timeout: 15_000 },
     );
     await this.recalcWarehouses(transfer.warehouseIds);
     return transfer.result;
@@ -255,22 +800,49 @@ export class InventoryService {
     note?: string,
     source: TransactionSource = TransactionSource.SCAN,
     scopeWarehouseId?: string | null,
+    requestId?: string,
   ) {
-    return this.prisma.$transaction(async (tx) => {
-      if (type === TransactionType.IMPORT) {
-        return this.incrementInTx(tx, userId, batchId, quantity, note, source, scopeWarehouseId);
-      }
-      return this.decrementInTx(
+    return this.prisma.$transaction((tx) =>
+      withMutationIdempotency(
         tx,
-        userId,
-        batchId,
-        quantity,
-        type,
-        source,
-        note,
-        scopeWarehouseId,
-      );
-    });
+        {
+          actorId: userId,
+          operation:
+            type === TransactionType.IMPORT ? "inventory.import" : "inventory.export",
+          requestId,
+          fingerprint: mutationFingerprint({
+            batchId,
+            type,
+            quantity,
+            note,
+            source,
+          }),
+        },
+        async () => {
+          if (type === TransactionType.IMPORT) {
+            return this.incrementInTx(
+              tx,
+              userId,
+              batchId,
+              quantity,
+              note,
+              source,
+              scopeWarehouseId,
+            );
+          }
+          return this.decrementInTx(
+            tx,
+            userId,
+            batchId,
+            quantity,
+            type,
+            source,
+            note,
+            scopeWarehouseId,
+          );
+        },
+      ),
+    );
   }
 
   /**
@@ -288,13 +860,52 @@ export class InventoryService {
     note?: string,
     scopeWarehouseId?: string | null,
   ) {
-    const before = await tx.itemBatch.findUnique({ where: { id: batchId } });
+    // Export phải serialize với borrow/return/report approval để phần đang cho
+    // mượn không thể bị xuất lần hai trong một request đồng thời.
+    await lockLoanTableForApproval(tx);
+    await lockLoanBatch(tx, batchId);
+    const before = await tx.itemBatch.findUnique({
+      where: { id: batchId },
+      include: { shelf: { select: { isLocked: true } } },
+    });
     if (!before) throw new NotFoundException("Không tìm thấy lô vật tư");
+    if (before.status && before.status !== ItemStatus.AVAILABLE) {
+      throw new BadRequestException("Lô vật tư không ở trạng thái có thể xuất");
+    }
+    if (
+      before.condition &&
+      before.condition !== ItemCondition.NEW &&
+      before.condition !== ItemCondition.USED
+    ) {
+      throw new BadRequestException("Lô vật tư hỏng hoặc đang chờ kiểm tra");
+    }
+    if (before.shelf?.isLocked) {
+      throw new BadRequestException("Kệ chứa lô đang bị khóa");
+    }
+    if (before.expiryDate && before.expiryDate.getTime() <= Date.now()) {
+      throw new BadRequestException("Lô vật tư đã hết hạn");
+    }
+
+    const openLoans = await tx.loanRecord.findMany({
+      where: {
+        batchId,
+        status: { in: [LoanStatus.ON_LOAN, LoanStatus.PARTIALLY_RETURNED] },
+      },
+      select: { quantity: true, returnedOk: true, returnedDamaged: true, lost: true },
+    });
+    const outstandingLoan = sumOutstanding(openLoans);
+    const availableNow = before.quantity - outstandingLoan;
+    if (quantity > availableNow) {
+      throw new BadRequestException(
+        `Không đủ tồn khả dụng: hiện ${availableNow}, đang cho mượn ${outstandingLoan}, yêu cầu xuất ${quantity}`,
+      );
+    }
 
     const result = await tx.itemBatch.updateMany({
       where: {
         id: batchId,
-        quantity: { gte: quantity },
+        // Giữ lại tối thiểu phần đang cho mượn ngay trong CAS của database.
+        quantity: { gte: outstandingLoan + quantity },
         ...(scopeWarehouseId ? { shelf: { zone: { warehouseId: scopeWarehouseId } } } : {}),
       },
       data: { quantity: { decrement: quantity } },
@@ -304,7 +915,7 @@ export class InventoryService {
       // che mất vi phạm quyền khi shelfId đổi giữa scope check và update.
       await assertBatchInScope(tx, scopeWarehouseId, batchId);
       throw new BadRequestException(
-        `Không đủ tồn: hiện ${before.quantity}, yêu cầu xuất ${quantity}`,
+        "Tồn khả dụng vừa thay đổi; hãy tải lại trước khi xuất",
       );
     }
 
@@ -333,8 +944,14 @@ export class InventoryService {
     source: TransactionSource,
     scopeWarehouseId?: string | null,
   ) {
-    const before = await tx.itemBatch.findUnique({ where: { id: batchId } });
+    const before = await tx.itemBatch.findUnique({
+      where: { id: batchId },
+      include: { shelf: { select: { isLocked: true } } },
+    });
     if (!before) throw new NotFoundException("Không tìm thấy lô vật tư");
+    if (before.shelf?.isLocked) {
+      throw new ConflictException("Kệ chứa lô đang bị khóa");
+    }
 
     if (scopeWarehouseId) {
       const result = await tx.itemBatch.updateMany({
@@ -415,6 +1032,10 @@ export class InventoryService {
       after: number;
     },
   ) {
+    const location = await tx.itemBatch.findUnique({
+      where: { id: p.batchId },
+      select: { shelf: { select: { zone: { select: { warehouseId: true } } } } },
+    });
     const txn = await tx.inventoryTransaction.create({
       data: {
         batchId: p.batchId,
@@ -422,7 +1043,11 @@ export class InventoryService {
         type: p.type,
         source: p.source,
         quantity: p.quantity,
+        beforeQuantity: p.before,
+        afterQuantity: p.after,
+        quantityDelta: p.after - p.before,
         note: p.note,
+        warehouseId: location?.shelf?.zone.warehouseId,
       },
     });
     await tx.auditLog.create({
@@ -443,4 +1068,13 @@ export class InventoryService {
     const batch = await tx.itemBatch.findUnique({ where: { id: p.batchId } });
     return { batch, transaction: txn };
   }
+}
+
+function isBeforeUtcToday(value: Date, now = new Date()): boolean {
+  const startOfTodayUtc = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+  );
+  return value.getTime() < startOfTodayUtc;
 }

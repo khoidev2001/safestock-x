@@ -22,6 +22,7 @@ export type IncidentKind =
   | "BAD_STORAGE"
   | "FIRE_RISK"
   | "POWER_OUTAGE"
+  | "MISPLACED_ITEM"
   | "STAT_ANOMALY"
   | "PREDICTIVE_WARNING";
 export type Severity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
@@ -74,6 +75,9 @@ export function detectIncidents(signals: SensorSignal[]): DetectedIncident[] {
 
   const power = detectPowerOutage(signals);
   if (power) incidents.push(power);
+
+  const misplaced = detectMisplacedItem(signals);
+  if (misplaced) incidents.push(misplaced);
 
   return incidents;
 }
@@ -257,6 +261,31 @@ function detectPowerOutage(signals: SensorSignal[]): DetectedIncident | null {
     title: "Mất điện kho",
     evidence: [
       { ...toEvidence(off), weight: 1, note: "Nguồn điện kho mất, không kèm lỗi kết nối gateway" },
+    ],
+  };
+}
+
+/** Vật tư sai vị trí: camera AI phát một kết quả nhận diện dương tính. */
+function detectMisplacedItem(signals: SensorSignal[]): DetectedIncident | null {
+  const detection = signals.find(
+    (signal) =>
+      signal.deviceType === "CAMERA_AI" &&
+      signal.eventType === "VISION_DETECTION" &&
+      signal.value >= 1,
+  );
+  if (!detection) return null;
+
+  return {
+    kind: "MISPLACED_ITEM",
+    severity: "HIGH",
+    confidence: 0.85,
+    title: "Phát hiện vật tư sai vị trí",
+    evidence: [
+      {
+        ...toEvidence(detection),
+        weight: 1,
+        note: "Camera AI phát hiện vật tư không nằm tại khu vực được quy định",
+      },
     ],
   };
 }

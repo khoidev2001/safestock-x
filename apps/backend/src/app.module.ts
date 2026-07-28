@@ -19,6 +19,7 @@ import { AssistantModule } from "./assistant/assistant.module";
 import { BackupModule } from "./backup/backup.module";
 import { AdminModule } from "./admin/admin.module";
 import { ReportModule } from "./report/report.module";
+import { CommuneContactModule } from "./contact/commune-contact.module";
 import { validateEnv } from "./config/env.validation";
 import { resolveEnvFilePaths } from "./config/env-file-path";
 
@@ -48,6 +49,7 @@ import { resolveEnvFilePaths } from "./config/env-file-path";
     BackupModule,
     AdminModule,
     ReportModule,
+    CommuneContactModule,
   ],
 })
 export class AppModule {}

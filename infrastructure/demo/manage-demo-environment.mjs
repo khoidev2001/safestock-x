@@ -10,6 +10,7 @@ import {
   validateDemoEnvironment,
 } from "./demo-environment-guard.mjs";
 import { validateDemoContainerIdentity } from "./demo-container-identity.mjs";
+import { resolvePortableSpawnCommand } from "./portable-spawn-command.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(scriptDirectory, "..", "..");
@@ -67,13 +68,13 @@ switch (action) {
     break;
   case "schema":
     assertDemoContainersRunning();
-    run("pnpm", ["--filter", "@safestock/backend", "prisma:generate"]);
+    ensurePrismaClientGenerated();
     run("pnpm", ["--filter", "@safestock/backend", "prisma:push"]);
     break;
   case "reset":
     requireDemoResetConfirmation(commandLine.confirmReset ? ["--confirm-demo-reset"] : []);
     assertDemoContainersRunning();
-    run("pnpm", ["--filter", "@safestock/backend", "prisma:generate"]);
+    ensurePrismaClientGenerated();
     run("pnpm", ["--filter", "@safestock/backend", "prisma:push"]);
     run("pnpm", ["--filter", "@safestock/backend", "seed"]);
     break;
@@ -103,9 +104,20 @@ function assertDemoContainersRunning() {
   validateDemoContainerIdentity(JSON.parse(result.stdout), demoEnv);
 }
 
+function ensurePrismaClientGenerated() {
+  const prismaClientPackage = require.resolve("@prisma/client/package.json");
+  const prismaClientRequire = createRequire(prismaClientPackage);
+  try {
+    prismaClientRequire.resolve(".prisma/client/default");
+    console.log("Prisma client already generated; keeping the loaded Windows engine intact.");
+  } catch {
+    run("pnpm", ["--filter", "@safestock/backend", "prisma:generate"]);
+  }
+}
+
 function run(command, commandArgs) {
-  const executable = process.platform === "win32" && command === "pnpm" ? "pnpm.cmd" : command;
-  const result = spawnSync(executable, commandArgs, {
+  const portable = resolvePortableSpawnCommand(command, commandArgs);
+  const result = spawnSync(portable.executable, portable.args, {
     cwd: repositoryRoot,
     env: childEnv,
     stdio: "inherit",

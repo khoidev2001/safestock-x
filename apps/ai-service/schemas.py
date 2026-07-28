@@ -132,6 +132,54 @@ class KnowledgeSearchAnswer(BaseModel):
     hits: list[KnowledgeHitAnswer]
 
 
+# ===== Xếp hạng catalog bằng embedding (B5 semantic search + B7 chuẩn hóa) =====
+
+class SemanticCandidateInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1, max_length=128)
+    text: str = Field(min_length=1, max_length=1000)
+
+
+class SemanticRankRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(min_length=2, max_length=500)
+    candidates: list[SemanticCandidateInput] = Field(min_length=1, max_length=500)
+    topK: int = Field(default=5, ge=1, le=20)
+    minScore: float = Field(default=0.35, ge=-1, le=1)
+
+
+class SemanticRankHitAnswer(BaseModel):
+    id: str
+    score: float
+
+
+class SemanticRankAnswer(BaseModel):
+    available: bool
+    reason: str | None = None
+    hits: list[SemanticRankHitAnswer]
+
+
+class BriefingFactInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(pattern=r"^F\d+$")
+    text: str = Field(min_length=1, max_length=1000)
+
+
+class BriefingSelectRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    facts: list[BriefingFactInput] = Field(min_length=1, max_length=12)
+
+
+class BriefingSelection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    factIds: list[str] = Field(min_length=1, max_length=12)
+
+
 # ===== Nhận dạng giọng nói (ASR) — PhoWhisper local, offline =====
 # Frontend ghi âm → mã hoá WAV 16kHz mono → base64 → gửi lên. ai-service giải mã +
 # chạy PhoWhisper (GPU nếu có). Text trả về để người dùng XEM LẠI & SỬA trước khi parse.

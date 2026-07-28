@@ -13,6 +13,7 @@ from pydantic import ValidationError
 
 from knowledge import SearchHit, get_knowledge_retriever
 from providers.factory import build_provider
+from semantic import SemanticCandidate, get_semantic_ranker
 from schemas import (
     ActionPlanNarrative,
     ActionPlanRequest,
@@ -20,11 +21,15 @@ from schemas import (
     AssistantPlainDraft,
     AssistantRagDraft,
     AssistantRequest,
+    BriefingSelectRequest,
+    BriefingSelection,
     ExplainRequest,
     KnowledgeSearchAnswer,
     KnowledgeSearchRequest,
     ParsedIncident,
     ParseRequest,
+    SemanticRankAnswer,
+    SemanticRankRequest,
     TranscribeAnswer,
     TranscribeRequest,
 )
@@ -72,6 +77,13 @@ _EXPLAIN_SYSTEM = _IDENTITY_GUARD + """
 Bạn là trợ lý giải thích phương án cứu hộ bằng tiếng Việt. \
 Diễn đạt lại dữ liệu ĐÃ ĐƯỢC TÍNH SẴN thành đoạn văn ngắn gọn, dễ hiểu cho người \
 điều phối. TUYỆT ĐỐI không bịa thêm số liệu — chỉ dùng số trong dữ liệu đưa vào."""
+
+_BRIEFING_SELECT_SYSTEM = _IDENTITY_GUARD + """
+
+Bạn nhận danh sách sự kiện vận hành đã được backend kiểm chứng, mỗi sự kiện có id.
+Chỉ trả JSON {"factIds":["F1","F2"]} chứa TOÀN BỘ id đầu vào, mỗi id đúng một lần,
+sắp xếp từ việc cần chú ý nhất đến việc ổn định nhất. Không viết lại nội dung, không
+thêm id, không thêm số hoặc nhận xét."""
 
 _ASSISTANT_SYSTEM = _IDENTITY_GUARD + """
 
@@ -287,6 +299,66 @@ def knowledge_search(req: KnowledgeSearchRequest) -> KnowledgeSearchAnswer:
         model=result.model,
         hits=[hit.public_dict() for hit in result.hits],
     )
+
+
+@app.post("/semantic/rank")
+def semantic_rank(req: SemanticRankRequest) -> SemanticRankAnswer:
+    """Xếp hạng ID theo ngữ nghĩa; không trả vector và không tự sửa dữ liệu."""
+    result = get_semantic_ranker().rank(
+        req.query,
+        [SemanticCandidate(candidate.id, candidate.text) for candidate in req.candidates],
+        top_k=req.topK,
+        min_score=req.minScore,
+    )
+    return SemanticRankAnswer(
+        available=result.available,
+        reason=result.reason,
+        hits=[{"id": hit.id, "score": hit.score} for hit in result.hits],
+    )
+
+
+@app.post("/briefing/select")
+def briefing_select(req: BriefingSelectRequest) -> BriefingSelection:
+    """AI chỉ xếp thứ tự fact; backend render nguyên văn để không hallucinate."""
+    expected_ids = [fact.id for fact in req.facts]
+    if len(set(expected_ids)) != len(expected_ids):
+        raise HTTPException(status_code=422, detail="fact id bị trùng")
+    prompt = json.dumps(
+        {
+            "expectedFactIds": expected_ids,
+            "facts": [fact.model_dump() for fact in req.facts],
+        },
+        ensure_ascii=False,
+    )
+    for attempt in range(_MAX_RETRY):
+        raw = provider.generate_json(
+            _BRIEFING_SELECT_SYSTEM,
+            prompt,
+            BriefingSelection.model_json_schema(),
+        )
+        try:
+            selection = BriefingSelection.model_validate_json(_strip_fence(raw))
+            if (
+                len(selection.factIds) == len(expected_ids)
+                and len(set(selection.factIds)) == len(expected_ids)
+                and set(selection.factIds) == set(expected_ids)
+            ):
+                return selection
+        except (ValidationError, json.JSONDecodeError):
+            pass
+        if attempt < _MAX_RETRY - 1:
+            prompt = json.dumps(
+                {
+                    "expectedFactIds": expected_ids,
+                    "facts": [fact.model_dump() for fact in req.facts],
+                    "retryInstruction": (
+                        "factIds phải chứa đúng toàn bộ expectedFactIds, "
+                        "không thiếu, không trùng, không thêm."
+                    ),
+                },
+                ensure_ascii=False,
+            )
+    raise HTTPException(status_code=503, detail="Không thể xếp bản tin an toàn")
 
 
 def _assistant_payload(

@@ -1,4 +1,4 @@
-import { ForbiddenException } from "@nestjs/common";
+import { ConflictException, ForbiddenException } from "@nestjs/common";
 import { TransactionSource } from "@prisma/client";
 import { InventoryService } from "../inventory.service";
 
@@ -45,6 +45,40 @@ describe("InventoryService scoped import atomicity", () => {
       },
       data: { quantity: { increment: 2 } },
     });
+    expect(tx.inventoryTransaction.create).not.toHaveBeenCalled();
+    expect(tx.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects import into an existing batch on a locked shelf", async () => {
+    const tx = {
+      itemBatch: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: "batch-locked",
+          quantity: 10,
+          shelf: { isLocked: true },
+        }),
+        update: jest.fn().mockResolvedValue({ id: "batch-locked", quantity: 12 }),
+      },
+      inventoryTransaction: { create: jest.fn().mockResolvedValue({ id: "txn-1" }) },
+      auditLog: { create: jest.fn().mockResolvedValue({ id: "audit-1" }) },
+    };
+    const service = new InventoryService(
+      {} as never,
+      { recalculateWarehouse: jest.fn() } as never,
+    );
+
+    await expect(
+      service.importInTx(
+        tx as never,
+        "user-1",
+        "batch-locked",
+        2,
+        "nhập bổ sung",
+        TransactionSource.MANUAL,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(tx.itemBatch.update).not.toHaveBeenCalled();
     expect(tx.inventoryTransaction.create).not.toHaveBeenCalled();
     expect(tx.auditLog.create).not.toHaveBeenCalled();
   });

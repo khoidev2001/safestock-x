@@ -7,6 +7,32 @@
     "pnpm": ">=10"
   },
   "pnpm": {
+    "packageExtensions": {
+      "@react-native-community/netinfo@11.4.1": {
+        "peerDependencies": {
+          "react": "*"
+        }
+      }
+    },
+    "overrides": {
+      "@expo/cli>glob": "10.5.0",
+      "@expo/cli>tar": "7.5.22",
+      "@expo/config>glob": "10.5.0",
+      "@expo/config-plugins>glob": "10.5.0",
+      "@expo/metro-config>glob": "10.5.0",
+      "@expo/metro-config>postcss": "8.5.23",
+      "@expo/plist>@xmldom/xmldom": "0.8.13",
+      "@nestjs/config>lodash": "4.18.1",
+      "@nestjs/platform-express>multer": "2.2.0",
+      "@nestjs/serve-static>path-to-regexp": "1.9.0",
+      "ajv>fast-uri": "3.1.4",
+      "cacache@18.0.4>tar": "7.5.22",
+      "minimatch@3.1.5>brace-expansion": "1.1.16",
+      "minimatch@5.1.9>brace-expansion": "2.1.2",
+      "minimatch@9.0.9>brace-expansion": "2.1.2",
+      "next>postcss": "8.5.23",
+      "next>sharp": "0.35.3"
+    },
     "onlyBuiltDependencies": [
       "@nestjs/core",
       "@prisma/client",
@@ -22,6 +48,17 @@
     "infra:up": "docker compose --env-file .env -f infrastructure/docker-compose.yml up -d",
     "infra:down": "docker compose --env-file .env -f infrastructure/docker-compose.yml down",
     "infra:logs": "docker compose --env-file .env -f infrastructure/docker-compose.yml logs -f",
+    "osrm:test": "node --test infrastructure/osrm/osrm-artifact.test.mjs infrastructure/osrm/osrm-operations.test.mjs infrastructure/osrm/osrm-runtime.test.mjs",
+    "osrm:fetch": "node infrastructure/osrm/fetch-dong-xuan-osm.mjs",
+    "osrm:build": "node infrastructure/osrm/manage-osrm.mjs build",
+    "osrm:manifest": "node infrastructure/osrm/manage-osrm.mjs manifest",
+    "osrm:preflight": "node infrastructure/osrm/manage-osrm.mjs preflight",
+    "osrm:up": "node infrastructure/osrm/manage-osrm.mjs up",
+    "osrm:down": "node infrastructure/osrm/manage-osrm.mjs down",
+    "osrm:status": "node infrastructure/osrm/manage-osrm.mjs status",
+    "osrm:logs": "node infrastructure/osrm/manage-osrm.mjs logs",
+    "osrm:verify-live": "node infrastructure/osrm/manage-osrm.mjs verify-live",
+    "osrm:verify-offline": "node infrastructure/osrm/manage-osrm.mjs verify-offline",
     "demo:validate": "node infrastructure/demo/manage-demo-environment.mjs validate",
     "demo:compose:verify": "node infrastructure/demo/verify-demo-compose.mjs",
     "demo:infra:up": "node infrastructure/demo/manage-demo-environment.mjs up",
@@ -39,8 +76,8 @@
     "fe:dev": "pnpm --filter @safestock/frontend dev",
     "desktop:dev": "pnpm --filter @safestock/desktop dev",
     "mobile:dev": "pnpm --filter @safestock/mobile start",
-    "ai:dev": "cd apps/ai-service && ./.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000",
-    "dev:all": "bash scripts/dev-all.sh",
+    "ai:dev": "node scripts/ai-dev.mjs",
+    "dev:all": "node scripts/dev-all.mjs",
     "demo": "node apps/backend/demo/demo.mjs",
     "lint": "pnpm -r --if-present lint && eslint .",
     "lint:fix": "pnpm -r --if-present lint:fix && eslint . --fix",

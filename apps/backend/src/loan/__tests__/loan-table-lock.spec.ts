@@ -1,3 +1,4 @@
+import { ForbiddenException } from "@nestjs/common";
 import { LoanStatus } from "@prisma/client";
 import { LoanService } from "../loan.service";
 
@@ -10,7 +11,15 @@ describe("LoanService loan-table coordination", () => {
     expect(state.tx.$executeRawUnsafe).toHaveBeenCalledWith(
       'LOCK TABLE "LoanRecord" IN ROW EXCLUSIVE MODE',
     );
+    expect(state.tx.$executeRawUnsafe).toHaveBeenNthCalledWith(
+      2,
+      "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+      "loan-batch:batch-1",
+    );
     expect(state.tx.$executeRawUnsafe.mock.invocationCallOrder[0]).toBeLessThan(
+      state.tx.itemBatch.findUnique.mock.invocationCallOrder[0],
+    );
+    expect(state.tx.$executeRawUnsafe.mock.invocationCallOrder[1]).toBeLessThan(
       state.tx.itemBatch.findUnique.mock.invocationCallOrder[0],
     );
   });
@@ -23,8 +32,48 @@ describe("LoanService loan-table coordination", () => {
     expect(state.tx.$executeRawUnsafe).toHaveBeenCalledWith(
       'LOCK TABLE "LoanRecord" IN ROW EXCLUSIVE MODE',
     );
+    expect(state.tx.$executeRawUnsafe).toHaveBeenNthCalledWith(
+      2,
+      "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+      "loan-batch:batch-1",
+    );
     expect(state.tx.$executeRawUnsafe.mock.invocationCallOrder[0]).toBeLessThan(
       state.tx.loanRecord.findUnique.mock.invocationCallOrder[0],
+    );
+    expect(state.tx.$executeRawUnsafe.mock.invocationCallOrder[1]).toBeLessThan(
+      state.tx.loanRecord.findUnique.mock.invocationCallOrder[1],
+    );
+  });
+
+  it("blocks borrow outside assigned warehouse before mutation", async () => {
+    const state = makeState();
+    state.prisma.itemBatch.findUnique.mockResolvedValue({
+      shelf: { zone: { warehouseId: "warehouse-foreign" } },
+    });
+
+    await expect(
+      state.service.borrow("user-1", "batch-1", 1, undefined, "warehouse-owned"),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(state.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("blocks returning a foreign loan inside the transaction", async () => {
+    const state = makeState();
+    state.tx.itemBatch.findUnique.mockResolvedValue({
+      shelf: { zone: { warehouseId: "warehouse-foreign" } },
+    });
+
+    await expect(
+      state.service.returnItems("user-1", "loan-1", 1, 0, 0, "warehouse-owned"),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(state.tx.loanRecord.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("blocks listing loans from another warehouse", async () => {
+    const state = makeState();
+
+    await expect(state.service.listOpen("warehouse-foreign", "warehouse-owned")).rejects.toBeInstanceOf(
+      ForbiddenException,
     );
   });
 });
@@ -49,6 +98,10 @@ function makeState() {
       findUnique: jest.fn().mockResolvedValue({
         id: "batch-1",
         quantity: 5,
+        status: "AVAILABLE",
+        condition: "NEW",
+        expiryDate: null,
+        shelf: { isLocked: false },
         item: { consumable: false },
       }),
       update: jest.fn().mockResolvedValue({ id: "batch-1" }),
@@ -62,7 +115,10 @@ function makeState() {
           { ...openLoan, returnedOk: 1, status: LoanStatus.PARTIALLY_RETURNED },
         ]),
       create: jest.fn().mockResolvedValue(openLoan),
-      update: jest.fn().mockResolvedValue({ ...openLoan, returnedOk: 1 }),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
+    inventoryTransaction: {
+      create: jest.fn().mockResolvedValue({ id: "txn-return-1" }),
     },
     auditLog: { create: jest.fn().mockResolvedValue({ id: "audit-1" }) },
   };
@@ -73,5 +129,5 @@ function makeState() {
   };
   const readiness = { recalculateWarehouse: jest.fn().mockResolvedValue(undefined) };
   const service = new LoanService(prisma as never, readiness as never);
-  return { service, tx, readiness };
+  return { service, prisma, tx, readiness };
 }

@@ -4,6 +4,7 @@ import { MISSION_NORMS, NormRule } from "./mission.config";
 /** Tình huống đã parse (từ AI hoặc nhập tay). */
 export interface IncidentInput {
   incidentType: IncidentType;
+  location?: string | null;
   affectedPeople: number;
   durationHours: number;
   children: number;
@@ -45,6 +46,7 @@ export interface Allocation {
     expiryDate: Date | null;
     warehouseId?: string;
     warehouseName?: string;
+    distanceKm?: number;
   }[];
 }
 
@@ -85,6 +87,7 @@ export function allocateGreedy(requirement: Requirement, batches: AvailableBatch
       expiryDate: batch.expiryDate,
       warehouseId: batch.warehouseId,
       warehouseName: batch.warehouseName,
+      distanceKm: batch.distanceKm,
     });
     remaining -= take;
   }
@@ -135,10 +138,14 @@ function basisValue(norm: NormRule, incident: IncidentInput, days: number): numb
  * Không có distanceKm (tương thích cũ) coi như bằng nhau → chỉ FEFO.
  */
 function byNearestThenFefo(a: AvailableBatch, b: AvailableBatch): number {
-  const da = a.distanceKm ?? 0;
-  const db = b.distanceKm ?? 0;
+  const da = a.distanceKm ?? Number.POSITIVE_INFINITY;
+  const db = b.distanceKm ?? Number.POSITIVE_INFINITY;
   if (da !== db) return da - db;
-  return byExpiryFefo(a, b);
+  const expiry = byExpiryFefo(a, b);
+  if (expiry !== 0) return expiry;
+  return `${a.warehouseId ?? ""}:${a.batchId}`.localeCompare(
+    `${b.warehouseId ?? ""}:${b.batchId}`,
+  );
 }
 
 /** FEFO: hạn gần nhất trước; lô không hạn xếp cuối. */

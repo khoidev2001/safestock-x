@@ -3,6 +3,9 @@ import ExcelJS from "exceljs";
 
 /** 1 dòng báo cáo kiểm kê thôn (đã parse từ Excel). */
 export interface ReportRow {
+  batchId?: string | null;
+  batchCode?: string | null;
+  shelfCode?: string | null;
   sku: string;
   itemName: string;
   quantity: number;
@@ -12,8 +15,19 @@ export interface ReportRow {
   note: string | null;
 }
 
-// Thứ tự 7 cột mẫu (hàng 1 = tiêu đề, dữ liệu từ hàng 2).
-const HEADERS = ["SKU", "Tên vật tư", "Số lượng", "Đơn vị", "Hạn dùng", "Tình trạng", "Ghi chú"];
+// Giữ nguyên 7 cột cũ và thêm định danh lô ở cuối để file cũ vẫn parse được.
+const HEADERS = [
+  "SKU",
+  "Tên vật tư",
+  "Số lượng",
+  "Đơn vị",
+  "Hạn dùng",
+  "Tình trạng",
+  "Ghi chú",
+  "Batch ID",
+  "Mã lô",
+  "Mã kệ",
+];
 
 /**
  * Parse buffer .xlsx (form mẫu 7 cột) → danh sách ReportRow. THUẦN async, không DB.
@@ -43,6 +57,9 @@ export async function parseReportExcel(buffer: Buffer): Promise<ReportRow[]> {
     }
 
     rows.push({
+      batchId: cellStr(row.getCell(8)) || null,
+      batchCode: cellStr(row.getCell(9)) || null,
+      shelfCode: cellStr(row.getCell(10)) || null,
       sku,
       itemName: cellStr(row.getCell(2)),
       quantity: Math.floor(qty),

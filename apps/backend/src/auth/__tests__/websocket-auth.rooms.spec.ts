@@ -20,6 +20,7 @@ describe("authenticated Socket.IO rooms", () => {
   let server: Server;
   let baseUrl: string;
   let runner: { onEvent?: (warehouseId: string, payload: unknown) => void };
+  let simulationEvents: { onEvent?: (warehouseId: string, payload: unknown) => void };
   let notifications: { push?: (role: UserRole, payload: unknown) => void };
 
   beforeEach(async () => {
@@ -40,8 +41,9 @@ describe("authenticated Socket.IO rooms", () => {
 
     const auth = new WebSocketAuthService(prisma as never, jwt, config as never);
     runner = {};
+    simulationEvents = {};
     notifications = {};
-    const simulation = new SimulationGateway(runner as never, auth);
+    const simulation = new SimulationGateway(runner as never, simulationEvents as never, auth);
     const notification = new NotificationGateway(notifications as never, auth);
 
     httpServer = createServer();
@@ -97,12 +99,17 @@ describe("authenticated Socket.IO rooms", () => {
     expect(receivedA).toEqual(["event-a"]);
     expect(receivedB).toEqual([]);
 
+    simulationEvents.onEvent?.("wh-a", { id: "manual-event-a" });
+    await delay(50);
+    expect(receivedA).toEqual(["event-a", "manual-event-a"]);
+    expect(receivedB).toEqual([]);
+
     clientA.emit("join", { warehouseId: "wh-b" });
     await delay(30);
     runner.onEvent?.("wh-b", { id: "event-b" });
     await delay(50);
 
-    expect(receivedA).toEqual(["event-a"]);
+    expect(receivedA).toEqual(["event-a", "manual-event-a"]);
     expect(receivedB).toEqual(["event-b"]);
     expect(prisma.user.findUnique).toHaveBeenCalledTimes(2);
   });

@@ -63,6 +63,31 @@ export class AiClientService {
     return result;
   }
 
+  /** Xếp hạng catalog bằng embedding local. Chỉ gửi ID + văn bản mô tả, không gửi tồn kho. */
+  async semanticRank(
+    query: string,
+    candidates: { id: string; text: string }[],
+    options: { topK?: number; minScore?: number } = {},
+  ): Promise<{
+    available: boolean;
+    reason?: string | null;
+    hits: { id: string; score: number }[];
+  }> {
+    return this.post("/semantic/rank", {
+      query,
+      candidates,
+      topK: options.topK ?? 5,
+      minScore: options.minScore ?? 0.35,
+    });
+  }
+
+  /** AI chỉ xếp thứ tự fact đã kiểm chứng; không được sinh câu hoặc số mới. */
+  async selectBriefingFacts(
+    facts: { id: string; text: string }[],
+  ): Promise<{ factIds: string[] }> {
+    return this.post("/briefing/select", { facts });
+  }
+
   private async post<T>(path: string, body: unknown): Promise<T> {
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {

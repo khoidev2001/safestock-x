@@ -45,11 +45,21 @@ export interface EmitInput {
   quality?: number;
 }
 
+export interface SimulationEventPayload {
+  deviceCode: string;
+  eventType: string;
+  value: number;
+  unit: string;
+  saved: boolean;
+}
+
 @Injectable()
 export class SimulationService implements OnModuleDestroy {
   private readonly log = new Logger(SimulationService.name);
   private recalcTimers = new Map<string, NodeJS.Timeout>();
   private incidentScanTimers = new Map<string, NodeJS.Timeout>();
+  // Gateway đăng ký callback này để phát chỉnh tay từ desktop tới web/mobile theo room kho.
+  onEvent?: (warehouseId: string, payload: SimulationEventPayload) => void;
 
   constructor(
     private prisma: PrismaService,
@@ -86,7 +96,12 @@ export class SimulationService implements OnModuleDestroy {
   }
 
   async listDevices(userId: string, warehouseId: string) {
-    await this.access.assertWarehouseAccess(userId, warehouseId, Permission.SIMULATION_VIEW);
+    const actor = await this.access.assertWarehouseAccess(
+      userId,
+      warehouseId,
+      Permission.SIMULATION_VIEW,
+    );
+    if (actor.warehouseKind !== WarehouseKind.CENTRAL) return [];
     return this.prisma.virtualDevice.findMany({
       where: { warehouseId },
       orderBy: [{ type: "asc" }, { code: "asc" }],
@@ -94,7 +109,12 @@ export class SimulationService implements OnModuleDestroy {
   }
 
   async getDevice(userId: string, warehouseId: string, code: string) {
-    await this.access.assertWarehouseAccess(userId, warehouseId, Permission.SIMULATION_VIEW);
+    const actor = await this.access.assertWarehouseAccess(
+      userId,
+      warehouseId,
+      Permission.SIMULATION_VIEW,
+    );
+    if (actor.warehouseKind !== WarehouseKind.CENTRAL) return null;
     return this.prisma.virtualDevice.findUnique({
       where: { warehouseId_code: { warehouseId, code } },
     });
@@ -137,7 +157,7 @@ export class SimulationService implements OnModuleDestroy {
       });
 
       if (!significant) {
-        return { saved: null, deviceType: device.type, inventoryBatchId };
+        return { saved: null, deviceType: device.type, inventoryBatchId, unit: device.unit };
       }
 
       const saved = await tx.sensorEvent.create({
@@ -153,7 +173,7 @@ export class SimulationService implements OnModuleDestroy {
           runId: input.runId,
         },
       });
-      return { saved, deviceType: device.type, inventoryBatchId };
+      return { saved, deviceType: device.type, inventoryBatchId, unit: device.unit };
     });
 
     if (result.inventoryBatchId) {
@@ -162,6 +182,23 @@ export class SimulationService implements OnModuleDestroy {
     if (ENV_DEVICE_TYPES.includes(result.deviceType)) {
       this.scheduleRecalc(input.warehouseId);
     }
+
+    // Runner phát payload riêng có runId/offsetMs. Slider desktop đi qua nhánh này để mọi
+    // client nhận currentValue mới, kể cả reading nhỏ bị lọc khỏi bảng lịch sử.
+    if (!input.runId) {
+      try {
+        this.onEvent?.(input.warehouseId, {
+          deviceCode: input.deviceCode,
+          eventType: input.eventType,
+          value: input.value,
+          unit: result.unit,
+          saved: Boolean(result.saved),
+        });
+      } catch {
+        this.log.warn("Không phát được sensor_event realtime; currentValue đã được lưu.");
+      }
+    }
+
     if (!result.saved) return null;
 
     // Event vừa persist → quét sự cố (debounce) để cảnh báo tự bật realtime
@@ -172,7 +209,12 @@ export class SimulationService implements OnModuleDestroy {
   }
 
   async timeline(userId: string, warehouseId: string, limit = 50) {
-    await this.access.assertWarehouseAccess(userId, warehouseId, Permission.SIMULATION_VIEW);
+    const actor = await this.access.assertWarehouseAccess(
+      userId,
+      warehouseId,
+      Permission.SIMULATION_VIEW,
+    );
+    if (actor.warehouseKind !== WarehouseKind.CENTRAL) return [];
     return this.prisma.sensorEvent.findMany({
       where: { warehouseId },
       include: { device: true },
