@@ -17,13 +17,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # pnpm phải có trên PATH TRƯỚC setup-node: bước `cache: pnpm` gọi `pnpm store
+      # path` để tìm cache dir, nếu chưa cài pnpm sẽ fail "Unable to locate
+      # executable file: pnpm". Runner ubuntu-latest có sẵn Node nên corepack chạy
+      # được ngay cả trước setup-node.
+      - name: Enable the pinned package manager
+        run: corepack enable && corepack prepare pnpm@10.32.1 --activate
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20.13.1
           cache: pnpm
-
-      - name: Enable the pinned package manager
-        run: corepack enable && corepack prepare pnpm@10.32.1 --activate
 
       - name: Install from lockfile
         run: pnpm install --frozen-lockfile
