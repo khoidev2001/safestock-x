@@ -32,6 +32,18 @@ jobs:
       - name: Install from lockfile
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma client
+        # `@prisma/client` cài về là stub: các enum sinh từ schema (MissionStatus,
+        # LoanStatus, UserRole, NotificationKind, TransactionSource…) và các thành
+        # viên namespace Prisma (InputJsonValue, DbNull, PrismaClientKnownRequestError)
+        # CHỈ tồn tại sau `prisma generate`. Repo không có postinstall hook nên phải
+        # chạy tường minh — nếu không, lint/prisma validate/jest/build đều fail compile
+        # trên checkout sạch (local pass vì client đã được generate từ lần trước). Cần
+        # DATABASE_URL resolve khi parse schema (không kết nối DB).
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
+        run: pnpm --filter @safestock/backend exec prisma generate
+
       - name: Build shared workspace packages
         # shared-types và scenario-definitions phát hành qua dist/ (gitignored). Consumers
         # (backend/frontend build) resolve theo main=dist/index.js nên phải build TRƯỚC.
