@@ -286,16 +286,32 @@ claim “CI đã đóng” chưa có đủ evidence.
 **Cần đóng:** thêm build topo rõ ràng trước consumer hoặc cấu hình package source
 đúng với workspace toolchain; chạy CI từ checkout sạch không có `dist` và lưu log.
 
-**Đã sửa (2026-07-29) — chưa đủ evidence:** `competition-quality.yml` nay build
+**Đã đóng (2026-07-29):** `competition-quality.yml` nay build
 `@safestock/shared-types` và `@safestock/scenario-definitions` ngay sau `install`,
-trước mọi consumer (backend/frontend build), và full pipeline chạy xanh ở local
-(94 suite/557 backend test, 74 AI test, các build client). *Chưa đóng hoàn toàn:*
-file workflow này **vẫn chưa commit/push** nên CI remote trên checkout sạch chưa
-từng chạy — evidence clean-checkout (log CI thật, không có `dist` sẵn) vẫn thiếu
-cho tới khi commit.
+trước mọi consumer (backend/frontend build). Workflow đã commit/push và **CI remote
+chạy xanh toàn bộ trên checkout sạch** — run `30462985652` (SHA `ad20964`), cả hai
+job `Node, web, mobile and desktop` và `AI service contracts` đều `success`. Đây là
+evidence clean-checkout thật (không có `dist`/`@prisma/client` generated sẵn) mà H6
+yêu cầu.
+
+Vòng lặp clean-checkout này lần lượt phơi bày và vá **3 lỗi mà preflight local về
+cấu trúc không bắt được** (local đã có sẵn pnpm, `apps/backend/.env`, và Prisma
+client generated):
+
+1. **`setup-node` không thấy pnpm** — bước `cache: pnpm` gọi `pnpm store path`
+   trước khi corepack cài pnpm → chuyển bước corepack lên trước `setup-node`
+   (commit `e1a469b`).
+2. **`prisma validate` thiếu `DATABASE_URL`** — CI không có `apps/backend/.env`
+   (gitignored) → thêm placeholder scope theo step (commit `4b174dc`).
+3. **`@prisma/client` là stub** — repo không có `postinstall` hook nên các enum
+   sinh từ schema (`MissionStatus`, `LoanStatus`, `UserRole`, `NotificationKind`,
+   `TransactionSource`) và thành viên namespace `Prisma` (`InputJsonValue`,
+   `DbNull`, `PrismaClientKnownRequestError`) không tồn tại → ~20 test suite backend
+   fail compile ("Test suite failed to run"). Thêm bước `prisma generate` tường minh
+   sau install (commit `ad20964`).
 
 **Bằng chứng source:**
-[`competition-quality.yml:40-50`](../.github/workflows/competition-quality.yml#L40-L50),
+[`competition-quality.yml:35-52`](../.github/workflows/competition-quality.yml#L35-L52),
 [`packages/shared-types/package.json:5-10`](../packages/shared-types/package.json#L5-L10),
 [`packages/scenario-definitions/package.json:5-10`](../packages/scenario-definitions/package.json#L5-L10).
 
