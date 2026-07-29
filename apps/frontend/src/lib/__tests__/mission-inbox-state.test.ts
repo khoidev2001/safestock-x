@@ -84,7 +84,8 @@ test("ưu tiên mission mà vai trò hiện tại cần hành động", () => {
     missionNeedsAction(missions[0], "WAREHOUSE", "warehouse-a"),
     false,
   );
-  assert.equal(missionNeedsAction(missions[1], "RESCUE", null), true);
+  // Lực lượng hiện trường chỉ đọc → không bao giờ gắn cờ "Cần xử lý".
+  assert.equal(missionNeedsAction(missions[1], "RESCUE", null), false);
 });
 
 test("tìm kiếm không phân biệt dấu theo địa điểm hoặc loại tình huống", () => {
@@ -112,5 +113,12 @@ test("deep-link encode mission id để giữ lựa chọn qua refresh/tab mới
   assert.equal(
     missionDeepLink("mission/with spaces"),
     "/mission?mission=mission%2Fwith%20spaces",
+  );
+});
+
+test("deep-link giữ evidence hiện trường cần ADMIN xem lại sau refresh", () => {
+  assert.equal(
+    missionDeepLink("mission/with spaces", "field update/1"),
+    "/mission?mission=mission%2Fwith%20spaces&fieldUpdate=field%20update%2F1",
   );
 });

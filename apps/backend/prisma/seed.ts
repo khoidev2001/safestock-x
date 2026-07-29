@@ -28,6 +28,11 @@ import {
   seedTransactionHistory,
 } from "./seed-support";
 import { getVerifiedNeighborContact } from "./verified-neighbor-contact";
+import {
+  HOME_COMMUNE_WAREHOUSE_LOCATION,
+  getVerifiedCommuneReferencePoint,
+  validateVerifiedWarehouseLocations,
+} from "./verified-warehouse-location";
 import { normalizeHamletName } from "../src/admin/hamlet-normalization";
 
 const prisma = new PrismaClient();
@@ -38,6 +43,8 @@ async function resetDatabase() {
   await prisma.incidentEvidence.deleteMany();
   await prisma.incident.deleteMany();
   await prisma.missionRequirement.deleteMany();
+  await prisma.missionFieldUpdate.deleteMany();
+  await prisma.missionAnalysisSnapshot.deleteMany();
   await prisma.mission.deleteMany();
   await prisma.notification.deleteMany();
   await prisma.monthlyStockReport.deleteMany();
@@ -67,12 +74,13 @@ async function resetDatabase() {
 }
 
 async function main() {
-  await resetDatabase();
-
   const validationErrors = validateSeedDataset();
+  validationErrors.push(...validateVerifiedWarehouseLocations());
   if (validationErrors.length > 0) {
     throw new Error(`Bộ dữ liệu seed không hợp lệ:\n- ${validationErrors.join("\n- ")}`);
   }
+
+  await resetDatabase();
 
   const organization = await prisma.organization.create({
     data: { name: "Hội Chữ thập đỏ xã Đồng Xuân" },
@@ -98,7 +106,7 @@ async function main() {
         organizationId: organization.id,
         email: "rescue@safestock.vn",
         passwordHash: password("rescue123"),
-        fullName: "Đội cứu hộ Đồng Xuân",
+        fullName: "Lực lượng hiện trường Đồng Xuân",
         role: "RESCUE",
       },
     ],
@@ -108,11 +116,11 @@ async function main() {
     data: {
       organizationId: organization.id,
       name: "Kho cứu trợ trung tâm Đồng Xuân",
-      location: "68 Trần Phú, thôn Long Châu, xã Đồng Xuân, tỉnh Đắk Lắk",
+      location: HOME_COMMUNE_WAREHOUSE_LOCATION.address,
       kind: "CENTRAL",
       communeId: COMMUNE_ID,
-      lat: 13.3667,
-      lng: 109.0333,
+      lat: HOME_COMMUNE_WAREHOUSE_LOCATION.lat,
+      lng: HOME_COMMUNE_WAREHOUSE_LOCATION.lng,
     },
   });
   const warehouseUser = await prisma.user.update({
@@ -321,7 +329,7 @@ async function createHamletWarehouses(organizationId: string, itemBySku: Map<str
       data: {
         organizationId,
         name: definition.name,
-        location: `${definition.name.replace("Kho ", "")}, xã Đồng Xuân, tỉnh Đắk Lắk`,
+        location: definition.location,
         kind: "HAMLET",
         communeId: COMMUNE_ID,
         lat: definition.lat,
@@ -396,8 +404,8 @@ async function createHamletLeaders(
 }
 
 async function seedNeighbors(warehouseId: string) {
-  // External/manual metadata only: never an operational Organization/Warehouse or stock promise.
-  // Empty summary and distanceKm=0 intentionally mean "unverified", not live availability.
+  // External reference metadata only: never an operational Organization/Warehouse or stock promise.
+  // Coordinates live in the verified public reference registry; availability remains UNKNOWN.
   const externalBoundaryCommunes = [
     "Xuân Thọ",
     "Tuy An Bắc",
@@ -407,13 +415,20 @@ async function seedNeighbors(warehouseId: string) {
     "Xuân Phước",
   ];
   await prisma.neighborWarehouse.createMany({
-    data: externalBoundaryCommunes.map((commune) => ({
-      warehouseId,
-      name: `[EXTERNAL/MANUALLY REPORTED] Xã ${commune}`,
-      distanceKm: 0,
-      contactInfo: getVerifiedNeighborContact(commune),
-      summary: [],
-    })),
+    data: externalBoundaryCommunes.map((commune) => {
+      const referencePoint = getVerifiedCommuneReferencePoint(commune);
+      if (!referencePoint) {
+        throw new Error(`Thiếu điểm UBND đã xác minh cho xã ${commune}`);
+      }
+      return {
+        warehouseId,
+        name: `[EXTERNAL/AVAILABILITY UNKNOWN] ${referencePoint.name}`,
+        // Không gắn khoảng cách đường chim bay vào trường khoảng cách tuyến.
+        distanceKm: 0,
+        contactInfo: getVerifiedNeighborContact(commune),
+        summary: [],
+      };
+    }),
   });
 }
 

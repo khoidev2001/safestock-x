@@ -1,6 +1,8 @@
 import { Type } from "class-transformer";
 import {
+  Equals,
   IsEnum,
+  IsISO8601,
   IsIn,
   IsInt,
   IsNumber,
@@ -34,7 +36,7 @@ export class TranscribeDto {
   mimeType?: string;
 }
 
-/** Đội cứu hộ từ chối nhiệm vụ — bắt buộc nêu lý do (admin xem xét sau). */
+/** Lực lượng hiện trường từ chối nhiệm vụ — bắt buộc nêu lý do (admin xem xét sau). */
 export class RejectMissionDto {
   @IsString()
   @MinLength(3)
@@ -48,7 +50,7 @@ export class AdminNoteDto {
   note?: string;
 }
 
-/** Đội cứu hộ xác nhận kết quả giao (READY → COMPLETED) — kèm ghi chú tuỳ chọn. */
+/** Lực lượng hiện trường xác nhận kết quả giao (READY → COMPLETED) — kèm ghi chú tuỳ chọn. */
 export class CompleteMissionDto {
   @IsIn(Object.values(DeliveryOutcome))
   outcome!: DeliveryOutcome;
@@ -56,6 +58,89 @@ export class CompleteMissionDto {
   @IsOptional()
   @IsString()
   note?: string;
+}
+
+export class WarehouseRequestNoteDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(1_000)
+  note?: string;
+}
+
+export class WarehouseRequestDiscrepancyDto {
+  @IsString()
+  @MinLength(3)
+  @MaxLength(1_000)
+  note!: string;
+}
+
+export class ReviewWarehouseRequestDto {
+  @IsInt()
+  @Min(1)
+  requestedQuantity!: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1_000)
+  adminNote?: string;
+}
+
+/**
+ * Ghi nhận của Lực lượng hiện trường: chỉ nhận text đã được người dùng xác
+ * nhận, bao gồm transcript voice. Không nhận audio thô, ảnh/video hay GPS.
+ */
+export class FieldUpdateDto {
+  @IsString()
+  @MinLength(8)
+  @MaxLength(128)
+  requestId!: string;
+
+  @IsIn(["TEXT", "VOICE_TRANSCRIPT"])
+  inputMode!: "TEXT" | "VOICE_TRANSCRIPT";
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(4_000)
+  confirmedText!: string;
+
+  @Equals(true)
+  confirmedByUser!: true;
+
+  @IsOptional()
+  @IsISO8601()
+  clientCapturedAt?: string;
+}
+
+/** ADMIN starts an immutable baseline analysis; it never edits the mission. */
+export class AnalyzeMissionDto {
+  @IsString()
+  @MinLength(8)
+  @MaxLength(128)
+  requestId!: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(5)
+  @MaxLength(4_000)
+  description?: string;
+}
+
+/** ADMIN-only What-if request. The text is parsed against a strict whitelist. */
+export class WhatIfDto {
+  @IsString()
+  @MinLength(8)
+  @MaxLength(128)
+  requestId!: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  baselineSnapshotId!: string;
+
+  @IsString()
+  @MinLength(2)
+  @MaxLength(500)
+  assumptionText!: string;
 }
 
 /** Tình huống đã có cấu trúc — trust boundary chung cho các API lập phương án. */

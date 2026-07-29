@@ -1,5 +1,5 @@
 import type { ColorIconName, ColorIconTone } from "@/components/shared/color-icon";
-import { Permission } from "@safestock/shared-types";
+import { FIELD_FORCE_ROLE_LABEL, Permission } from "@safestock/shared-types";
 
 export type NavGroup = "Điều hành" | "Nghiệp vụ kho" | "Quản trị";
 
@@ -142,7 +142,7 @@ export const navItems: NavItem[] = [
     requiredPermission: Permission.ADMIN_USERS,
     adminOnly: true,
     title: "Quản lý tài khoản",
-    subtitle: "Cấp quyền sử dụng cho phụ trách kho, đội cứu hộ và quản trị xã.",
+    subtitle: `Cấp quyền sử dụng cho phụ trách kho, ${FIELD_FORCE_ROLE_LABEL} và quản trị xã.`,
   },
   {
     path: "/audit",

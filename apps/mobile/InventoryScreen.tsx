@@ -1456,7 +1456,7 @@ function QrScanner({
     const code = parseScannedInventoryCode(result.data);
     if (!code) {
       setScanned(true);
-      onError("QR không chứa SKU SafeStock hợp lệ.");
+      onError("QR không chứa SKU hợp lệ.");
       return;
     }
     setScanned(true);

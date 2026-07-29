@@ -9,8 +9,14 @@ import { Server, Socket } from "socket.io";
 import { WebSocketAuthService } from "../auth/websocket-auth.service";
 import { RunnerService } from "./runner.service";
 import { SimulationService } from "./simulation.service";
+import { createRuntimeCorsOriginValidator } from "../config/http-security";
 
-@WebSocketGateway({ cors: { origin: "*" } })
+@WebSocketGateway({
+  cors: {
+    origin: createRuntimeCorsOriginValidator(),
+    credentials: true,
+  },
+})
 export class SimulationGateway implements OnModuleInit, OnGatewayInit, OnGatewayConnection {
   @WebSocketServer() server!: Server;
 

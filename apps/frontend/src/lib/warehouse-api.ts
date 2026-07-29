@@ -3,6 +3,7 @@ import { apiFetch } from "./api";
 export interface AdminWarehouse {
   id: string;
   name: string;
+  location: string | null;
   kind: "CENTRAL" | "HAMLET";
   communeId: string;
   lat: number | null;

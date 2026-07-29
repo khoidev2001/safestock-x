@@ -1,6 +1,6 @@
 # Bộ dữ liệu chuẩn xã Đồng Xuân
 
-_Cập nhật: 2026-07-21 · Catalog version: `2026.07`_
+_Cập nhật: 2026-07-28 · Catalog version: `2026.07`_
 
 ## Mục tiêu
 
@@ -32,7 +32,12 @@ Một kho cứu trợ trung tâm và 17 kho thôn cùng `communeId = dong-xuan`:
 
 Danh sách bám theo công bố sắp xếp thôn ngày 01/07/2026 của [UBND xã Đồng Xuân](https://dongxuan.daklak.gov.vn/tin-tuc-su-kien/dong-xuan-cong-bo-nghi-quyet-quyet-dinh-ve-sap-xep-thon-va-cong-tac-can-bo-o-co-so.html).
 
-Tọa độ 17 kho thôn được để `null` có chủ đích. ADMIN dùng màn hình bản đồ để pin vị trí thực; seed không gán tọa độ suy đoán.
+Kho trung tâm đặt tại UBND Xã Đồng Xuân (`13.3782428, 109.1042590`). Trong 17 kho
+thôn, seed chỉ gán tọa độ Nhà văn hóa/nhà sinh hoạt cộng đồng đã xác minh cho Kỳ Đu,
+Phước Huệ, Tân Bình, Phú Sơn và Triêm Đức. Mười hai kho còn lại giữ `lat/lng = null`;
+ADMIN dùng màn hình bản đồ để ghim sau, seed không gán tọa độ suy đoán. Danh mục và
+nguồn xác minh nằm tại
+[`DANH-MUC-VI-TRI-KHO-XA-VA-KHO-THON.md`](DANH-MUC-VI-TRI-KHO-XA-VA-KHO-THON.md).
 
 ## Danh mục vật tư
 

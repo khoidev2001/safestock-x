@@ -24,6 +24,7 @@ import {
   buildMonthlyReportRows,
   finalizeMonthlyReportDraft,
 } from "../monthly-report-state";
+import { mobileRoleLabel } from "../role-labels";
 
 const session = {
   accessToken: "access-token",
@@ -32,9 +33,13 @@ const session = {
     id: "user-1",
     email: "rescue@safestock.vn",
     role: "RESCUE",
-    fullName: "Đội cứu hộ",
+    fullName: "Lực lượng hiện trường",
   },
 };
+
+test("RESCUE uses the shared field-force label", () => {
+  assert.equal(mobileRoleLabel("RESCUE"), "Lực lượng hiện trường");
+});
 
 test("stored session requires both tokens and a stable user identity", () => {
   assert.deepEqual(parseStoredSession(serializeSession(session)), session);

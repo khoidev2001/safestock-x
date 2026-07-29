@@ -2,9 +2,12 @@
 
 ## Objective
 
-Hoàn thiện các feature còn thiếu theo thứ tự phụ thuộc và rủi ro: đóng P09 điều phối đa kho/offline routing; phát hành APK Android REPORTER/RESCUE; khép nghiệp vụ web; mở rộng mobile dashboard, readiness, QR và toàn bộ nghiệp vụ kho; bổ sung AI dự báo mưa 72 giờ, semantic search, bản tin đầu ngày và chuẩn hóa nhập liệu bằng embedding; sau cùng hardening và nghiệm thu.
+Hoàn thiện các feature còn thiếu theo thứ tự phụ thuộc và rủi ro: đóng P09 điều phối đa kho/offline routing; phát hành APK Android REPORTER/Lực lượng hiện trường (`RESCUE`); khép nghiệp vụ web; mở rộng mobile dashboard, readiness, QR và toàn bộ nghiệp vụ kho; bổ sung AI dự báo mưa 72 giờ, semantic search, bản tin đầu ngày và chuẩn hóa nhập liệu bằng embedding; triển khai AI Phân tích tình huống, AI What-if và Trợ lý hiện trường; sau cùng hardening và nghiệm thu.
 
-Người dùng chính là ADMIN xã, WAREHOUSE, RESCUE và REPORTER. Thành công nghĩa là từng lát cắt chạy qua UI thật, đúng scope, có loading/error/offline state và có bằng chứng test phù hợp.
+Người dùng chính là ADMIN xã, WAREHOUSE, Lực lượng hiện trường (`RESCUE`) và
+REPORTER. Thành công nghĩa là từng lát cắt chạy qua UI thật, đúng scope, có
+loading/error/offline state và có bằng chứng test phù hợp. AI chỉ tham mưu trên dữ
+liệu được validate; con người xác nhận và phê duyệt mọi thay đổi nghiệp vụ.
 
 ## Tech Stack
 
@@ -30,7 +33,7 @@ Người dùng chính là ADMIN xã, WAREHOUSE, RESCUE và REPORTER. Thành côn
 
 - `apps/backend/`: API, auth/scope, inventory, loan, readiness, incident, mission.
 - `apps/frontend/`: web ADMIN/WAREHOUSE.
-- `apps/mobile/`: Android REPORTER/RESCUE/WAREHOUSE.
+- `apps/mobile/`: Android REPORTER/Lực lượng hiện trường/WAREHOUSE.
 - `apps/ai-service/`: forecast, embedding, semantic retrieval và brief.
 - `infrastructure/`: OSRM, LAN runtime, backup/recovery.
 - `docs/PRD.md`: nguồn trạng thái duy nhất.
@@ -63,17 +66,36 @@ return result;
 - Always: bảo toàn dữ liệu hiện hữu, scope theo organization/xã/kho/actor, dùng API làm authority, giữ offline-write tắt.
 - Ask first: thay đổi phá vỡ contract public, reset/seed database, mở dịch vụ ra Internet hoặc đổi mô hình tenant.
 - Never: commit secret/token/password thật, tự seed/reset dữ liệu đang chạy, để LLM thực thi mutation, giả tuyến đường hoặc báo thành công khi mất mạng.
+- Loại khỏi phạm vi: phân tích ảnh/video, phân công đội/cá nhân, GPS liên tục, AI tự
+  duyệt/dispatch, AI tự liên hệ xã khác và kiểm tra tồn kho xã khác.
 
 ## Success Criteria
 
 - P09 có OSRM local, marker đã xác minh, route snapshot và Internet-off acceptance.
-- APK Android cài trên Galaxy S23 Ultra; REPORTER/RESCUE chạy qua LAN, session bền và offline-read rõ.
+- APK Android cài trên Galaxy S23 Ultra; REPORTER/Lực lượng hiện trường chạy qua LAN, session bền và offline-read rõ.
 - Web và mobile hoàn tất inventory/loan/readiness/incident theo role.
 - QR hỗ trợ SKU/lô theo contract có version, vẫn cho nhập tay và xác nhận trước mutation.
 - Bốn feature AI mới có nguồn/provenance, scope, cache/fallback và test.
+- Báo cáo tự nhiên tạo được bản phân tích có provenance, dữ kiện thiếu/mâu thuẫn,
+  nhu cầu, phương án, dự báo, câu hỏi ưu tiên và giải thích mà không bịa số.
+- What-if chạy trên snapshot tách biệt, hiển thị giả định/delta và không mutation.
+- Trợ lý hiện trường nhận text/voice đã được người dùng xem, sửa và xác nhận trước khi
+  lưu evidence; ADMIN là người quyết định có đổi phương án hay không.
 - Full workflow qua phiên độc lập chạy lặp lại, không curl/SQL/copy ID.
 - PRD, README và claim demo khớp bằng chứng thật.
 
 ## Open Questions
 
-- Không có câu hỏi chặn implementation hiện tại. QR payload và AI embedding model sẽ được khóa bằng contract/test trước khi thêm dependency hoặc migration tương ứng.
+- Không còn câu hỏi sản phẩm về danh mục route/điểm cho AI-3. Danh mục V1 đã được
+  tra Google Maps và khóa tại
+  `docs/DANH-MUC-THAM-CHIEU-TUYEN-AI-WHAT-IF.md`.
+- Registry vị trí kho đã có runtime validation: kho trung tâm dùng UBND Đồng Xuân,
+  sáu UBND lân cận là external reference availability `UNKNOWN`, năm Nhà văn hóa
+  thôn đã xác minh được seed và 12 điểm còn lại giữ null cho ADMIN ghim. Trước khi
+  code AI-3 vẫn phải đưa danh mục cầu/đường vào registry có version và map-match với
+  route snapshot/graph. Các tên
+  `Cầu Sông Cô`, `Cầu Cây Sung`, `cầu sắt La Hai/Cầu La Hai cũ` và đoạn
+  Phước Lộc–Xuân Quang 1 giữ `UNRESOLVED/AMBIGUOUS` cho tới khi có điểm/geometry
+  được ADMIN xác minh.
+- QR payload và AI embedding model tiếp tục được khóa bằng contract/test trước khi
+  thêm dependency hoặc migration tương ứng.

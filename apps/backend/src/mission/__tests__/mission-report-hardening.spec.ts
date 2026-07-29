@@ -147,15 +147,17 @@ describe("MissionService report planning invariants", () => {
     );
   });
 
-  it("chặn dispatch report thô chưa có readiness và requirement", async () => {
+  it("chặn phát hành report thô chưa có readiness và requirement", async () => {
     const state = makeService();
     state.mission.findUnique.mockResolvedValue({
       ...draft,
       readinessAssessment: null,
       _count: { requirements: 0 },
+      requirements: [],
+      warehouse: { organizationId: "org-1" },
     });
 
-    await expect(state.service.dispatch(draft.id)).rejects.toThrow(
+    await expect(state.service.approve(draft.id, undefined as never)).rejects.toThrow(
       "Chưa thể điều phối báo cáo chưa được lập phương án",
     );
 
@@ -309,7 +311,87 @@ describe("MissionService organization scope", () => {
   }
 });
 
-describe("MissionService dispatch atomicity", () => {
+describe("MissionService reporter history", () => {
+  it("lists only the reporter's own text reports with a bounded cursor page", async () => {
+    const findMany = jest.fn().mockResolvedValue([
+      {
+        id: "mission-2",
+        createdAt: new Date("2026-07-29T02:00:00.000Z"),
+        reportText: "Nước dâng tại nhà văn hóa.",
+        status: MissionStatus.DRAFT,
+        warehouse: { name: "Kho tổng xã" },
+      },
+    ]);
+    const userFindUnique = jest.fn().mockResolvedValue({ organizationId: "org-1" });
+    const prisma = {
+      mission: { findMany },
+      user: { findUnique: userFindUnique },
+    };
+    const service = new MissionService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(service.listOwnReports("reporter-1", undefined, "cursor-1", 999)).resolves.toEqual({
+      items: [
+        {
+          id: "mission-2",
+          createdAt: new Date("2026-07-29T02:00:00.000Z"),
+          reportText: "Nước dâng tại nhà văn hóa.",
+          status: MissionStatus.DRAFT,
+          warehouse: { name: "Kho tổng xã" },
+        },
+      ],
+      nextCursor: null,
+    });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          createdByUserId: "reporter-1",
+          warehouse: { organizationId: "org-1" },
+        }),
+        cursor: { id: "cursor-1" },
+        skip: 1,
+        take: 51,
+      }),
+    );
+  });
+
+  it("does not return another reporter's report detail", async () => {
+    const findFirst = jest.fn().mockResolvedValue(null);
+    const prisma = {
+      mission: { findFirst },
+      user: { findUnique: jest.fn().mockResolvedValue({ organizationId: "org-1" }) },
+    };
+    const service = new MissionService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(service.getOwnReport("mission-foreign", "reporter-1")).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: "mission-foreign",
+          createdByUserId: "reporter-1",
+          warehouse: { organizationId: "org-1" },
+        }),
+      }),
+    );
+  });
+});
+
+describe("MissionService publish atomicity", () => {
   it("keeps the mission in DRAFT when notification persistence fails", async () => {
     const missionState = {
       id: "mission-1",
@@ -321,7 +403,8 @@ describe("MissionService dispatch atomicity", () => {
       incidentLng: 108.61,
       readinessAssessment: { status: "DISPATCHABLE", blockers: [] },
       _count: { requirements: 1 },
-      requirements: [],
+      warehouse: { organizationId: "organization-1" },
+      requirements: [{ allocations: [] }],
     };
     const persistedNotifications: object[] = [];
     const mission = {
@@ -335,6 +418,9 @@ describe("MissionService dispatch atomicity", () => {
     };
     const tx = {
       mission,
+      missionWarehousePreparation: {
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       notification: {
         create: jest.fn().mockRejectedValue(new Error("notification insert failed")),
       },
@@ -363,7 +449,9 @@ describe("MissionService dispatch atomicity", () => {
       {} as never,
     );
 
-    await expect(service.dispatch(missionState.id)).rejects.toThrow("notification insert failed");
+    await expect(service.approve(missionState.id, undefined as never)).rejects.toThrow(
+      "notification insert failed",
+    );
 
     expect(missionState.status).toBe(MissionStatus.DRAFT);
     expect(persistedNotifications).toEqual([]);

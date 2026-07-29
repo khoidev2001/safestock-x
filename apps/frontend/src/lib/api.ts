@@ -38,6 +38,7 @@ function rawFetch(path: string, options: RequestInit) {
   const { token } = useAuth.getState();
   return fetch(`${BASE}${path}`, {
     ...options,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -56,22 +57,41 @@ async function handle<T>(response: Response): Promise<T> {
 }
 
 async function tryRefresh(): Promise<boolean> {
-  const { refreshToken, setAuth } = useAuth.getState();
-  if (!refreshToken) return false;
+  const { setAuth } = useAuth.getState();
 
   try {
     const response = await fetch(`${BASE}/api/auth/refresh`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken }),
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Session-Transport": "web",
+      },
     });
     if (!response.ok) return false;
 
     const data = await response.json();
-    setAuth(data.accessToken, data.refreshToken, data.user);
+    setAuth(data.accessToken, data.user);
     return true;
   } catch {
     return false;
+  }
+}
+
+export async function restoreWebSession(): Promise<boolean> {
+  return tryRefresh();
+}
+
+export async function closeWebSession(): Promise<void> {
+  const { token } = useAuth.getState();
+  try {
+    await fetch(`${BASE}/api/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+  } finally {
+    useAuth.getState().clear();
   }
 }
 

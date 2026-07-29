@@ -16,6 +16,7 @@ import {
   ApiError,
   fetchNotifications,
   login,
+  logout as revokeServerSession,
   refreshSession,
   type AuthUser,
   type LoginResult,
@@ -46,6 +47,7 @@ import {
   kindIcon,
   parseMissionSummary,
 } from "./disaster";
+import { mobileRoleLabel } from "./role-labels";
 
 export default function App() {
   const [session, setSession] = useState<LoginResult | null>(null);
@@ -116,6 +118,16 @@ export default function App() {
 
   async function logout() {
     const userId = session?.user.id;
+    const accessToken = session?.accessToken;
+    // Thu hồi phiên phía máy chủ trước (tokenVersion++) để refresh token cũ hết hiệu lực.
+    // Best-effort: mất mạng/hết hạn vẫn xoá sạch phiên cục bộ để không kẹt trên thiết bị.
+    if (accessToken) {
+      try {
+        await revokeServerSession(accessToken);
+      } catch {
+        // Bỏ qua lỗi mạng — vẫn tiếp tục đăng xuất cục bộ.
+      }
+    }
     await clearStoredSession();
     if (userId) await clearOfflineCache(userId);
     setSession(null);
@@ -126,7 +138,7 @@ export default function App() {
       <SafeAreaView style={styles.screen}>
         <StatusBar style="light" />
         <View style={styles.center}>
-          <Text style={styles.logo}>SafeStock</Text>
+          <Text style={styles.logo}>Ứng phó nhanh</Text>
           <Text style={styles.emptyText}>Đang khôi phục phiên an toàn…</Text>
         </View>
       </SafeAreaView>
@@ -168,7 +180,7 @@ function MobileRoleShell({
       {tab !== "alerts" && tab !== "report" ? (
         <View style={shellStyles.sessionBar}>
           <Text style={shellStyles.sessionText} numberOfLines={1}>
-            {user.fullName ?? user.email} · {user.role}
+            {user.fullName ?? user.email} · {mobileRoleLabel(user.role)}
           </Text>
           <Pressable onPress={onLogout} accessibilityRole="button">
             <Text style={shellStyles.logout}>Đăng xuất</Text>
@@ -244,7 +256,7 @@ function tabIcon(tab: MobileTab): string {
   }[tab];
 }
 
-/** Màn đăng nhập chung — trưởng thôn (báo cáo) hoặc đội cứu hộ (nhận điều phối). */
+/** Màn đăng nhập chung cho người báo cáo và Lực lượng hiện trường. */
 function LoginScreen({
   onLogin,
 }: {
@@ -270,7 +282,7 @@ function LoginScreen({
 
   return (
     <View style={styles.center}>
-      <Text style={styles.logo}>SafeStock</Text>
+      <Text style={styles.logo}>Ứng phó nhanh</Text>
       <Text style={[styles.subtitle, { marginBottom: 28 }]}>Ứng phó hiện trường</Text>
 
       <Text style={styles.label}>Email</Text>
@@ -280,7 +292,7 @@ function LoginScreen({
         onChangeText={setEmail}
         autoCapitalize="none"
         keyboardType="email-address"
-        placeholder="email@safestock.vn"
+        placeholder="email@ungphonhanh.vn"
         placeholderTextColor={c.muted}
         aria-label="Email đăng nhập"
       />
@@ -413,12 +425,9 @@ function NotificationsScreen({
       <MissionDetailScreen
         token={token}
         userId={user.id}
+        role={user.role}
         missionId={selectedMissionId}
         onBack={() => setSelectedMissionId(null)}
-        onResolved={() => {
-          setSelectedMissionId(null);
-          load();
-        }}
       />
     );
   }
@@ -429,7 +438,7 @@ function NotificationsScreen({
         <View>
           <Text style={styles.title}>Thông báo điều phối</Text>
           <Text style={styles.subtitle}>
-            {user.fullName ?? user.email} · {user.role}
+            {user.fullName ?? user.email} · {mobileRoleLabel(user.role)}
           </Text>
         </View>
         <View style={{ alignItems: "flex-end", gap: 8 }}>
@@ -540,7 +549,7 @@ function formatCacheTime(value: string): string {
       });
 }
 
-/** Thẻ nhiệm vụ nổi bật — dành cho đội cứu hộ nắm bắt nhanh trong 1 cái liếc. */
+/** Thẻ nhiệm vụ nổi bật để Lực lượng hiện trường nắm bắt nhanh. */
 function MissionCard({
   item,
   summary,

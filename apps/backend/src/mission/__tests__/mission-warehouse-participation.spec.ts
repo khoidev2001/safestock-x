@@ -6,9 +6,17 @@ const multiWarehouseMission = {
   warehouseId: "warehouse-a",
   incidentType: "FLOOD",
   affectedPeople: 20,
-  status: MissionStatus.PENDING_RESCUE,
+  status: MissionStatus.DRAFT,
+  incidentLat: 13.378,
+  incidentLng: 109.104,
+  readinessAssessment: { status: "DISPATCHABLE", blockers: [] },
+  _count: { requirements: 1 },
+  warehouse: { organizationId: "org-1" },
   requirements: [
     {
+      sku: "WATER-01",
+      itemName: "Nước uống",
+      unit: "chai",
       allocations: [
         { batchId: "batch-a", qty: 4, warehouseId: "warehouse-a" },
         { batchId: "batch-b", qty: 6, warehouseId: "warehouse-b" },
@@ -38,7 +46,7 @@ function serviceWithPrisma(prisma: Record<string, unknown>, notifications = {}) 
 }
 
 describe("MissionService warehouse participation", () => {
-  it("RESCUE confirm tạo đúng một preparation cho mỗi kho có allocation", async () => {
+  it("ADMIN phát hành tạo đúng một preparation cho mỗi kho có allocation", async () => {
     const mission = {
       findUnique: jest.fn().mockResolvedValue(multiWarehouseMission),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -50,15 +58,35 @@ describe("MissionService warehouse participation", () => {
     const missionWarehousePreparation = {
       createMany: jest.fn().mockResolvedValue({ count: 2 }),
     };
-    const tx = { mission, missionWarehousePreparation };
+    const missionWarehouseRequest = {
+      createMany: jest.fn().mockResolvedValue({ count: 2 }),
+    };
+    const notification = {
+      create: jest
+        .fn()
+        .mockResolvedValueOnce({ id: "notification-warehouse" })
+        .mockResolvedValueOnce({ id: "notification-field-force" }),
+    };
+    const tx = {
+      mission,
+      missionWarehousePreparation,
+      missionWarehouseRequest,
+      notification,
+    };
     const prisma = {
       mission,
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ organizationId: "org-1" }),
+      },
+      warehouse: {
+        findUnique: jest.fn().mockResolvedValue({ organizationId: "org-1" }),
+      },
       $transaction: jest.fn(async (fn: (client: typeof tx) => unknown) => fn(tx)),
     };
-    const notifications = { create: jest.fn().mockResolvedValue({}) };
+    const notifications = { pushPersisted: jest.fn() };
     const service = serviceWithPrisma(prisma, notifications);
 
-    await service.confirmByRescue("mission-1");
+    await service.approve("mission-1", "admin-1");
 
     expect(missionWarehousePreparation.createMany).toHaveBeenCalledWith({
       data: [
@@ -67,10 +95,32 @@ describe("MissionService warehouse participation", () => {
       ],
       skipDuplicates: true,
     });
-    expect(mission.updateMany).toHaveBeenCalledWith({
-      where: { id: "mission-1", status: MissionStatus.PENDING_RESCUE },
-      data: { status: MissionStatus.PENDING_WAREHOUSE },
+    expect(missionWarehouseRequest.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          missionId: "mission-1",
+          warehouseId: "warehouse-a",
+          sku: "WATER-01",
+          requestedQuantity: 4,
+        }),
+        expect.objectContaining({
+          missionId: "mission-1",
+          warehouseId: "warehouse-b",
+          sku: "WATER-01",
+          requestedQuantity: 6,
+        }),
+      ],
+      skipDuplicates: true,
     });
+    expect(mission.updateMany).toHaveBeenCalledWith({
+      where: { id: "mission-1", status: MissionStatus.DRAFT },
+      data: expect.objectContaining({
+        status: MissionStatus.PENDING_WAREHOUSE,
+        approvedByUserId: "admin-1",
+      }),
+    });
+    expect(notification.create).toHaveBeenCalledTimes(2);
+    expect(notifications.pushPersisted).toHaveBeenCalledTimes(2);
   });
 
   it("kho tham gia đọc được mission dù không phải kho nguồn", async () => {
@@ -117,7 +167,11 @@ describe("MissionService warehouse participation", () => {
           ],
           warehouse: { organizationId: "org-1" },
         }),
-        include: { requirements: true, warehousePreparations: true },
+        include: expect.objectContaining({
+          requirements: true,
+          warehousePreparations: true,
+          warehouseRequests: expect.any(Object),
+        }),
       }),
     );
   });

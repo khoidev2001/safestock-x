@@ -1,5 +1,5 @@
 /**
- * Suy diễn thông tin "nắm bắt nhanh" cho đội cứu hộ từ dữ liệu thật của backend.
+ * Suy diễn thông tin "nắm bắt nhanh" cho Lực lượng hiện trường từ dữ liệu thật của backend.
  * Không gọi API — chỉ map/tô màu để làm nổi bật 3 thứ quan trọng nhất:
  * loại thiên tai · mức nguy hiểm · số người gặp nạn.
  */
@@ -44,7 +44,7 @@ export interface DangerMeta {
 
 /**
  * Chấm mức nguy hiểm từ loại thiên tai + số người gặp nạn.
- * Thang này là tín hiệu trực quan cho đội cứu hộ, không phải kết luận của backend.
+ * Thang này là tín hiệu trực quan cho Lực lượng hiện trường, không phải kết luận của backend.
  */
 export function assessDanger(type: string, people: number): DangerMeta {
   const typeScore: Record<string, number> = {

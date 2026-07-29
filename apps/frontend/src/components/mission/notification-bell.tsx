@@ -12,7 +12,7 @@ import { useMissionFocus } from "@/lib/mission-focus-store";
 export function NotificationBell({
   onOpenMission,
 }: {
-  onOpenMission?: (missionId: string) => void;
+  onOpenMission?: (missionId: string, fieldUpdateId?: string | null) => void;
 }) {
   const role = useAuth((s) => s.user?.role);
   const token = useAuth((s) => s.token);
@@ -20,9 +20,9 @@ export function NotificationBell({
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
 
-  function openMission(missionId: string) {
+  function openMission(missionId: string, fieldUpdateId?: string | null) {
     focusMission(missionId);
-    onOpenMission?.(missionId);
+    onOpenMission?.(missionId, fieldUpdateId);
     setOpen(false);
   }
 
@@ -95,7 +95,7 @@ export function NotificationBell({
                     <button
                       key={n.id}
                       type="button"
-                      onClick={() => openMission(n.missionId as string)}
+                      onClick={() => openMission(n.missionId as string, n.fieldUpdateId)}
                       className="block w-full border-b px-4 py-3 text-left transition last:border-0 hover:bg-[var(--surface-2)]"
                     >
                       <p className="text-sm font-medium">{n.title}</p>

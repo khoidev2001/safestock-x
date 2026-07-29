@@ -7,6 +7,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
+    "test:coordination": "pnpm build && node --test tests/coordination.test.cjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
   },

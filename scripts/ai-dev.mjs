@@ -23,7 +23,11 @@ if (!existsSync(python)) {
   process.exit(1);
 }
 
-const args = ["-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"];
+// M5: mặc định loopback (ai-service không có auth riêng). Muốn phục vụ LAN phải cố ý
+// đặt AI_SERVICE_HOST=0.0.0.0. Không còn phơi 0.0.0.0 mặc định trên dev launcher.
+const host = process.env.AI_SERVICE_HOST?.trim() || "127.0.0.1";
+const port = process.env.AI_SERVICE_PORT?.trim() || "8000";
+const args = ["-m", "uvicorn", "main:app", "--host", host, "--port", port];
 // stdio kế thừa để log uvicorn hiện trực tiếp; cwd = ai-service để uvicorn thấy main.py.
 const child = spawn(python, args, { cwd: serviceDir, stdio: "inherit" });
 

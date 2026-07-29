@@ -1,5 +1,7 @@
 import { HttpException, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { FieldUpdateIntent, SituationExtraction } from "@safestock/shared-types";
+import { randomUUID } from "crypto";
 import { ActionPlanNarrative } from "../mission/action-plan";
 import { IncidentInput } from "../mission/mission.compute";
 
@@ -8,15 +10,33 @@ import { IncidentInput } from "../mission/mission.compute";
  * ngay, không phụ thuộc Gemini rate-limit/mạng hội trường. Đây là demo an toàn,
  * không phải gian lận.
  */
+// Cache demo có giới hạn: nhập liệu tuỳ ý (mô tả, context) không được để Map phình vô hạn
+// → rò rỉ bộ nhớ theo thời gian chạy dài. Vượt ngưỡng thì loại bỏ khoá cũ nhất (FIFO/LRU thô).
+const MAX_CACHE_ENTRIES = 200;
+// Chặn treo request khi ai-service chậm/mạng hội trường kém: quá hạn thì huỷ và fallback.
+const DEFAULT_TIMEOUT_MS = 15_000;
+
 @Injectable()
 export class AiClientService {
   private readonly log = new Logger(AiClientService.name);
   private readonly baseUrl: string;
+  private readonly timeoutMs: number;
   private parseCache = new Map<string, IncidentInput>();
   private actionPlanCache = new Map<string, ActionPlanNarrative>();
 
   constructor(config: ConfigService) {
     this.baseUrl = config.get("AI_SERVICE_URL") ?? "http://localhost:8000";
+    const configured = Number(config.get("AI_SERVICE_TIMEOUT_MS"));
+    this.timeoutMs = Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_TIMEOUT_MS;
+  }
+
+  /** Ghi cache có chặn kích thước: quá ngưỡng thì bỏ khoá cũ nhất để tránh rò rỉ bộ nhớ. */
+  private cacheSet<V>(cache: Map<string, V>, key: string, value: V): void {
+    if (cache.size >= MAX_CACHE_ENTRIES) {
+      const oldest = cache.keys().next().value;
+      if (oldest !== undefined) cache.delete(oldest);
+    }
+    cache.set(key, value);
   }
 
   /** Parse mô tả → tình huống. Cache theo mô tả (chuẩn hóa). */
@@ -26,7 +46,7 @@ export class AiClientService {
     if (cached) return cached;
 
     const result = await this.post<IncidentInput>("/parse", { description });
-    this.parseCache.set(key, result);
+    this.cacheSet(this.parseCache, key, result);
     return result;
   }
 
@@ -59,8 +79,33 @@ export class AiClientService {
     if (cached) return cached;
 
     const result = await this.post<ActionPlanNarrative>("/action-plan", { context });
-    this.actionPlanCache.set(key, result);
+    this.cacheSet(this.actionPlanCache, key, result);
     return result;
+  }
+
+  /**
+   * NLP-only extraction for coordination. Inventory, routes, forecasts and
+   * allocation remain backend-owned and are never accepted from this response.
+   */
+  async analyzeSituation(input: {
+    description: string;
+    sourceId: string;
+    sourceType: "USER_REPORT" | "FIELD_UPDATE";
+    capturedAt?: string | null;
+  }): Promise<SituationExtraction> {
+    return this.post<SituationExtraction>("/situation-analysis", input);
+  }
+
+  /**
+   * Classifies an operator-confirmed field update into review-required intent
+   * and source-grounded facts. It cannot calculate or mutate operations.
+   */
+  async analyzeFieldUpdateIntent(input: {
+    confirmedText: string;
+    sourceId: string;
+    capturedAt?: string | null;
+  }): Promise<FieldUpdateIntent> {
+    return this.post<FieldUpdateIntent>("/field-update-intent", input);
   }
 
   /** Xếp hạng catalog bằng embedding local. Chỉ gửi ID + văn bản mô tả, không gửi tồn kho. */
@@ -89,21 +134,65 @@ export class AiClientService {
   }
 
   private async post<T>(path: string, body: unknown): Promise<T> {
+    const correlationId = randomUUID();
+    const startedAt = Date.now();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Correlation-ID": correlationId,
+        },
         body: JSON.stringify(body),
+        signal: controller.signal,
       });
       if (!response.ok) {
-        const detail = await response.text();
-        throw new HttpException(`AI service lỗi: ${detail}`, response.status);
+        this.log.warn(
+          JSON.stringify({
+            event: "ai_request",
+            operation: path,
+            correlationId,
+            durationMs: Date.now() - startedAt,
+            outcome: "http_error",
+            status: response.status,
+          }),
+        );
+        // Provider details can contain prompt text, transcripts, phone numbers
+        // or tokens. They are deliberately neither logged nor returned.
+        throw new HttpException("AI service không xử lý được yêu cầu", response.status);
       }
-      return (await response.json()) as T;
+      const result = (await response.json()) as T;
+      this.log.log(
+        JSON.stringify({
+          event: "ai_request",
+          operation: path,
+          correlationId,
+          durationMs: Date.now() - startedAt,
+          outcome: "success",
+          status: response.status ?? 200,
+        }),
+      );
+      return result;
     } catch (error) {
       if (error instanceof HttpException) throw error;
-      this.log.error(`Gọi ai-service thất bại: ${(error as Error).message}`);
+      this.log.error(
+        JSON.stringify({
+          event: "ai_request",
+          operation: path,
+          correlationId,
+          durationMs: Date.now() - startedAt,
+          outcome: "network_error",
+          errorClass:
+            error != null && typeof error === "object" && "name" in error
+              ? String(error.name).slice(0, 80)
+              : "UnknownError",
+        }),
+      );
       throw new HttpException("Không kết nối được AI service", 503);
+    } finally {
+      clearTimeout(timeout);
     }
   }
 }

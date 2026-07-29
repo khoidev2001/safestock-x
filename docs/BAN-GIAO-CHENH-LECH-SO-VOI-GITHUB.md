@@ -150,6 +150,23 @@ Các file chính: `apps/ai-service/semantic.py`, `main.py`,
 - Mission inbox/deep link, tiến độ prepare theo từng kho, fulfillment atomic và
   idempotent đã được bổ sung.
 
+### Cập nhật 2026-07-29 sau review PR #13
+
+- Local tiếp tục là nền chính; không merge/pull toàn bộ PR #13.
+- `RESCUE`/Lực lượng hiện trường đã chuyển về đúng phạm vi chỉ đọc phương án,
+  nhận thông báo và gửi cập nhật text/voice đã tự xác nhận. Public route/UI
+  confirm, reject, defer, resend và complete không còn thuộc workflow mới.
+- Bản đồ dùng một bộ nhãn semantic có ưu tiên/chống va chạm cho kho, xã và POI;
+  lưu marker theo từng warehouse chống nhấn lặp và không xóa draft mới hơn response.
+- APK REPORTER có lịch sử/chi tiết báo cáo text của chính tài khoản, scope theo
+  user + organization; không lưu audio thô.
+- Mission mới có yêu cầu chuẩn bị theo từng SKU. Web/APK WAREHOUSE tiếp nhận,
+  báo chênh lệch và xác nhận xuất từng dòng; ADMIN được giảm lượng chưa xuất.
+- Race của PR #13 đã được khép bằng claim token + transaction ở prepare và CAS
+  `status + claimToken + updatedAt` ở ADMIN review. Stale review không thể reset
+  `PREPARED`.
+- Chi tiết quyết định: `docs/adr/ADR-004-per-sku-warehouse-preparation.md`.
+
 ## 8. Security và tính đúng đã bổ sung
 
 - Organization/warehouse scope cho các đường inventory, loan, report, audit và
@@ -178,6 +195,17 @@ pnpm --filter @safestock/backend prisma:backfill-audit-scope
 pnpm --filter @safestock/backend prisma:backfill-hamlets
 pnpm --filter @safestock/backend prisma:backfill-mission-preparations
 ```
+
+Trước khi deploy source 2026-07-29, áp dụng thêm migration additive:
+
+```powershell
+# Chạy trên database clone/đã backup trước, rồi xác minh schema.
+psql $env:DATABASE_URL -f apps/backend/prisma/sql/20260729_mission_warehouse_requests.sql
+pnpm --filter @safestock/backend prisma:generate
+```
+
+Không chạy endpoint phát hành/prepare SKU trước khi bảng
+`MissionWarehouseRequest` và ba giá trị enum notification mới đã tồn tại.
 
 Sau `db push`, script inventory backfill lấy kho hiện tại của batch cho các
 transaction legacy chưa có snapshot. Đây là backfill tương thích tốt nhất với

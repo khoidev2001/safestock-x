@@ -104,6 +104,31 @@ function ContactList({ contacts }: { contacts: PublicCommuneContact[] }) {
               </span>
             </div>
             <p className="mt-1 text-sm text-[var(--text-muted)]">{contact.contactTitle}</p>
+            <p className="mt-2 text-sm font-medium">{contact.referencePoint.name}</p>
+            <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+              {contact.referencePoint.address}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+              <span
+                className={`rounded-full px-2.5 py-1 font-semibold ${
+                  contact.availability === "LOCAL_INVENTORY"
+                    ? "bg-[var(--accent-soft)] text-[var(--color-ready)]"
+                    : "bg-[var(--surface-3)] text-[var(--color-attention)]"
+                }`}
+              >
+                {contact.availability === "LOCAL_INVENTORY"
+                  ? "Kho nội xã"
+                  : "Chưa xác minh tồn kho"}
+              </span>
+              <a
+                className="font-semibold text-[var(--color-accent)] underline-offset-4 hover:underline"
+                href={contact.referencePoint.sourceUrl}
+                rel="noreferrer"
+                target="_blank"
+              >
+                Mở trên Google Maps
+              </a>
+            </div>
           </div>
 
           {contact.phone ? (

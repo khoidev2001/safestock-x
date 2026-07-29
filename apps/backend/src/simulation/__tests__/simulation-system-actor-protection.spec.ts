@@ -35,6 +35,7 @@ describe("simulation system actor protection", () => {
         email,
         role: UserRole.WAREHOUSE,
         warehouseId: "warehouse-1",
+        tokenVersion: 0,
       }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });

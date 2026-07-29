@@ -7,6 +7,7 @@ import {
   missionNeedsAction,
   type MissionInboxView,
 } from "@/lib/mission-inbox-state";
+import { FIELD_FORCE_ROLE_LABEL } from "@safestock/shared-types";
 
 const INCIDENT_LABELS: Record<string, string> = {
   FLOOD: "Lũ lụt",
@@ -19,12 +20,12 @@ const INCIDENT_LABELS: Record<string, string> = {
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: "Bản nháp",
-  PENDING_RESCUE: "Chờ cứu hộ",
-  RESCUE_CONFIRMED: "Cứu hộ đã nhận",
+  PENDING_RESCUE: `Chờ ${FIELD_FORCE_ROLE_LABEL}`,
+  RESCUE_CONFIRMED: `${FIELD_FORCE_ROLE_LABEL} đã nhận`,
   PENDING_WAREHOUSE: "Kho đang chuẩn bị",
   READY: "Sẵn sàng giao",
   COMPLETED: "Đã hoàn tất",
-  REJECTED: "Cứu hộ từ chối",
+  REJECTED: `${FIELD_FORCE_ROLE_LABEL} từ chối`,
   DEFERRED: "Tạm hoãn",
   CANCELLED: "Đã hủy",
 };

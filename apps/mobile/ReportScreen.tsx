@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { submitReport, transcribe, type AuthUser } from "./api";
+import {
+  fetchOwnReport,
+  fetchOwnReports,
+  submitReport,
+  transcribe,
+  type AuthUser,
+  type OwnReportDetail,
+  type OwnReportSummary,
+} from "./api";
 import { isRecordingSupported, startRecording, type AudioRecording } from "./audio";
 import { MAX_RECORDING_MS } from "./audio-platform-state";
 import { c, styles } from "./styles";
@@ -28,6 +36,11 @@ export function ReportScreen({
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [history, setHistory] = useState<OwnReportSummary[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [selectedReport, setSelectedReport] = useState<OwnReportDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const recordingRef = useRef<AudioRecording | null>(null);
   const recordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestRef = useRef<{ description: string; requestId: string } | null>(null);
@@ -43,6 +56,12 @@ export function ReportScreen({
     },
     [],
   );
+
+  useEffect(() => {
+    void loadHistory();
+    // loadHistory only depends on the current authenticated token.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 
   function createRequestId() {
     return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -120,10 +139,36 @@ export function ReportScreen({
       requestRef.current = null;
       setSent(true);
       setDescription("");
+      await loadHistory();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không gửi được báo cáo");
     } finally {
       setSending(false);
+    }
+  }
+
+  async function loadHistory() {
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const page = await fetchOwnReports(token);
+      setHistory(page.items);
+    } catch (e) {
+      setHistoryError(e instanceof Error ? e.message : "Không tải được lịch sử báo cáo");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function openReport(id: string) {
+    setDetailLoading(true);
+    setHistoryError(null);
+    try {
+      setSelectedReport(await fetchOwnReport(token, id));
+    } catch (e) {
+      setHistoryError(e instanceof Error ? e.message : "Không tải được chi tiết báo cáo");
+    } finally {
+      setDetailLoading(false);
     }
   }
 
@@ -215,7 +260,148 @@ export function ReportScreen({
         >
           <Text style={styles.buttonText}>{sending ? "Đang gửi…" : "Gửi báo cáo"}</Text>
         </Pressable>
+
+        <View style={styles.reportHistorySection}>
+          <View style={styles.reportHistoryHeader}>
+            <Text style={styles.reportHistoryTitle}>Báo cáo đã gửi</Text>
+            <Pressable
+              onPress={() => void loadHistory()}
+              disabled={historyLoading}
+              accessibilityRole="button"
+              accessibilityLabel="Tải lại lịch sử báo cáo"
+            >
+              <Text style={styles.reportHistoryRefresh}>
+                {historyLoading ? "Đang tải…" : "Tải lại"}
+              </Text>
+            </Pressable>
+          </View>
+
+          {historyError ? <Text style={styles.errorText}>{historyError}</Text> : null}
+          {detailLoading ? (
+            <Text style={styles.reportHistoryEmpty}>Đang tải chi tiết báo cáo…</Text>
+          ) : selectedReport ? (
+            <OwnReportDetailPanel
+              report={selectedReport}
+              onBack={() => setSelectedReport(null)}
+            />
+          ) : (
+            <OwnReportHistory
+              reports={history}
+              loading={historyLoading}
+              onOpen={(id) => void openReport(id)}
+            />
+          )}
+        </View>
       </ScrollView>
     </View>
   );
+}
+
+function OwnReportHistory({
+  reports,
+  loading,
+  onOpen,
+}: {
+  reports: OwnReportSummary[];
+  loading: boolean;
+  onOpen: (id: string) => void;
+}) {
+  if (loading && reports.length === 0) {
+    return <Text style={styles.reportHistoryEmpty}>Đang tải các báo cáo đã gửi…</Text>;
+  }
+  if (reports.length === 0) {
+    return (
+      <Text style={styles.reportHistoryEmpty}>
+        Chưa có báo cáo nào. Báo cáo mới sẽ xuất hiện tại đây sau khi gửi thành công.
+      </Text>
+    );
+  }
+  return (
+    <>
+      {reports.map((report) => (
+        <Pressable
+          key={report.id}
+          style={styles.reportHistoryCard}
+          onPress={() => onOpen(report.id)}
+          accessibilityRole="button"
+          accessibilityLabel={`Xem báo cáo ${shortReport(report.reportText)}`}
+        >
+          <Text style={styles.reportHistoryCardTitle} numberOfLines={2}>
+            {shortReport(report.reportText)}
+          </Text>
+          <Text style={styles.reportHistoryMeta}>
+            {new Date(report.createdAt).toLocaleString("vi-VN")} ·{" "}
+            {report.warehouse?.name ?? "Cơ quan điều phối"}
+          </Text>
+          <Text style={styles.reportHistoryStatus}>{reportStatusLabel(report.status)}</Text>
+        </Pressable>
+      ))}
+    </>
+  );
+}
+
+function OwnReportDetailPanel({
+  report,
+  onBack,
+}: {
+  report: OwnReportDetail;
+  onBack: () => void;
+}) {
+  return (
+    <View style={styles.reportDetailPanel}>
+      <Pressable onPress={onBack} accessibilityRole="button">
+        <Text style={styles.reportDetailBack}>← Quay lại lịch sử</Text>
+      </Pressable>
+      <Text style={styles.reportDetailTitle}>Chi tiết báo cáo</Text>
+      <Text style={styles.reportHistoryStatus}>{reportStatusLabel(report.status)}</Text>
+
+      <Text style={styles.reportDetailLabel}>Nội dung đã xác nhận</Text>
+      <Text style={styles.reportDetailValue}>{report.reportText ?? "Không có nội dung text."}</Text>
+
+      <Text style={styles.reportDetailLabel}>Thời điểm gửi</Text>
+      <Text style={styles.reportDetailValue}>
+        {new Date(report.createdAt).toLocaleString("vi-VN")}
+      </Text>
+
+      {report.location ? (
+        <>
+          <Text style={styles.reportDetailLabel}>Địa điểm</Text>
+          <Text style={styles.reportDetailValue}>{report.location}</Text>
+        </>
+      ) : null}
+
+      {report.requirements.length > 0 ? (
+        <>
+          <Text style={styles.reportDetailLabel}>Vật tư trong phương án</Text>
+          {report.requirements.map((item) => (
+            <Text key={item.id} style={styles.reportDetailValue}>
+              • {item.itemName}: {item.allocated}/{item.required} {item.unit}
+            </Text>
+          ))}
+        </>
+      ) : null}
+
+      {report.explanation ? (
+        <>
+          <Text style={styles.reportDetailLabel}>Phản hồi từ hệ thống</Text>
+          <Text style={styles.reportDetailValue}>{report.explanation}</Text>
+        </>
+      ) : null}
+    </View>
+  );
+}
+
+function shortReport(text: string | null): string {
+  const normalized = text?.trim();
+  if (!normalized) return "Báo cáo tình huống";
+  return normalized.length > 100 ? `${normalized.slice(0, 100)}…` : normalized;
+}
+
+function reportStatusLabel(status: string): string {
+  if (status === "DRAFT") return "Đã nhận · chờ phân tích";
+  if (status === "PENDING_WAREHOUSE") return "Đã lập phương án · kho đang chuẩn bị";
+  if (status === "READY") return "Vật tư đã sẵn sàng";
+  if (status === "CANCELLED") return "Đã đóng / hủy";
+  if (status === "COMPLETED") return "Đã hoàn tất";
+  return "Đang xử lý";
 }

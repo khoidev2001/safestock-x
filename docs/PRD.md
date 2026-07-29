@@ -5,7 +5,7 @@
 
 | Thuộc tính | Giá trị |
 |---|---|
-| Phiên bản | 3.9 - Hoàn tất source quản lý kho ngày thường, chờ acceptance thực tế |
+| Phiên bản | 4.0 - Field Force read-only, báo cáo text-only và chuẩn bị kho theo SKU |
 | Ngày đối chiếu | 2026-07-28 |
 | Trạng thái | Quản lý kho ngày thường đã hoàn tất trong phạm vi source/test/build đã chốt; MVP end-to-end và production vẫn chờ acceptance/hardening |
 | Mức hoàn thành thực tế | P09, workflow kho ngày thường web/mobile, APK code/build và bốn AI feature bắt buộc đã hoàn thành ở mức code/test/build; browser đa phiên, thiết bị/LAN, database clone, full judged flow và production hardening còn mở |
@@ -98,7 +98,7 @@ Phần mềm kho thông thường trả lời kho đang ghi nhận bao nhiêu h�
 1. Vật tư nào đang thực sự sẵn sàng?
 2. Kho có blocker vận hành nào?
 3. Với tình huống cụ thể, cần gì và đáp ứng được bao nhiêu?
-4. Ai phải làm gì tiếp theo để chuẩn bị và bàn giao vật tư?
+4. Việc gì cần làm tiếp theo để chuẩn bị và bàn giao vật tư?
 
 ### 2.3. Tuyên bố giá trị
 
@@ -108,9 +108,24 @@ Phần mềm kho thông thường trả lời kho đang ghi nhận bao nhiêu h�
 
 - Quản lý tồn, lô, tình trạng, lưu hành, kiểm kê, mượn-trả và audit.
 - Đánh giá Readiness theo blocker, sáu chiều, lý do và hành động.
-- Biên dịch tình huống thành nhu cầu, phân bổ FEFO và Action Plan có kiểm chứng số.
+- Biên dịch báo cáo tiếng Việt tự nhiên từ text/voice thành dữ kiện có nguồn, nhu cầu,
+  phân bổ FEFO và bản tham mưu điều phối có kiểm chứng số.
+- ADMIN nhận một bản phân tích tình huống thống nhất gồm: thông tin tiếp nhận, mức
+  khẩn cấp/độ tin cậy, căn cứ, dữ liệu còn thiếu, nhu cầu vật tư, phương án kho-tuyến,
+  cảnh báo, dự báo 6-72 giờ, câu hỏi ưu tiên và giải thích.
+- ADMIN dùng AI What-if để mô phỏng giả định bằng ngôn ngữ tự nhiên trên snapshot
+  tách biệt, so sánh với phương án hiện tại mà không sửa dữ liệu thật.
+- APK của `RESCUE`, tên hiển thị **Lực lượng hiện trường**, chỉ đọc phương án và có Trợ lý hiện trường
+  nhận cập nhật text/voice, cho người dùng sửa/xác nhận rồi chuyển thành bằng chứng
+  để ADMIN xem xét và mô phỏng lại phương án.
+- APK `REPORTER` lưu lịch sử/chi tiết báo cáo text của chính tài khoản; audio chỉ
+  dùng tạm thời cho PhoWhisper và không được lưu hoặc phát lại.
+- Mỗi kho tiếp nhận, báo chênh lệch và xác nhận xuất theo từng SKU. Mission chỉ
+  `READY` khi mọi SKU của mọi kho đã `PREPARED`.
 - Nhận diện thôn đã được ADMIN cấu hình, tự chọn một hoặc nhiều kho nội xã, và trực quan hóa các tuyến kho → điểm cứu hộ trên dashboard.
-- Khép workflow desktop simulator -> APK REPORTER -> web ADMIN -> APK RESCUE -> web WAREHOUSE -> APK RESCUE -> web ADMIN qua các phiên độc lập và UI nhìn thấy.
+- Khép workflow desktop simulator -> APK REPORTER -> web ADMIN -> web/APK WAREHOUSE
+  -> APK Lực lượng hiện trường (`RESCUE`) -> web ADMIN
+  qua các phiên độc lập và UI nhìn thấy.
 - Mô phỏng cảm biến deterministic, realtime nhưng không gây rủi ro cho dữ liệu production.
 - Chạy được online qua domain và offline trong LAN với AI local.
 - Có bộ kiểm thử đủ chứng minh quyền, concurrency và workflow chính.
@@ -118,29 +133,49 @@ Phần mềm kho thông thường trả lời kho đang ghi nhận bao nhiêu h�
 
 ### 2.5. Ngoài phạm vi MVP
 
-- Nhận diện khuôn mặt, computer vision phức tạp, blockchain, drone.
-- Đồng bộ database tự động giữa các xã.
+- Nhận/phân tích ảnh hoặc video hiện trường, nhận diện khuôn mặt, computer vision,
+  blockchain và drone.
+- Phân công đội, nhóm hoặc cá nhân cứu hộ; hệ thống không có entity/logic gán
+  lực lượng cụ thể và AI không chọn người thực hiện.
+- Đồng bộ database hoặc kiểm tra tồn kho tự động giữa các xã.
 - Offline-write tự động merge tồn kho.
 - OR-Tools hoặc tối ưu hóa phức tạp khi greedy + FEFO đã đủ.
 - Dự báo thiên tai cấp tỉnh hoặc bản đồ GIS nghiệp vụ quy mô lớn.
-- GPS realtime, turn-by-turn navigation, cảnh báo lệch tuyến hoặc dẫn đường bằng giọng nói trên thiết bị cứu hộ.
-- AI tự tính tồn, tự duyệt nghiệp vụ, chạy SQL/shell hoặc thực thi hành động nguy hiểm.
+- Theo dõi GPS liên tục, turn-by-turn navigation, cảnh báo lệch tuyến hoặc dẫn đường
+  bằng giọng nói trên thiết bị Lực lượng hiện trường.
+- AI tự tính tồn, tự duyệt nghiệp vụ, chạy SQL/shell, dispatch mission, liên hệ xã
+  khác hoặc thực thi hành động nguy hiểm.
 
 ## 3. Người dùng, quyền và ranh giới dữ liệu
 
 | Role | Trách nhiệm | Không được phép |
 |---|---|---|
-| `ADMIN` | Quản trị user, tạo mission, giám sát, hậu kiểm, cấu hình | Không được thay actor thật bằng admin hệ thống cho thao tác tự động |
+| `ADMIN` | Quản trị user, phân tích báo cáo, chạy What-if, tạo/duyệt mission, giám sát, hậu kiểm, cấu hình | Không được thay actor thật bằng admin hệ thống cho thao tác tự động |
 | `WAREHOUSE` | Vận hành kho được phân công, chuẩn bị/xuất mission, kiểm kê, mượn-trả | Không đọc/ghi kho ngoài scope nếu không được giao rõ |
-| `RESCUE` | Xem và xác nhận mission, nhận/hoàn vật tư, xem thông tin cần thiết | Không mutate simulator, tồn kho hoặc incident bằng quyền xem |
+| `RESCUE` — **Lực lượng hiện trường** | Xem phương án/tuyến/điểm lấy vật tư, nhận thông báo và gửi cập nhật text/voice đã xác nhận | Không xác nhận/từ chối/hoàn tất mission, không bị hệ thống phân công theo đội/cá nhân; không mutate simulator, tồn kho hoặc tự duyệt phương án |
+| `REPORTER` | Trưởng thôn/người báo cáo gửi tình huống text/voice, xem lịch sử/chi tiết text của chính mình và nhận phản hồi | Không tạo/duyệt mission, xuất kho, xem báo cáo người khác hoặc truy cập audio thô |
 
 Quyết định nền:
 
 - Mô hình kiểm soát là **hậu kiểm**, không duyệt hai bước cho mọi thao tác.
+- `RESCUE` là enum kỹ thuật giữ để tương thích; mọi UI/tài liệu người dùng phải
+  hiển thị **Lực lượng hiện trường**. Role này biểu diễn actor ngoài hiện trường,
+  không phải một đội cứu hộ cụ thể được hệ thống phân công.
 - Mỗi xã vận hành một hệ thống và một database độc lập.
 - Trong xã: một kho tổng + nhiều kho thôn dùng chung `communeId`.
+- Kho tổng của xã Đồng Xuân đặt tại **UBND xã Đồng Xuân**. Kho thôn đặt tại **Nhà
+  văn hóa/Nhà sinh hoạt cộng đồng của đúng thôn**. Chỉ điền tọa độ khi địa điểm đã
+  được xác minh; mục chưa tìm thấy trên Google Maps giữ `lat/lng = null` và do ADMIN
+  ghim sau. Danh mục nguồn nằm tại
+  [`DANH-MUC-VI-TRI-KHO-XA-VA-KHO-THON.md`](DANH-MUC-VI-TRI-KHO-XA-VA-KHO-THON.md).
+- Điểm kho/liên hệ của sáu xã lân cận dùng vị trí **UBND của chính xã đó**. Đây là
+  external metadata có availability `UNKNOWN`, không phải kho vận hành, không có tồn
+  kho trong tenant Đồng Xuân và không được cộng vào fulfillment.
 - ADMIN cấu hình trước danh mục thôn, điểm cứu hộ/tập kết mặc định của từng thôn và vị trí thực tế từng kho; AI chỉ tra cứu điểm đã xác minh, không geocode hoặc sinh tọa độ.
-- Liên xã: chỉ lưu metadata kho lân cận và gợi ý liên hệ; không sync database.
+- Liên xã: chỉ lưu metadata điểm/kho/thôn được ghim thủ công và thông tin liên hệ
+  công khai. Chỉ khi toàn bộ hàng nội xã đủ điều kiện đã được phân bổ mà vẫn thiếu,
+  hệ thống mới xếp hạng điểm nên liên hệ theo vị trí/tuyến. Không kiểm tra tồn kho
+  xã khác, không tăng fulfillment, không tự liên hệ và không tạo giao dịch ngoài xã.
 - Phạm vi demo vận hành chỉ có tenant Đồng Xuân. Sáu xã giáp ranh Xuân Thọ, Tuy An Bắc, Tuy An Tây, Xuân Lãnh, Phú Mỡ, Xuân Phước chỉ là metadata ngoài xã, không phải tenant/kho vận hành và không tham gia allocation/readiness/fulfillment.
 - Mọi read/write/AI snapshot phải được scope theo tổ chức, xã và kho.
 - WebSocket room do server suy ra từ JWT và assignment; client không tự khai role/kho đáng tin cậy.
@@ -151,11 +186,17 @@ Quyết định nền:
 
 | Thành phần | Được làm | Không được làm |
 |---|---|---|
-| LLM | Parse tiếng Việt, diễn giải, viết narrative theo context | Tính tồn, tự bịa số, tự phê duyệt, thực thi mutation |
-| Backend | Auth, scope, transaction, audit, state transition | Tin dữ liệu quyền từ client |
+| LLM/embedding | Parse tiếng Việt, trích xuất dữ kiện kèm đoạn nguồn, resolve ngữ nghĩa, phát hiện thiếu/mâu thuẫn, chọn câu hỏi ưu tiên, điều phối tool mô phỏng chỉ đọc và diễn giải | Tính tồn, tự bịa số/tọa độ/tuyến, tự phê duyệt, phân công người, liên hệ bên ngoài hoặc thực thi mutation |
+| Backend | Auth, scope, transaction, audit, state transition, snapshot và mọi phép tính có tính quyết định | Tin dữ liệu quyền từ client hoặc cho mô phỏng ghi vào dữ liệu thật |
 | Rule engine | Readiness, severity, forecast, nhu cầu, fulfillment | Dùng trung bình để che thiếu vật tư thiết yếu |
+| Geo/inventory/forecast tools | Trả dữ liệu kiểm chứng cho AI và chạy mô phỏng trên snapshot | Biến giả định thành sự thật hoặc khẳng định dữ liệu ngoài xã chưa có |
 
-Mọi con số tồn, phần trăm đáp ứng, severity, ETA và forecast phải truy được về backend/rule/GeoService. LLM chỉ dùng số đã cung cấp.
+Mọi con số tồn, phần trăm đáp ứng, severity, ETA, forecast và độ tin cậy tổng hợp
+phải truy được về backend/rule/GeoService hoặc mô hình dự báo có version/provenance.
+LLM chỉ dùng số đã cung cấp. Mọi nhận định trên UI phải phân biệt được bốn trạng thái:
+**người dùng báo cáo**, **hệ thống đã xác minh**, **AI suy luận** và **chưa xác minh**.
+AI không được nâng “có nguy cơ cô lập” thành “đã mắc kẹt”, hoặc suy ra số hộ, phương
+tiện, tình trạng đường và khả năng tiếp cận nếu input/tool chưa cung cấp.
 
 ### 4.2. Readiness
 
@@ -191,20 +232,30 @@ Thứ tự quyết định bắt buộc:
 
 ### 4.6. Quy ước “mọi bước qua UI” cho bài thi
 
-Đây là **release contract bắt buộc**, không phải ưu tiên UX. “Qua UI” nghĩa là giám khảo/operator có thể hoàn tất workflow đã hứa bằng control nhìn thấy trên web, desktop simulator hoặc APK Android: đăng nhập, nhập report, gửi, mở notification/inbox, tạo/dispatch mission, confirm/reject/prepare/complete và xem trạng thái cuối. Không dùng curl/Postman, SQL, sửa source/API URL, copy ID ẩn hoặc seed giữa chừng để thay cho thao tác nghiệp vụ.
+Đây là **release contract bắt buộc**, không phải ưu tiên UX. “Qua UI” nghĩa là giám khảo/operator có thể hoàn tất workflow đã hứa bằng control nhìn thấy trên web, desktop simulator hoặc APK Android: đăng nhập, nhập report, xem lại lịch sử text, mở notification/inbox, phân tích/What-if, ADMIN phát hành phương án, kho tiếp nhận/báo chênh lệch/xuất từng SKU, Lực lượng hiện trường xem phương án và gửi cập nhật đã xác nhận, rồi xem trạng thái cuối. Không dùng curl/Postman, SQL, sửa source/API URL, copy ID ẩn hoặc seed giữa chừng để thay cho thao tác nghiệp vụ.
 
 Được phép trước khi bắt đầu: dùng terminal/launcher để khởi động service, chạy preflight và reset/seed một lần theo runbook; mở desktop simulator vì đây là công cụ demo có UI để phát scenario deterministic. Từ lúc bắt đầu câu chuyện chấm thi đến khi hiện kết quả cuối, mọi nghiệp vụ phải qua UI. Không tính script/API fallback hoặc video dự phòng là bằng chứng hoàn thành UI. Nếu mất LAN, app phải hiển thị stale/offline rõ ràng và không tự xếp hàng mutation.
 
-Luồng acceptance: (1) desktop simulator phát incident; (2) APK REPORTER gửi report typed; (3) web ADMIN xem AI resolve thôn đã cấu hình, nhu cầu, phân bổ đa kho và các tuyến hội tụ rồi duyệt/dispatch Mission-to-Kit; (4) APK RESCUE nhận notification, mở mission, confirm/reject; (5) web WAREHOUSE mở inbox, prepare/fulfill; (6) APK RESCUE complete delivery; (7) web ADMIN xem timeline/readiness/audit.
+Luồng acceptance: (1) desktop simulator phát incident; (2) APK REPORTER gửi report
+text/voice đã xác nhận và mở lại lịch sử; (3) web ADMIN xem bản phân tích AI có
+provenance, chạy ít nhất một What-if, xem nhu cầu, phân bổ đa kho và các tuyến hội tụ
+rồi duyệt/phát hành Mission-to-Kit; (4) web hoặc APK WAREHOUSE mở yêu cầu SKU của
+đúng kho, tiếp nhận, có thể báo chênh lệch để ADMIN duyệt lại, rồi xác nhận xuất từng
+SKU; (5) APK Lực lượng hiện trường (`RESCUE`) nhận notification, mở phương án ở chế
+độ chỉ đọc và gửi một cập nhật text/voice đã xác nhận; (6) web ADMIN thấy timeline,
+trạng thái `READY`, readiness và audit. Việc tổ chức lực lượng/giao nhận cuối cùng do
+con người quyết định ngoài ứng dụng.
 
 | Chặng | UI bắt buộc | Bằng chứng pass | Không được dùng để thay thế |
 |---|---|---|---|
 | Khởi tạo tình huống | Desktop simulator | Scenario/incident xuất hiện và trạng thái realtime đổi | Gọi API phát event sau khi demo đã bắt đầu |
-| Báo cáo hiện trường | APK REPORTER | Gửi typed report, thấy xác nhận và mission/report reference | Insert DB, curl/Postman, voice-only không có fallback gõ |
-| Điều phối | Web ADMIN | Mở report từ inbox/notification, xem AI resolve marker thôn đã cấu hình, hệ thống tự chọn/ghép kho, xem tuyến rồi duyệt và dispatch | Tự chọn kho để thay thuật toán, tạo điểm ngẫu nhiên, copy/paste ID, mở URL ID chuẩn bị trước, chạy seed giữa luồng |
-| Nhận nhiệm vụ | APK RESCUE | Notification/inbox mở đúng mission sau restart; confirm hoặc reject có lỗi hiển thị | Giữ state RAM từ phiên ADMIN hoặc gọi transition API |
-| Chuẩn bị vật tư | Web WAREHOUSE | Đăng nhập phiên độc lập, tìm mission, prepare/fulfill đúng kho | Dùng tài khoản ADMIN thay role, SQL hoặc script export |
-| Hoàn tất và hậu kiểm | APK RESCUE + Web ADMIN | Complete delivery; ADMIN thấy status, readiness và audit cuối | Sửa DB/status trực tiếp hoặc chỉ trình chiếu video |
+| Báo cáo hiện trường | APK REPORTER | Gửi text hoặc voice→text đã xác nhận, thấy report reference | Insert DB, curl/Postman, voice không cho xem/sửa hoặc không có fallback gõ |
+| Phân tích/What-if | Web ADMIN | Xem provenance, dữ liệu thiếu, nhu cầu, kho-tuyến, dự báo; nhập giả định tự nhiên và thấy delta so với baseline | Cho LLM tự bịa số, ghi giả định vào dữ liệu thật, gọi API/script mô phỏng ngoài UI |
+| Điều phối | Web ADMIN | Hệ thống tự chọn/ghép kho nội xã, xem tuyến rồi ADMIN duyệt và dispatch | AI tự duyệt/dispatch, tự chọn người, tạo điểm ngẫu nhiên, copy/paste ID, mở URL ID chuẩn bị trước, chạy seed giữa luồng |
+| Theo dõi phương án | APK Lực lượng hiện trường (`RESCUE`) | Notification/inbox mở đúng mission sau restart; chỉ xem phương án/tuyến và không có nút chuyển workflow | Gán đội/cá nhân cụ thể, confirm/reject/complete mission hoặc giữ state RAM từ phiên ADMIN |
+| Chuẩn bị vật tư | Web/APK WAREHOUSE | Đăng nhập phiên độc lập, tiếp nhận/báo chênh lệch/xuất từng SKU đúng kho; retry không double-export | Dùng tài khoản ADMIN thay role, xuất cả mission bằng SQL/script hoặc chỉnh SKU đã PREPARED |
+| Cập nhật hiện trường | APK Lực lượng hiện trường | Gửi text/voice, sửa và xác nhận bản ghi; ADMIN thấy bằng chứng và mô phỏng ảnh hưởng | Ảnh/video, GPS liên tục, nội dung voice tự gửi khi chưa xác nhận |
+| Hoàn tất và hậu kiểm | Web ADMIN | Khi mọi SKU đã PREPARED, mission tự `READY`; ADMIN thấy readiness, timeline và audit cuối | Sửa DB/status trực tiếp hoặc chỉ trình chiếu video |
 
 Điều kiện continuity: mỗi role dùng phiên đăng nhập độc lập; logout/login, refresh, mở tab mới hoặc restart app vẫn tìm lại mission bằng inbox/notification/deep-link. Mọi loading, empty, 401, 403, 404, 5xx và mất LAN phải hiển thị rõ; không đổi lỗi thành danh sách rỗng hoặc trạng thái thành công giả.
 
@@ -212,12 +263,86 @@ Luồng acceptance: (1) desktop simulator phát incident; (2) APK REPORTER gửi
 
 - Input tự nhiên như `Tân Bình cô lập 100 người` được AI parse thành loại sự cố, số người và tên thôn; địa điểm phải khớp danh mục thôn do ADMIN cấu hình trước.
 - `Hamlet` và `Warehouse` là hai loại điểm khác nhau: điểm thôn là đích cứu hộ/tập kết mặc định; marker kho là nơi lấy vật tư. Chúng có thể gần nhau nhưng không được mặc định là cùng tọa độ.
+- Với tenant Đồng Xuân, marker kho xã dùng vị trí UBND xã; marker kho thôn dùng Nhà
+  văn hóa/nhà sinh hoạt cộng đồng cùng tên thôn. Google Maps hiện xác minh được
+  Kỳ Đu, Phước Huệ, Tân Bình, Phú Sơn và Triêm Đức; các kho thôn khác không được
+  dùng kết quả trùng tên ở xã khác để tính “gần nhất”.
+- Marker liên xã dùng UBND Xuân Thọ, Tuy An Bắc, Tuy An Tây, Xuân Lãnh, Phú Mỡ và
+  Xuân Phước đã xác minh trên Google Maps. Marker chỉ xuất hiện dưới nhãn `đề xuất
+  liên hệ, chưa xác nhận có hàng`, không được vẽ như một allocation đã cam kết.
 - Mission lưu tham chiếu điểm thôn và snapshot tọa độ dùng lúc lập phương án để lịch sử không đổi khi ADMIN cập nhật marker sau này.
 - Rule engine tính nhu cầu; inventory/readiness engine loại lô hoặc kho không điều phối được; allocation ưu tiên kho phù hợp/gần và tự ghép nhiều kho đến khi đủ. LLM không tự chọn số lượng, trừ tồn hoặc phê duyệt phương án.
 - Dashboard chỉ vẽ marker/tuyến cho các kho thực sự được phân bổ. Nhiều kho cùng cứu một điểm phải hiện nhiều marker và nhiều tuyến hội tụ về một marker sự cố.
-- Mỗi tuyến phải bám mạng đường, có màu/nhãn phân biệt, khoảng cách và ETA. Tuyến chính là kho nội xã đã phân bổ; gợi ý ngoài xã nếu thiếu chỉ hiển thị nét đứt/trạng thái `chờ liên hệ`, không được tính vào fulfillment hoặc tự xuất kho.
+- Mỗi tuyến phải bám mạng đường, có màu/nhãn phân biệt, khoảng cách và ETA. Tuyến
+  chính là kho nội xã đã phân bổ. Chỉ khi toàn bộ nguồn nội xã đủ điều kiện đã dùng mà
+  vẫn thiếu, hệ thống mới hiển thị điểm liên hệ ngoài xã đã ghim thủ công, kèm xã,
+  thôn/điểm, tuyến/ETA và số điện thoại công khai nếu có. Gợi ý phải mang trạng thái
+  `đề xuất liên hệ, chưa xác nhận có hàng`, không được tính vào fulfillment hoặc tự
+  xuất kho/tự liên hệ.
 - Routing cho demo dùng engine local qua private LAN và dữ liệu đường đóng gói sẵn. Haversine chỉ là fallback có nhãn `ước tính đường chim bay`, không được vẽ thành đường giao thông.
-- Phạm vi UI là xem trước phương án trên dashboard; không làm GPS realtime hoặc turn-by-turn navigation trong MVP.
+- Phạm vi UI là xem trước phương án trên dashboard; không theo dõi GPS liên tục hoặc
+  làm turn-by-turn navigation.
+
+### 4.8. Contract AI phân tích tình huống và tham mưu điều phối
+
+Input là câu tiếng Việt tự nhiên từ REPORTER, ADMIN hoặc cập nhật đã xác nhận của
+Lực lượng hiện trường. AI phải trả dữ liệu có cấu trúc trước; backend mới dùng dữ liệu
+đã validate để tính toán. Màn ADMIN trình bày tối thiểu:
+
+1. Thông tin tiếp nhận: địa điểm, số người, loại thiên tai, thời tiết và trạng thái.
+2. Mức khẩn cấp, độ tin cậy và trạng thái `sơ bộ/cần xác nhận/đã xác minh`.
+3. Căn cứ đã có; mỗi dữ kiện kèm nguồn và đoạn text gốc khi áp dụng.
+4. Dữ liệu còn thiếu hoặc mâu thuẫn; không tự chọn một giá trị để che xung đột.
+5. Nhu cầu vật tư: cơ sở, dự phòng, tổng đề xuất và công thức/provenance.
+6. Phương án điều phối: kho nội xã, tỷ lệ đáp ứng, tuyến/ETA, mức dự phòng còn lại.
+7. Cảnh báo và dự báo theo các mốc 6/12/24/72 giờ.
+8. Một câu hỏi ưu tiên có khả năng làm thay đổi phương án lớn nhất; các câu khác xếp sau.
+9. Giải thích ngắn vì sao đề xuất được đưa ra và điều kiện làm đề xuất hết hiệu lực.
+10. Control cho ADMIN: xác nhận, yêu cầu bổ sung, chạy What-if, chỉnh dữ kiện, duyệt
+    hoặc từ chối đề xuất.
+
+Không đủ dữ liệu thì AI phải nêu `chưa đủ dữ liệu để đề xuất`, không sinh kho, số
+lượng, tuyến, tọa độ, trạng thái đường hoặc con số độ tin cậy tùy ý. Bản phân tích là
+snapshot có `computedAt`, version model/rule và nguồn dữ liệu để hậu kiểm; có thể render
+trên web và xuất tài liệu sau này, nhưng file Word/PDF không thay cho workflow UI.
+
+### 4.9. AI What-if và Trợ lý hiện trường
+
+**AI What-if cho ADMIN**
+
+- ADMIN nhập giả định tự nhiên, ví dụ thay đổi số người, thời gian mưa, trạng thái một
+  tuyến/kho hoặc mức dự phòng.
+- Tên cầu/đường/điểm chỉ được resolve qua registry có version; danh mục V1 và bằng
+  chứng tra cứu nằm tại
+  [`DANH-MUC-THAM-CHIEU-TUYEN-AI-WHAT-IF.md`](DANH-MUC-THAM-CHIEU-TUYEN-AI-WHAT-IF.md).
+  Google Maps chỉ xác minh tên/vị trí, không xác minh địa điểm đang có rủi ro.
+- Mọi địa danh có trạng thái mặc định `REFERENCE_ONLY`. Giả định của ADMIN tạo
+  `HYPOTHETICAL` trong snapshot; báo cáo hiện trường tạo `REPORTED`; chỉ xác nhận
+  nghiệp vụ mới có thể tạo `VERIFIED`. Không trạng thái nào được LLM tự nâng cấp.
+- Hệ thống clone snapshot baseline và chạy tool tính nhu cầu, allocation, readiness,
+  routing, forecast trên sandbox chỉ đọc. Không ghi tồn, mission, marker hoặc incident.
+- Một cầu/điểm chỉ ảnh hưởng route option khi geometry của route đi qua buffer điểm;
+  tên đường chỉ ảnh hưởng khi route snapshot/graph có road ref tương ứng. V1 lọc và
+  xếp hạng lại route option đã có, không tự bịa đường vòng. Tên không resolve hoặc
+  không có topology phù hợp phải trả lỗi/trạng thái có cấu trúc.
+- Kết quả phải hiển thị giả định, delta so với baseline, tỷ lệ đáp ứng, kho tham gia,
+  tồn dự phòng, tuyến/ETA, rủi ro và gợi ý liên hệ ngoài xã nếu vẫn thiếu.
+- Kịch bản giả định luôn có nhãn `MÔ PHỎNG`; chỉ khi ADMIN xác nhận dữ kiện và duyệt
+  một draft mới thì workflow thật mới thay đổi. AI không có quyền approve/dispatch.
+
+**Trợ lý hiện trường cho `RESCUE`**
+
+- Tên hiển thị bắt buộc là **Lực lượng hiện trường**.
+- Nhận text hoặc voice tiếng Việt; voice dùng WAV 16 kHz → PhoWhisper, chỉ điền sẵn.
+  Người dùng phải xem, sửa nếu cần và xác nhận trước khi gửi.
+- Nhận các intent tối thiểu: đã đến, không tiếp cận được, đường/cầu bị ngập hoặc sạt
+  lở, số người thay đổi, phát sinh nhóm cần hỗ trợ, cần thêm vật tư, đã nhận, đã giao,
+  không thể tiếp tục và tình hình đã ổn định.
+- Bản ghi đã xác nhận trở thành evidence có actor/time/source; AI có thể trích xuất
+  nguy cơ và tự chạy What-if sơ bộ, nhưng ADMIN phải xác minh trước khi đổi trạng thái
+  tuyến hoặc phương án thật.
+- Không nhận/phân tích ảnh/video, không theo dõi GPS liên tục, không phân công đội/cá
+  nhân, không tự duyệt, không tự liên hệ xã khác và không kiểm tra tồn kho xã khác.
 
 ## 5. Ma trận yêu cầu và trạng thái thực tế
 
@@ -284,25 +409,41 @@ E2E vẫn là điều kiện nghiệm thu MVP/production.
 ### 5.5. Mission-to-Kit và Action Plan
 
 - [x] Parse tình huống qua Gemini/Ollama và validate schema.
+- [ ] Bản phân tích AI theo contract mục 4.8 hiển thị đủ provenance, dữ kiện thiếu/
+  mâu thuẫn, nhu cầu, phương án, dự báo, câu hỏi ưu tiên và giải thích; không bịa số.
+- [ ] ADMIN chạy What-if bằng câu tự nhiên trên snapshot tách biệt, xem giả định và
+  delta so với baseline; mô phỏng không mutation và không tự approve/dispatch.
 - [x] Backend tính nhu cầu, FEFO, greedy và mức đáp ứng theo SKU yếu nhất.
 - [x] Action Plan 8 mục có backend severity/forecast và template fallback.
 - [x] GeoService có Haversine offline và Google Routes fallback/quota guard.
 - [x] Fulfillment atomic, idempotent và không double-export khi retry.
 - [x] Allocation/fulfillment scoped theo kho được giao ở bước prepare.
 - [x] Tiến độ prepare lưu riêng từng kho; mission chỉ `READY` sau kho cuối, kể cả hai kho thao tác đồng thời.
+- [x] Phương án mới materialize thành `MissionWarehouseRequest` theo
+  `mission + warehouse + SKU`; web/APK kho có tiếp nhận, báo chênh lệch và xuất
+  từng dòng.
+- [x] Prepare SKU dùng claim token + transaction ledger; ADMIN review dùng CAS
+  `status + claimToken + updatedAt`, không thể reset `PREPARED` hoặc gây double-export.
+- [x] Lực lượng hiện trường chỉ có `MISSION_VIEW`, `MISSION_FIELD_UPDATE` và
+  `NOTIFICATION_VIEW`; public route/UI confirm/reject/complete đã loại khỏi workflow.
+- [x] REPORTER có lịch sử/chi tiết text scope theo chính user + organization;
+  không lưu audio thô.
 - [x] Allocation engine có thể lấy từ nhiều kho cùng `communeId`, ưu tiên khoảng cách rồi FEFO và loại kho/lô không dispatchable.
 - [x] Có mission inbox, tìm kiếm, filter đang xử lý/đã kết thúc và ưu tiên việc theo ADMIN/RESCUE/WAREHOUSE.
 - [x] Web notification deep-link tới URL mission cụ thể; selection không còn chỉ nằm trong RAM.
 - [ ] Browser acceptance chứng minh F5, tab mới và logout/login vẫn mở lại mission bằng inbox/notification của đúng actor.
 - [ ] REPORTER, ADMIN, RESCUE, WAREHOUSE hoàn thành workflow qua phiên độc lập; desktop simulator là UI khởi tạo scenario.
-- [ ] REPORTER submit trả reference hoặc lỗi/retry rõ; RESCUE transition/WS reconnect và WAREHOUSE prepare không được false success.
-- [ ] ADMIN nhìn thấy trạng thái, readiness và audit cuối sau WAREHOUSE prepare và RESCUE complete.
+- [ ] REPORTER submit/history trả reference hoặc lỗi/retry rõ; RESCUE reconnect
+  ở chế độ chỉ đọc và WAREHOUSE prepare SKU không được false success.
+- [ ] ADMIN nhìn thấy trạng thái, readiness và audit cuối sau khi mọi SKU kho đã `PREPARED`.
 - [ ] Seed/toạ độ đủ để chứng minh chọn kho gần nhất trong demo.
 - [ ] ADMIN cấu hình danh mục thôn, marker điểm cứu hộ mặc định và marker kho qua UI; tên thôn resolve duy nhất, không sinh điểm ngẫu nhiên.
 - [ ] Mission lưu `hamletId` và snapshot điểm cứu hộ; mô tả không khớp địa danh phải yêu cầu ADMIN xác nhận.
 - [ ] Routing local trả geometry đường bộ, khoảng cách và ETA cho từng kho được phân bổ khi public Internet tắt.
 - [ ] Action Plan map vẽ nhiều polyline từ nhiều kho cùng hội tụ về một điểm cứu hộ, kèm popup vật tư từng kho.
-- [ ] Kho ngoài xã thiếu hụt chỉ hiện như gợi ý liên hệ có nguồn/trạng thái; không tham gia allocation/readiness/fulfillment.
+- [ ] Khi toàn bộ nguồn nội xã đủ điều kiện vẫn thiếu, điểm liên hệ ngoài xã đã ghim
+  thủ công hiện xã, thôn/điểm, tuyến/ETA và số công khai; luôn ghi `đề xuất liên hệ,
+  chưa xác nhận có hàng`, không kiểm tra tồn hoặc tham gia allocation/readiness/fulfillment.
 
 **Verdict:** compute tốt; workflow vận hành chưa khép kín.
 
@@ -319,7 +460,8 @@ E2E vẫn là điều kiện nghiệm thu MVP/production.
 - [ ] Next.js có play/pause/reset/x1/x10 và chỉnh thiết bị; hiện panel chủ yếu read-only.
 - [x] Socket.IO handshake xác thực access JWT; role/warehouse room do server cấp từ assignment DB, client không tự join.
 - [ ] Readiness/incident UI subscribe realtime đúng kho.
-- [ ] Incident view có detail, evidence timeline, assign/ack/resolve đúng permission.
+- [ ] Incident view có detail, evidence timeline và acknowledge/resolve đúng permission;
+  không có action phân công lực lượng cứu hộ.
 - [ ] Redaction, prompt-injection defense và output-safety test cho AI explain-incident hoàn chỉnh.
 - [ ] `sim.html` không dùng CDN/credential hard-code nếu còn dùng cho demo.
 
@@ -348,6 +490,9 @@ E2E vẫn là điều kiện nghiệm thu MVP/production.
 
 - [x] Có Expo SDK 52/RN 0.76, login/refresh/logout và session mã hóa bằng SecureStore.
 - [x] Có notification/mission rút gọn cho RESCUE và report text/voice cho REPORTER.
+- [x] Mọi nhãn người dùng của `RESCUE` hiển thị **Lực lượng hiện trường**.
+- [x] Trợ lý hiện trường nhận text/voice, cho sửa/xác nhận rồi gửi evidence; hỗ trợ
+  intent tối thiểu theo mục 4.9 và kích hoạt What-if sơ bộ cho ADMIN.
 - [x] Trang chủ, kho, readiness, cảnh báo, mưa 72h và bản tin đầu ngày theo role đã có trên mobile.
 - [x] QR camera + nhập SKU tay + semantic search + nhập/xuất/chuyển/kiểm kê/điều chỉnh/báo tình trạng/xuất nhiều lô đã có.
 - [x] RESCUE/WAREHOUSE mượn, hoàn một phần tốt/hỏng/mất đầy đủ theo permission.
@@ -363,7 +508,8 @@ E2E vẫn là điều kiện nghiệm thu MVP/production.
 - [x] Frontend/backend có Windows autostart script nền.
 - [x] Backend/frontend build production pass và live trả HTTP 200 sau cập nhật 2026-07-22.
 - [ ] PostgreSQL/Redis/AI/Ollama không public và firewall được kiểm chứng từ ngoài.
-- [ ] CORS, security headers, upload limits và auth hardening hoàn tất.
+- [x] CORS allowlist, security headers, upload limits và auth hardening: rate limit
+  login, token-version rotation/revocation, cookie HttpOnly web và logout thu hồi session.
 - [ ] Prisma migration history thay cho chỉ `db push`.
 - [ ] Backup có checksum/retry/retention và restore drill thành công.
 - [ ] Reboot máy chủ tự phục hồi toàn bộ service.
@@ -374,12 +520,12 @@ E2E vẫn là điều kiện nghiệm thu MVP/production.
 
 ## 6. Quality gates hiện tại
 
-| Gate | Kết quả refresh 2026-07-27 |
+| Gate | Kết quả refresh 2026-07-28 |
 |---|---|
-| Backend Jest | 74 suite, 452/452 test pass |
-| AI service pytest | 67/67 test pass |
-| Mobile state tests | 7/7 test pass |
-| Production dependency audit (high+) | Pass: 0 critical, 0 high; còn 6 moderate, 1 low được theo dõi |
+| Backend Jest | 92 suite, 537/537 test pass |
+| AI service pytest | 74/74 test pass |
+| Mobile state tests | 13/13 state test + 2/2 dependency-resolution pass |
+| Production dependency audit | Pass: 0 critical, 0 high, 0 moderate, 0 low (`pnpm audit --prod --audit-level=low`) |
 | Backend coverage | Chưa chạy lại ngày 2026-07-22; số audit 2026-07-21 là 69,44% statements; 60,42% branches; 65,35% functions; 69,38% lines |
 | Shared types build | Pass |
 | Scenario definitions build | Pass |
@@ -392,15 +538,14 @@ E2E vẫn là điều kiện nghiệm thu MVP/production.
 | Live frontend + backend health | HTTP 200; database/Redis báo `up` tại thời điểm kiểm tra |
 | Frontend lint | Pass; root/workspace ESLint exit 0 |
 | Frontend automated test | Chưa có browser/component suite |
-| AI automated test | 62 pytest pass; live HTTP/model smoke chưa chạy trong refresh |
-| Browser E2E | Không có |
+| Browser acceptance web | Pass manual có kiểm soát: login → dashboard, F5/tab mới `/readiness` khôi phục phiên cookie HttpOnly, logout thu hồi phiên và route guard trả về login. Đây chưa thay rehearsal đủ bốn role. |
 | API/controller integration | Có các suite mission/report/transfer/loan; raw-ID coverage còn thiếu |
 | Concurrency test | Có transfer/report/mission prepare; inventory-loan có lock-order, CAS loser, no-negative và idempotent retry coverage |
-| CI workflow | Không có |
+| CI workflow | Có `.github/workflows/competition-quality.yml`: audit, lint, Prisma validate, Node/web/mobile/desktop/OSRM và AI contract tests. |
 | Prisma migrations | Không có |
-| Dependency audit production | Đã chạy 2026-07-27: 0 critical/high; còn 6 moderate và 1 low cần nhánh nâng dependency riêng |
+| Dependency audit production | Pass 2026-07-28: 0 advisory production; không dùng audit ignore. |
 
-Kết luận: test hiện tại chứng minh tốt các hàm rule/compute thuần, một số concurrency path và WebSocket auth/room isolation. Authorization toàn hệ thống, controller contract và workflow đa role vẫn chưa được chứng minh đầy đủ.
+Kết luận: test hiện tại chứng minh rule/compute, controller/contract trọng yếu, concurrency path và WebSocket auth/room isolation; source gate đã được tự động hóa. Rehearsal bốn role, desktop simulator, private-LAN và S23 Ultra vẫn là bằng chứng vận hành bắt buộc, không được suy diễn từ CI.
 
 ## 7. Workflow nghiệm thu bắt buộc
 
@@ -423,30 +568,40 @@ CAS/loan race, idempotency và audit. Browser thật và Galaxy S23 Ultra chưa 
 
 ```text
 ADMIN đã cấu hình thôn + điểm cứu hộ + marker kho
-  -> nhập/mở báo cáo "Tân Bình cô lập 100 người"
-  -> AI parse và resolve đúng marker Tân Bình
-  -> rule engine tính nhu cầu
+  -> nhập/mở báo cáo tự nhiên "Tân Bình cô lập khoảng 100 người, mưa còn lớn"
+  -> AI parse, resolve marker và gắn nguồn cho từng dữ kiện
+  -> ADMIN xem mức khẩn cấp/độ tin cậy, dữ kiện thiếu và câu hỏi ưu tiên
+  -> backend/rule/forecast engine tính nhu cầu và dự báo 6-72 giờ
   -> inventory/readiness tự chọn và ghép các kho nội xã
   -> dashboard vẽ marker các kho tham gia + nhiều tuyến kho → Tân Bình
   -> mỗi tuyến hiện khoảng cách, ETA và vật tư kho đóng góp
-  -> nếu toàn xã thiếu, hiển thị kho ngoài xã để liên hệ, chưa tính vào fulfillment
+  -> ADMIN nhập một giả định What-if và xem delta so với baseline
+  -> nếu toàn xã vẫn thiếu, hiển thị điểm liên hệ ngoài xã đã ghim và số điện thoại,
+     ghi rõ chưa xác nhận có hàng và không tính vào fulfillment
   -> ADMIN duyệt và dispatch phương án
-  -> RESCUE/WAREHOUSE tiếp tục workflow nghiệp vụ
+  -> Lực lượng hiện trường (`RESCUE`) và WAREHOUSE tiếp tục workflow nghiệp vụ
 ```
 
 Acceptance bản đồ: ADMIN không chọn kho bằng tay để tạo phương án; hệ thống chọn từ tồn/readiness/vị trí. ADMIN được xem, xác minh và duyệt; không có tuyến đường bộ thì báo rõ, không vẽ đường thẳng giả làm tuyến.
 
 ```text
 ADMIN tạo mission
-  -> RESCUE nhận notification và mở mission
-  -> RESCUE xác nhận
+  -> Lực lượng hiện trường nhận notification và mở mission
+  -> Lực lượng hiện trường xác nhận nhận/giao vật tư; hệ thống không phân công đội/cá nhân
   -> WAREHOUSE nhận mission theo kho
   -> chuẩn bị và fulfill một lần
-  -> ADMIN + RESCUE thấy READY
+  -> ADMIN + Lực lượng hiện trường thấy READY
+  -> Lực lượng hiện trường báo text/voice "cầu không đi được", xem/sửa và xác nhận
+  -> AI lưu evidence, chạy What-if sơ bộ và báo chênh lệch cho ADMIN
+  -> ADMIN giữ hoặc duyệt phương án cập nhật
   -> bàn giao/hoàn vật tư có audit
 ```
 
-Hiện trạng: **Chưa đạt end-to-end UI**. Prepare đa kho đã có state riêng từng kho, scope, retry/concurrency test và progress trên màn mission. Web inbox/deep-link đã được triển khai và qua unit/type/lint/production build cùng API smoke ba vai trò; blocker còn lại là browser acceptance qua các phiên độc lập, notification partition đúng actor và các bước APK.
+Hiện trạng: **Chưa đạt end-to-end UI**. Prepare đa kho đã có state riêng từng kho,
+scope, retry/concurrency test và progress trên màn mission. Web inbox/deep-link đã
+được triển khai và qua unit/type/lint/production build cùng API smoke ba vai trò.
+Bản phân tích AI mới, What-if, Trợ lý hiện trường, browser acceptance qua các phiên
+độc lập, notification partition đúng actor và các bước APK vẫn là blocker mở.
 
 ### 7.3. Workflow simulator demo
 
@@ -484,7 +639,8 @@ Hiện trạng: **Chưa nghiệm thu**.
 - [ ] Centralize organization/commune/warehouse scope cho REST, AI snapshot và WebSocket.
 - [x] Sửa transfer partial bằng tách batch transactionally; authorize source/destination và khóa race bằng unit/E2E.
 - [x] Xác thực Socket.IO handshake; server tự join role/warehouse room từ assignment hiện tại trong DB.
-- [ ] Tách `incident:view`, `incident:ack`, `incident:assign`, `incident:resolve`.
+- [ ] Tách `incident:view`, `incident:ack`, `incident:resolve`; không bổ sung quyền
+  phân công lực lượng cứu hộ.
 - [x] Khóa loan return-vs-export bằng table/advisory lock + CAS; giữ condition hỏng và partial-loan invariant.
 - [x] Mission fulfillment atomic, idempotent, scoped theo allocation/kho ở bước prepare; các transition còn lại vẫn cần audit scope/notification atomic.
 - [x] Report approval atomic, idempotent, multi-batch đúng.
@@ -501,7 +657,7 @@ Hiện trạng: **Chưa nghiệm thu**.
 - [x] Backend mission list scope theo actor/organization/warehouse participation; web inbox filter trạng thái và ưu tiên hành động theo role.
 - [x] Mission dùng URL `?mission=<id>` làm nguồn selection; có unit test encode và production build.
 - [x] Notification web tạo deep-link trực tiếp tới mission ID.
-- [ ] Browser/manual acceptance F5, tab mới và logout/login trên ADMIN/RESCUE/WAREHOUSE.
+- [ ] Browser/manual acceptance RESCUE/WAREHOUSE và APK restart vẫn thuộc rehearsal bốn role; ADMIN đã Pass F5/tab mới/logout-login.
 - [x] UI inventory receiving/import/export/bulk/transfer/adjust/reconcile/condition và in QR.
 - [x] UI borrow + return từng phần, validate tổng và hiển thị lỗi mutation.
 - [x] Role-aware navigation và route guard cho các route kho/báo cáo/audit.
@@ -511,16 +667,18 @@ Hiện trạng: **Chưa nghiệm thu**.
 - [ ] Incident detail/evidence/action UI hoàn chỉnh.
 - [ ] UI cấu hình thôn, điểm cứu hộ/tập kết và marker kho có xác minh/audit.
 - [ ] AI resolve tên thôn đã cấu hình; bỏ hoàn toàn điểm sự cố ngẫu nhiên.
+- [ ] Web ADMIN có bản phân tích AI theo mục 4.8 và màn What-if theo mục 4.9;
+  giả định/snapshot/delta/provenance hiển thị qua UI và không mutation dữ liệu thật.
 - [ ] Dashboard Action Plan vẽ nhiều tuyến kho được phân bổ → một điểm cứu hộ, có khoảng cách/ETA và vật tư theo kho.
 
 Điều kiện thoát P1:
 
 - Terminal/launcher chỉ dùng startup/preflight/reset trước lúc chấm; đóng trước bước scenario và không reset/reseed/restart giữa core flow, trừ recovery exercise được công bố.
-- Browser automation ADMIN/RESCUE/WAREHOUSE chỉ là web subgate; không thay full live acceptance gồm desktop simulator và APK REPORTER/RESCUE.
-- Bốn tài khoản REPORTER/ADMIN/RESCUE/WAREHOUSE chạy trọn workflow; REPORTER/RESCUE dùng APK, ADMIN/WAREHOUSE dùng web context độc lập, desktop simulator phát scenario.
+- Browser automation ADMIN/WAREHOUSE chỉ là web subgate; không thay full live acceptance gồm desktop simulator và APK REPORTER/RESCUE/WAREHOUSE.
+- Bốn tài khoản REPORTER/ADMIN/RESCUE/WAREHOUSE chạy trọn workflow; REPORTER/RESCUE dùng APK, WAREHOUSE được kiểm tra cả web và APK, ADMIN dùng web context độc lập, desktop simulator phát scenario.
 - Mỗi role tìm lại cùng mission từ inbox/notification sau F5, tab mới, logout/login hoặc app restart; không copy mission ID.
-- Lỗi submit report, transition RESCUE, WebSocket reconnect và WAREHOUSE prepare phải hiển thị rõ, không thành success/empty giả.
-- Sau WAREHOUSE prepare và RESCUE complete, web ADMIN thấy status, readiness và audit cuối.
+- Lỗi submit/history report, WebSocket reconnect, cập nhật hiện trường và WAREHOUSE prepare SKU phải hiển thị rõ, không thành success/empty giả.
+- Sau khi mọi SKU kho đã `PREPARED`, web ADMIN thấy mission `READY`, readiness và audit cuối.
 - Workflow kho thường ngày dùng được từ UI, không cần script/API thủ công.
 - Demo simulator không chạm dữ liệu production.
 
@@ -533,11 +691,17 @@ Hiện trạng: **Chưa nghiệm thu**.
 - [ ] Routing engine local + graph đường Đồng Xuân/vùng đệm chạy khi public Internet tắt; không phụ thuộc public OSRM/Google/CDN.
 - [x] Contract/integration test khóa multi-warehouse allocation/prepare, hamlet resolution, route failure và external-neighbor boundary.
 - [ ] Hoàn thiện AI explain-incident, redaction và automated tests.
-- [ ] Cấu hình ESLint hiện hành; lint pass.
+- [ ] Contract/test khóa AI không nâng suy luận thành sự thật, không sinh số/tọa độ/
+  tuyến/kho, không tự duyệt/dispatch và không gọi tool mutation.
+- [ ] Contract/test What-if bảo đảm isolation, reproducibility, baseline/delta và
+  không ghi tồn/mission/incident/marker.
+- [ ] Contract/test Trợ lý hiện trường bảo đảm voice chỉ prefill, người dùng xác nhận
+  trước khi gửi, evidence đúng actor/time/source và ADMIN là người quyết định replan.
+- [x] Cấu hình ESLint hiện hành; lint pass.
 - [ ] Controller/API integration tests cho auth, scope, DTO và transition.
 - [ ] Concurrency tests cho stock, loan, mission và report.
 - [ ] Browser E2E cho login, inventory, mission, simulator và report.
-- [ ] CI chạy lint, typecheck, test, build và Prisma validate.
+- [x] CI chạy audit, lint, typecheck/test/build và Prisma validate; workflow AI tách riêng.
 - [ ] Tạo Prisma migration baseline và quy trình migrate/rollback.
 
 Điều kiện thoát P2:
@@ -548,8 +712,8 @@ Hiện trạng: **Chưa nghiệm thu**.
 
 ### P3 - Hardening và nghiệm thu pilot
 
-- [ ] CORS allowlist theo domain/LAN; Helmet/security headers; request size limits.
-- [ ] Login rate limit; refresh rotation/revocation; logout thu hồi session phù hợp.
+- [x] CORS allowlist theo domain/LAN; security headers và request size limits.
+- [x] Login rate limit; refresh rotation/revocation; logout thu hồi session phù hợp.
 - [ ] Docker bind nội bộ; firewall chặn PostgreSQL, Redis, AI Service và Ollama.
 - [ ] Secret production ngoài Git; bỏ credential demo/hard-code.
 - [ ] Backup retry/checksum/retention; restore drill ghi nhận RPO/RTO.
@@ -557,7 +721,7 @@ Hiện trạng: **Chưa nghiệm thu**.
 - [ ] Smoke live đồng thời runtime vận hành và demo trên máy pilot; xác nhận runtime vận hành giữ `SIMULATION_MUTATION_ENABLED=false`, demo dùng cổng 3110 và không chia sẻ dữ liệu/volume.
 - [ ] Online/LAN/offline/recovery acceptance test.
 - [ ] Offline tiles/package không phụ thuộc CDN.
-- [ ] Scan cổng public và dependency audit không còn high exploitable trong scope.
+- [ ] Scan cổng public chỉ có thể tick sau khi triển khai đúng hạ tầng pilot; dependency audit production đã sạch.
 - [ ] Logging/monitoring đủ truy login, mutation, queue, backup và lỗi AI.
 
 Điều kiện thoát P3:
@@ -568,11 +732,14 @@ Hiện trạng: **Chưa nghiệm thu**.
 
 ### P4 - Mobile và deliverable dự thi
 
-- [x] Chốt Android APK là deliverable bắt buộc; scope là REPORTER/RESCUE, không phải toàn bộ F0-F4 cũ.
+- [x] Chốt Android APK là deliverable bắt buộc; scope là REPORTER và Lực lượng hiện
+  trường (`RESCUE`), không phải toàn bộ F0-F4 cũ.
 - [x] Build APK release ký riêng, API/WS lấy từ release env/profile.
 - [x] Persist session bằng SecureStore và offline-read/stale state rõ ràng; mutation không queue khi mất LAN.
 - [ ] Cài/test thiết bị thật và chạy API/WS qua private LAN khi public Internet tắt.
 - [x] Voice input `vi-VN` trên APK Android dùng WAV 16 kHz → PhoWhisper, chỉ điền sẵn để người dùng xác nhận và có fallback gõ tay; code/test/build đã đạt, độ chính xác và permission flow trên S23 Ultra còn thuộc device gate.
+- [x] Trợ lý hiện trường dùng lại pipeline voice đã xác nhận để gửi cập nhật evidence
+  và kích hoạt What-if sơ bộ; không nhận ảnh/video hoặc theo dõi GPS liên tục.
 - [ ] PDF/báo cáo/phiếu giấy dự phòng theo nhu cầu trình diễn.
 - [x] Chốt một tenant vận hành Đồng Xuân; sáu xã giáp ranh chỉ là metadata liên hệ ngoài xã.
 - [ ] Chốt demo chính 5-7 phút; không dùng bước chưa tồn tại.
@@ -593,7 +760,14 @@ Không làm song song quá nhiều module trước khi P0 đóng. Thứ tự:
 2. **Sprint workflow:** mission inbox/deep-link, inventory/loan UI, error states, simulator controls.
 3. **Sprint proof:** integration, concurrency, browser E2E, lint, CI, migrations.
 4. **Sprint pilot:** network hardening, backup/restore, reboot, online/offline acceptance.
-5. **Sprint deliverable:** APK Android REPORTER/RESCUE, private-LAN offline, demo/video/slide.
+5. **Sprint deliverable:** APK Android REPORTER/Lực lượng hiện trường, AI What-if,
+   Trợ lý hiện trường, private-LAN offline và demo/video/slide.
+
+Scope AI tham mưu điều phối chốt ngày 2026-07-28 được chia chi tiết thành Phase
+`AI-0` đến `AI-6` tại `tasks/plan.md` và checklist sống tại `tasks/todo.md`. Thứ tự
+bắt buộc là contract/guardrail → persistence/API → bản phân tích tự nhiên → What-if
+→ Trợ lý hiện trường → vòng thích ứng → hardening/nghiệm thu. `docs/PRD.md` vẫn là
+nguồn trạng thái sản phẩm; task chỉ được tick khi có bằng chứng tương ứng.
 
 Lịch 7 ngày đã chốt theo APK Android bắt buộc và một tenant Đồng Xuân. Không dùng phần trăm endpoint để ước lượng hoàn thành.
 
@@ -615,10 +789,17 @@ kho ngày thường tại mục 1.1.
 - [ ] Mission bốn role chạy qua UI/phiên độc lập, không mất state khi refresh, relogin, tab mới hoặc APK restart.
 - [ ] Fulfillment không double-export và đúng warehouse scope.
 - [ ] Simulator demo realtime, reproducible và không sửa production stock.
-- [ ] APK Android REPORTER/RESCUE chạy trên thiết bị thật qua private LAN khi public Internet tắt.
+- [ ] APK Android REPORTER/Lực lượng hiện trường chạy trên thiết bị thật qua private LAN khi public Internet tắt.
 - [ ] ADMIN cấu hình trước marker thôn và marker kho; nhập tên thôn resolve đúng điểm, không tạo tọa độ ngẫu nhiên.
+- [ ] Bản phân tích AI biến text/voice tự nhiên thành bản tham mưu có provenance,
+  dữ kiện thiếu, nhu cầu, phương án, dự báo, câu hỏi ưu tiên và giải thích.
+- [ ] AI What-if chạy giả định tự nhiên trên snapshot tách biệt, hiển thị delta và
+  không mutation/tự duyệt/tự dispatch.
+- [ ] Trợ lý hiện trường gửi text/voice đã xác nhận thành evidence và cho ADMIN thấy
+  ảnh hưởng tới phương án; không phân công người, ảnh/video hoặc GPS liên tục.
 - [ ] AI/rule engine tự ghép một hoặc nhiều kho nội xã; dashboard vẽ các tuyến đường bộ hội tụ về điểm cứu hộ với khoảng cách, ETA và vật tư từng kho.
-- [ ] Thiếu nội xã chỉ sinh gợi ý ngoài xã để liên hệ; không làm tăng fulfillment hoặc tự xuất kho.
+- [ ] Thiếu nội xã chỉ sinh điểm liên hệ ngoài xã đã ghim, tuyến/ETA và số công khai;
+  không kiểm tra tồn, làm tăng fulfillment, tự liên hệ hoặc tự xuất kho.
 
 ### Bảo mật và dữ liệu
 
@@ -654,7 +835,7 @@ kho ngày thường tại mục 1.1.
 | `apps/frontend` | Web role-facing và dashboard | `pnpm fe:dev`, `pnpm --filter @safestock/frontend build` | Checklist P1-P2 |
 | `apps/desktop` | Công cụ Electron giả lập cảm biến và quan sát phản ứng realtime | `pnpm desktop:dev`, `pnpm --filter @safestock/desktop typecheck`, `pnpm --filter @safestock/desktop build` | Mục 5.6; chỉ dùng demo/test |
 | `apps/ai-service` | Parse/narrative bằng Gemini/Ollama | `pnpm ai:dev` | Mục 5.7 và P2 |
-| `apps/mobile` | App Android hiện trường | `pnpm mobile:dev` sau khi scaffold | Mục 5.8 và P4 |
+| `apps/mobile` | App Android hiện trường | `pnpm mobile:dev`, `pnpm --filter @safestock/mobile android:release` | Mục 5.8 và P4 |
 | `packages/shared-types` | Enum/type/permission contract dùng chung | build theo workspace | Phải đổi cùng public contract |
 | `packages/scenario-definitions` | Scenario deterministic | build theo workspace | Mục 5.6 |
 | `infrastructure` | Docker, tunnel, Windows services, backup/offline | `pnpm infra:up` | P3 |
@@ -693,6 +874,10 @@ Roadmap cũ ghi Insights chưa làm và frontend placeholder là thông tin đã
 - Claude branch chưa triển khai và được **defer khỏi MVP** trừ khi có quyết định mới.
 - Explain-incident đã được nối vào luồng sự cố và có focused test; redaction, prompt-injection defense và output-safety tests đầy đủ vẫn nằm ở P2.
 - AI không được thực thi SQL/shell/xóa dữ liệu/gửi mail hoặc tự mutation nghiệp vụ.
+- Scope AI điều phối đã chốt gồm bản phân tích tự nhiên theo contract mục 4.8,
+  What-if read-only cho ADMIN và Trợ lý hiện trường text/voice theo mục 4.9.
+- Không đưa vào roadmap: phân tích ảnh/video, phân công đội/cá nhân, GPS liên tục,
+  AI tự duyệt, AI tự liên hệ xã khác hoặc kiểm tra tồn kho xã khác.
 
 ### 11.5. Nội dung roadmap Mobile đã hấp thụ
 
@@ -723,11 +908,64 @@ F0 scaffold/auth, APK release, SecureStore, offline-read/stale state, dashboard/
 
 Plan/audit/work-log lịch sử đã được loại khỏi gói source dự thi. Nếu bằng chứng cũ xung đột, source/test mới nhất và báo cáo đối chiếu được ưu tiên.
 
-## 13. Quyết định vận hành đã chốt ngày 2026-07-27
+## 13. Quyết định vận hành đã chốt
+
+### 13.1. Ngày 2026-07-27
 
 1. Thiết bị thi chính là Samsung Galaxy S23 Ultra, cài bản cập nhật ổn định mới nhất tại buổi rehearsal; biên bản rehearsal phải lưu phiên bản Android, One UI và build cụ thể. APK release ký bằng local keystore riêng của dự án, không dùng debug signing.
 2. Digital Twin/IoT chỉ áp dụng cho kho trung tâm. Desktop simulator dùng cho demo/test: chỉnh thiết bị phải phát realtime sang web/mobile; khi vượt ngưỡng, rule tạo incident ngay, AI làm giàu cảnh báo cho trợ lý và email. Kho thôn không có thiết bị IoT, vận hành nhập/xuất/chuyển/kiểm kê bằng web/mobile và không bị trừ Readiness vì thiếu cảm biến. Production không bật mutation simulator; phần cứng thật tương lai chỉ nối tại kho trung tâm.
 3. Mỗi tài khoản WAREHOUSE chỉ prepare/fulfill phần allocation thuộc kho được gán; không được vận hành thay cả cụm xã.
 4. Offline tiles và OSRM graph Đồng Xuân/vùng đệm được prebuild, gắn version/checksum và đóng gói cùng release; máy pilot không build graph trong lúc demo.
-5. Liên hệ Đồng Xuân và sáu xã lân cận là thông tin công khai phục vụ người dân và điều phối thủ công. Chủ dự án đã xác minh trực tiếp các số hiện có là số của Chủ tịch UBND xã; trang `/contacts` hiển thị không cần đăng nhập, số thật lấy từ file môi trường cục bộ bị Git bỏ qua và xã chưa có số giữ `null`. OSM chỉ là provenance bản đồ, không phải nguồn số điện thoại hay cam kết tồn kho.
+5. Liên hệ Đồng Xuân và sáu xã lân cận là thông tin công khai phục vụ người dân và điều phối thủ công. Chủ dự án đã xác minh trực tiếp các số hiện có là số của Chủ tịch UBND xã; trang `/contacts` hiển thị không cần đăng nhập. Bốn số đã xác minh có fallback trong registry code và có thể được ghi đè bằng biến môi trường; xã chưa có số giữ `null`. OSM/Google Maps chỉ là provenance vị trí, không phải nguồn số điện thoại hay cam kết tồn kho.
 6. Email cá nhân phải xác minh bằng link hoặc OTP trước khi được dùng để nhận dữ liệu sự cố.
+
+### 13.2. Ngày 2026-07-28 — AI tham mưu điều phối
+
+Các mục dưới đây là yêu cầu đã chốt. Riêng nền vị trí kho/điểm liên hệ tại mục 8 đã
+có registry, seed, public API/UI và test mục tiêu; các phần AI phân tích/What-if/trợ
+lý hiện trường vẫn không được coi là hoàn tất nếu chưa có bằng chứng tương ứng:
+
+1. Tên ứng dụng là **Ứng phó nhanh**.
+2. `RESCUE` được giữ làm enum kỹ thuật; tên hiển thị thống nhất là **Lực lượng hiện
+   trường**.
+3. Không có logic hoặc entity phân công đội/cá nhân. Việc tổ chức lực lượng chủ yếu là
+   quyết định của con người ngoài hệ thống; AI không chọn người thực hiện.
+4. Khi gặp câu tiếng Việt tự nhiên, AI tạo bản **Phân tích tình huống và tham mưu
+   điều phối** theo contract mục 4.8. Mọi dữ kiện phải phân biệt báo cáo, đã xác minh,
+   AI suy luận và chưa xác minh; số nghiệp vụ chỉ lấy từ backend/tool.
+5. Bổ sung **AI What-if cho ADMIN**: nhận giả định tự nhiên, clone snapshot, chạy mô
+   phỏng chỉ đọc và so sánh delta với baseline. AI không tự duyệt hoặc dispatch.
+6. Bổ sung **Trợ lý hiện trường**: Lực lượng hiện trường gửi text/voice, xem/sửa/xác
+   nhận trước khi tạo evidence; AI có thể chạy What-if sơ bộ, ADMIN quyết định replan.
+7. Liên xã chỉ kích hoạt sau khi toàn bộ nguồn nội xã đủ điều kiện vẫn thiếu. Hệ thống
+   xếp hạng điểm/kho/thôn đã ghim thủ công, hiển thị tuyến/ETA và số công khai, luôn
+   ghi `đề xuất liên hệ, chưa xác nhận có hàng`. Không kiểm tra tồn, không cộng
+   fulfillment, không tự liên hệ và không tạo giao dịch ngoài xã.
+8. Kho xã Đồng Xuân đặt tại UBND xã; điểm kho/liên hệ của sáu xã lân cận đặt tại
+   UBND tương ứng. Kho thôn đặt tại Nhà văn hóa/nhà sinh hoạt cộng đồng đúng thôn;
+   chỉ năm điểm Kỳ Đu, Phước Huệ, Tân Bình, Phú Sơn, Triêm Đức đã được Google Maps
+   xác minh, mười hai điểm còn lại giữ tọa độ null cho tới khi ADMIN xác nhận.
+9. Loại hẳn khỏi phạm vi: phân tích ảnh/video; phân công đội/cá nhân; theo dõi GPS
+   liên tục; AI tự duyệt; AI tự liên hệ xã khác; kiểm tra tồn kho xã khác.
+
+Quyết định kỹ thuật và ranh giới external reference được ghi tại
+[`ADR-002`](adr/ADR-002-verified-warehouse-and-external-reference-boundary.md).
+
+### 13.3. Bằng chứng source AI điều phối — 28/07/2026
+
+- [x] Source có contract provenance/field intent, baseline bất biến, What-if tách biệt,
+  evidence text/voice đã xác nhận, intent fallback, notification và timeline ADMIN.
+- [x] What-if sơ bộ từ evidence chỉ chạy trên baseline có sẵn; delta được lưu trong snapshot
+  để đọc lại sau F5/relogin. Không mutation route, mission, tồn kho hoặc dispatch.
+- [x] Focused shared/Python/backend tests, targeted lint và `prisma validate` có trong
+  [`AI-COORDINATION-IMPLEMENTATION.md`](AI-COORDINATION-IMPLEMENTATION.md).
+- [x] Prisma Client đã generate; PostgreSQL hiện hành đã push schema additive cho snapshot,
+  field-update và notification partition. Backfill notification lịch sử không còn record
+  null organization.
+- [x] Backend production build và `/api/health` runtime trả database/Redis `up`; login ADMIN
+  web dùng refresh cookie HttpOnly, rotation/revocation và rate limit có targeted test.
+- [x] Browser acceptance ADMIN: login → dashboard, F5/tab mới `/readiness` khôi phục được
+  phiên, logout thu hồi phiên và route guard trả về login. Không đọc cookie/token trong browser.
+- [ ] Chưa coi là runtime/pilot complete: four-role mission trên dữ liệu live, desktop simulator
+  → alert/email, private-LAN/public-Internet-off và Galaxy S23 Ultra vẫn phải có biên bản
+  rehearsal. Không được suy diễn các gate này từ unit test hoặc browser subgate.

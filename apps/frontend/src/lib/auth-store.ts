@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import { UserRole } from "@safestock/shared-types";
 
 export interface AuthUser {
@@ -17,37 +16,21 @@ export interface AuthUser {
 
 interface AuthState {
   token: string | null;
-  refreshToken: string | null;
   user: AuthUser | null;
   hasHydrated: boolean;
-  setAuth: (token: string, refreshToken: string, user: AuthUser) => void;
+  setAuth: (token: string, user: AuthUser) => void;
   updateUser: (user: AuthUser) => void;
   clear: () => void;
   setHasHydrated: (hasHydrated: boolean) => void;
 }
 
-export const useAuth = create<AuthState>()(
-  persist(
-    (set) => ({
-      token: null,
-      refreshToken: null,
-      user: null,
-      hasHydrated: false,
-      setAuth: (token, refreshToken, user) => set({ token, refreshToken, user }),
-      updateUser: (user) => set({ user }),
-      clear: () => set({ token: null, refreshToken: null, user: null }),
-      setHasHydrated: (hasHydrated) => set({ hasHydrated }),
-    }),
-    {
-      name: "safestock-auth",
-      onRehydrateStorage: () => (state) => {
-        state?.setHasHydrated(true);
-      },
-      partialize: (state) => ({
-        token: state.token,
-        refreshToken: state.refreshToken,
-        user: state.user,
-      }),
-    },
-  ),
-);
+export const useAuth = create<AuthState>()((set) => ({
+  // Access token only exists in memory. The web refresh token is an HttpOnly cookie.
+  token: null,
+  user: null,
+  hasHydrated: false,
+  setAuth: (token, user) => set({ token, user }),
+  updateUser: (user) => set({ user }),
+  clear: () => set({ token: null, user: null }),
+  setHasHydrated: (hasHydrated) => set({ hasHydrated }),
+}));

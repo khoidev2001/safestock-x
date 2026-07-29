@@ -1,4 +1,5 @@
 import { apiFetch } from "./api";
+import type { CoordinationAnalysis, FieldUpdateIntent, WhatIfSimulationResult } from "@safestock/shared-types";
 
 export type MissionStatus =
   | "DRAFT"
@@ -37,6 +38,25 @@ export interface MissionWarehousePreparation {
   preparedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface MissionWarehouseRequest {
+  id: string;
+  missionId: string;
+  warehouseId: string;
+  sku: string;
+  itemName: string;
+  unit: string;
+  requestedQuantity: number;
+  preparedQuantity: number;
+  status: "PENDING" | "ACCEPTED" | "PREPARED";
+  warehouseNote: string | null;
+  adminNote: string | null;
+  acceptedAt: string | null;
+  preparedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  warehouse?: { id: string; name: string };
 }
 
 export type DeliveryOutcome = "DELIVERED" | "PARTIAL" | "FAILED";
@@ -80,6 +100,7 @@ export interface Mission {
   readinessAssessment: MissionReadinessAssessment | null;
   requirements: MissionRequirement[];
   warehousePreparations?: MissionWarehousePreparation[];
+  warehouseRequests?: MissionWarehouseRequest[];
   rejectionReason?: string | null;
   adminNote?: string | null;
   deliveryOutcome?: DeliveryOutcome | null;
@@ -110,6 +131,61 @@ export interface ActionPlan {
     followUpQuestions: string[];
   };
   generatedBy: "ai" | "template";
+}
+
+export interface CoordinationAnalysisSnapshot {
+  id: string;
+  missionId: string;
+  kind: "BASELINE" | "WHAT_IF";
+  fingerprint: string;
+  computedAt: string;
+  expiresAt?: string | null;
+  result: CoordinationAnalysis;
+  modelVersion: string;
+  ruleVersion: string;
+  geoRegistryVersion?: string | null;
+  routingGraphVersion?: string | null;
+  weatherSnapshotVersion?: string | null;
+  input?: {
+    simulation?: {
+      delta: WhatIfSimulationResult["delta"];
+      expiresAt: string;
+    };
+  };
+}
+
+export interface AnalyzeMissionResult {
+  snapshot: CoordinationAnalysisSnapshot;
+  analysis: CoordinationAnalysis;
+  extractionSource: "AI_SERVICE" | "BACKEND_FALLBACK";
+}
+
+export interface SimulateMissionResult {
+  snapshot: CoordinationAnalysisSnapshot;
+  simulation: WhatIfSimulationResult;
+  analysis: CoordinationAnalysis;
+}
+
+export interface MissionFieldUpdate {
+  id: string;
+  missionId: string;
+  requestId: string;
+  inputMode: "TEXT" | "VOICE_TRANSCRIPT";
+  confirmedText: string;
+  clientCapturedAt: string | null;
+  createdAt: string;
+  structuredIntent: FieldUpdateIntent | null;
+  intentProvenance: {
+    source?: "AI_SERVICE" | "BACKEND_FALLBACK";
+    extractedAt?: string;
+    preliminarySimulation?: {
+      status: "CREATED" | "NOT_APPLICABLE" | "BASELINE_MISSING" | "FAILED";
+      snapshotId?: string;
+      expiresAt?: string | null;
+      unresolvedAssumptionCount?: number;
+    };
+  } | null;
+  actor?: { id: string; fullName: string; role: string };
 }
 
 export interface DispatchRoute {
@@ -143,6 +219,7 @@ export interface AppNotification {
   body: string;
   read: boolean;
   missionId: string | null;
+  fieldUpdateId?: string | null;
   createdAt: string;
 }
 
@@ -223,6 +300,30 @@ export const transcribeAudio = (audioBase64: string, mimeType = "audio/wav") =>
 
 export const getMission = (id: string) => apiFetch<Mission>(`/api/missions/${id}`);
 
+export const analyzeMission = (id: string, input: { requestId: string; description?: string }) =>
+  apiFetch<AnalyzeMissionResult>(`/api/missions/${id}/analyses`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+
+export const getLatestCoordinationAnalysis = (id: string) =>
+  apiFetch<CoordinationAnalysisSnapshot | null>(`/api/missions/${id}/analyses/latest`);
+
+export const getSimulation = (missionId: string, simulationId: string) =>
+  apiFetch<CoordinationAnalysisSnapshot>(`/api/missions/${missionId}/simulations/${simulationId}`);
+
+export const listFieldUpdates = (id: string) =>
+  apiFetch<MissionFieldUpdate[]>(`/api/missions/${id}/field-updates`);
+
+export const simulateMission = (
+  id: string,
+  input: { requestId: string; baselineSnapshotId: string; assumptionText: string },
+) =>
+  apiFetch<SimulateMissionResult>(`/api/missions/${id}/simulations`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+
 export const listMissions = (statuses?: MissionStatus[]) =>
   apiFetch<Mission[]>(`/api/missions${statuses?.length ? `?status=${statuses.join(",")}` : ""}`);
 
@@ -232,32 +333,36 @@ export const getClusterWarehouses = (warehouseId: string) =>
 export const generateActionPlan = (id: string) =>
   apiFetch<ActionPlan>(`/api/missions/${id}/action-plan`, { method: "POST" });
 
-// Workflow liên role
-export const dispatchMission = (id: string) =>
-  apiFetch<Mission>(`/api/missions/${id}/dispatch`, { method: "POST" });
-export const confirmMission = (id: string) =>
-  apiFetch<Mission>(`/api/missions/${id}/confirm`, { method: "POST" });
+// ADMIN phát hành trực tiếp tới kho; lực lượng hiện trường chỉ đọc phương án.
+export const approveMission = (id: string) =>
+  apiFetch<Mission>(`/api/missions/${id}/approve`, { method: "POST" });
 export const prepareMission = (id: string) =>
   apiFetch<Mission>(`/api/missions/${id}/prepare`, { method: "POST" });
-
-// RESCUE xác nhận kết quả giao hiện trường (READY → COMPLETED)
-export const completeMission = (id: string, outcome: DeliveryOutcome, note?: string) =>
-  apiFetch<Mission>(`/api/missions/${id}/complete`, {
-    method: "POST",
-    body: JSON.stringify({ outcome, note }),
-  });
-
-// Admin xử lý đơn từ chối của đội cứu hộ
-export const deferMission = (id: string, note?: string) =>
-  apiFetch<Mission>(`/api/missions/${id}/defer`, {
-    method: "POST",
-    body: JSON.stringify({ note }),
-  });
-export const resendMission = (id: string, note?: string) =>
-  apiFetch<Mission>(`/api/missions/${id}/resend`, {
-    method: "POST",
-    body: JSON.stringify({ note }),
-  });
+export const listWarehouseRequests = () =>
+  apiFetch<MissionWarehouseRequest[]>("/api/missions/warehouse-requests/own");
+export const acceptWarehouseRequest = (requestId: string, note?: string) =>
+  apiFetch<MissionWarehouseRequest>(
+    `/api/missions/warehouse-requests/${requestId}/accept`,
+    { method: "POST", body: JSON.stringify({ note }) },
+  );
+export const reportWarehouseRequestDiscrepancy = (requestId: string, note: string) =>
+  apiFetch<MissionWarehouseRequest>(
+    `/api/missions/warehouse-requests/${requestId}/discrepancy`,
+    { method: "POST", body: JSON.stringify({ note }) },
+  );
+export const prepareWarehouseRequest = (requestId: string) =>
+  apiFetch<MissionWarehouseRequest>(
+    `/api/missions/warehouse-requests/${requestId}/prepare`,
+    { method: "POST" },
+  );
+export const reviewWarehouseRequest = (
+  requestId: string,
+  input: { requestedQuantity: number; adminNote?: string },
+) =>
+  apiFetch<MissionWarehouseRequest>(
+    `/api/missions/warehouse-requests/${requestId}/review`,
+    { method: "POST", body: JSON.stringify(input) },
+  );
 export const cancelMission = (id: string, note?: string) =>
   apiFetch<Mission>(`/api/missions/${id}/cancel`, {
     method: "POST",

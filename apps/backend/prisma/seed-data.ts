@@ -1,3 +1,5 @@
+import { getVerifiedHamletWarehouseLocation } from "./verified-warehouse-location";
+
 export type ReliefGroup = "WASH" | "FOOD" | "RESCUE" | "SHELTER" | "HEALTH" | "COMMUNICATION";
 
 export interface SeedItemDefinition {
@@ -224,7 +226,7 @@ export const CENTRAL_BATCHES: SeedBatchDefinition[] = [
 ];
 
 // Danh sách sau sắp xếp thôn được xã Đồng Xuân công bố ngày 01/07/2026.
-// Tọa độ để null có chủ đích; cán bộ sẽ ghim trực tiếp trên bản đồ sau.
+// Chỉ 5 Nhà văn hóa đã xác minh được seed tọa độ; 12 điểm còn lại chờ ADMIN ghim.
 export const HAMLET_WAREHOUSES = [
   ["long-chau", "Long Châu"],
   ["long-thang", "Long Thăng"],
@@ -281,6 +283,9 @@ export function validateSeedDataset(): string[] {
     if ((warehouse.lat == null) !== (warehouse.lng == null)) {
       errors.push(`${warehouse.name} thiếu một phần tọa độ`);
     }
+    if (warehouse.locationVerified !== (warehouse.lat != null && warehouse.lng != null)) {
+      errors.push(`${warehouse.name} có trạng thái xác minh không khớp tọa độ`);
+    }
     for (const stock of warehouse.stock) {
       if (!skus.has(stock.sku))
         errors.push(`${warehouse.name} dùng SKU không tồn tại: ${stock.sku}`);
@@ -292,11 +297,14 @@ export function validateSeedDataset(): string[] {
 
 function createHamletWarehouse(key: string, hamletName: string, index: number) {
   const tier = index % 5;
+  const verifiedLocation = getVerifiedHamletWarehouseLocation(key);
   return {
     key,
     name: `Kho thôn ${hamletName}`,
-    lat: null,
-    lng: null,
+    location: verifiedLocation?.name ?? `Nhà văn hóa thôn ${hamletName}`,
+    locationVerified: verifiedLocation != null,
+    lat: verifiedLocation?.lat ?? null,
+    lng: verifiedLocation?.lng ?? null,
     stock: [
       { sku: "WATER-01", quantity: 180 + tier * 30, expiryOffsetDays: 210 + tier * 15 },
       { sku: "LIFE-ADULT", quantity: 18 + tier * 4, expiryOffsetDays: null },

@@ -6,12 +6,7 @@ import { ColorIcon } from "@/components/shared/color-icon";
 import { useAuth } from "@/lib/auth-store";
 import { getProfile, updateProfile, type UpdateProfileInput } from "@/lib/profile-api";
 import { ProfileAvatarEditor } from "./profile-avatar-editor";
-
-const roleLabels: Record<string, string> = {
-  ADMIN: "Quản trị xã",
-  WAREHOUSE: "Phụ trách kho",
-  RESCUE: "Đội cứu hộ",
-};
+import { userRoleLabel } from "@safestock/shared-types";
 
 export function UserProfileDialog({
   isOpen,
@@ -150,7 +145,7 @@ export function UserProfileDialog({
               Hồ sơ cá nhân
             </h2>
             <p className="mt-1 text-sm text-[var(--text-muted)]">
-              {roleLabels[profile?.role ?? ""] ?? "Người dùng hệ thống"}
+              {profile?.role ? userRoleLabel(profile.role) : "Người dùng hệ thống"}
             </p>
           </div>
           <button

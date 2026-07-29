@@ -23,13 +23,16 @@ describe("WebSocketAuthService", () => {
   it("rejects missing, invalid, expired, and deleted-user access tokens", async () => {
     await expect(service.authenticate(fakeSocket())).rejects.toThrow("Unauthorized");
 
-    const invalid = await jwt.signAsync({ sub: "user-a" }, { secret: "wrong-secret" });
+    const invalid = await jwt.signAsync({ sub: "user-a", tokenVersion: 0 }, { secret: "wrong-secret" });
     await expect(service.authenticate(fakeSocket(invalid))).rejects.toThrow();
 
-    const expired = await jwt.signAsync({ sub: "user-a" }, { secret: SECRET, expiresIn: -1 });
+    const expired = await jwt.signAsync(
+      { sub: "user-a", tokenVersion: 0 },
+      { secret: SECRET, expiresIn: -1 },
+    );
     await expect(service.authenticate(fakeSocket(expired))).rejects.toThrow();
 
-    const deletedUserToken = await jwt.signAsync({ sub: "deleted" }, { secret: SECRET });
+    const deletedUserToken = await jwt.signAsync({ sub: "deleted", tokenVersion: 0 }, { secret: SECRET });
     await expect(service.authenticate(fakeSocket(deletedUserToken))).rejects.toThrow(
       "Unauthorized",
     );
@@ -38,7 +41,7 @@ describe("WebSocketAuthService", () => {
   it("uses current database role and assignment instead of stale token claims", async () => {
     users.set("user-a", warehouseUser("user-a", "wh-a"));
     const token = await jwt.signAsync(
-      { sub: "user-a", role: UserRole.ADMIN, warehouseId: "wh-b" },
+      { sub: "user-a", role: UserRole.ADMIN, warehouseId: "wh-b", tokenVersion: 0 },
       { secret: SECRET },
     );
 
@@ -57,7 +60,7 @@ describe("WebSocketAuthService", () => {
       warehouse: null,
       organization: { warehouses: [{ id: "wh-a" }, { id: "wh-b" }] },
     });
-    const token = await jwt.signAsync({ sub: "admin" }, { secret: SECRET });
+    const token = await jwt.signAsync({ sub: "admin", tokenVersion: 0 }, { secret: SECRET });
 
     await expect(service.authenticate(fakeSocket(token))).resolves.toMatchObject({
       role: UserRole.ADMIN,
@@ -83,6 +86,7 @@ function warehouseUser(id: string, warehouseId: string) {
     role: UserRole.WAREHOUSE,
     organizationId: "org-a",
     warehouseId: warehouseId as string | null,
+    tokenVersion: 0,
     warehouse: { organizationId: "org-a" } as { organizationId: string } | null,
     organization: { warehouses: [{ id: warehouseId }] },
   };

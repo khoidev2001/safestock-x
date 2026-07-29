@@ -15,16 +15,16 @@ export class NotificationController {
   /** Thông báo của role người dùng hiện tại. */
   @Get()
   list(@Request() req: AuthenticatedRequest, @Query("unread") unread?: string) {
-    return this.notifications.list(req.user.role as UserRole, unread === "true");
+    return this.notifications.list(req.user.userId, req.user.role as UserRole, unread === "true");
   }
 
   @Post(":id/read")
-  markRead(@Param("id") id: string) {
-    return this.notifications.markRead(id);
+  markRead(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.notifications.markRead(req.user.userId, req.user.role as UserRole, id);
   }
 
   @Post("read-all")
   markAllRead(@Request() req: AuthenticatedRequest) {
-    return this.notifications.markAllRead(req.user.role as UserRole);
+    return this.notifications.markAllRead(req.user.userId, req.user.role as UserRole);
   }
 }

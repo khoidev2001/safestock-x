@@ -2,11 +2,18 @@
 
 import { ColorIcon, type ColorIconName, type ColorIconTone } from "@/components/shared/color-icon";
 import type { MissionStatus } from "@/lib/mission-api";
+import { FIELD_FORCE_ROLE_LABEL } from "@safestock/shared-types";
 
-/** Ba bước phối hợp giữa bộ phận điều phối, cứu hộ và kho. */
+/** Ba bước phối hợp giữa bộ phận điều phối, lực lượng hiện trường và kho. */
 const STEPS = [
   { key: "admin", label: "Điều phối lập kế hoạch", role: "ADMIN", icon: "workflow", tone: "blue" },
-  { key: "rescue", label: "Cứu hộ xác nhận", role: "RESCUE", icon: "mission", tone: "orange" },
+  {
+    key: "rescue",
+    label: `${FIELD_FORCE_ROLE_LABEL} xác nhận`,
+    role: "RESCUE",
+    icon: "mission",
+    tone: "orange",
+  },
   {
     key: "warehouse",
     label: "Kho chuẩn bị và giao",
@@ -28,10 +35,10 @@ function completedIndex(status: MissionStatus): number {
     case "DRAFT":
       return 0; // đã lập, chờ gửi
     case "PENDING_RESCUE":
-      return 0; // chờ cứu hộ
+      return 0; // chờ lực lượng hiện trường
     case "RESCUE_CONFIRMED":
     case "PENDING_WAREHOUSE":
-      return 1; // cứu hộ xong, chờ kho
+      return 1; // hiện trường đã xác nhận, chờ kho
     case "READY":
     case "COMPLETED":
       return 2; // xong hết
@@ -42,7 +49,10 @@ function completedIndex(status: MissionStatus): number {
 
 /** Trạng thái ngoài luồng 3 bước — hiện băng riêng thay vì stepper. */
 const OFF_FLOW: Partial<Record<MissionStatus, { label: string; tone: string }>> = {
-  REJECTED: { label: "Đội cứu hộ đã từ chối", tone: "var(--color-critical)" },
+  REJECTED: {
+    label: `${FIELD_FORCE_ROLE_LABEL} đã từ chối`,
+    tone: "var(--color-critical)",
+  },
   DEFERRED: { label: "Tạm hoãn — chờ điều phối cập nhật", tone: "var(--color-attention)" },
   CANCELLED: { label: "Nhiệm vụ đã huỷ", tone: "var(--text-muted)" },
 };

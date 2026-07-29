@@ -9,8 +9,14 @@ import { UserRole } from "@prisma/client";
 import { Server, Socket } from "socket.io";
 import { WebSocketAuthService } from "../auth/websocket-auth.service";
 import { NotificationService } from "./notification.service";
+import { createRuntimeCorsOriginValidator } from "../config/http-security";
 
-@WebSocketGateway({ cors: { origin: "*" } })
+@WebSocketGateway({
+  cors: {
+    origin: createRuntimeCorsOriginValidator(),
+    credentials: true,
+  },
+})
 export class NotificationGateway implements OnModuleInit, OnGatewayInit, OnGatewayConnection {
   @WebSocketServer() server!: Server;
 
@@ -29,12 +35,16 @@ export class NotificationGateway implements OnModuleInit, OnGatewayInit, OnGatew
       client.disconnect(true);
       return;
     }
-    void client.join(`role:${principal.role}`);
+    void client.join(notificationRoom(principal.organizationId, principal.role));
   }
 
   onModuleInit() {
-    this.notifications.push = (role: UserRole, notification: unknown) => {
-      this.server.to(`role:${role}`).emit("notification", notification);
+    this.notifications.push = (organizationId: string, role: UserRole, notification: unknown) => {
+      this.server.to(notificationRoom(organizationId, role)).emit("notification", notification);
     };
   }
+}
+
+function notificationRoom(organizationId: string, role: UserRole): string {
+  return `notification:${organizationId}:${role}`;
 }

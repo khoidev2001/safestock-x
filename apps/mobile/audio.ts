@@ -153,7 +153,7 @@ export async function startRecording(): Promise<AudioRecording> {
       {
         title: "Cho phép ghi âm mô tả",
         message:
-          "SafeStock cần dùng micro khi bạn bấm ghi âm để chuyển lời nói thành nội dung báo cáo.",
+          "Ứng phó nhanh cần dùng micro khi bạn bấm ghi âm để chuyển lời nói thành nội dung báo cáo.",
         buttonPositive: "Cho phép",
         buttonNegative: "Không cho phép",
       },

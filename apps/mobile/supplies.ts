@@ -1,6 +1,6 @@
 /**
  * Nhận diện nhanh vật tư cứu trợ: icon + màu nhóm cho từng SKU.
- * Mục tiêu — trong tình huống cấp bách, đội cứu hộ liếc là biết ngay
+ * Mục tiêu — trong tình huống cấp bách, Lực lượng hiện trường liếc là biết ngay
  * "cái gì, thuộc nhóm nào, đủ hay thiếu".
  */
 

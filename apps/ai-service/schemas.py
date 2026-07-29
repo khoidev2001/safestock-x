@@ -1,6 +1,6 @@
 """Schema Pydantic — validate output AI (không tin AI, §14)."""
 from enum import Enum
-from typing import List, Literal, Optional
+from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -35,6 +35,184 @@ class ParsedIncident(BaseModel):
 
 class ParseRequest(BaseModel):
     description: str = Field(min_length=5, max_length=2000)
+
+
+# ===== Situation analysis extraction (AI-2.1) =====
+# The AI service may extract only text-grounded facts. Backend owns every
+# inventory, routing, forecast and allocation calculation.
+
+SituationFactKey = Literal[
+    "LOCATION",
+    "AFFECTED_PEOPLE",
+    "HOUSEHOLDS",
+    "INCIDENT_TYPE",
+    "WEATHER",
+    "ISOLATION_RISK",
+    "PEOPLE_STRANDED",
+    "VULNERABLE_GROUP",
+    "ACCESS_CONDITION",
+    "DURATION_HOURS",
+    "OTHER",
+]
+
+
+class SituationAnalysisRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    description: str = Field(min_length=5, max_length=4_000)
+    sourceId: str = Field(min_length=1, max_length=128)
+    sourceType: Literal["USER_REPORT", "FIELD_UPDATE"] = "USER_REPORT"
+    capturedAt: Optional[str] = Field(default=None, max_length=64)
+
+
+class SituationFactSource(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sourceType: Literal["USER_REPORT", "FIELD_UPDATE"]
+    sourceId: str = Field(min_length=1, max_length=128)
+    excerpt: str = Field(min_length=1, max_length=1_000)
+    capturedAt: Optional[str] = Field(default=None, max_length=64)
+
+
+class SituationExtractedFact(BaseModel):
+    """A fact must declare whether it was reported, inferred, or is missing."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1, max_length=128)
+    key: SituationFactKey
+    provenance: Literal["REPORTED", "AI_INFERENCE", "MISSING"]
+    value: Any = None
+    qualifier: Optional[Literal["EXACT", "APPROXIMATE", "POSSIBLE", "UNSPECIFIED"]] = None
+    source: Optional[SituationFactSource] = None
+    confidence: Optional[float] = Field(default=None, ge=0, le=1)
+    basisFactIds: List[str] = Field(default_factory=list, max_length=20)
+    explanation: Optional[str] = Field(default=None, max_length=1_000)
+    question: Optional[str] = Field(default=None, max_length=500)
+    impact: Optional[str] = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def validate_provenance_shape(self) -> "SituationExtractedFact":
+        if self.provenance == "REPORTED":
+            if self.value is None or self.source is None or self.qualifier is None:
+                raise ValueError("REPORTED fact requires value, source and qualifier")
+            if self.confidence is not None or self.basisFactIds or self.explanation is not None:
+                raise ValueError("REPORTED fact cannot contain inference fields")
+        elif self.provenance == "AI_INFERENCE":
+            if self.value is None or not self.basisFactIds or not self.explanation:
+                raise ValueError("AI_INFERENCE fact requires value, basisFactIds and explanation")
+            # M4: khớp InferredCoordinationFact (TS) yêu cầu confidence: number bắt buộc.
+            if self.confidence is None:
+                raise ValueError("AI_INFERENCE fact requires a confidence score")
+            if self.source is not None or self.qualifier is not None:
+                raise ValueError("AI_INFERENCE fact cannot contain a report source")
+        else:
+            if self.value is not None or self.source is not None or not self.question or not self.impact:
+                raise ValueError("MISSING fact requires question and impact only")
+            if self.qualifier is not None or self.confidence is not None or self.basisFactIds or self.explanation:
+                raise ValueError("MISSING fact cannot contain reported or inference fields")
+        return self
+
+
+class SituationMissingData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: SituationFactKey
+    question: str = Field(min_length=1, max_length=500)
+    impact: str = Field(min_length=1, max_length=500)
+
+
+class SituationConflict(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: SituationFactKey
+    factIds: List[str] = Field(min_length=2, max_length=10)
+    question: str = Field(min_length=1, max_length=500)
+
+
+class SituationPriorityQuestion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    factKey: SituationFactKey
+    question: str = Field(min_length=1, max_length=500)
+    expectedImpact: str = Field(min_length=1, max_length=500)
+
+
+class SituationExtraction(BaseModel):
+    """Strict NLP-only output; no recommendation or operational calculation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    schemaVersion: Literal["situation-extraction.v1"]
+    facts: List[SituationExtractedFact] = Field(min_length=1, max_length=30)
+    missingData: List[SituationMissingData] = Field(default_factory=list, max_length=12)
+    conflicts: List[SituationConflict] = Field(default_factory=list, max_length=8)
+    priorityQuestion: Optional[SituationPriorityQuestion] = None
+
+    @model_validator(mode="after")
+    def validate_references(self) -> "SituationExtraction":
+        fact_ids = [fact.id for fact in self.facts]
+        if len(fact_ids) != len(set(fact_ids)):
+            raise ValueError("fact ids must be unique")
+        known_ids = set(fact_ids)
+        for fact in self.facts:
+            if fact.provenance == "AI_INFERENCE" and not set(fact.basisFactIds).issubset(known_ids):
+                raise ValueError("inference basisFactIds must reference returned facts")
+        for conflict in self.conflicts:
+            if not set(conflict.factIds).issubset(known_ids):
+                raise ValueError("conflict factIds must reference returned facts")
+        return self
+
+
+# ===== Field assistant intent extraction (AI-4.3) =====
+# This is deliberately an evidence classifier, not a dispatch/replanning API.
+FieldUpdateIntentKind = Literal[
+    "ARRIVED",
+    "ACCESS_BLOCKED",
+    "ROUTE_HAZARD",
+    "AFFECTED_PEOPLE_CHANGED",
+    "VULNERABLE_GROUP_REPORTED",
+    "MORE_SUPPLIES_NEEDED",
+    "SUPPLIES_RECEIVED",
+    "SUPPLIES_DELIVERED",
+    "CANNOT_CONTINUE",
+    "SITUATION_STABLE",
+    "OTHER",
+]
+
+
+class FieldUpdateIntentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    confirmedText: str = Field(min_length=1, max_length=4_000)
+    sourceId: str = Field(min_length=1, max_length=128)
+    capturedAt: Optional[str] = Field(default=None, max_length=64)
+
+
+class FieldUpdateIntentExtraction(BaseModel):
+    """AI labels confirmed field evidence; every result still needs ADMIN review."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    schemaVersion: Literal["field-update-intent.v1"]
+    kind: FieldUpdateIntentKind
+    confidence: float = Field(ge=0, le=1)
+    sourceExcerpt: str = Field(min_length=1, max_length=1_000)
+    requiresAdminVerification: Literal[True]
+    facts: List[SituationExtractedFact] = Field(min_length=1, max_length=30)
+    resolvedReferenceIds: List[str] = Field(default_factory=list, max_length=0)
+    unresolvedReferences: List[str] = Field(default_factory=list, max_length=12)
+
+    @model_validator(mode="after")
+    def validate_fact_references(self) -> "FieldUpdateIntentExtraction":
+        fact_ids = [fact.id for fact in self.facts]
+        if len(fact_ids) != len(set(fact_ids)):
+            raise ValueError("fact ids must be unique")
+        known_ids = set(fact_ids)
+        for fact in self.facts:
+            if fact.provenance == "AI_INFERENCE" and not set(fact.basisFactIds).issubset(known_ids):
+                raise ValueError("inference basisFactIds must reference returned facts")
+        return self
 
 
 class ExplainRequest(BaseModel):

@@ -18,12 +18,21 @@ describe("RBAC role permissions", () => {
     expect(roleHasPermission(UserRole.WAREHOUSE, Permission.ADMIN_USERS)).toBe(false);
   });
 
-  it("should limit RESCUE to view + request + confirm + loan", () => {
-    expect(roleHasPermission(UserRole.RESCUE, Permission.INVENTORY_READ)).toBe(true);
-    expect(roleHasPermission(UserRole.RESCUE, Permission.MISSION_REQUEST)).toBe(true);
-    expect(roleHasPermission(UserRole.RESCUE, Permission.MISSION_CONFIRM)).toBe(true);
-    expect(roleHasPermission(UserRole.RESCUE, Permission.LOAN_MANAGE)).toBe(true);
-    expect(roleHasPermission(UserRole.RESCUE, Permission.SIMULATION_VIEW)).toBe(true);
+  it("should keep field force read-only except confirmed field updates", () => {
+    expect(ROLE_PERMISSIONS[UserRole.RESCUE]).toEqual([
+      Permission.MISSION_VIEW,
+      Permission.MISSION_FIELD_UPDATE,
+      Permission.NOTIFICATION_VIEW,
+    ]);
+    expect(roleHasPermission(UserRole.RESCUE, Permission.INVENTORY_READ)).toBe(false);
+    expect(roleHasPermission(UserRole.RESCUE, Permission.MISSION_REQUEST)).toBe(false);
+    expect(roleHasPermission(UserRole.RESCUE, Permission.MISSION_CONFIRM)).toBe(false);
+    expect(roleHasPermission(UserRole.RESCUE, Permission.MISSION_FIELD_UPDATE)).toBe(true);
+    expect(roleHasPermission(UserRole.RESCUE, Permission.MISSION_ANALYZE)).toBe(false);
+    expect(roleHasPermission(UserRole.RESCUE, Permission.MISSION_SIMULATE)).toBe(false);
+    expect(roleHasPermission(UserRole.RESCUE, Permission.LOAN_MANAGE)).toBe(false);
+    expect(roleHasPermission(UserRole.RESCUE, Permission.READINESS_VIEW)).toBe(false);
+    expect(roleHasPermission(UserRole.RESCUE, Permission.SIMULATION_VIEW)).toBe(false);
     expect(roleHasPermission(UserRole.RESCUE, Permission.SIMULATION_MUTATE)).toBe(false);
   });
 
@@ -41,6 +50,7 @@ describe("RBAC role permissions", () => {
 
   it("should limit REPORTER (trưởng thôn) to reporting an incident + voice + notifications", () => {
     expect(roleHasPermission(UserRole.REPORTER, Permission.INCIDENT_REPORT_SUBMIT)).toBe(true);
+    expect(roleHasPermission(UserRole.REPORTER, Permission.INCIDENT_REPORT_VIEW_OWN)).toBe(true);
     expect(roleHasPermission(UserRole.REPORTER, Permission.NOTIFICATION_VIEW)).toBe(true);
     // KHÔNG được lập/điều phối phương án hay đụng kho — chỉ báo cáo từ hiện trường.
     expect(roleHasPermission(UserRole.REPORTER, Permission.MISSION_CREATE)).toBe(false);

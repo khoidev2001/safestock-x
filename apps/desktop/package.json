@@ -31,7 +31,7 @@
   },
   "build": {
     "appId": "vn.safestock.desktop",
-    "productName": "SafeStock Simulator",
+    "productName": "Ứng phó nhanh — Giả lập cảm biến",
     "directories": {
       "output": "release"
     },

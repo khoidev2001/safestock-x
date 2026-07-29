@@ -9,11 +9,15 @@ function createWindow(): void {
     height: 820,
     minWidth: 940,
     minHeight: 640,
-    title: "SafeStock — Giả lập cảm biến",
+    title: "Ứng phó nhanh — Giả lập cảm biến",
     autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
-      sandbox: false,
+      // Bật sandbox: preload không dùng Node API nào (chỉ giữ contextIsolation), renderer
+      // chạy như web app thuần (fetch + socket.io tới backend). Sandbox chặn renderer/preload
+      // truy cập Node → giảm bề mặt tấn công nếu nội dung web bị lợi dụng.
+      sandbox: true,
+      contextIsolation: true,
     },
   });
 

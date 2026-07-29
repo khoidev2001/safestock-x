@@ -1,6 +1,13 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
-import { DeliveryOutcome, MissionStatus, NotificationKind, Prisma, UserRole } from "@prisma/client";
-import { IncidentType } from "@safestock/shared-types";
+import {
+  DeliveryOutcome,
+  MissionStatus,
+  MissionWarehouseRequestStatus,
+  NotificationKind,
+  Prisma,
+  UserRole,
+} from "@prisma/client";
+import { FIELD_FORCE_ROLE_LABEL, IncidentType } from "@safestock/shared-types";
 import { AiClientService } from "../ai/ai-client.service";
 import { LatLng } from "../geo/haversine";
 import { LocalRoutingService } from "../geo/local-routing.service";
@@ -28,6 +35,7 @@ import {
 } from "./mission.compute";
 import { assessMissionReadiness, MissionReadinessAssessment } from "./mission-readiness";
 import { normalizeHamletName } from "../admin/hamlet-normalization";
+import { buildWarehouseRequestCreates } from "./mission-warehouse-request";
 
 /** Gợi ý mượn kho lân cận cho 1 SKU thiếu. */
 interface NeighborSuggestion {
@@ -272,6 +280,7 @@ export class MissionService {
             body: excerpt,
             missionId: mission.id,
             warehouseId: input.warehouseId,
+            organizationId: warehouse.organizationId,
           },
         });
         return { mission, notification };
@@ -305,16 +314,55 @@ export class MissionService {
   /**
    * Chọn kho tiếp nhận báo cáo: ưu tiên kho scope của trưởng thôn → kho chỉ định →
    * kho TỔNG (CENTRAL) của xã → kho bất kỳ. Không có kho nào → ném NotFound.
+   *
+   * BẮT BUỘC cùng organization với người báo cáo: kho scope, kho chỉ định và kho
+   * mặc định đều phải thuộc tổ chức của actor. Chặn trưởng thôn không-scope (toàn xã)
+   * hoặc client độc hại ghi báo cáo sang kho của tổ chức khác (cross-tenant).
    */
-  async resolveReportWarehouseId(scopeWarehouseId?: string | null, requestedId?: string) {
-    if (scopeWarehouseId) return scopeWarehouseId;
-    if (requestedId) return requestedId;
+  async resolveReportWarehouseId(
+    actorUserId: string,
+    scopeWarehouseId?: string | null,
+    requestedId?: string,
+  ) {
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actorUserId },
+      select: { organizationId: true },
+    });
+    if (!actor) throw new NotFoundException("Không tìm thấy người báo cáo");
+
+    // Trưởng thôn có scope kho: luôn dùng đúng kho scope, không cho ghi đè sang kho khác.
+    if (scopeWarehouseId) {
+      const scoped = await this.prisma.warehouse.findFirst({
+        where: { id: scopeWarehouseId, organizationId: actor.organizationId },
+        select: { id: true },
+      });
+      if (!scoped) throw new NotFoundException("Kho scope không thuộc tổ chức của người báo cáo");
+      return scoped.id;
+    }
+
+    // Người báo cáo toàn xã chỉ định kho: kho phải cùng organization.
+    if (requestedId) {
+      const requested = await this.prisma.warehouse.findFirst({
+        where: { id: requestedId, organizationId: actor.organizationId },
+        select: { id: true },
+      });
+      if (!requested)
+        throw new NotFoundException("Kho tiếp nhận không thuộc tổ chức của người báo cáo");
+      return requested.id;
+    }
+
+    // Mặc định: kho TỔNG (CENTRAL) trong đúng organization → kho bất kỳ cùng org.
     const central = await this.prisma.warehouse.findFirst({
-      where: { kind: "CENTRAL" },
+      where: { kind: "CENTRAL", organizationId: actor.organizationId },
       orderBy: { createdAt: "asc" },
+      select: { id: true },
     });
     if (central) return central.id;
-    const any = await this.prisma.warehouse.findFirst({ orderBy: { createdAt: "asc" } });
+    const any = await this.prisma.warehouse.findFirst({
+      where: { organizationId: actor.organizationId },
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+    });
     if (!any) throw new NotFoundException("Chưa có kho nào để tiếp nhận báo cáo");
     return any.id;
   }
@@ -322,7 +370,14 @@ export class MissionService {
   async getMission(id: string, actorUserId?: string, scopeWarehouseId?: string | null) {
     const mission = await this.prisma.mission.findUnique({
       where: { id },
-      include: { requirements: true, warehousePreparations: true },
+      include: {
+        requirements: true,
+        warehousePreparations: true,
+        warehouseRequests: {
+          include: { warehouse: { select: { id: true, name: true } } },
+          orderBy: [{ warehouseId: "asc" }, { sku: "asc" }],
+        },
+      },
     });
     if (!mission) throw new NotFoundException("Không tìm thấy nhiệm vụ");
     assertMissionWarehouseInScope(scopeWarehouseId, mission);
@@ -407,26 +462,90 @@ export class MissionService {
     }
   }
 
-  /** Duyệt phương án — chuyển DRAFT → APPROVED. */
+  /**
+   * ADMIN duyệt và phát hành phương án trực tiếp tới các kho tham gia.
+   * Lực lượng hiện trường chỉ nhận bản tin để theo dõi, không xác nhận hay
+   * thay đổi trạng thái nhiệm vụ.
+   */
   async approve(id: string, userId: string, scopeWarehouseId?: string | null) {
+    await this.getMission(id, userId, scopeWarehouseId);
     const mission = await this.prisma.mission.findUnique({
       where: { id },
-      include: { _count: { select: { requirements: true } } },
+      include: {
+        requirements: true,
+        _count: { select: { requirements: true } },
+        warehouse: { select: { organizationId: true } },
+      },
     });
     if (!mission) throw new NotFoundException("Không tìm thấy nhiệm vụ");
     assertWarehouseInScope(scopeWarehouseId, mission.warehouseId);
     if (mission.status !== MissionStatus.DRAFT) {
       throw new BadRequestException("Chỉ duyệt được nhiệm vụ ở trạng thái nháp");
     }
+    this.assertMissionHasIncidentPoint(mission);
     this.assertMissionDispatchable(mission.readinessAssessment, mission._count.requirements);
-    const approved = await this.prisma.mission.updateMany({
-      where: { id, status: MissionStatus.DRAFT },
-      data: { status: MissionStatus.APPROVED, approvedByUserId: userId, approvedAt: new Date() },
+    const warehouseIds = missionParticipantWarehouseIds(
+      mission.requirements,
+      mission.warehouseId,
+    );
+    const warehouseRequests = buildWarehouseRequestCreates(id, mission.requirements);
+    const result = await this.prisma.$transaction(async (tx) => {
+      const approved = await tx.mission.updateMany({
+        where: { id, status: MissionStatus.DRAFT },
+        data: {
+          status: MissionStatus.PENDING_WAREHOUSE,
+          approvedByUserId: userId,
+          approvedAt: new Date(),
+        },
+      });
+      if (approved.count === 0) {
+        throw new BadRequestException(
+          "Nhiệm vụ vừa được cập nhật, vui lòng tải lại trước khi phát hành",
+        );
+      }
+      await tx.missionWarehousePreparation.createMany({
+        data: warehouseIds.map((warehouseId) => ({ missionId: id, warehouseId })),
+        skipDuplicates: true,
+      });
+      if (warehouseRequests.length > 0) {
+        await tx.missionWarehouseRequest.createMany({
+          data: warehouseRequests.map((request) => ({
+            ...request,
+            allocations: request.allocations as unknown as Prisma.InputJsonValue,
+          })),
+          skipDuplicates: true,
+        });
+      }
+      const warehouseNotification = await tx.notification.create({
+        data: {
+          recipientRole: UserRole.WAREHOUSE,
+          kind: NotificationKind.MISSION_ASSIGNED,
+          title: "Phương án vật tư mới cần chuẩn bị",
+          body: `${mission.incidentType} — ${mission.affectedPeople} người. Chuẩn bị phần vật tư được phân bổ cho kho.`,
+          missionId: id,
+          organizationId: mission.warehouse.organizationId,
+        },
+      });
+      const fieldForceNotification = await tx.notification.create({
+        data: {
+          recipientRole: UserRole.RESCUE,
+          kind: NotificationKind.MISSION_ASSIGNED,
+          title: "Phương án ứng phó mới",
+          body: `${mission.incidentType} — ${mission.affectedPeople} người. Xem tuyến và các điểm lấy vật tư trong phương án.`,
+          missionId: id,
+          organizationId: mission.warehouse.organizationId,
+        },
+      });
+      const updated = await tx.mission.findUniqueOrThrow({
+        where: { id },
+        include: { requirements: true, warehousePreparations: true },
+      });
+      return { updated, notifications: [warehouseNotification, fieldForceNotification] };
     });
-    if (approved.count === 0) {
-      throw new BadRequestException("Chỉ duyệt được nhiệm vụ ở trạng thái nháp");
+    for (const notification of result.notifications) {
+      this.notifications.pushPersisted(notification);
     }
-    return this.prisma.mission.findUniqueOrThrow({ where: { id } });
+    return result.updated;
   }
 
   /** Lưu giải thích AI (proxy từ ai-service) vào nhiệm vụ. */
@@ -441,7 +560,10 @@ export class MissionService {
   async dispatch(id: string, actorUserId?: string, scopeWarehouseId?: string | null) {
     const mission = await this.prisma.mission.findUnique({
       where: { id },
-      include: { _count: { select: { requirements: true } } },
+      include: {
+        _count: { select: { requirements: true } },
+        warehouse: { select: { organizationId: true } },
+      },
     });
     if (!mission) throw new NotFoundException("Không tìm thấy nhiệm vụ");
     await this.getMission(id, actorUserId, scopeWarehouseId);
@@ -463,6 +585,7 @@ export class MissionService {
           title: "Nhiệm vụ cứu hộ mới",
           body: `${mission.incidentType} — ${mission.affectedPeople} người. Xác nhận để lấy vật tư.`,
           missionId: id,
+          organizationId: mission.warehouse.organizationId,
         },
       });
       const updated = await tx.mission.findUniqueOrThrow({ where: { id } });
@@ -543,7 +666,9 @@ export class MissionService {
     await this.notifications.create({
       recipientRole: UserRole.ADMIN,
       kind: NotificationKind.MISSION_REJECTED,
-      title: afterConfirm ? "Đội cứu hộ báo không tiếp tục được" : "Đội cứu hộ từ chối nhiệm vụ",
+      title: afterConfirm
+        ? `${FIELD_FORCE_ROLE_LABEL} báo không tiếp tục được`
+        : `${FIELD_FORCE_ROLE_LABEL} từ chối nhiệm vụ`,
       body: `${mission.incidentType} — ${mission.affectedPeople} người. Lý do: ${reason}`,
       missionId: id,
     });
@@ -552,8 +677,8 @@ export class MissionService {
       await this.notifications.create({
         recipientRole: UserRole.WAREHOUSE,
         kind: NotificationKind.MISSION_REJECTED,
-        title: "Tạm dừng chuẩn bị — đội cứu hộ đã rút",
-        body: `${mission.incidentType} — ${mission.affectedPeople} người. Đội cứu hộ không tiếp tục được, chờ điều phối xử lý.`,
+        title: `Tạm dừng chuẩn bị — ${FIELD_FORCE_ROLE_LABEL} đã rút`,
+        body: `${mission.incidentType} — ${mission.affectedPeople} người. ${FIELD_FORCE_ROLE_LABEL} không tiếp tục được, chờ điều phối xử lý.`,
         missionId: id,
       });
     }
@@ -584,10 +709,10 @@ export class MissionService {
   }
 
   /**
-   * ADMIN gửi lại nhiệm vụ tạm hoãn cho đội cứu hộ (DEFERRED → PENDING_RESCUE),
+   * ADMIN gửi lại nhiệm vụ tạm hoãn cho Lực lượng hiện trường (DEFERRED → PENDING_RESCUE),
    * kèm ghi chú phản hồi. GIỮ NGUYÊN phương án phân bổ hiện tại — nếu cần đổi
    * nhân lực/vật tư (đội từ chối vì thiếu) thì admin lập phương án MỚI, không
-   * dùng resend. Đội cứu hộ xác nhận / từ chối lại như bình thường.
+   * dùng resend. Lực lượng hiện trường xác nhận / từ chối lại như bình thường.
    */
   async resendByAdmin(id: string, note?: string, scopeWarehouseId?: string | null) {
     const mission = await this.requireMission(id, scopeWarehouseId);
@@ -609,10 +734,10 @@ export class MissionService {
   }
 
   /**
-   * ADMIN huỷ nhiệm vụ, kèm lý do gửi đội cứu hộ. Huỷ được ở mọi bước TRƯỚC khi
+   * ADMIN huỷ nhiệm vụ, kèm lý do gửi Lực lượng hiện trường. Huỷ được ở mọi bước TRƯỚC khi
    * kho xuất vật tư (DRAFT/PENDING_RESCUE/RESCUE_CONFIRMED/PENDING_WAREHOUSE) và
    * từ REJECTED/DEFERRED. Kết thúc luồng — không gửi lại được nữa. Nếu đang chờ
-   * kho chuẩn bị thì báo thêm WAREHOUSE dừng; đội cứu hộ luôn được báo.
+   * kho chuẩn bị thì báo thêm WAREHOUSE dừng; Lực lượng hiện trường luôn được báo.
    */
   async cancelByAdmin(id: string, note?: string, scopeWarehouseId?: string | null) {
     const mission = await this.requireMission(id, scopeWarehouseId);
@@ -720,7 +845,7 @@ export class MissionService {
       await this.notifications.create({
         recipientRole: role,
         kind: NotificationKind.MISSION_COMPLETED,
-        title: `Đội cứu hộ đã giao — ${label}`,
+        title: `${FIELD_FORCE_ROLE_LABEL} đã giao — ${label}`,
         body: `${mission.incidentType} — ${mission.affectedPeople} người. Kết quả: ${label}.${note ? ` Ghi chú: ${note}` : ""}${stockNote}`,
         missionId: id,
       });
@@ -751,9 +876,87 @@ export class MissionService {
         ...(actor ? { warehouse: { organizationId: actor.organizationId } } : {}),
       },
       orderBy: { createdAt: "desc" },
-      include: { requirements: true, warehousePreparations: true },
+      include: {
+        requirements: true,
+        warehousePreparations: true,
+        warehouseRequests: {
+          include: { warehouse: { select: { id: true, name: true } } },
+          orderBy: [{ warehouseId: "asc" }, { sku: "asc" }],
+        },
+      },
       take: 100,
     });
+  }
+
+  /**
+   * Lịch sử báo cáo text của chính trưởng thôn. Không dùng listMissions vì
+   * reporter không được nhìn thấy nhiệm vụ của người khác trong cùng xã.
+   * Cursor chỉ là id mission đã trả ở trang trước; page size bị chặn tối đa 50.
+   */
+  async listOwnReports(
+    actorUserId: string,
+    scopeWarehouseId?: string | null,
+    cursor?: string,
+    requestedLimit?: number,
+  ) {
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actorUserId },
+      select: { organizationId: true },
+    });
+    if (!actor) throw new NotFoundException("Không tìm thấy người dùng");
+    const requested = Number.isFinite(requestedLimit) ? Math.trunc(requestedLimit as number) : 20;
+    const limit = Math.min(Math.max(requested, 1), 50);
+    const rows = await this.prisma.mission.findMany({
+      where: {
+        createdByUserId: actorUserId,
+        ...(scopeWarehouseId ? { warehouseId: scopeWarehouseId } : {}),
+        warehouse: { organizationId: actor.organizationId },
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      take: limit + 1,
+      include: {
+        warehouse: { select: { id: true, name: true } },
+        requirements: { select: { id: true, sku: true, itemName: true, required: true, allocated: true, shortage: true, unit: true } },
+      },
+    });
+    const hasNext = rows.length > limit;
+    const items = hasNext ? rows.slice(0, limit) : rows;
+    return {
+      items,
+      nextCursor: hasNext ? items[items.length - 1]?.id ?? null : null,
+    };
+  }
+
+  /** Chi tiết báo cáo text của chính trưởng thôn; không trả media/audio/GPS liên tục. */
+  async getOwnReport(
+    missionId: string,
+    actorUserId: string,
+    scopeWarehouseId?: string | null,
+  ) {
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actorUserId },
+      select: { organizationId: true },
+    });
+    if (!actor) throw new NotFoundException("Không tìm thấy người dùng");
+    const report = await this.prisma.mission.findFirst({
+      where: {
+        id: missionId,
+        createdByUserId: actorUserId,
+        ...(scopeWarehouseId ? { warehouseId: scopeWarehouseId } : {}),
+        warehouse: { organizationId: actor.organizationId },
+      },
+      include: {
+        warehouse: { select: { id: true, name: true } },
+        requirements: { select: { id: true, sku: true, itemName: true, required: true, allocated: true, shortage: true, unit: true } },
+        fieldUpdates: {
+          select: { id: true, confirmedText: true, inputMode: true, createdAt: true },
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
+    if (!report) throw new NotFoundException("Không tìm thấy báo cáo");
+    return report;
   }
 
   /**
@@ -766,9 +969,18 @@ export class MissionService {
     const result = await this.prisma.$transaction(async (tx) => {
       const mission = await tx.mission.findUnique({
         where: { id },
-        include: { requirements: true, warehousePreparations: true },
+        include: {
+          requirements: true,
+          warehousePreparations: true,
+          _count: { select: { warehouseRequests: true } },
+        },
       });
       if (!mission) throw new NotFoundException("Không tìm thấy nhiệm vụ");
+      if (mission._count?.warehouseRequests > 0) {
+        throw new BadRequestException(
+          "Nhiệm vụ này chuẩn bị theo từng vật tư; vui lòng dùng danh sách yêu cầu SKU",
+        );
+      }
 
       let preparation =
         mission.warehousePreparations.find((item) => item.warehouseId === warehouseId) ??
@@ -908,7 +1120,7 @@ export class MissionService {
             recipientRole: role,
             kind: NotificationKind.WAREHOUSE_READY,
             title: "Các kho đã chuẩn bị xong",
-            body: `Vật tư cho ${result.mission.incidentType} đã sẵn sàng giao cho đội cứu hộ.`,
+            body: `Vật tư cho ${result.mission.incidentType} đã sẵn sàng giao cho ${FIELD_FORCE_ROLE_LABEL}.`,
             missionId: id,
           }),
         ),
@@ -970,10 +1182,15 @@ export class MissionService {
   ) {
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT "id" FROM "Mission" WHERE "id" = ${id} FOR UPDATE`;
-      const preparedWarehouseCount = await tx.missionWarehousePreparation.count({
-        where: { missionId: id, preparedAt: { not: null } },
-      });
-      if (preparedWarehouseCount > 0) {
+      const [preparedWarehouseCount, preparedRequestCount] = await Promise.all([
+        tx.missionWarehousePreparation.count({
+          where: { missionId: id, preparedAt: { not: null } },
+        }),
+        tx.missionWarehouseRequest.count({
+          where: { missionId: id, status: MissionWarehouseRequestStatus.PREPARED },
+        }),
+      ]);
+      if (preparedWarehouseCount > 0 || preparedRequestCount > 0) {
         throw new BadRequestException(
           "Không thể dừng nhiệm vụ vì đã có kho xuất vật tư; cần hoàn kho hoặc hoàn tất giao nhận",
         );

@@ -1,0 +1,169 @@
+{
+  "schemaVersion": "coordination-analysis.v1",
+  "status": "NEEDS_CONFIRMATION",
+  "reception": {
+    "locationFactId": "fact-location",
+    "affectedPeopleFactId": "fact-affected-people",
+    "incidentTypeFactId": "fact-incident-type",
+    "weatherFactId": "fact-weather",
+    "operationalStatus": "PRELIMINARY"
+  },
+  "urgency": {
+    "level": 4,
+    "label": "RẤT CAO",
+    "confidence": 0.68,
+    "status": "NEEDS_CONFIRMATION",
+    "basisFactIds": [
+      "fact-incident-type",
+      "fact-weather",
+      "fact-isolation-risk"
+    ],
+    "ruleVersion": "coordination-severity-v1"
+  },
+  "facts": [
+    {
+      "id": "fact-location",
+      "key": "LOCATION",
+      "provenance": "REPORTED",
+      "value": "Thôn Phước Lộc",
+      "qualifier": "EXACT",
+      "source": {
+        "sourceType": "USER_REPORT",
+        "sourceId": "golden-phuoc-loc",
+        "excerpt": "Khu vực: Thôn Phước Lộc",
+        "capturedAt": null
+      }
+    },
+    {
+      "id": "fact-affected-people",
+      "key": "AFFECTED_PEOPLE",
+      "provenance": "REPORTED",
+      "value": 100,
+      "qualifier": "APPROXIMATE",
+      "source": {
+        "sourceType": "USER_REPORT",
+        "sourceId": "golden-phuoc-loc",
+        "excerpt": "Khoảng 100 người",
+        "capturedAt": null
+      }
+    },
+    {
+      "id": "fact-incident-type",
+      "key": "INCIDENT_TYPE",
+      "provenance": "REPORTED",
+      "value": "FLOOD",
+      "qualifier": "EXACT",
+      "source": {
+        "sourceType": "USER_REPORT",
+        "sourceId": "golden-phuoc-loc",
+        "excerpt": "Thiên tai: Ngập lụt",
+        "capturedAt": null
+      }
+    },
+    {
+      "id": "fact-weather",
+      "key": "WEATHER",
+      "provenance": "REPORTED",
+      "value": "Mưa lớn tiếp diễn",
+      "qualifier": "EXACT",
+      "source": {
+        "sourceType": "USER_REPORT",
+        "sourceId": "golden-phuoc-loc",
+        "excerpt": "Điều kiện thời tiết: Mưa lớn tiếp diễn",
+        "capturedAt": null
+      }
+    },
+    {
+      "id": "fact-isolation-risk",
+      "key": "ISOLATION_RISK",
+      "provenance": "AI_INFERENCE",
+      "value": true,
+      "source": null,
+      "confidence": 0.68,
+      "basisFactIds": [
+        "fact-incident-type",
+        "fact-weather"
+      ],
+      "explanation": "Báo cáo nêu có khả năng bị cô lập; đây là nguy cơ, chưa phải xác nhận đã cô lập."
+    },
+    {
+      "id": "fact-people-stranded",
+      "key": "PEOPLE_STRANDED",
+      "provenance": "MISSING",
+      "value": null,
+      "source": null,
+      "question": "Hiện có người mắc kẹt hoặc đã bị cô lập hay chưa?",
+      "impact": "Có thể thay đổi mức khẩn cấp, tuyến tiếp cận và bộ vật tư."
+    }
+  ],
+  "missingData": [
+    {
+      "key": "VULNERABLE_GROUP",
+      "question": "Có trẻ em, người cao tuổi, người bệnh hoặc phụ nữ mang thai không?",
+      "impact": "Ảnh hưởng thành phần và ưu tiên bộ vật tư."
+    },
+    {
+      "key": "ACCESS_CONDITION",
+      "question": "Đường bộ còn lưu thông không?",
+      "impact": "Ảnh hưởng kho tham gia, phương tiện và ETA."
+    },
+    {
+      "key": "HOUSEHOLDS",
+      "question": "Khoảng bao nhiêu hộ đang cần hỗ trợ?",
+      "impact": "Chưa đủ cơ sở tính vật tư theo hộ như đèn pin."
+    }
+  ],
+  "conflicts": [],
+  "requirements": {
+    "status": "PENDING_BACKEND",
+    "items": [],
+    "reason": "Chờ backend áp định mức đã duyệt và tồn kho thực; AI không tự sinh số lượng.",
+    "ruleVersion": null
+  },
+  "coordination": {
+    "status": "PENDING_BACKEND",
+    "allocations": [],
+    "fulfillmentPercent": null,
+    "reason": "Chờ inventory/readiness/routing tools của backend.",
+    "externalContacts": []
+  },
+  "forecasts": [
+    {
+      "horizonHours": 24,
+      "status": "PENDING_DATA",
+      "risk": null,
+      "source": null,
+      "explanation": "Chưa có forecast tool snapshot nên không gán phần trăm tùy ý."
+    }
+  ],
+  "priorityQuestion": {
+    "factKey": "ACCESS_CONDITION",
+    "question": "Đường bộ vào Phước Lộc còn lưu thông không?",
+    "expectedImpact": "Có thể làm thay đổi kho, tuyến, ETA và phương tiện tiếp cận."
+  },
+  "explanation": {
+    "summary": "Tình huống cần ưu tiên cao do ngập lụt và mưa tiếp diễn, nhưng trạng thái cô lập và khả năng tiếp cận vẫn cần xác nhận.",
+    "invalidatedBy": [
+      "Số người thực tế thay đổi",
+      "Điều kiện tiếp cận được xác minh",
+      "Bản tin mưa mới",
+      "Tồn kho hoặc readiness thay đổi"
+    ]
+  },
+  "adminControls": [
+    "CONFIRM_FACTS",
+    "REQUEST_MORE_INFORMATION",
+    "RUN_WHAT_IF",
+    "EDIT_FACTS",
+    "APPROVE_DRAFT",
+    "REJECT_DRAFT"
+  ],
+  "computedAt": "2026-07-28T00:00:00.000Z",
+  "versions": {
+    "model": "golden-fixture-no-model",
+    "rules": "coordination-severity-v1",
+    "geoRegistry": "2026-07-28",
+    "routingGraph": null,
+    "weatherSnapshot": null
+  }
+}

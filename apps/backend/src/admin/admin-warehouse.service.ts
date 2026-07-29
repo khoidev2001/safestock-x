@@ -11,7 +11,15 @@ export class AdminWarehouseService {
     const organizationId = await this.actorOrganizationId(actorId);
     const warehouses = await this.prisma.warehouse.findMany({
       where: { organizationId },
-      select: { id: true, name: true, kind: true, communeId: true, lat: true, lng: true },
+      select: {
+        id: true,
+        name: true,
+        location: true,
+        kind: true,
+        communeId: true,
+        lat: true,
+        lng: true,
+      },
       orderBy: [{ kind: "asc" }, { name: "asc" }],
     });
     return warehouses;
@@ -35,7 +43,15 @@ export class AdminWarehouseService {
       const warehouse = await tx.warehouse.update({
         where: { id },
         data: { lat, lng },
-        select: { id: true, name: true, kind: true, communeId: true, lat: true, lng: true },
+        select: {
+          id: true,
+          name: true,
+          location: true,
+          kind: true,
+          communeId: true,
+          lat: true,
+          lng: true,
+        },
       });
       await tx.auditLog.create({
         data: {
@@ -45,6 +61,7 @@ export class AdminWarehouseService {
           entityId: id,
           metadata: {
             reason: "ADMIN cập nhật vị trí kho phục vụ điều phối tuyến",
+            verificationSource: "ADMIN_MAP_PIN",
             lat,
             lng,
           },

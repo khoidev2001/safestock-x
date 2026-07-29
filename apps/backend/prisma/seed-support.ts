@@ -159,7 +159,7 @@ export async function seedOperationalRecords(
         batchId: ref.batchId,
         countedQty: Math.max(0, ref.quantity - onLoan + (ref.definition.countedDelta ?? 0)),
         userId: context.hamletLeaderIds.get(ref.warehouseId) ?? context.warehouseUserId,
-        note: onLoan > 0 ? "Đã đối chiếu phần đang cấp cho đội cứu hộ" : "Kiểm kê định kỳ",
+        note: onLoan > 0 ? "Đã đối chiếu phần đang cấp cho lực lượng hiện trường" : "Kiểm kê định kỳ",
         countedAt: dateFromOffset(-(ref.definition.countedOffsetDays ?? 7))!,
       },
     });

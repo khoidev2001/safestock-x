@@ -1,258 +1,683 @@
-# Báo cáo đánh giá mức sẵn sàng dự thi
+# Báo cáo đánh giá hiện trạng và mức sẵn sàng — Ứng phó nhanh
 
-> PM review: 2026-07-26 · Đối chiếu PRD, source, test và cấu hình tại working tree hiện tại. Kế hoạch 7 ngày: [Competition Readiness Week](../plans/260726-1857-competition-readiness-week/plan.md).
-
-> Cập nhật 2026-07-27: workflow kho ngày thường đã được khép ở mức code/test/build:
-> receiving SKU/lô, nhập/xuất/bulk/chuyển/adjust/reconcile/condition, QR, mượn-trả,
-> idempotency, inventory-loan lock/CAS, scope organization/kho và error state web/mobile.
-> Các tỷ lệ PM bên dưới là snapshot 2026-07-26; trạng thái hiện hành lấy từ
-> [PRD](PRD.md). Browser, Galaxy S23 Ultra/LAN và production hardening vẫn là gate.
+Ngày đánh giá: **2026-07-29**. Phạm vi được đối chiếu với [PRD](PRD.md); các
+bước nghiệm thu trên thiết bị và private LAN được quản lý tại
+[Competition rehearsal](COMPETITION-REHEARSAL.md).
 
 ## 1. Kết luận điều hành
 
-Đối chiếu toàn bộ Markdown còn hiệu lực trước cleanup, `docs/PRD.md` với source, contract, test và cấu hình hiện tại cho thấy đây là sản phẩm có lõi kỹ thuật thật, không phải giao diện mô phỏng. Điểm mạnh nổi bật: quản lý năng lực kho theo blocker, Mission-to-Kit, FEFO, điều phối đa vai trò, mô phỏng cảm biến deterministic, AI local/RAG có trích nguồn và luồng báo cáo hiện trường.
+Ứng dụng là nền tảng điều phối ứng phó cấp xã gồm quản lý kho thường ngày,
+readiness, tiếp nhận báo cáo hiện trường, lập Mission-to-Kit, phân bổ nhiều kho,
+bản đồ/tuyến local, AI hỗ trợ có provenance, mobile Android bốn vai trò và
+Digital Twin desktop. Backend vẫn là nguồn sự thật cho quyền hạn, tồn kho, nhu
+cầu, phân bổ, tuyến, fulfillment và mọi mutation; AI không tự duyệt, tự dispatch
+hoặc ghi nghiệp vụ.
 
-Tuy nhiên, chưa nên tuyên bố “MVP hoàn tất” hoặc “sẵn sàng production”. Bản thi phải đạt **web + backend + desktop simulator + AI local + Android APK REPORTER/RESCUE** và chạy trong private LAN khi public Internet tắt. Trước demo phải đóng lỗi tenant/scope, SecureStore/API LAN, local asset và diễn tập sạch.
+Source hiện có độ hoàn thiện cao và nhiều kiểm soát đúng, nhưng **chưa đủ bằng
+chứng để gọi 100/100 source hoặc release candidate**. Audit hiện tại xác nhận ba
+nhóm blocker cao: ranh giới tenant ở báo cáo, race khi hai SKU cuối được prepare
+đồng thời, và cấu hình/runtime có thể làm lộ secret hoặc dịch vụ. Ngoài ra còn
+blocker cần chứng minh trên clean checkout, device và private LAN.
 
-| Góc chấm | Mức hiện tại | Kết luận |
-|---|---:|---|
-| Hoàn thiện theo full PRD/deliverables | **63%** | Nhiều lõi đã có; frontend vận hành, mobile APK, pilot/offline và quality gate chưa khép kín |
-| Adjusted implementation view | **63%** | APK/offline-LAN vẫn nằm trong cut-line; chưa có evidence device/LAN nên chưa nâng điểm |
-| Sẵn sàng demo/đi thi với phạm vi rút gọn | **72%** | Có câu chuyện kỹ thuật tốt; APK, LAN offline, scope và rehearsal còn blocker |
-| Sẵn sàng pilot/production | **45%** | Chưa đủ tenant isolation, hardening, CI/migration, backup/recovery và nghiệm thu mạng |
+| Lớp đánh giá | Kết luận hiện tại |
+| --- | --- |
+| Chức năng trong source | **Gần hoàn thiện, chưa đạt 100%**: các lát cắt chính tồn tại, nhưng còn finding High/Medium dưới đây. |
+| Automated test đã chạy trong phiên audit | **Một phần Pass**: 6 suite backend/73 test và 9 shared-contract test Pass. Không suy diễn thành toàn bộ CI Pass. |
+| Browser/device/private-LAN rehearsal | **Chưa nghiệm thu trong phiên này**; cần hai lượt có evidence trên artifact cụ thể. |
+| Public Internet production | **No-go** cho tới khi đóng secret/binding, firewall, backup-restore, migration, clean-checkout và hardening vận hành. |
 
-Các tỷ lệ là đánh giá có trọng số tại working tree hiện tại, không phải tỷ lệ số endpoint. **63,1%** là điểm full-deliverable trước acceptance device/LAN; **72%** là readiness demo hiện tại nhưng chưa phải go. Không dùng phần trăm để che APK/offline gate chưa có bằng chứng.
+### 1.1 Cập nhật sau khi vá blocker (2026-07-29)
 
-### Nhận xét PM độc lập
+Toàn bộ 6 blocker High và 3 Medium chi phí thấp (M1/M4/M5) đã được **vá trong
+source và có test/bằng chứng** trong chính phiên này:
 
-Tài liệu ban đầu đúng hướng, trung thực hơn phần lớn báo cáo dự án thi, nhưng chưa phải release-control document tốt: trộn snapshot audit, product backlog, cleanup manifest và release decision; test evidence có claim stale; thiếu owner/dependency/deadline/exit criteria; chưa có risk register, daily go/no-go, freeze/rollback. Sau audit, khuyến nghị dùng tài liệu này làm **readiness snapshot**, còn execution authority là plan 7 ngày liên kết ở đầu trang.
+- **H1** — `resolveReportWarehouseId` nay nhận `actorUserId` và bắt buộc kho scope,
+  kho chỉ định và kho mặc định đều cùng `organizationId` của người báo cáo; kèm
+  suite regression cross-tenant mới
+  ([mission-report-warehouse-scope.spec.ts](../apps/backend/src/mission/__tests__/mission-report-warehouse-scope.spec.ts)).
+- **H2** — `MissionWarehouseRequestService.prepare` giữ `pg_advisory_xact_lock`
+  trên `missionId` trước khi đếm remaining, buộc finalize per-SKU chạy tuần tự;
+  test khẳng định lock chạy trước count.
+- **H3** — env validation từ chối danh sách placeholder secret công khai
+  (`change_me_*`, `placeholder`, …) không phân biệt hoa/thường.
+- **H4** — `main.ts` bind theo `resolveBindAddress` đã validate (mặc định loopback,
+  chỉ ra LAN khi cố ý đặt `BIND_ADDRESS=0.0.0.0`); giá trị rác bị chặn lúc boot.
+- **H5** — desktop bỏ credential ADMIN hard-coded, chuyển sang ô nhập
+  email/mật khẩu (prefill tùy chọn qua `RENDERER_VITE_*`, rỗng khi đóng gói).
+- **H6** — CI build `@safestock/shared-types` và `@safestock/scenario-definitions`
+  ngay sau install, trước mọi consumer.
+- **M1** — `/action-plan` và `/explain` (ghi mission) chuyển từ `MISSION_VIEW`
+  sang `MISSION_ANALYZE`. **M4** — schema Python bắt buộc `confidence` cho
+  `AI_INFERENCE`, khớp `InferredCoordinationFact`. **M5** — `ai-dev.mjs` mặc định
+  bind `127.0.0.1`.
 
-Khuyến nghị điều hành: không cố hoàn thành toàn PRD trong một tuần. Tập trung APK Android, private-LAN offline, P0 scope, mission inbox/deep-link, error states, metadata sáu xã giáp ranh và diễn tập sạch. QR, iOS, offline-write/sync, federation nhiều xã và production defer.
+Bổ sung trong phiên: các Medium còn lại và toàn bộ Low đã được **vá hoặc chốt
+thiết kế**:
 
-## 2. Mô hình chấm điểm
+- **M2** — Đăng xuất nay thu hồi phiên phía máy chủ: mobile (`api.ts logout()` +
+  `App.tsx`) và desktop (`logoutServer()`) đều gọi `POST /api/auth/logout`
+  (`tokenVersion++`) trước khi xóa phiên cục bộ, best-effort khi mất mạng.
+- **M3** — `AiClientService` thêm timeout `AbortController` (mặc định 15s, chỉnh
+  qua `AI_SERVICE_TIMEOUT_MS`) và cache có chặn kích thước (`MAX_CACHE_ENTRIES`
+  200, loại khóa cũ nhất) → không treo request, không rò rỉ bộ nhớ.
+- **M6** — Reset simulator được ghi rõ phạm vi (chỉ đưa con trỏ về IDLE, KHÔNG
+  hoàn tác sensor/tồn kho đã sinh) trong code lẫn thông báo UI desktop.
+- **L1** — Cờ "Cần xử lý" cho vai trò RESCUE bị gỡ (RESCUE chỉ đọc, chỉ có
+  `MISSION_VIEW` và `MISSION_FIELD_UPDATE`), khớp state machine hiện tại; test cập nhật.
+- **L2** — Desktop dời `setAuthed(true)` xuống sau khi bootstrap xong và thu hồi
+  phiên nếu bootstrap hỏng → không kẹt trạng thái "đăng nhập một nửa".
+- **L3** — Bật `sandbox: true` cho Electron `BrowserWindow` (preload không dùng
+  Node API), thêm `contextIsolation: true` tường minh.
+- **L5** — Gỡ khối prompt `_SITUATION_ANALYSIS_SYSTEM` mojibake bị khai báo trùng
+  (bản ASCII giữ nguyên, không còn dead declaration).
+- **L6** — `.env.example` đổi Redis host port `56380 → 16379` (tránh dải excluded
+  TCP của Windows từng làm backend treo lúc start).
+- **L4** — Giữ nguyên phòng thủ prompt cho `/explain` (chốt thiết kế: guard số học
+  cứng dễ false-positive khi model reformat số hợp lệ; backend đã có template
+  fallback khi AI lỗi).
 
-| Nhóm | Trọng số PRD | Hoàn thiện | Điểm quy đổi | Cơ sở |
-|---|---:|---:|---:|---|
-| Backend nghiệp vụ và toàn vẹn dữ liệu | 25% | 76% | 19.0 | Inventory, readiness, incident, mission, report có hành vi thật; scope chưa tập trung |
-| Web workflow | 20% | 58% | 11.6 | Mission inbox/deep-link đã có code và build; vẫn thiếu write workflow và browser E2E độc lập |
-| AI/RAG/insights | 15% | 78% | 11.7 | Gemini/Ollama, RAG 21 chunks, voice, forecast thống kê, 62 test Python; thiếu live HTTP/model acceptance/hardening đầy đủ |
-| Simulator/realtime/desktop | 10% | 80% | 8.0 | Scenario deterministic, isolation, incident debounce, WS auth; chưa nghiệm thu offline/live hai stack |
-| Mobile hiện trường | 10% | 38% | 3.8 | Có Expo login/report/mission/notification; thiếu APK, SecureStore, LAN/offline cache và device test |
-| Bảo mật và tenant isolation | 10% | 48% | 4.8 | JWT/RBAC và một số scope tốt; vẫn còn IDOR/scope role-wide |
-| Test, CI, migration, vận hành | 10% | 42% | 4.2 | Backend test mạnh; thiếu CI, browser/mobile test, migration, pilot/restore drill |
-| **Tổng** | **100%** |  | **63.1%** | Điểm thô sau refresh AI/RAG; sai số đánh giá ±3 điểm |
+Tài liệu đã được đồng bộ: PRD 11.1 (dòng mobile không còn "sau khi scaffold"),
+COMPETITION-REHEARSAL (RESCUE ở chế độ chỉ đọc; thứ tự build bổ sung
+`shared-types`/`scenario-definitions` trước consumer và dùng `jest --runInBand`).
 
-APK Android và private-LAN offline đã được chốt bắt buộc, nên bỏ góc nhìn 67% từng loại chúng khỏi cut-line. Dùng **63% full PRD/deliverable** làm baseline chính cho tới khi có fresh APK/device/LAN evidence.
+Kết quả kiểm chứng sau vá (cùng phiên): **backend 94 suite / 557 test Pass**,
+**AI pytest 74 Pass**, **shared coordination contract 9 Pass**, **frontend
+mission-inbox 5 + map-marker-state 2 Pass**, **mobile state 13 Pass**, backend +
+frontend + desktop build sạch, backend + desktop lint sạch. **M7** đóng một phần:
+root `package.json` nay pin `"packageManager": "pnpm@10.32.1"` khớp CI; việc xóa
+`package-lock.json` stale là thao tác phá hủy nên hoãn chờ duyệt. **M8** (tách
+`mission.service.ts`) hoãn có chủ đích vì là refactor lớn rủi ro regression trước
+bản thi. Mọi rehearsal device/LAN/clean-checkout/backup-restore vẫn **chưa** nghiệm
+thu — xem §6–§7.
 
-## 3. Ma trận PRD đối chiếu code
+## 2. Ứng dụng thực sự làm gì
 
-Quy ước: **Xong** = hành vi chính có code và bằng chứng test; **Một phần** = có lát cắt thật nhưng chưa đạt acceptance end-to-end; **Chưa làm/chưa chứng minh** = thiếu implementation hoặc chưa có nghiệm thu đủ để tuyên bố.
+### 2.1 Backend và nghiệp vụ kho
 
-| Hạng mục PRD | Trạng thái | Hoàn thiện | Bằng chứng chính | Phần còn thiếu / ảnh hưởng thi |
-|---|---|---:|---|---|
-| Monorepo, NestJS, Prisma, PostgreSQL, Redis | Xong | 90% | `package.json`, `apps/backend`, `infrastructure` | Chưa có Prisma migration history và aggregate verify command |
-| JWT login/refresh/profile/RBAC | Một phần | 65% | `apps/backend/src/auth`, `src/rbac` | Thiếu rate limit, refresh rotation/revocation, session/logout, email verification |
-| Scope organization/warehouse | Một phần | 48% | Auth/mission/report paths đã có một phần scope | Inventory/readiness/loan/admin/notification và một số mission transition còn IDOR |
-| Inventory nhập/xuất/bulk/audit | Xong code-level | 95% | inventory backend/web/mobile, focused tests | Browser/device acceptance chưa chạy |
-| Transfer partial atomic | Xong | 92% | `inventory-transfer.ts`, `inventory.service.ts`, transfer unit/E2E | Cần giữ regression/concurrency suite; claim cũ trong PRD đã lỗi thời |
-| Kiểm kê/reconcile | Xong code-level | 92% | inventory web/mobile, reconcile/CAS tests | Browser/device acceptance chưa chạy |
-| Mượn/trả vật tư | Xong code-level | 92% | `loan.service.ts`, loan integrity/lock tests, `loan-view.tsx`, mobile inventory | Browser/device acceptance chưa chạy |
-| Readiness 6 chiều/blocker/action | Một phần mạnh | 75% | `apps/backend/src/readiness`, readiness tests | Chưa chứng minh recalc mọi mutation, unknown/stale contract và scope mọi ID |
-| Mission-to-Kit, FEFO, greedy, weakest SKU | Xong lõi | 88% | `apps/backend/src/mission`, rule/tests | Cần browser acceptance và audit scope transition còn lại |
-| Mission prepare/fulfill atomic/idempotent | Xong lõi | 93% | per-warehouse preparation model, unit/concurrency + workflow E2E | Một số notification sau transition chưa atomic; browser acceptance còn thiếu |
-| Mission list/get/report flow | Một phần mạnh | 86% | mission/report scope tests; web inbox/deep-link unit/build và API smoke ba role | Inbox/URL đã triển khai; admin scope-null, notification partition và continuity qua browser vẫn cần nghiệm thu |
-| Report hiện trường text/voice, approve | Xong lõi | 88% | backend report tests, frontend/mobile report UI | Upload đã cap size/type; AI/report live acceptance chưa đủ |
-| Sensor simulator deterministic | Xong lõi | 85% | `src/simulation`, scenario definitions, desktop app | Web controls chưa đủ; cần diễn tập reset/lặp lại trên máy thi |
-| Sensor → incident debounce | Xong | 85% | incident/simulation tests | Permission incident còn quá rộng; UI realtime/scope chưa nghiệm thu |
-| Socket.IO auth + server-derived rooms | Xong một phần | 78% | websocket auth tests | Notification vẫn role-wide, chưa partition chắc theo org/kho |
-| AI parse/explain/action plan | Xong lõi | 82% | `apps/ai-service`, backend AI integration | Cần live provider/model smoke; production auth boundary/output policy |
-| RAG local có citation | Xong lõi | 84% | `knowledge.py`, index 21 chunks, corpus 8 chủ đề, 62 Python tests | Cần chạy live HTTP/model smoke và kiểm fallback trên máy thi |
-| Forecast/statistical insights | Xong lõi | 78% | `apps/backend/src/insights/forecast.ts`, tests | Chưa có demand/weather join và acceptance dữ liệu thật |
-| Web dashboard/map/incident/assistant | Một phần mạnh | 68% | `apps/frontend/src/components` | Nhiều màn biến API error thành empty; route guard chưa permission-aware |
-| Mobile RESCUE/REPORTER/WAREHOUSE | Xong code-level | 90% | `apps/mobile`, APK 0.3.0, mobile state tests | Còn fresh-device/Galaxy S23 Ultra/private-LAN acceptance |
-| Demo Docker/runtime isolation | Một phần mạnh | 78% | `infrastructure/demo`, `.env.demo.example` | Chưa smoke đồng thời hai stack và fresh-boot recovery |
-| Offline LAN + local AI + offline GIS | Chưa chứng minh | 35% | Có script/docs và Ollama/local paths | Chưa có biên bản Internet-off LAN→recovery; local font/tile package chưa nghiệm thu |
-| CI, lint/build/test clean checkout | Một phần | 40% | Lệnh lint/test/build cục bộ | Không có `.github` workflow, frontend/browser/mobile test còn thiếu |
-| Backup/restore/monitoring | Một phần | 45% | Infrastructure scripts | Chưa restore drill, checksum/retry/RPO-RTO và nghiệm thu reboot |
+- NestJS + Prisma/PostgreSQL quản lý tổ chức, kho, SKU/lô, nhập/xuất/điều chuyển,
+  FEFO, kiểm kê, mượn-trả, damaged/lost, readiness và audit ledger.
+- JWT access/refresh có rotation bằng `tokenVersion`, CAS khi refresh, revoke khi
+  gọi logout, login rate limit, RBAC và warehouse/organization scope.
+- Inventory/loan có transaction, row/advisory lock, CAS và mutation idempotency;
+  hàng hỏng khi trả được tách thành lô `NEEDS_CHECK`, không nhập lại như hàng tốt.
 
-## 4. Những phần đã hoàn thành có giá trị trình diễn
+### 2.2 Mission, realtime và điều phối
 
-1. **Readiness khác biệt với app kho thông thường:** đánh giá khả năng dùng ngay thay vì chỉ đếm tồn; có blocker, lý do và hành động.
-2. **Mission-to-Kit có kiểm chứng số:** biên dịch tình huống thành nhu cầu, phân bổ FEFO/greedy, thể hiện thiếu hụt và Action Plan.
-3. **Các biên integrity quan trọng đã được nâng cấp:** transfer partial, mission prepare, report approval có transaction/idempotency/concurrency tests.
-4. **Digital twin thật:** desktop phát scenario deterministic; backend persist sensor event, debounce incident, cập nhật readiness và realtime.
-5. **AI không tự quyết định số tồn:** AI dùng để parse/giải thích/truy xuất tri thức; số nghiệp vụ do rule/backend kiểm soát.
-6. **RAG local có corpus/citation:** phù hợp câu chuyện hỗ trợ ứng phó khi Internet yếu.
-7. **Mobile đã có lát cắt hiện trường:** REPORTER gửi text/voice report; RESCUE nhận notification và thao tác mission. APK Android + device/LAN acceptance là deliverable bắt buộc còn thiếu.
+- REPORTER gửi báo cáo; ADMIN phân tích/lập phương án/duyệt; WAREHOUSE tiếp nhận và
+  prepare theo từng SKU; RESCUE đọc mission và gửi field evidence đã tự xác nhận.
+- Mỗi SKU có request riêng, allocation theo lô, claim token và export ledger trong
+  cùng transaction. Socket.IO phân phòng theo tổ chức/role/kho và kiểm tra phiên.
+- What-if dùng baseline immutable và chỉ ghi analysis snapshot; không mutation
+  mission, inventory hoặc route vận hành.
 
-## 5. Blocker và lỗi đã xác định bằng `$ak:debug`
+### 2.3 Web, mobile và desktop
 
-### P0 — phải xử lý trước khi demo có nhiều tài khoản/tổ chức
+- Web Next.js có access token trong RAM, refresh cookie HttpOnly, React Query,
+  navigation theo permission, inbox/deep-link, map Leaflet và local tile/OSRM.
+- Mobile Expo/Android dùng SecureStore native, cache đọc bằng AsyncStorage,
+  fail-closed khi mất LAN, QR/voice/field update và thao tác kho theo role. Không
+  có offline mutation queue.
+- Electron desktop mô phỏng cảm biến/kịch bản deterministic và hiển thị realtime.
+  Đây là Digital Twin demo, không phải bằng chứng kết nối IoT vật lý.
 
-| Vấn đề | Root cause đã xác định | Tác động | Hướng sửa và bằng chứng thoát |
-|---|---|---|---|
-| Mission transition residual scope | Confirm/reject/defer/resend/cancel/complete/approve đã nhận `warehouseId` và guard kho; actor ADMIN scope-null vẫn chưa truyền organization vào mọi transition | Admin ngoài tổ chức có thể đổi mission ngoài tenant nếu biết ID; warehouse actor đã được chặn | Bind organization vào service scope chung, thêm cross-org E2E cho mọi transition; focused warehouse-scope tests đã pass |
-| Loan residual tenant scope | Loan list/borrow/return đã guard warehouse assignment, nhưng scope-null organization boundary và browser contract chưa có đầy đủ | Admin/actor toàn xã có thể vượt tenant nếu org guard thiếu | Thêm org scope + controller integration; focused warehouse-scope tests đã pass |
-| Frontend return loan contract | UI state vẫn dùng tên hiển thị `returnedOk/returnedDamaged`, mapper gửi backend `{ok, damaged, lost}` | Đã loại lỗi ValidationPipe đã xác định; chưa có browser contract test | Giữ mapper/type test và thêm browser E2E |
-| Inventory/readiness raw-ID read | Controller nhận raw warehouse/zone/shelf ID nhưng không bind actor scope | Rò dữ liệu hoặc recalc kho khác | Dùng scope guard dùng chung + IDOR integration tests |
-| Notification role-wide | List/mark-read/WS room theo role thay vì org/kho/actor | Rò mission/incident giữa tenant; đọc hộ notification | Partition query/room/id guard; integration + WS room tests |
-| Admin service toàn cục | User/warehouse admin không luôn lọc organization của actor | Admin xã có thể thấy/sửa tenant khác | Actor-org scope + cross-org tests |
-| Upload report thiếu giới hạn | `FileInterceptor` không cap size/type/missing file | 500 hoặc memory/abuse qua upload lớn | Multer limit/type guard + negative tests |
+### 2.4 AI service và shared contracts
 
-### P1 — phải đóng để demo trơn tru
+- FastAPI cung cấp parse, situation analysis, field intent, explain, action plan,
+  assistant RAG, semantic rank, briefing selection và PhoWhisper transcription.
+- RAG theo evidence ID, có guard prompt injection, fallback deterministic và kiểm
+  soát số ở các đường assistant/action-plan. Backend ghép AI extraction với dữ
+  liệu vận hành đã kiểm chứng rồi lưu snapshot có provenance/version.
+- TypeScript và Python vẫn duy trì hai bản contract, nên cần contract gate chéo và
+  hiện còn một bất nhất đã xác nhận.
 
-- Nghiệm thu Mission inbox + stable URL/deep-link qua F5, tab mới và relogin ba vai trò.
-- Inventory write UI và create-borrow/partial-return UI.
-- Permission-aware navigation/route guard; hiển thị API error rõ thay vì empty/healthy.
-- Notification click mở đúng mission/incident.
-- Một kịch bản browser E2E + APK bốn context: REPORTER → ADMIN → RESCUE → WAREHOUSE.
-- Loại dependency Internet khỏi font/map/tile của kịch bản offline.
-- Build APK Android qua env/profile, SecureStore token, read-only cache và trạng thái LAN/offline rõ ràng.
-- Seed sáu xã giáp ranh dưới dạng `NeighborWarehouse` external/manual metadata; không tạo peer tenant/kho hay đưa vào allocation.
+## 3. Điểm mạnh đã kiểm chứng trong source
 
-### P2 — tăng điểm kỹ thuật sau khi hết blocker
+1. **Auth web đúng hướng**: refresh token nằm trong cookie HttpOnly; access token
+   chỉ ở memory; refresh rotation dùng CAS; logout backend tăng `tokenVersion`.
+2. **RBAC hiện hành khớp vai trò**: REPORTER chỉ submit/xem báo cáo của mình;
+   RESCUE xem mission và gửi field update; WAREHOUSE fulfillment; ADMIN phân tích,
+   mô phỏng và duyệt.
+3. **Inventory/loan có bảo vệ đồng thời**: scope tổ chức/kho, lock, idempotency,
+   CAS và ledger cùng transaction; các kết luận cũ rằng loan thiếu các bảo vệ này
+   không còn đúng với working tree hiện tại.
+4. **Readiness có authorization theo actor và kho**, không chỉ dựa vào raw ID.
+5. **Per-SKU prepare chống xuất trùng cùng request** bằng claim token và transaction;
+   retry request đã `PREPARED` không export lần hai.
+6. **AI boundary rõ**: AI chỉ trích xuất/xếp hạng/diễn giải; requirement,
+   allocation, readiness, route và mutation do backend quyết định.
+7. **Field assistant ưu tiên evidence**: nội dung đã được người dùng xem/sửa/xác
+   nhận được commit trước AI enrichment; lỗi AI không làm mất evidence; không lưu
+   raw audio, ảnh/video hoặc GPS liên tục.
+8. **What-if cô lập**: baseline và simulation snapshot tách biệt, assumption có
+   whitelist, reference không resolve được giữ `UNRESOLVED` thay vì đoán.
+9. **Bản đồ offline trung thực**: mission dùng tile local; chỉ vẽ route khi có
+   route geometry, không dùng đường thẳng giả như đường bộ.
+10. **Liên xã được giữ đúng ranh giới**: chỉ là contact/reference có trạng thái
+    availability `UNKNOWN`, không được tính vào tồn kho hoặc fulfillment.
 
-- CI chạy lint, typecheck, test, build, Prisma validate trên clean checkout.
-- Prisma migration baseline + migrate/rollback rehearsal.
-- CORS allowlist, Helmet, request-size theo endpoint, login rate-limit.
-- Backup restore drill; preflight/health dashboard; demo reset một nút.
+## 4. Findings đã xác nhận và xếp hạng
 
-### Bất cập bổ sung sau review source
+### 4.1 High
 
-| Vấn đề | Mức | Evidence | Quyết định tuần |
-|---|---|---|---|
-| Loan return-lost có thể race với inventory export | P0 integrity | Return khóa loan nhưng decrement batch chưa có bằng chứng CAS/lock dùng chung với export | Viết DB concurrency test; sửa theo cause nếu quantity có thể âm |
-| Notification sau nhiều mission transition không atomic | P1 demo reliability | State có thể commit nhưng notification fail sau đó | Ưu tiên confirm/prepare/complete; full outbox defer nếu quá 1 tuần |
-| Mission inbox/deep-link chưa có browser gate | P1 demo blocker | Inbox + URL selection đã triển khai, unit/build/API smoke pass | Chạy three-context browser acceptance và khóa regression |
-| Navigation chỉ ẩn trang users | P1 UX/security clarity | RESCUE/WAREHOUSE/REPORTER vẫn thấy nhiều route không có quyền | Permission-aware nav/guard; backend vẫn là authority |
-| Mobile config hard-code localhost, token RAM | P0 APK | Thiết bị thật không gọi được localhost; không SecureStore | Sửa bằng release env/profile, SecureStore, LAN status/cache trước device gate |
-| Desktop/sim legacy có demo credential và CDN | P1 claim risk | Không phù hợp production/offline claim | Chỉ chạy trong demo stack cô lập; không public Internet |
+#### H1. REPORTER có thể chọn kho thuộc tổ chức khác khi JWT không gắn kho
 
-### Maintainability risk
+Route báo cáo truyền `dto.warehouseId` vào resolver chỉ với `warehouseId` trong
+JWT. Nếu scope đó rỗng, resolver chấp nhận raw ID; `createReportDraft` chỉ kiểm tra
+kho tồn tại, không so `organizationId` của reporter với kho. Một reporter có thể
+tạo draft/notification trong tenant khác.
 
-Một số module vượt xa ngưỡng dễ review (ví dụ `mission-view.tsx` ~1.164 dòng, `mission.service.ts` ~1.124, `knowledge.py` ~678, `map-canvas.tsx` ~504, mobile `MissionDetail.tsx` ~477, desktop `App.tsx` ~460). Không refactor lớn trong tuần thi vì rủi ro regression cao. Sau freeze nên tách theo boundary: workflow state/API, role actions, provenance/timeline, map layers, AI retrieval/provider; mỗi lần tách phải giữ contract và chạy focused gate.
+**Ảnh hưởng:** cross-organization write/IDOR, vi phạm tenant boundary.
 
-## 6. Tính năng nên bổ sung để tăng điểm cuộc thi
+**Cần đóng:** resolver phải nhận actor ID và gọi organization-scope assertion;
+thêm regression test reporter-org-A → warehouse-org-B bị `403`, kể cả retry cùng
+`requestId`.
 
-Ưu tiên theo “điểm trình diễn / công sức”, không mở rộng trước khi đóng P0.
+**Đã đóng (2026-07-29):** `resolveReportWarehouseId` nay nhận `actorUserId` và bắt
+buộc kho scope — cả kho chỉ định lẫn kho mặc định đều phải cùng `organizationId`
+với người báo cáo, ngược lại trả `403`. Có suite regression cross-tenant mới
+([mission-report-warehouse-scope.spec.ts](../apps/backend/src/mission/__tests__/mission-report-warehouse-scope.spec.ts))
+xác nhận reporter-org-A → warehouse-org-B bị chặn kể cả khi retry cùng `requestId`.
 
-| Ưu tiên | Tính năng | Giá trị với giám khảo | Công sức |
-|---|---|---|---|
-| 1 | **Command timeline** từ báo cáo → AI plan → điều phối → chuẩn bị → hoàn tất | Biến nhiều module thành một câu chuyện 5–7 phút dễ hiểu | Trung bình |
-| 2 | **Trace/provenance panel** cho số liệu và citation | Chứng minh AI không bịa, mỗi quyết định truy được nguồn/rule/audit | Trung bình |
-| 3 | **One-click demo reset + preflight** | Giảm rủi ro demo, cho biết DB/Redis/AI/Ollama/map sẵn sàng | Thấp–trung bình |
-| 4 | **After-action report/PDF** | Có deliverable giám khảo cầm được; thể hiện trước/sau và thời gian phản ứng | Trung bình |
-| 5 | **Offline status/fallback UI** | Làm rõ local-first bằng bằng chứng trực quan | Trung bình |
-| 6 | **QR bàn giao** | Kết nối kho với hiện trường, tạo khoảnh khắc demo tốt | Defer sau APK/LAN P0 |
+**Bằng chứng source:**
+[`mission.controller.ts:74-91`](../apps/backend/src/mission/mission.controller.ts#L74-L91),
+[`mission.service.ts:233`](../apps/backend/src/mission/mission.service.ts#L233),
+[`mission.service.ts:318`](../apps/backend/src/mission/mission.service.ts#L318).
 
-## 7. Kịch bản thi đề xuất
+#### H2. Hai SKU cuối prepare đồng thời có thể để mission kẹt `PENDING_WAREHOUSE`
 
-Chốt demo 5–7 phút với tenant Đồng Xuân, một incident và bốn role UI:
+Mỗi transaction finalize request của mình rồi đếm request chưa `PREPARED`. Không
+có lock trên Mission trước phép đếm. Với PostgreSQL `READ COMMITTED`, hai
+transaction cuối có thể không thấy thay đổi chưa commit của nhau, cùng đếm còn
+một request, cùng commit export nhưng không transaction nào chuyển mission sang
+`READY`.
 
-1. Desktop simulator phát tình huống; dashboard hiện incident/readiness thay đổi.
-2. REPORTER gửi mô tả hiện trường; AI parse nhưng không tự sửa số tồn.
-3. ADMIN tạo Mission-to-Kit; giải thích nhu cầu, FEFO và thiếu hụt.
-4. RESCUE nhận mission, xác nhận; WAREHOUSE chuẩn bị/fulfill; RESCUE hoàn tất giao.
-5. ADMIN xem timeline/audit, readiness trước-sau và báo cáo kết quả.
-6. Tắt public Internet trong rehearsal; phone vẫn nối private LAN, chứng minh local AI/map/font và recovery.
+**Ảnh hưởng:** tồn kho đã xuất và mọi SKU đã prepared nhưng workflow không tiến,
+notification READY không phát.
 
-Không đưa QR, offline-write, iOS hoặc production security vào lời hứa; APK Android và private-LAN offline là gate phải có acceptance evidence.
+**Cần đóng:** serialize finalization bằng `SELECT ... FOR UPDATE` trên Mission
+(giống đường prepare legacy), hoặc một cơ chế finalize có invariant tương đương;
+thêm PostgreSQL concurrency test thật cho hai request cuối.
 
-## 8. Ma trận kiểm chứng
+**Đã đóng (2026-07-29):** `MissionWarehouseRequestService.prepare` nay giữ
+`pg_advisory_xact_lock` trên `missionId` trước khi đếm request remaining, buộc phần
+finalize per-SKU chạy tuần tự nên hai transaction cuối không thể cùng bỏ sót
+chuyển `READY`; test khẳng định lock được lấy trước phép đếm.
 
-| Gate | Trạng thái | Kết quả gần nhất |
-|---|---|---|
-| Focused backend hardening/unit | **Passed** | Scope/atomic regression suites nằm trong full unit run |
-| Full backend unit | **Passed** | 51 suites, 366/366 tests |
-| Full backend E2E | **Passed with explicit env override** | 6 suites, 50/50 tests với test PostgreSQL ở `localhost:15432`; runbook/default `55433` vẫn phải chuẩn hóa |
-| Backend TypeScript | **Passed** | Exit 0 |
-| Frontend TypeScript | **Passed** | Exit 0 |
-| Mobile TypeScript | **Passed** | Exit 0 |
-| Desktop typecheck | **Passed** | Exit 0 |
-| Monorepo lint | **Passed** | Workspace lint + root ESLint exit 0 |
-| Prisma validate | **Passed** | Current schema hợp lệ; chưa có migration history |
-| Demo infrastructure guards | **Passed** | 10/10 node tests; compose verify pass |
-| Windows launcher syntax | **Passed** | `node --check` cho `ai-dev.mjs`, `dev-all.mjs` |
-| Diff whitespace | **Passed** | `git diff --check` exit 0 |
-| AI Python tests + index check | **Passed** | 62/62 tests; venv tồn tại; index 21 chunks và model embedding đã có |
-| AI live HTTP/model smoke | **Not run** | Chưa khởi động uvicorn và chạy acceptance HTTP/model trong audit này |
-| Browser E2E ba vai trò | **Not run / chưa có suite** | Chưa có bằng chứng acceptance |
-| Mobile APK/device test | **Not run** | Chưa có APK artifact/device evidence; đây là P0 release gate |
-| Internet-off private-LAN/recovery pilot | **Not run** | Chưa có biên bản live; đây là P0 release gate |
-| Dependency/security scan | **Not run** | Không suy diễn “an toàn production” |
+**Bằng chứng source:**
+[`mission-warehouse-request.service.ts:262-333`](../apps/backend/src/mission/mission-warehouse-request.service.ts#L262-L333).
 
-Current Passed phản ánh working tree tại lượt review này. Sau thay đổi code phải chạy focused gate trước, rồi full matrix vào ngày 3, 6 và 7. Full E2E hiện chỉ pass khi override đúng test DB; đây vẫn là rủi ro tái lập, chưa được coi là đã giải quyết.
+#### H3. Operational secret mẫu dễ đoán nhưng vẫn qua validation
 
-## 9. Kế hoạch 7 ngày được PM đề xuất
+`.env.example` dùng `change_me_access` và `change_me_refresh`; validator hiện chỉ
+kiểm tra dài tối thiểu 16 ký tự và hai secret khác nhau. Người vận hành copy file
+mẫu có thể khởi động bằng signing key công khai.
 
-Execution detail nằm tại [plan 7 ngày](../plans/260726-1857-competition-readiness-week/plan.md). Cut-line: web + backend + desktop simulator + AI/RAG local + Android APK; offline là private-LAN khi public Internet tắt.
+**Ảnh hưởng:** có thể forge JWT nếu cấu hình mẫu được dùng nguyên trạng.
 
-| Ngày | Ưu tiên | Kết quả bắt buộc | Go/no-go cuối ngày |
-|---|---|---|---|
-| 1 | Evidence/scope | APK, private-LAN, UI-only, một tenant Đồng Xuân, sáu xã metadata | Scope ký chốt |
-| 2 | Tenant isolation | Actor org scope cho inventory/readiness/insights/mission/loan/report/admin | Foreign org 403/404, zero-write |
-| 3 | APK + quality | Hello APK, API LAN, SecureStore, full automated gate | APK cài/gọi LAN khi Internet tắt |
-| 4 | Core UI workflow | Mission inbox, stable URL, role nav, errors, REPORTER/RESCUE APK | Luồng bốn role không API script |
-| 5 | Offline + geo resilience | Local AI/map/font, preflight/reset, sáu xã external metadata | Internet-off flow + map pass |
-| 6 | Rehearsal | UI scenario hai lần trên LAN, live AI smoke | Kịch bản 5–7 phút pass hai lần |
-| 7 | Freeze/submission | Clean-checkout gate, video/slides, SHA/checksum, limitations | Chỉ freeze nếu không còn P0 |
+**Cần đóng:** placeholder phải không thể khởi động operational/production; dùng
+marker rõ ràng và validator denylist/entropy policy, đồng thời tài liệu bắt buộc
+generate secret.
 
-### Risk register
+**Đã đóng (2026-07-29):** env validation nay từ chối danh sách placeholder secret
+công khai (`change_me_*`, `placeholder`, …) không phân biệt hoa/thường, nên cấu
+hình mẫu không thể khởi động; tài liệu hướng dẫn generate secret thật.
 
-| Rủi ro | Xác suất | Tác động | Giảm thiểu | Trigger no-go |
-|---|---:|---:|---|---|
-| Cross-tenant disclosure/mutation | Cao | Rất cao | ActorScope + negative integration matrix | Bất kỳ foreign-ID test fail |
-| Test DB lệch port/máy | Cao | Cao | Dedicated disposable DB + fail-fast preflight | Full E2E không khởi động |
-| Mission không mở lại giữa role | Cao | Cao | Inbox + URL + notification deep-link | RESCUE/WAREHOUSE cần API script |
-| AI/Ollama cold start hoặc unavailable | Trung bình | Trung bình | Warm-up, cached index, fallback video | Core UI block vì AI |
-| Internet mất làm map/font vỡ | Cao | Trung bình | Local layer, remove/narrow CDN dependency | Promised offline flow không hoàn thành |
-| Mở thêm QR/iOS/offline-write/full CRUD/federation | Cao | Cao | Change-control; task mới phải thay task cũ | P0 bị lùi sau ngày 3 |
+**Bằng chứng source:** [`.env.example:15-16`](../.env.example#L15-L16),
+[`env.validation.ts:9-36`](../apps/backend/src/config/env.validation.ts#L9-L36).
 
-### Scope defer sau cuộc thi
+#### H4. Binding của backend không tuân theo guard `BIND_ADDRESS`
 
-- QR handover, iOS, offline-write queue/sync đầy đủ.
-- Full inventory import/export/transfer/adjust/bulk UI.
-- Full offline GIS, production public Internet, session rotation/revocation hoàn chỉnh.
-- Backup/restore RPO-RTO pilot, multi-machine reboot/recovery, advanced weather-demand AI.
+Demo validator yêu cầu `BIND_ADDRESS=127.0.0.1`, nhưng bootstrap gọi
+`app.listen(port)` mà không truyền host. Guard vì vậy không chứng minh backend chỉ
+listen loopback. Ngược lại, `.env.example` và Docker Compose mặc định
+`BIND_ADDRESS=0.0.0.0`, có thể publish PostgreSQL/Redis ra mọi interface.
 
-## 10. Manifest dọn repository
+**Ảnh hưởng:** sai giả định isolation của demo và nguy cơ lộ data services trên
+LAN/public interface.
 
-Mục tiêu: giữ source, test thực thi, runbook, PRD, corpus RAG và bằng chứng cần cho thi; bỏ lịch sử agent/plan và artifact cục bộ.
+**Cần đóng:** backend listen theo host đã validate; mặc định data services về
+loopback; chỉ mở API trên private interface được chỉ định; thêm startup/port-scan
+smoke test.
 
-### Giữ lại
+**Đã đóng (2026-07-29):** `main.ts` nay bind theo `resolveBindAddress` đã validate
+— mặc định loopback, chỉ mở ra LAN khi cố ý đặt `BIND_ADDRESS=0.0.0.0`, và giá trị
+rác bị chặn ngay lúc boot. *Còn lại (ngoài phạm vi code):* port-scan/firewall smoke
+trên môi trường thật vẫn cần chạy tay theo checklist.
 
-- `README.md`, `docs/PRD.md`, hướng dẫn cài/chạy/test, seed, mô tả ý tưởng.
-- `docs/knowledge/`: corpus runtime của RAG, không phải tài liệu rác.
-- `docs/qa/`: bằng chứng kỹ thuật dạng văn bản có giá trị khi phản biện; ảnh kiểm thử RAG đã bỏ khỏi gói source theo yêu cầu.
-- Toàn bộ unit/integration/E2E test trong source.
-- Scripts đang được manifest gọi hoặc phục vụ GIS/AI/demo/deploy.
-- `.env.example`, `.env.demo.example`; không commit hoặc công bố `.env` thật.
+**Bằng chứng source:** [`main.ts:33-36`](../apps/backend/src/main.ts#L33-L36),
+[`env.validation.ts:81-88`](../apps/backend/src/config/env.validation.ts#L81-L88),
+[`.env.example:2-14`](../.env.example#L2-L14),
+[`docker-compose.yml:10-25`](../infrastructure/docker-compose.yml#L10-L25).
 
-### Xóa
+#### H5. Desktop gửi credential ADMIN hard-coded tới host do người dùng nhập
 
-- Plan lịch sử đã hoàn thành hoặc bị thay thế. **Giữ** plan 7 ngày đang active cho tới khi thi xong.
-- `docs/archive/`: lịch sử cũ đã có trong Git.
-- `docs/plan-*.md`: plan triển khai trạng thái, không phải authority sản phẩm.
-- Báo cáo cũ mâu thuẫn code: `bao-cao-review-toan-du-an.md`, `bao-cao-xac-thuc-di-thi.md`, `bao-cao-e2e-rag-qua-giao-dien.md`.
-- Checklist phụ `checklist-cong-viec-con-lai.md`; PRD + báo cáo này là authority tiến độ.
-- `.claude/`, `.pytest_cache/`, `*.log`, build/cache cục bộ.
+Renderer chứa `admin` / `admin123@`, cho nhập host tùy ý và tự gửi credential qua
+URL được chuẩn hóa thành HTTP nếu thiếu scheme. Endpoint nhầm hoặc độc hại có thể
+thu credential seed; HTTP LAN cũng không bảo vệ credential khỏi nghe lén.
 
-## 11. Quyết định phát hành
+**Ảnh hưởng:** lộ tài khoản quản trị demo và khuyến khích tái sử dụng credential
+công khai.
 
-- **Có thể đem đi thi:** Có, nếu scope demo được chốt như mục 7 và P0 tenant/scope được đóng bằng tests.
-- **Có thể public Internet production:** Chưa.
-- **Có thể gọi full MVP hoàn tất:** Chưa.
-- **Thông điệp nên dùng:** “Prototype vận hành tích hợp đã chứng minh lõi readiness, Mission-to-Kit, digital twin và AI local; đang hoàn thiện hardening và pilot acceptance.”
+**Cần đóng:** không nhúng password; dùng credential nhập lúc chạy hoặc scoped
+simulator token/account; allowlist endpoint/demo stack; ưu tiên HTTPS/tunnel an
+toàn và rotate mọi seed credential trước release.
 
-## 12. Quyết định đã chốt sau đánh giá
+**Đã đóng (2026-07-29):** desktop bỏ credential ADMIN hard-coded, chuyển sang ô nhập
+email/mật khẩu lúc chạy (prefill tùy chọn qua `RENDERER_VITE_*`, rỗng khi đóng
+gói) nên không còn `admin`/`admin123@` nhúng trong renderer. *Còn lại (ngoài phạm
+vi code):* rotate seed credential và ưu tiên HTTPS/tunnel là bước vận hành trước
+release.
 
-1. Thiết bị thi chính là Samsung Galaxy S23 Ultra với bản cập nhật ổn định mới nhất tại buổi rehearsal; APK release dùng local keystore riêng của dự án và biên bản phải ghi lại Android/One UI/build thực tế.
-2. Các số hiện có của Đồng Xuân và xã lân cận đã được chủ dự án xác minh trực tiếp là số của Chủ tịch UBND xã và được phép công khai cho người dân gọi. Trang `/contacts` hiển thị danh sách không cần đăng nhập; giá trị thật vẫn lấy từ cấu hình cục bộ không commit. OSM vẫn chỉ là provenance bản đồ.
+**Bằng chứng source:**
+[`App.tsx:46-50`](../apps/desktop/src/renderer/App.tsx#L46-L50),
+[`App.tsx:93-104`](../apps/desktop/src/renderer/App.tsx#L93-L104),
+[`App.tsx:277-293`](../apps/desktop/src/renderer/App.tsx#L277-L293).
 
-## 13. Giải thích “mọi bước qua UI”
+#### H6. Clean-checkout CI chưa chứng minh build order của workspace package
 
-Qua UI nghĩa là người chấm nhìn thấy và bấm/tap được toàn bộ nghiệp vụ chính, không cần terminal, curl/Postman, SQL, sửa ID/API URL hoặc chạy script ẩn giữa câu chuyện. Seed/reset/preflight trước demo và desktop simulator được phép vì có vai trò vận hành rõ ràng; chúng không thay thao tác nghiệp vụ của ADMIN, REPORTER, RESCUE hay WAREHOUSE.
+`@safestock/shared-types` và `@safestock/scenario-definitions` publish entry từ
+`dist`, trong khi `dist` không được commit. CI chạy backend test/build trước bước
+build rõ ràng cho shared types và không có bước build scenario definitions.
+Working tree cục bộ có thể che lỗi bằng artifact cũ.
 
-Luồng thi cụ thể: desktop simulator phát scenario → APK REPORTER đăng nhập, gõ report và gửi → web ADMIN mở report, xem AI parse, chọn điểm và tạo/dispatch mission → APK RESCUE nhận notification, mở mission và confirm/reject → web WAREHOUSE mở inbox, prepare/fulfill → APK RESCUE complete delivery → web ADMIN xem timeline, readiness và audit. Mỗi bước phải có loading/error/403/empty state; refresh hoặc logout/login vẫn tìm lại được mission.
+**Ảnh hưởng:** checkout sạch có thể fail hoặc dùng artifact không tương ứng source;
+claim “CI đã đóng” chưa có đủ evidence.
 
-“Offline” ở đây là public Internet bị tắt nhưng điện thoại và máy chủ vẫn cùng private Wi-Fi/LAN. Nếu điện thoại mất cả LAN, app chỉ được hiển thị dữ liệu cache/stale hoặc trạng thái unavailable; tuần này không hứa offline-write/sync.
+**Cần đóng:** thêm build topo rõ ràng trước consumer hoặc cấu hình package source
+đúng với workspace toolchain; chạy CI từ checkout sạch không có `dist` và lưu log.
+
+**Đã sửa (2026-07-29) — chưa đủ evidence:** `competition-quality.yml` nay build
+`@safestock/shared-types` và `@safestock/scenario-definitions` ngay sau `install`,
+trước mọi consumer (backend/frontend build), và full pipeline chạy xanh ở local
+(94 suite/557 backend test, 74 AI test, các build client). *Chưa đóng hoàn toàn:*
+file workflow này **vẫn chưa commit/push** nên CI remote trên checkout sạch chưa
+từng chạy — evidence clean-checkout (log CI thật, không có `dist` sẵn) vẫn thiếu
+cho tới khi commit.
+
+**Bằng chứng source:**
+[`competition-quality.yml:40-50`](../.github/workflows/competition-quality.yml#L40-L50),
+[`packages/shared-types/package.json:5-10`](../packages/shared-types/package.json#L5-L10),
+[`packages/scenario-definitions/package.json:5-10`](../packages/scenario-definitions/package.json#L5-L10).
+
+### 4.2 Medium
+
+#### M1. Mutation narrative dùng quyền chỉ-đọc `MISSION_VIEW`
+
+`POST :id/action-plan` ghi `mission.actionPlan`; `POST :id/explain` ghi
+`mission.explanation`, nhưng cả hai chỉ yêu cầu `MISSION_VIEW`. RESCUE và WAREHOUSE
+có quyền này nên có thể ghi đè narrative dù vai trò không được lập phương án.
+
+**Cần đóng:** dùng `MISSION_ANALYZE`/quyền mutation riêng và thêm permission tests.
+
+**Đã đóng (2026-07-29):** `POST :id/action-plan` và `POST :id/explain` nay yêu cầu
+`MISSION_ANALYZE` (chỉ ADMIN có), không còn `MISSION_VIEW`; RESCUE/WAREHOUSE mất khả
+năng ghi đè narrative. Có test permission khẳng định phân quyền mới.
+
+**Bằng chứng source:**
+[`mission.controller.ts:332-350`](../apps/backend/src/mission/mission.controller.ts#L332-L350).
+
+#### M2. Mobile và desktop logout chỉ xóa local token
+
+Web gọi backend logout, nhưng mobile chỉ xóa SecureStore/cache và desktop chỉ xóa
+biến memory. Refresh token đã cấp vẫn hợp lệ cho tới rotation, login khác hoặc hết
+hạn.
+
+**Cần đóng:** gọi `/api/auth/logout` trước khi xóa local state; nếu mất LAN, ghi rõ
+logout cục bộ chưa revoke và revoke ở lần kết nối sau hoặc có chính sách phù hợp.
+
+**Đã đóng (2026-07-29):** mobile thêm `logout(token)` gọi `POST /api/auth/logout`
+(Bearer, timeout 10s) trước `clearStoredSession`/`clearOfflineCache`; desktop thêm
+`logoutServer()` gọi cùng endpoint trước khi xóa memory session. Cả hai best-effort:
+mất LAN vẫn xóa phiên cục bộ, revoke phía server bỏ qua lỗi mạng.
+
+**Bằng chứng source:** [`App.tsx:118-123`](../apps/mobile/App.tsx#L118-L123),
+[`desktop App.tsx:243-254`](../apps/desktop/src/renderer/App.tsx#L243-L254).
+
+#### M3. AI client thiếu timeout và cache có thể tăng vô hạn
+
+Mọi `fetch` tới FastAPI không có `AbortSignal`; parse/action-plan dùng `Map` không
+TTL/size cap. AI service treo có thể giữ request backend, input duy nhất lặp lại có
+thể làm tăng memory.
+
+**Cần đóng:** timeout theo operation, retry có giới hạn khi an toàn, LRU/TTL và
+metric hit/eviction.
+
+**Đã đóng (2026-07-29):** `post()` thêm `AbortController` với timeout cấu hình qua
+`AI_SERVICE_TIMEOUT_MS` (mặc định 15s), `clearTimeout` trong `finally`; cache parse
+và action-plan qua `cacheSet` chặn ở `MAX_CACHE_ENTRIES=200` (evict FIFO oldest).
+Retry có giới hạn và metric hit/eviction đầy đủ vẫn để lại như cải tiến sau.
+
+**Bằng chứng source:**
+[`ai-client.service.ts:15-18`](../apps/backend/src/ai/ai-client.service.ts#L15-L18),
+[`ai-client.service.ts:118-129`](../apps/backend/src/ai/ai-client.service.ts#L118-L129).
+
+#### M4. Contract Python cho phép inference thiếu `confidence`
+
+Pydantic khai báo `confidence` optional và validator `AI_INFERENCE` không bắt buộc
+trường này, trong khi TypeScript `InferredCoordinationFact` và runtime validator
+đòi xác suất 0..1. Payload hợp lệ ở FastAPI có thể bị backend từ chối.
+
+**Cần đóng:** bắt buộc confidence cho `AI_INFERENCE` ở Python và thêm golden
+cross-language negative/positive tests.
+
+**Đã đóng (2026-07-29):** `model_validator` của `SituationExtractedFact` nay raise
+`ValueError` khi `AI_INFERENCE` thiếu `confidence`, khớp `InferredCoordinationFact`
+(TS) đòi xác suất 0..1 — payload không còn hợp lệ ở FastAPI rồi bị backend từ chối.
+*Còn lại (cải tiến sau):* bộ golden cross-language đầy đủ.
+
+**Bằng chứng source:** [`schemas.py:77-105`](../apps/ai-service/schemas.py#L77-L105),
+[`coordination.ts:84-91`](../packages/shared-types/src/coordination.ts#L84-L91).
+
+#### M5. FastAPI không có service authentication
+
+Các route FastAPI không xác thực caller. Windows launcher bind loopback, nhưng
+`scripts/ai-dev.mjs` lại bind `0.0.0.0`. Nếu dùng lệnh dev trên LAN, endpoint LLM
+và transcription đắt tiền bị mở cho mọi client tới được cổng.
+
+**Cần đóng:** mặc định loopback, chỉ mở private interface có chủ đích; thêm
+service token/mTLS hoặc reverse proxy auth trước mọi non-loopback deployment.
+
+**Đã đóng (2026-07-29):** `ai-dev.mjs` nay mặc định bind `127.0.0.1`, chỉ phơi LAN
+khi cố ý đặt `AI_SERVICE_HOST=0.0.0.0` — dev launcher không còn tự mở `0.0.0.0`.
+*Còn lại (ngoài phạm vi code):* service token/mTLS hoặc reverse-proxy auth vẫn cần
+cho mọi triển khai non-loopback.
+
+**Bằng chứng source:**
+[`ai-dev.mjs:26-28`](../scripts/ai-dev.mjs#L26-L28),
+[`run-ai-service.ps1:29`](../infrastructure/windows/run-ai-service.ps1#L29).
+
+#### M6. Reset simulator không hoàn tác tác động đã sinh
+
+Reset chỉ đưa run về `IDLE` và `cursorMs=0`; sensor event, incident, device value,
+readiness hoặc inventory side effect đã phát vẫn còn. UI báo “Đã reset kịch bản”
+dễ khiến rehearsal tưởng dữ liệu về baseline.
+
+**Cần đóng:** đổi nhãn thành reset con trỏ, hoặc triển khai reset demo có scope và
+transaction rõ; không dùng nó thay DB snapshot/restore.
+
+**Đã đóng (2026-07-29):** chọn phương án ghi rõ phạm vi thay vì partial-rollback rủi
+ro (tác động trải nhiều bảng, chỉ `sensorEvent` gắn `runId`, loadcell/incident thì
+không → rollback từng phần dễ desync). `reset()` thêm doc-comment nêu chỉ đưa con
+trỏ về `IDLE`/`cursorMs=0`; UI desktop đổi log thành “Đã reset con trỏ kịch bản (dữ
+liệu đã sinh vẫn giữ). Tạo run mới nếu cần dữ liệu sạch.”
+
+**Bằng chứng source:**
+[`runner.service.ts:200-213`](../apps/backend/src/simulation/runner.service.ts#L200-L213),
+[`desktop App.tsx:232-240`](../apps/desktop/src/renderer/App.tsx#L232-L240).
+
+#### M7. Package manager và lockfile chưa thống nhất
+
+Repo dùng pnpm nhưng chưa khóa `packageManager` tại root; policy
+`onlyBuiltDependencies` không đồng nhất; `package-lock.json` stale mô tả Expo khác
+với app thực. Nhiều TypeScript version cũng làm tăng sai khác local/CI.
+
+**Cần đóng:** chọn pnpm là nguồn duy nhất, pin version, bỏ hoặc regenerate npm
+lock theo quyết định có chủ đích, hợp nhất build policy và ghi rõ ngoại lệ Expo.
+
+**Đã đóng (2026-07-29):** thêm `"packageManager": "pnpm@10.32.1"` tại root
+`package.json` để local khớp đúng version corepack mà CI đang pin — loại sai khác
+local/CI do pnpm khác version. `package-lock.json` stale (npm `lockfileVersion: 3`
+khai báo `expo ^57.0.7` không còn tồn tại ở root, không được CI/scripts tham chiếu)
+đã được gỡ khỏi repo sau khi người dùng phê duyệt — pnpm (`pnpm-lock.yaml`) là
+nguồn khóa dependency duy nhất.
+
+#### M8. `mission.service.ts` quá lớn và còn đường workflow legacy song song
+
+Service khoảng 1.700 dòng chứa nhiều trách nhiệm và cả prepare theo mission lẫn
+prepare per-SKU. Hai đường cùng tồn tại làm tăng khả năng invariant/authorization
+khác nhau và khó review concurrency.
+
+**Cần đóng:** xác định API canonical, deprecate đường legacy, tách orchestration,
+queries, transitions và persistence theo boundary có test.
+
+**Quyết định (2026-07-29):** hoãn có chủ đích. Đây là refactor kiến trúc lớn, rủi ro
+regression cao ngay trước bản thi; tách service phải kèm bộ test concurrency/authorization
+mới để không đổi hành vi. Không thực hiện trong phiên fix end-to-end này; giữ nguyên
+đường canonical hiện hành (đã có test prepare/report atomic phủ) và ghi nợ kỹ thuật.
+
+### 4.3 Low
+
+#### L1. Inbox vẫn đánh dấu action cho RESCUE theo transition legacy
+
+`missionNeedsAction` coi `PENDING_RESCUE`/`READY` là action của RESCUE, trong khi
+luồng hiện hành chỉ cho RESCUE gửi evidence và không confirm/complete transition.
+Đây chủ yếu là sai sorting/attention label, không phải bypass backend.
+
+**Đã đóng (2026-07-29):** nhánh RESCUE của `missionNeedsAction` trả `false`; test
+`mission-inbox-state` cập nhật theo.
+
+#### L2. Desktop có thể vào trạng thái authenticated một phần
+
+Renderer set `authed=true` ngay sau login, trước khi tải warehouse/device/scenario.
+Bootstrap sau đó fail vẫn để UI ở trạng thái đăng nhập dở dang.
+
+**Đã đóng (2026-07-29):** `setAuthed(true)` dời xuống sau khi bootstrap thành
+công; nhánh catch gọi `logout()` + reset state để không kẹt nửa vời.
+
+#### L3. Electron tắt sandbox
+
+Context isolation đang bật và chưa expose preload API đáng kể, nhưng
+`sandbox=false` làm giảm defense-in-depth. Cần bật lại nếu dependency/runtime cho
+phép, đặc biệt trước khi renderer nhận nội dung ngoài kiểm soát.
+
+**Đã đóng (2026-07-29):** đặt `sandbox: true` + `contextIsolation: true`; preload
+không dùng Node API nên bật sandbox không phá chức năng (typecheck/build sạch).
+
+#### L4. `/explain` dựa chủ yếu vào prompt để không thêm số
+
+Assistant và action-plan có numeric validation rõ hơn; explain chưa có hậu kiểm
+unsupported number tương đương. Input hiện do backend dựng nên giảm rủi ro, nhưng
+output vẫn nên được validate trước khi ghi mission.
+
+**Chốt thiết kế (2026-07-29):** giữ phòng thủ ở mức prompt. Guard số học cứng dễ
+false-positive khi model reformat số hợp lệ (`90%`, `1.000`); backend đã có
+template fallback khi AI lỗi nên rủi ro thực tế thấp.
+
+#### L5. AI service có khai báo prompt mojibake bị khai báo lại
+
+Khai báo sau đang ghi đè nên chưa thấy lỗi runtime, nhưng dead declaration/encoding
+làm review khó và có thể tái xuất hiện khi refactor.
+
+**Đã đóng (2026-07-29):** gỡ khối `_SITUATION_ANALYSIS_SYSTEM` mojibake bị trùng;
+chỉ còn bản ASCII duy nhất (pytest 74 Pass).
+
+#### L6. Redis host port 56380 không bền trên Windows
+
+Port trong `.env.example` có thể rơi vào excluded TCP range thay đổi theo máy;
+đã có trường hợp backend treo startup tại môi trường Windows. Chọn port local ổn
+định đã kiểm tra (ví dụ 16379) và preflight port trước khi start.
+
+**Đã đóng (2026-07-29):** `.env.example` đổi Redis host port sang `16379` kèm chú
+thích về dải excluded TCP của Windows (profile demo giữ port riêng đã pin).
+
+## 5. Mức hoàn thiện theo subsystem
+
+| Subsystem | Đánh giá | Gate còn mở |
+| --- | --- | --- |
+| Backend core/inventory/loan/readiness | Cao (H3/H4/H6 đã đóng) | Rerun full unit/E2E và migration/restore trên clean environment. |
+| Mission/concurrency | Khá cao (H1/H2/M1 đã đóng) | Test PostgreSQL concurrency và tenant regression trên môi trường thật. |
+| Web | Gần hoàn thiện source (L1 đã đóng) | Browser acceptance đủ role, cookie/session, map và error state. |
+| Mobile Android | Feature source/APK path có (M2 đã đóng) | Fresh install S23 Ultra, LAN-offline/recovery, permission/voice/QR evidence. |
+| AI service | Boundary tốt (M3/M4/M5/L5 đã đóng; L4 chốt prompt-level) | Full pytest từ đúng cwd, live-model/RAG calibration khi model/corpus đổi. |
+| Desktop simulator | Dùng được cho demo (H5/M2/M6/L2/L3 đã đóng) | Package artifact và chứng minh isolation/realtime/SMTP. |
+| Infrastructure/shared packages | Có compose/OSRM/CI (H3/H4/H6/L6 đã đóng) | M7/M8 refactor; firewall/port scan, backup-restore, reboot và clean-checkout evidence. |
+
+## 6. Trạng thái kiểm chứng trong phiên audit
+
+### Passed
+
+- Backend focused Jest: **6 suites, 73 tests**.
+  - environment validation;
+  - auth session rotation;
+  - permission matrix;
+  - per-SKU warehouse request;
+  - report hardening;
+  - What-if service.
+- Shared coordination contract: **9 tests**.
+
+- Focused AI pytest chạy từ đúng `apps/ai-service`: **7 tests Pass**
+  (`test_situation_analysis.py`, `test_field_update_intent.py`).
+
+### Failed
+
+- Lần chạy focused pytest đầu tiên từ repository root dừng ở collection với
+  `ModuleNotFoundError: No module named 'main'`. Đây là lỗi working directory của
+  lệnh audit; sau khi chạy lại từ đúng thư mục, 7 test mục tiêu đã Pass.
+
+### Not run / chưa có bằng chứng mới trong phiên này
+
+- Full backend unit/E2E, full frontend/mobile/desktop build, production audit,
+  Prisma migration on clean database và toàn bộ GitHub Actions từ checkout sạch.
+- Full AI pytest, live Ollama/PhoWhisper/GPU evaluation.
+- Samsung Galaxy S23 Ultra fresh install, APK signer/SHA, private-LAN with public
+  Internet off, complete four-role UI flow, LAN-loss recovery.
+- Desktop → realtime alert → SMTP evidence, firewall/port scan, backup-restore,
+  reboot/autostart và production pilot.
+
+## 7. Phán quyết readiness
+
+Sau khi vá blocker (§1.1):
+
+- **Source:** H1–H6 và M1/M4/M5 đã đóng bằng code + test trong phiên. Toàn bộ
+  automated gate được chạy lại trong phiên **Pass** (backend 557, AI 74, shared 9;
+  build/typecheck/lint sạch). Đây là điều kiện cần cho nhãn chất lượng cao, nhưng
+  **vẫn chưa phải bằng chứng “100/100” tuyệt đối**: cần một lượt CI đầy đủ từ
+  **clean checkout** (không dựa vào `dist/` đã build cục bộ), full E2E và
+  migration-restore trên môi trường sạch. Còn M2/M3/M6/M7/M8 (không phải blocker
+  thi) vẫn mở.
+- **Competition rehearsal:** vẫn **no-go cho tới khi có bằng chứng thiết bị/LAN**.
+  Source gate nay sạch, nhưng bảng ký trong runbook cần **hai lượt Pass trên cùng
+  commit/artifact**: fresh install APK (Galaxy S23 Ultra, signer/SHA), luồng bốn
+  vai trò, private-LAN với Internet tắt, desktop→realtime→SMTP, khôi phục khi mất
+  LAN. Chưa có evidence nào trong phiên này.
+- **Public production:** **no-go**; cần thêm firewall/port-scan, backup-restore,
+  observability, reboot/autostart và pilot thực tế.
+
+**Đánh giá khách quan “đã tốt nhất để đem đi thi chưa”:** về **chất lượng source
+và automated gate**, ứng dụng nay ở trạng thái tốt — mọi blocker đã biết được vá
+và test lại xanh. Nhưng “sẵn sàng thi” của một hệ thống điều phối realtime **không
+kết luận được chỉ từ source**: phần quyết định điểm là **rehearsal có bằng chứng
+trên thiết bị thật + private LAN** và **một lượt CI clean-checkout**. Hai việc này
+chưa làm, nên trạng thái đúng nhất là: *sẵn sàng về mã nguồn, chưa sẵn sàng đã được
+nghiệm thu* — cần chạy đúng runbook rehearsal trước ngày thi để chốt go/no-go.
+
+## 8. Đề xuất quản trị tài liệu
+
+Inventory audit xác định **61 tài liệu Markdown do dự án quản lý** (theo phạm vi
+root/apps/docs/infrastructure/plans/tasks; loại dependency, venv, cache, `.expo`,
+local agent/memory). Số dòng là số động và phải đo lại sau mỗi lần sửa/merge, nên
+không dùng làm acceptance metric. Quy tắc: chỉ PRD là product scope/status;
+report này là assessment; rehearsal là runbook/evidence. README chỉ là gateway.
+
+### KEEP — 43 file
+
+Giữ nguyên vai trò lâu dài, nhưng sửa mâu thuẫn nội dung khi cần:
+
+1. `AGENTS.md`;
+2. `README.md`;
+3. `THIRD_PARTY_NOTICES.md`;
+4. `apps/ai-service/README.md`;
+5. `apps/frontend/README.md`;
+6. `apps/mobile/README.md`;
+7. `docs/PRD.md`;
+8. `docs/bao-cao-danh-gia-san-sang-du-thi.md`;
+9. `docs/COMPETITION-REHEARSAL.md`;
+10. `docs/HUONG-DAN-CAI-DAT-VA-CHAY.md`;
+11. `docs/HUONG-DAN-TEST.md`;
+12. `docs/SEED-DATASET.md`;
+13. `docs/CONTRIBUTING.md`;
+14. `docs/BAN-MO-TA-Y-TUONG.md`;
+15. `docs/DANH-MUC-THAM-CHIEU-TUYEN-AI-WHAT-IF.md`;
+16. `docs/DANH-MUC-VI-TRI-KHO-XA-VA-KHO-THON.md`;
+17. `infrastructure/osrm/data/README.md`;
+18. `docs/adr/ADR-001-daily-inventory-integrity.md`;
+19. `docs/adr/ADR-002-verified-warehouse-and-external-reference-boundary.md`;
+20. `docs/adr/ADR-003-notification-organization-boundary.md`;
+21. `docs/adr/ADR-004-per-sku-warehouse-preparation.md`;
+22. `docs/knowledge/README.md`;
+23. `docs/knowledge/an-toan-luong-thuc-va-dinh-duong.md`;
+24. `docs/knowledge/dinh-muc-cuu-tro.md`;
+25. `docs/knowledge/noi-o-khan-cap-va-bao-ve.md`;
+26. `docs/knowledge/phan-loai-uu-tien-nan-nhan.md`;
+27. `docs/knowledge/quy-trinh-ung-pho-bao-lu.md`;
+28. `docs/knowledge/so-cuu-co-ban.md`;
+29. `docs/knowledge/tieu-chuan-sphere.md`;
+30. `docs/knowledge/ve-sinh-nuoc-va-phong-benh.md`;
+31. `docs/qa/README.md`;
+32. `docs/qa/ollama-qwen-evaluation.md`;
+33. `docs/qa/ollama-qwen35-4b-evaluation.md`;
+34. `docs/qa/phase-a-nen-tang.md`;
+35. `docs/qa/phase-a2-rbac.md`;
+36. `docs/qa/phase-b-simulator.md`;
+37. `docs/qa/phase-bp-nhap-xuat-da-nguon.md`;
+38. `docs/qa/phase-c-readiness.md`;
+39. `docs/qa/phase-d-mission.md`;
+40. `docs/qa/phase-e-incident.md`;
+41. `docs/qa/phase-g-bp5-chatbot-backup.md`;
+42. `docs/qa/phase-m-normal-mode.md`;
+43. `docs/qa/tong-quan.md`.
+
+Các file `docs/qa/` được giữ như evidence/Q&A lịch sử, có nhãn
+non-authoritative; chúng không được dùng để ghi đè status hiện tại.
+
+### MERGE — 6 file
+
+Trích nội dung bền vững vào PRD/report/runbook/ADR tương ứng, sau đó mới đề xuất
+xóa source file ở một thay đổi riêng:
+
+1. `docs/AI-COORDINATION-IMPLEMENTATION.md` → report + PRD/ADR AI boundary.
+2. `docs/BAN-GIAO-CHENH-LECH-SO-VOI-GITHUB.md` → runbook release/migration và
+   cảnh báo bảo toàn working tree.
+3. `docs/PM-REVIEW-QUAN-LY-KHO-NGAY-THUONG.md` → PRD acceptance criteria + report.
+4. `tasks/spec.md` → PRD scope/boundaries.
+5. `tasks/plan.md` → PRD open gates + rehearsal sequence.
+6. `tasks/todo.md` → PRD/rehearsal checklist chưa đóng.
+
+### DELETE sau khi merge và có phê duyệt — 10 file
+
+Đây là planning/journal lịch sử của cùng một readiness week; trạng thái đã stale
+và đang cạnh tranh với PRD/report/runbook:
+
+1. `plans/260726-1857-competition-readiness-week/plan.md`;
+2. `plans/260726-1857-competition-readiness-week/phase-01-start.md`;
+3. `plans/260726-1857-competition-readiness-week/phase-02-tenant-isolation-and-data-safety.md`;
+4. `plans/260726-1857-competition-readiness-week/phase-03-deterministic-quality-gates.md`;
+5. `plans/260726-1857-competition-readiness-week/phase-04-mission-inbox-and-demo-workflow.md`;
+6. `plans/260726-1857-competition-readiness-week/phase-05-demo-resilience-and-judge-experience.md`;
+7. `plans/260726-1857-competition-readiness-week/phase-06-release-freeze-rehearsal-and-submission.md`;
+8. `plans/260726-1857-competition-readiness-week/phase-07-android-apk-and-lan-offline-foundation.md`;
+9. `plans/260726-1857-competition-readiness-week/phase-08-surrounding-communes-metadata-and-map.md`;
+10. `plans/260726-1857-competition-readiness-week/phase-09-ai-multi-warehouse-dispatch-map-routing.md`.
+
+### ARCHIVE hoặc DELETE sau khi merge và có phê duyệt — 2 file
+
+Hai file sau có giá trị truy vết lịch sử nhưng không phải tài liệu vận hành. Nếu
+repo không có chính sách archive, đề xuất DELETE sau khi trích evidence duy nhất:
+
+- `plans/260726-1857-competition-readiness-week/reports/pm-260726-phase-09-dispatch-slice.md`;
+- `plans/journals/260726-phase-09-dispatch-foundation.md`.
+
+> **Chưa xóa hoặc merge vật lý file nào trong audit này.** Tổng số ở các nhóm có
+> chồng bước có chủ đích: 6 file MERGE sẽ trở thành ứng viên delete sau khi nội
+> dung được hấp thụ; 10 + 2 planning file là ứng viên cleanup. Mọi bulk cleanup
+> cần phê duyệt exact path trước.
+
+## 9. Thứ tự xử lý đề xuất
+
+1. Vá H1 và thêm tenant regression test.
+2. Serialize final per-SKU preparation, thêm PostgreSQL race test H2.
+3. Đóng H3–H5: secret, bind/network và desktop credential/session.
+4. Sửa build graph H6 và chứng minh clean-checkout CI.
+5. Đóng M1–M7, chạy lại focused/full gates đúng working directory.
+6. Sửa PRD/runbook: bỏ claim 100/100, bỏ bước RESCUE “xác nhận/bàn giao”, thống
+   nhất source gate build order.
+7. Chạy hai rehearsal có evidence; chỉ sau đó ký Go.
+8. Trình duyệt exact documentation diff; chỉ merge/delete tài liệu sau phê duyệt.
+
+## 10. Câu hỏi còn bỏ ngỏ
+
+- Chọn **archive** hay **delete** cho hai report/journal lịch sử ở mục 8?
+- Desktop simulator sẽ dùng scoped service token, tài khoản simulator riêng hay
+  form nhập credential lúc chạy?
+- Deployment thi sẽ bind backend vào IP private-LAN cụ thể hay đi qua reverse
+  proxy/tunnel HTTPS?

@@ -54,7 +54,7 @@ export enum CirculationStatus {
 /**
  * Vai trò người dùng — 3 role (xã thường 1 người phụ trách kho → gộp staff+manager).
  * WAREHOUSE: phụ trách kho, toàn quyền vận hành + thao tác nhạy cảm (tự chịu, hậu kiểm).
- * RESCUE: đội cứu hộ — xem phương án, mượn-hoàn, yêu cầu vật tư.
+ * RESCUE: Lực lượng hiện trường — xem phương án và gửi cập nhật đã xác nhận.
  * ADMIN: quản trị/giám sát — quản lý user, xem toàn bộ nhật ký, hậu kiểm.
  */
 export enum UserRole {
@@ -62,6 +62,19 @@ export enum UserRole {
   RESCUE = "RESCUE",
   ADMIN = "ADMIN",
   REPORTER = "REPORTER", // trưởng thôn — báo cáo tình huống từ hiện trường (mobile)
+}
+
+export const FIELD_FORCE_ROLE_LABEL = "Lực lượng hiện trường" as const;
+
+export const USER_ROLE_LABELS: Readonly<Record<UserRole, string>> = {
+  [UserRole.ADMIN]: "Quản trị xã",
+  [UserRole.WAREHOUSE]: "Phụ trách kho",
+  [UserRole.RESCUE]: FIELD_FORCE_ROLE_LABEL,
+  [UserRole.REPORTER]: "Trưởng thôn (báo cáo)",
+};
+
+export function userRoleLabel(role: UserRole | string): string {
+  return USER_ROLE_LABELS[role as UserRole] ?? role;
 }
 
 /**
@@ -79,9 +92,13 @@ export enum Permission {
   MISSION_CREATE = "mission:create",
   MISSION_REQUEST = "mission:request",
   MISSION_APPROVE = "mission:approve",
-  MISSION_CONFIRM = "mission:confirm", // RESCUE xác nhận lấy vật tư
+  MISSION_ANALYZE = "mission:analyze", // ADMIN chạy/xem snapshot phân tích AI
+  MISSION_SIMULATE = "mission:simulate", // ADMIN chạy What-if tách biệt
+  MISSION_CONFIRM = "mission:confirm", // legacy compatibility; không cấp cho role mới
+  MISSION_FIELD_UPDATE = "mission:field_update", // Lực lượng hiện trường gửi ghi nhận đã xác nhận
   MISSION_FULFILL = "mission:fulfill", // WAREHOUSE chuẩn bị + xuất
   NOTIFICATION_VIEW = "notification:view",
+  INCIDENT_REPORT_VIEW_OWN = "incident:report_view_own", // trưởng thôn xem lại báo cáo text của chính mình
   READINESS_VIEW = "readiness:view",
   SIMULATION_VIEW = "simulation:view",
   SIMULATION_MUTATE = "simulation:mutate",
@@ -119,14 +136,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.REPORT_VIEW,
   ],
   [UserRole.RESCUE]: [
-    // Cứu hộ: xem + XÁC NHẬN lấy vật tư.
-    Permission.INVENTORY_READ,
+    // Lực lượng hiện trường chỉ nhận thông tin và gửi evidence đã tự xác nhận.
     Permission.MISSION_VIEW,
-    Permission.MISSION_REQUEST,
-    Permission.MISSION_CONFIRM, // xác nhận lấy
-    Permission.READINESS_VIEW,
-    Permission.SIMULATION_VIEW,
-    Permission.LOAN_MANAGE,
+    Permission.MISSION_FIELD_UPDATE,
     Permission.NOTIFICATION_VIEW,
   ],
   [UserRole.ADMIN]: [
@@ -134,8 +146,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     ...Object.values(Permission),
   ],
   [UserRole.REPORTER]: [
-    // Trưởng thôn: báo cáo tình huống + dùng parse/transcribe + xem thông báo phản hồi.
+    // Trưởng thôn: báo cáo tình huống + xem lại báo cáo text của chính mình + thông báo.
     Permission.INCIDENT_REPORT_SUBMIT,
+    Permission.INCIDENT_REPORT_VIEW_OWN,
     Permission.NOTIFICATION_VIEW,
   ],
 };
@@ -201,3 +214,5 @@ export interface SensorEvent {
   quality: number; // 0..1
   scenarioId?: string;
 }
+
+export * from "./coordination";

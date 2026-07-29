@@ -12,21 +12,20 @@ import {
   type AdminUser,
 } from "@/lib/admin-api";
 import { Pagination, usePagination } from "@/components/shared/pagination";
+import {
+  FIELD_FORCE_ROLE_LABEL,
+  userRoleLabel,
+} from "@safestock/shared-types";
 
 const ROLES = [
   { value: "WAREHOUSE", label: "Phụ trách kho / Trưởng thôn" },
-  { value: "RESCUE", label: "Đội cứu hộ" },
+  { value: "RESCUE", label: FIELD_FORCE_ROLE_LABEL },
   { value: "ADMIN", label: "Quản trị xã" },
 ] as const;
 
 // Nhãn HIỂN THỊ cho mọi role (gồm REPORTER — trưởng thôn báo cáo từ mobile, tạo qua seed/di động,
 // không nằm trong dropdown tạo tài khoản ở trên). Dùng string key để nhận mọi UserRole.
-const roleLabels = new Map<string, string>([
-  ...ROLES.map((role) => [role.value, role.label] as [string, string]),
-  ["REPORTER", "Trưởng thôn (báo cáo)"],
-]);
-
-/** ADMIN xã quản lý tài khoản: tạo trưởng thôn gán kho, cứu hộ, quản trị. */
+/** ADMIN xã quản lý tài khoản: tạo người phụ trách kho, hiện trường và quản trị. */
 export function AdminUsersView({ warehouseId }: { warehouseId: string }) {
   const qc = useQueryClient();
   const usersQuery = useQuery({ queryKey: ["admin-users"], queryFn: listUsers });
@@ -166,7 +165,7 @@ export function AdminUsersView({ warehouseId }: { warehouseId: string }) {
                     <span className="text-xs text-[var(--text-muted)]">· {u.email}</span>
                   </p>
                   <p className="text-xs text-[var(--text-muted)]">
-                    {roleLabels.get(u.role) ?? u.role}
+                    {userRoleLabel(u.role)}
                     {u.warehouseId
                       ? ` · ${nameById.get(u.warehouseId) ?? "kho thôn"}`
                       : u.role === "WAREHOUSE"

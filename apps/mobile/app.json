@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "SafeStock Cứu hộ",
+    "name": "Ứng phó nhanh",
     "slug": "safestock-mobile",
     "version": "0.5.0",
     "scheme": "safestock",
@@ -44,7 +44,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Cho phép SafeStock dùng camera để quét mã QR vật tư.",
+          "cameraPermission": "Cho phép Ứng phó nhanh dùng camera để quét mã QR vật tư.",
           "recordAudioAndroid": true
         }
       ]

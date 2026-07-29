@@ -8,6 +8,7 @@ import {
   Query,
   Request,
   UseGuards,
+  ValidationPipe,
 } from "@nestjs/common";
 import { MissionStatus } from "@prisma/client";
 import { Permission } from "@safestock/shared-types";
@@ -18,16 +19,25 @@ import { RequirePermission } from "../rbac/permissions.decorator";
 import { AiClientService } from "../ai/ai-client.service";
 import {
   AdminNoteDto,
-  CompleteMissionDto,
+  AnalyzeMissionDto,
+  FieldUpdateDto,
   GeneratePlanDto,
   ParseDto,
   PlanFromReportDto,
-  RejectMissionDto,
+  ReviewWarehouseRequestDto,
   SubmitReportDto,
   TranscribeDto,
+  WarehouseRequestDiscrepancyDto,
+  WarehouseRequestNoteDto,
+  WhatIfDto,
 } from "./dto";
 import { IncidentInput } from "./mission.compute";
 import { MissionService } from "./mission.service";
+import { MissionCoordinationService } from "./mission-coordination.service";
+import { CoordinationAnalysisService } from "./coordination-analysis.service";
+import { WhatIfService } from "./what-if.service";
+import { FieldUpdateAssistantService } from "./field-update-assistant.service";
+import { MissionWarehouseRequestService } from "./mission-warehouse-request.service";
 
 @UseGuards(JwtAuthGuard, PermissionGuard)
 @Controller("missions")
@@ -35,6 +45,11 @@ export class MissionController {
   constructor(
     private missions: MissionService,
     private ai: AiClientService,
+    private coordination: MissionCoordinationService,
+    private coordinationAnalysis: CoordinationAnalysisService,
+    private whatIf: WhatIfService,
+    private fieldAssistant: FieldUpdateAssistantService,
+    private warehouseRequestService: MissionWarehouseRequestService,
   ) {}
 
   /** Parse mô tả → tình huống JSON (proxy AI, có cache). */
@@ -60,6 +75,7 @@ export class MissionController {
   @Post("report")
   async report(@Request() req: AuthenticatedRequest, @Body() dto: SubmitReportDto) {
     const warehouseId = await this.missions.resolveReportWarehouseId(
+      req.user.userId,
       req.user.warehouseId,
       dto.warehouseId,
     );
@@ -133,10 +149,178 @@ export class MissionController {
     return this.missions.listMissions(statuses, req.user.userId, req.user.warehouseId);
   }
 
+  /** Lịch sử báo cáo text của chính trưởng thôn (cursor pagination). */
+  @RequirePermission(Permission.INCIDENT_REPORT_VIEW_OWN)
+  @Get("reports/own")
+  ownReports(
+    @Request() req: AuthenticatedRequest,
+    @Query("cursor") cursor?: string,
+    @Query("limit") limit?: string,
+  ) {
+    const parsedLimit = limit == null || limit.trim() === "" ? undefined : Number(limit);
+    return this.missions.listOwnReports(
+      req.user.userId,
+      req.user.warehouseId,
+      cursor,
+      parsedLimit,
+    );
+  }
+
+  /** Chi tiết một báo cáo text thuộc đúng reporter đang đăng nhập. */
+  @RequirePermission(Permission.INCIDENT_REPORT_VIEW_OWN)
+  @Get("reports/own/:id")
+  ownReport(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.missions.getOwnReport(id, req.user.userId, req.user.warehouseId);
+  }
+
+  /** Công việc chuẩn bị theo từng SKU của đúng kho đang đăng nhập. */
+  @RequirePermission(Permission.MISSION_FULFILL)
+  @Get("warehouse-requests/own")
+  warehouseRequests(@Request() req: AuthenticatedRequest) {
+    return this.warehouseRequestService.list(req.user.userId, req.user.warehouseId);
+  }
+
+  @RequirePermission(Permission.MISSION_FULFILL)
+  @Post("warehouse-requests/:requestId/accept")
+  acceptWarehouseRequest(
+    @Request() req: AuthenticatedRequest,
+    @Param("requestId") requestId: string,
+    @Body() dto: WarehouseRequestNoteDto,
+  ) {
+    return this.warehouseRequestService.accept(
+      requestId,
+      req.user.userId,
+      req.user.warehouseId,
+      dto.note,
+    );
+  }
+
+  @RequirePermission(Permission.MISSION_FULFILL)
+  @Post("warehouse-requests/:requestId/discrepancy")
+  reportWarehouseDiscrepancy(
+    @Request() req: AuthenticatedRequest,
+    @Param("requestId") requestId: string,
+    @Body() dto: WarehouseRequestDiscrepancyDto,
+  ) {
+    return this.warehouseRequestService.reportDiscrepancy(
+      requestId,
+      req.user.userId,
+      req.user.warehouseId,
+      dto.note,
+    );
+  }
+
+  @RequirePermission(Permission.MISSION_FULFILL)
+  @Post("warehouse-requests/:requestId/prepare")
+  prepareWarehouseRequest(
+    @Request() req: AuthenticatedRequest,
+    @Param("requestId") requestId: string,
+  ) {
+    return this.warehouseRequestService.prepare(
+      requestId,
+      req.user.userId,
+      req.user.warehouseId,
+    );
+  }
+
+  @RequirePermission(Permission.MISSION_APPROVE)
+  @Post("warehouse-requests/:requestId/review")
+  reviewWarehouseRequest(
+    @Request() req: AuthenticatedRequest,
+    @Param("requestId") requestId: string,
+    @Body() dto: ReviewWarehouseRequestDto,
+  ) {
+    return this.warehouseRequestService.review(requestId, req.user.userId, dto);
+  }
+
   @RequirePermission(Permission.MISSION_VIEW)
   @Get(":id")
   get(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
     return this.missions.getMission(id, req.user.userId, req.user.warehouseId);
+  }
+
+  /** Snapshot phân tích AI để ADMIN đối chiếu nguồn và phiên bản đã dùng. */
+  @RequirePermission(Permission.MISSION_ANALYZE)
+  @Get(":id/analysis-snapshots")
+  analysisSnapshots(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.coordination.listAnalysisSnapshots(id, req.user.userId, req.user.warehouseId);
+  }
+
+  /** Run a provenance-aware baseline; only ADMIN may trigger it. */
+  @RequirePermission(Permission.MISSION_ANALYZE)
+  @Post(":id/analyses")
+  analyze(
+    @Request() req: AuthenticatedRequest,
+    @Param("id") id: string,
+    @Body(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
+    dto: AnalyzeMissionDto,
+  ) {
+    return this.coordinationAnalysis.analyze(id, req.user.userId, req.user.warehouseId, dto);
+  }
+
+  /** Latest immutable baseline/What-if snapshot for the ADMIN detail panel. */
+  @RequirePermission(Permission.MISSION_ANALYZE)
+  @Get(":id/analyses/latest")
+  async latestAnalysis(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    const snapshots = await this.coordination.listAnalysisSnapshots(
+      id,
+      req.user.userId,
+      req.user.warehouseId,
+    );
+    // /analyses/latest is deliberately a BASELINE endpoint. A What-if is an
+    // isolated comparison and must never silently become the next baseline.
+    return snapshots.find((snapshot) => snapshot["kind"] === "BASELINE") ?? null;
+  }
+
+  /** ADMIN runs a non-mutating What-if against an immutable baseline. */
+  @RequirePermission(Permission.MISSION_SIMULATE)
+  @Post(":id/simulations")
+  simulate(
+    @Request() req: AuthenticatedRequest,
+    @Param("id") id: string,
+    @Body(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
+    dto: WhatIfDto,
+  ) {
+    return this.whatIf.simulate(id, req.user.userId, req.user.warehouseId, dto);
+  }
+
+  /** Read a persisted simulation only inside its mission scope. */
+  @RequirePermission(Permission.MISSION_ANALYZE)
+  @Get(":id/simulations/:simulationId")
+  simulation(
+    @Request() req: AuthenticatedRequest,
+    @Param("id") id: string,
+    @Param("simulationId") simulationId: string,
+  ) {
+    return this.coordination.getAnalysisSnapshot(
+      id,
+      simulationId,
+      req.user.userId,
+      req.user.warehouseId,
+    );
+  }
+
+  /** Các cập nhật hiện trường đã được người dùng tự xác nhận. */
+  @RequirePermission(Permission.MISSION_VIEW)
+  @Get(":id/field-updates")
+  fieldUpdates(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.coordination.listFieldUpdates(id, req.user.userId, req.user.warehouseId);
+  }
+
+  /**
+   * Lực lượng hiện trường gửi nội dung gõ tay hoặc transcript voice ĐÃ xác
+   * nhận. Pipe riêng buộc trả lỗi cho field ngoài whitelist thay vì âm thầm
+   * bỏ qua những payload như imageUrl/gpsTrack.
+   */
+  @RequirePermission(Permission.MISSION_FIELD_UPDATE)
+  @Post(":id/field-updates")
+  recordFieldUpdate(
+    @Request() req: AuthenticatedRequest,
+    @Param("id") id: string,
+    @Body(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
+    dto: FieldUpdateDto,
+  ) {
+    return this.fieldAssistant.submit(id, req.user.userId, req.user.warehouseId, dto);
   }
 
   /** Kho tổng + thôn trong cụm xã (có toạ độ) — cho map ghim điểm nạn trước khi lập phương án. */
@@ -149,15 +333,16 @@ export class MissionController {
   /**
    * Sinh Incident Action Plan (8 mục): backend chấm severity/forecasts bằng rule,
    * LLM viết diễn giải, fallback template khi mất mạng. Lưu vào mission.actionPlan.
+   * M1: route GHI mission.actionPlan → yêu cầu MISSION_ANALYZE (ADMIN), không phải VIEW.
    */
-  @RequirePermission(Permission.MISSION_VIEW)
+  @RequirePermission(Permission.MISSION_ANALYZE)
   @Post(":id/action-plan")
   actionPlan(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
     return this.missions.generateActionPlan(id, req.user.userId, req.user.warehouseId);
   }
 
-  /** Sinh giải thích tiếng Việt cho phương án (proxy AI). */
-  @RequirePermission(Permission.MISSION_VIEW)
+  /** Sinh giải thích tiếng Việt cho phương án (proxy AI). M1: GHI mission.explanation. */
+  @RequirePermission(Permission.MISSION_ANALYZE)
   @Post(":id/explain")
   async explain(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
     const mission = await this.missions.getMission(id, req.user.userId, req.user.warehouseId);
@@ -173,44 +358,7 @@ export class MissionController {
     return this.missions.approve(id, req.user.userId, req.user.warehouseId);
   }
 
-  // ===== Workflow liên role (BE-L) =====
-
-  /** ADMIN gửi phương án cho đội cứu hộ (DRAFT → PENDING_RESCUE). */
-  @RequirePermission(Permission.MISSION_CREATE)
-  @Post(":id/dispatch")
-  dispatch(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
-    return this.missions.dispatch(id, req.user.userId, req.user.warehouseId);
-  }
-
-  /** RESCUE xác nhận lấy vật tư (PENDING_RESCUE → PENDING_WAREHOUSE). */
-  @RequirePermission(Permission.MISSION_CONFIRM)
-  @Post(":id/confirm")
-  confirm(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
-    return this.missions.confirmByRescue(id, req.user.warehouseId);
-  }
-
-  /** RESCUE từ chối nhiệm vụ kèm lý do (PENDING_RESCUE → REJECTED), báo ADMIN. */
-  @RequirePermission(Permission.MISSION_CONFIRM)
-  @Post(":id/reject")
-  reject(@Request() req: AuthenticatedRequest, @Param("id") id: string, @Body() dto: RejectMissionDto) {
-    return this.missions.rejectByRescue(id, dto.reason, req.user.warehouseId);
-  }
-
-  /** ADMIN tiếp nhận đơn từ chối → tạm hoãn (REJECTED → DEFERRED), báo RESCUE. */
-  @RequirePermission(Permission.MISSION_CREATE)
-  @Post(":id/defer")
-  defer(@Request() req: AuthenticatedRequest, @Param("id") id: string, @Body() dto: AdminNoteDto) {
-    return this.missions.deferByAdmin(id, dto.note, req.user.warehouseId);
-  }
-
-  /** ADMIN gửi lại nhiệm vụ tạm hoãn cho RESCUE (DEFERRED → PENDING_RESCUE). */
-  @RequirePermission(Permission.MISSION_CREATE)
-  @Post(":id/resend")
-  resend(@Request() req: AuthenticatedRequest, @Param("id") id: string, @Body() dto: AdminNoteDto) {
-    return this.missions.resendByAdmin(id, dto.note, req.user.warehouseId);
-  }
-
-  /** ADMIN huỷ nhiệm vụ (REJECTED|DEFERRED → CANCELLED), báo RESCUE kèm lý do. */
+  /** ADMIN huỷ phương án trước khi bất kỳ kho nào xuất vật tư. */
   @RequirePermission(Permission.MISSION_CREATE)
   @Post(":id/cancel")
   cancel(@Request() req: AuthenticatedRequest, @Param("id") id: string, @Body() dto: AdminNoteDto) {
@@ -222,17 +370,6 @@ export class MissionController {
   @Post(":id/prepare")
   prepare(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
     return this.missions.prepareByWarehouse(id, req.user.userId, req.user.warehouseId);
-  }
-
-  /** RESCUE xác nhận đã giao hiện trường + kết quả (READY → COMPLETED). */
-  @RequirePermission(Permission.MISSION_CONFIRM)
-  @Post(":id/complete")
-  complete(
-    @Request() req: AuthenticatedRequest,
-    @Param("id") id: string,
-    @Body() dto: CompleteMissionDto,
-  ) {
-    return this.missions.completeByRescue(id, dto.outcome, req.user.userId, dto.note, req.user.warehouseId);
   }
 
   // ---- helpers ----

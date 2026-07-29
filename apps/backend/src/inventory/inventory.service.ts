@@ -716,7 +716,7 @@ export class InventoryService {
   }
 
   /**
-   * Nhập lô 1 chạm — đối xứng {@link bulkExport}. Dùng khi HOÀN KHO: đội cứu hộ
+   * Nhập lô 1 chạm — đối xứng {@link bulkExport}. Dùng khi HOÀN KHO: lực lượng hiện trường
    * giao thất bại → nhập lại phần đã xuất về đúng lô cũ. Nhiều batch trong 1
    * transaction; thất bại 1 batch → rollback tất cả. Bỏ qua dòng qty <= 0.
    */

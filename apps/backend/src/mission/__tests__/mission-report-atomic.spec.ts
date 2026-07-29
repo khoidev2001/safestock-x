@@ -151,7 +151,11 @@ describe("NotificationService realtime delivery", () => {
     jest.spyOn(Logger.prototype, "warn").mockImplementation(() => undefined);
     const prisma = {
       notification: {
-        create: jest.fn().mockResolvedValue({ id: "notification-1", recipientRole: "ADMIN" }),
+        create: jest.fn().mockResolvedValue({
+          id: "notification-1",
+          organizationId: "organization-1",
+          recipientRole: "ADMIN",
+        }),
       },
     };
     const service = new NotificationService(prisma as never);
@@ -165,6 +169,7 @@ describe("NotificationService realtime delivery", () => {
         kind: "INCIDENT_REPORTED" as never,
         title: "Báo cáo mới",
         body: description,
+        organizationId: "organization-1",
       }),
     ).resolves.toMatchObject({ id: "notification-1" });
   });

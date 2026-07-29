@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, UnauthorizedException } from "@nestjs/common";
+import {
+  BadRequestException,
+  Injectable,
+  Optional,
+  UnauthorizedException,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import * as bcrypt from "bcryptjs";
@@ -7,6 +12,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { JwtPayload } from "./jwt.strategy";
 import { UpdateProfileDto } from "./dto";
 import { isSimulationSystemActorEmail } from "../simulation/simulation-system-actor-identity";
+import { AuthRateLimitService } from "./auth-rate-limit.service";
 
 @Injectable()
 export class AuthService {
@@ -14,18 +20,39 @@ export class AuthService {
     private prisma: PrismaService,
     private jwt: JwtService,
     private config: ConfigService,
+    @Optional() private readonly rateLimit?: AuthRateLimitService,
   ) {}
 
-  async login(email: string, password: string) {
+  async login(email: string, password: string, sourceIp = "unknown") {
+    this.rateLimit?.assertAllowed(email, sourceIp);
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (
       !user ||
       isSimulationSystemActorEmail(user.email) ||
       !(await bcrypt.compare(password, user.passwordHash))
     ) {
+      this.rateLimit?.recordFailure(email, sourceIp);
       throw new UnauthorizedException("Email hoặc mật khẩu sai");
     }
-    return this.issueTokens(user.id, user.email, user.role as UserRole, user.warehouseId);
+    this.rateLimit?.clear(email, sourceIp);
+    const rotatedUser = await this.prisma.user.update({
+      where: { id: user.id },
+      data: { tokenVersion: { increment: 1 } },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        warehouseId: true,
+        tokenVersion: true,
+      },
+    });
+    return this.issueTokens(
+      rotatedUser.id,
+      rotatedUser.email,
+      rotatedUser.role as UserRole,
+      rotatedUser.warehouseId,
+      rotatedUser.tokenVersion,
+    );
   }
 
   async refresh(refreshToken: string) {
@@ -37,11 +64,38 @@ export class AuthService {
     } catch {
       throw new UnauthorizedException("Refresh token không hợp lệ");
     }
+    if (!Number.isInteger(payload.tokenVersion)) {
+      throw new UnauthorizedException("Refresh token không còn hiệu lực");
+    }
     const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
-    if (!user || isSimulationSystemActorEmail(user.email)) {
+    if (
+      !user ||
+      isSimulationSystemActorEmail(user.email) ||
+      user.tokenVersion !== payload.tokenVersion
+    ) {
       throw new UnauthorizedException("User không tồn tại");
     }
-    return this.issueTokens(user.id, user.email, user.role as UserRole, user.warehouseId);
+    const rotated = await this.prisma.user.updateMany({
+      where: { id: user.id, tokenVersion: payload.tokenVersion },
+      data: { tokenVersion: { increment: 1 } },
+    });
+    if (rotated.count !== 1) {
+      throw new UnauthorizedException("Refresh token không còn hiệu lực");
+    }
+    return this.issueTokens(
+      user.id,
+      user.email,
+      user.role as UserRole,
+      user.warehouseId,
+      payload.tokenVersion + 1,
+    );
+  }
+
+  async revokeSessions(userId: string): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { tokenVersion: { increment: 1 } },
+    });
   }
 
   async getProfile(userId: string) {
@@ -105,8 +159,15 @@ export class AuthService {
     email: string,
     role: UserRole,
     warehouseId?: string | null,
+    tokenVersion = 0,
   ) {
-    const payload: JwtPayload = { sub, email, role, warehouseId: warehouseId ?? null };
+    const payload: JwtPayload = {
+      sub,
+      email,
+      role,
+      warehouseId: warehouseId ?? null,
+      tokenVersion,
+    };
     const [accessToken, refreshToken] = await Promise.all([
       this.jwt.signAsync(payload, {
         secret: this.config.get("JWT_ACCESS_SECRET"),

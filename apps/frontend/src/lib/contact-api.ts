@@ -1,11 +1,7 @@
 import { apiFetch } from "./api";
+import type { PublicCommuneContact } from "@safestock/shared-types";
 
-export interface PublicCommuneContact {
-  communeName: string;
-  scope: "HOME" | "NEIGHBOR";
-  contactTitle: string;
-  phone: string | null;
-}
+export type { PublicCommuneContact } from "@safestock/shared-types";
 
 export function getPublicCommuneContacts(): Promise<PublicCommuneContact[]> {
   return apiFetch<PublicCommuneContact[]>("/api/public/commune-contacts");

@@ -63,7 +63,11 @@ export class WebSocketAuthService {
       secret: this.accessSecret,
       algorithms: ["HS256"],
     });
-    if (!payload?.sub || typeof payload.sub !== "string") {
+    if (
+      !payload?.sub ||
+      typeof payload.sub !== "string" ||
+      !Number.isInteger(payload.tokenVersion)
+    ) {
       throw new Error(UNAUTHORIZED_MESSAGE);
     }
 
@@ -75,11 +79,16 @@ export class WebSocketAuthService {
         role: true,
         organizationId: true,
         warehouseId: true,
+        tokenVersion: true,
         warehouse: { select: { organizationId: true } },
         organization: { select: { warehouses: { select: { id: true } } } },
       },
     });
-    if (!user || isSimulationSystemActorEmail(user.email)) {
+    if (
+      !user ||
+      isSimulationSystemActorEmail(user.email) ||
+      user.tokenVersion !== payload.tokenVersion
+    ) {
       throw new Error(UNAUTHORIZED_MESSAGE);
     }
     if (user.warehouse && user.warehouse.organizationId !== user.organizationId) {

@@ -77,6 +77,7 @@ model Organization {
   users      User[]
   warehouses Warehouse[]
   hamlets    Hamlet[]
+  notifications Notification[]
 }
 
 model User {
@@ -90,6 +91,8 @@ model User {
   notificationEmail   String?
   avatarUrl           String?
   role                UserRole                      @default(WAREHOUSE)
+  // Tăng khi đăng nhập, refresh hoặc logout để thu hồi toàn bộ JWT cũ của tài khoản.
+  tokenVersion        Int                           @default(0)
   // Scope kho: null = phụ trách toàn xã (kho tổng); có giá trị = trưởng thôn CHỈ quản kho này.
   warehouseId         String?
   warehouse           Warehouse?                    @relation(fields: [warehouseId], references: [id])
@@ -97,6 +100,10 @@ model User {
   transactions        InventoryTransaction[]
   reports             MonthlyStockReport[]
   missionPreparations MissionWarehousePreparation[]
+  missionRequestsAccepted MissionWarehouseRequest[] @relation("MissionWarehouseRequestAcceptedBy")
+  missionRequestsPrepared MissionWarehouseRequest[] @relation("MissionWarehouseRequestPreparedBy")
+  analysisSnapshots   MissionAnalysisSnapshot[] @relation("MissionAnalysisActor")
+  fieldUpdates        MissionFieldUpdate[]      @relation("MissionFieldUpdateActor")
 }
 
 enum WarehouseKind {
@@ -121,6 +128,7 @@ model Warehouse {
   reports             MonthlyStockReport[]
   missions            Mission[]                     @relation("MissionSourceWarehouse")
   missionPreparations MissionWarehousePreparation[]
+  missionRequests     MissionWarehouseRequest[]
 }
 
 // Thôn/điểm ứng phó do ADMIN cấu hình trước. Marker này độc lập với marker kho.
@@ -501,6 +509,12 @@ enum DeliveryOutcome {
   FAILED // không giao được (đường tắc, điểm nạn di dời…)
 }
 
+enum MissionWarehouseRequestStatus {
+  PENDING
+  ACCEPTED
+  PREPARED
+}
+
 // Nhiệm vụ cứu hộ — sinh từ tình huống, gồm nhu cầu + phương án phân bổ.
 model Mission {
   id                    String                        @id @default(cuid())
@@ -535,9 +549,76 @@ model Mission {
   approvedAt            DateTime?
   requirements          MissionRequirement[]
   warehousePreparations MissionWarehousePreparation[]
+  warehouseRequests     MissionWarehouseRequest[]
+  analysisSnapshots     MissionAnalysisSnapshot[]
+  fieldUpdates          MissionFieldUpdate[]
 
   @@unique([createdByUserId, reportRequestId])
   @@index([hamletId])
+}
+
+/// Immutable evidence of a human-reviewed coordination analysis. It captures
+/// its exact inputs, output, provenance and version stamps, without assigning
+/// people, contacting another commune, or mutating inventory.
+enum MissionAnalysisSnapshotKind {
+  BASELINE
+  WHAT_IF
+}
+
+model MissionAnalysisSnapshot {
+  id                     String                      @id @default(cuid())
+  missionId              String
+  mission                Mission                     @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  kind                   MissionAnalysisSnapshotKind
+  requestId              String?
+  fingerprint            String
+  baselineSnapshotId     String?
+  baselineSnapshot       MissionAnalysisSnapshot?    @relation("MissionAnalysisBaseline", fields: [baselineSnapshotId], references: [id], onDelete: SetNull)
+  derivedSnapshots       MissionAnalysisSnapshot[]   @relation("MissionAnalysisBaseline")
+  input                  Json
+  provenance             Json
+  result                 Json
+  assumptions            Json?
+  modelVersion           String
+  ruleVersion            String
+  geoRegistryVersion     String?
+  routingGraphVersion    String?
+  weatherSnapshotVersion String?
+  actorId                String
+  actor                  User                        @relation("MissionAnalysisActor", fields: [actorId], references: [id])
+  computedAt             DateTime                    @default(now())
+  expiresAt              DateTime?
+
+  @@unique([missionId, requestId])
+  @@index([missionId, kind, computedAt])
+  @@index([baselineSnapshotId])
+}
+
+enum FieldUpdateInputMode {
+  TEXT
+  VOICE_TRANSCRIPT
+}
+
+/// A confirmed, idempotent field observation. The stored text is deliberately
+/// limited to the operator-confirmed transcript; media and continuous tracking
+/// are outside the product scope.
+model MissionFieldUpdate {
+  id               String               @id @default(cuid())
+  missionId        String
+  mission          Mission              @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  actorId          String
+  actor            User                 @relation("MissionFieldUpdateActor", fields: [actorId], references: [id])
+  requestId        String
+  inputMode        FieldUpdateInputMode
+  confirmedText    String
+  clientCapturedAt DateTime?
+  structuredIntent Json?
+  intentProvenance Json?
+  createdAt        DateTime             @default(now())
+
+  @@unique([missionId, actorId, requestId])
+  @@index([missionId, createdAt])
+  @@index([actorId, createdAt])
 }
 
 // Nhu cầu vật tư của nhiệm vụ (sinh từ định mức).
@@ -573,6 +654,41 @@ model MissionWarehousePreparation {
 
   @@unique([missionId, warehouseId])
   @@index([warehouseId, preparedAt])
+}
+
+// Từng SKU mà một kho tham gia phải tiếp nhận và chuẩn bị cho nhiệm vụ.
+// preparationClaimToken là CAS lock: ADMIN không thể sửa khi kho đang xuất.
+model MissionWarehouseRequest {
+  id                     String                        @id @default(cuid())
+  missionId              String
+  mission                Mission                       @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  warehouseId            String
+  warehouse              Warehouse                     @relation(fields: [warehouseId], references: [id])
+  sku                    String
+  itemName               String
+  unit                   String
+  requestedQuantity      Int
+  preparedQuantity       Int                           @default(0)
+  allocations            Json
+  preparedAllocations    Json?
+  status                 MissionWarehouseRequestStatus @default(PENDING)
+  warehouseNote          String?
+  adminNote              String?
+  acceptedByUserId       String?
+  acceptedBy             User?                         @relation("MissionWarehouseRequestAcceptedBy", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
+  preparedByUserId       String?
+  preparedBy             User?                         @relation("MissionWarehouseRequestPreparedBy", fields: [preparedByUserId], references: [id], onDelete: SetNull)
+  preparationClaimToken  String?
+  preparationClaimedAt   DateTime?
+  acceptedAt             DateTime?
+  preparedAt             DateTime?
+  createdAt              DateTime                      @default(now())
+  updatedAt              DateTime                      @updatedAt
+
+  @@unique([missionId, warehouseId, sku])
+  @@index([warehouseId, status, createdAt])
+  @@index([missionId, status])
+  @@index([preparationClaimToken])
 }
 
 // ===== Phase E: Incident Intelligence =====
@@ -663,10 +779,18 @@ enum NotificationKind {
   MISSION_CANCELLED // admin huỷ nhiệm vụ (kèm lý do) → báo đội cứu hộ
   MISSION_COMPLETED // đội cứu hộ xác nhận đã giao (kèm kết quả) → báo admin + kho
   INCIDENT_REPORTED // trưởng thôn báo cáo tình huống từ hiện trường → báo admin
+  FIELD_UPDATE_REPORTED // lực lượng hiện trường gửi evidence đã tự xác nhận → báo admin
+  WAREHOUSE_REQUESTED // admin phát hành/cập nhật yêu cầu SKU → báo kho
+  WAREHOUSE_REQUEST_ACCEPTED // kho xác nhận tiếp nhận một SKU → báo admin
+  WAREHOUSE_REQUEST_REVIEW // kho báo thiếu/sai, cần admin xem lại
 }
 
 model Notification {
   id            String           @id @default(cuid())
+  // Nullable only while legacy records are backfilled. Runtime reads never
+  // expose a null-scoped record, so old data cannot leak across organizations.
+  organizationId String?
+  organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   recipientRole UserRole // gửi theo role (WAREHOUSE/RESCUE/ADMIN)
   missionId     String?
   warehouseId   String?
@@ -674,7 +798,10 @@ model Notification {
   title         String
   body          String
   read          Boolean          @default(false)
+  // Deep-link target for ADMIN evidence review. It is a scalar by design so
+  // notification retention never owns or deletes the immutable evidence.
+  fieldUpdateId String?          @unique
   createdAt     DateTime         @default(now())
 
-  @@index([recipientRole, read])
+  @@index([organizationId, recipientRole, read])
 }

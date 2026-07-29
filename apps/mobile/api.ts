@@ -258,6 +258,18 @@ export async function refreshSession(
   return res.json();
 }
 
+/**
+ * Đăng xuất phía máy chủ: thu hồi toàn bộ refresh token của người dùng (tokenVersion++)
+ * để phiên cũ không refresh lại được. Best-effort — App vẫn xoá phiên cục bộ dù mất mạng.
+ */
+export async function logout(token: string): Promise<void> {
+  const res = await request(apiUrl("/api/auth/logout"), {
+    method: "POST",
+    headers: authHeader(token),
+  });
+  if (!res.ok) throw await apiFailure(res, "Đăng xuất phía máy chủ thất bại");
+}
+
 /** Danh sách thông báo của role hiện tại (mới nhất trước). */
 export async function fetchNotifications(token: string): Promise<Notification[]> {
   const res = await request(apiUrl("/api/notifications"), {
@@ -310,6 +322,66 @@ export async function submitReport(
   return res.json();
 }
 
+export type OwnReportStatus =
+  | "DRAFT"
+  | "PENDING_WAREHOUSE"
+  | "READY"
+  | "CANCELLED"
+  | "APPROVED"
+  | "IN_PROGRESS"
+  | "COMPLETED";
+
+export interface OwnReportSummary {
+  id: string;
+  reportText: string | null;
+  status: OwnReportStatus | string;
+  incidentType: string;
+  affectedPeople: number;
+  location: string | null;
+  createdAt: string;
+  warehouse: { id: string; name: string } | null;
+  requirements: MissionRequirement[];
+}
+
+export interface OwnReportDetail extends OwnReportSummary {
+  incidentLat: number | null;
+  incidentLng: number | null;
+  priority: string | null;
+  fulfillment: number;
+  explanation: string | null;
+  fieldUpdates: Array<{
+    id: string;
+    confirmedText: string;
+    inputMode: "TEXT" | "VOICE_TRANSCRIPT";
+    createdAt: string;
+  }>;
+}
+
+/** Báo cáo text do chính trưởng thôn đã gửi, không kèm audio/media thô. */
+export async function fetchOwnReports(
+  token: string,
+  cursor?: string,
+  limit = 20,
+): Promise<{ items: OwnReportSummary[]; nextCursor: string | null }> {
+  const params = new URLSearchParams();
+  if (cursor) params.set("cursor", cursor);
+  params.set("limit", String(limit));
+  const res = await request(apiUrl(`/api/missions/reports/own?${params.toString()}`), {
+    headers: authHeader(token),
+  });
+  if (!res.ok) throw new Error("Không tải được lịch sử báo cáo");
+  return res.json();
+}
+
+/** Chi tiết một báo cáo text thuộc chính tài khoản hiện tại. */
+export async function fetchOwnReport(token: string, id: string): Promise<OwnReportDetail> {
+  const res = await request(apiUrl(`/api/missions/reports/own/${encodeURIComponent(id)}`), {
+    headers: authHeader(token),
+  });
+  if (!res.ok) throw new Error("Không tải được chi tiết báo cáo");
+  return res.json();
+}
+
 export interface MissionRequirement {
   id: string;
   sku: string;
@@ -335,9 +407,27 @@ export interface MissionDetail {
   deliveryOutcome?: DeliveryOutcome | null;
   deliveryNote?: string | null;
   requirements: MissionRequirement[];
+  warehouseRequests?: WarehouseMaterialRequest[];
 }
 
 export type DeliveryOutcome = "DELIVERED" | "PARTIAL" | "FAILED";
+
+export interface WarehouseMaterialRequest {
+  id: string;
+  missionId: string;
+  warehouseId: string;
+  sku: string;
+  itemName: string;
+  unit: string;
+  requestedQuantity: number;
+  preparedQuantity: number;
+  status: "PENDING" | "ACCEPTED" | "PREPARED";
+  warehouseNote: string | null;
+  adminNote: string | null;
+  acceptedAt: string | null;
+  preparedAt: string | null;
+  warehouse?: { id: string; name: string };
+}
 
 const authHeader = (token: string) => ({ Authorization: `Bearer ${token}` });
 
@@ -350,55 +440,83 @@ export async function fetchMission(token: string, id: string): Promise<MissionDe
   return res.json();
 }
 
-/** Chấp nhận nhiệm vụ (PENDING_RESCUE → PENDING_WAREHOUSE). */
-export async function confirmMission(token: string, id: string): Promise<MissionDetail> {
-  const res = await request(apiUrl(`/api/missions/${id}/confirm`), {
-    method: "POST",
+export async function fetchWarehouseMaterialRequests(
+  token: string,
+): Promise<WarehouseMaterialRequest[]> {
+  const res = await request(apiUrl("/api/missions/warehouse-requests/own"), {
     headers: authHeader(token),
   });
+  if (!res.ok) throw new Error("Không tải được yêu cầu chuẩn bị vật tư");
+  return res.json();
+}
+
+export async function acceptWarehouseMaterialRequest(
+  token: string,
+  requestId: string,
+  note?: string,
+): Promise<WarehouseMaterialRequest> {
+  return mutateWarehouseMaterialRequest(token, requestId, "accept", { note });
+}
+
+export async function prepareWarehouseMaterialRequest(
+  token: string,
+  requestId: string,
+): Promise<WarehouseMaterialRequest> {
+  return mutateWarehouseMaterialRequest(token, requestId, "prepare");
+}
+
+export async function reportWarehouseMaterialDiscrepancy(
+  token: string,
+  requestId: string,
+  note: string,
+): Promise<WarehouseMaterialRequest> {
+  return mutateWarehouseMaterialRequest(token, requestId, "discrepancy", { note });
+}
+
+async function mutateWarehouseMaterialRequest(
+  token: string,
+  requestId: string,
+  action: "accept" | "prepare" | "discrepancy",
+  body?: Record<string, unknown>,
+): Promise<WarehouseMaterialRequest> {
+  const res = await request(
+    apiUrl(`/api/missions/warehouse-requests/${encodeURIComponent(requestId)}/${action}`),
+    {
+      method: "POST",
+      headers: { ...authHeader(token), "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    },
+  );
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error(data.message ?? "Không chấp nhận được nhiệm vụ");
+    throw new Error(data.message ?? "Không cập nhật được yêu cầu vật tư");
   }
   return res.json();
 }
 
 /**
- * Từ chối / rút nhiệm vụ kèm lý do. PENDING_RESCUE = từ chối trước khi nhận;
- * RESCUE_CONFIRMED/PENDING_WAREHOUSE = báo không tiếp tục được sau khi đã nhận.
+ * Lực lượng hiện trường gửi text hoặc transcript voice sau khi tự đọc/sửa và
+ * bấm xác nhận. Không gửi audio thô, ảnh/video hoặc GPS liên tục.
  */
-export async function rejectMission(
+export async function submitFieldUpdate(
   token: string,
-  id: string,
-  reason: string,
-): Promise<MissionDetail> {
-  const res = await request(apiUrl(`/api/missions/${id}/reject`), {
+  missionId: string,
+  input: {
+    requestId: string;
+    inputMode: "TEXT" | "VOICE_TRANSCRIPT";
+    confirmedText: string;
+    confirmedByUser: true;
+    clientCapturedAt?: string;
+  },
+): Promise<{ id: string; confirmedText: string }> {
+  const res = await request(apiUrl(`/api/missions/${missionId}/field-updates`), {
     method: "POST",
     headers: { ...authHeader(token), "Content-Type": "application/json" },
-    body: JSON.stringify({ reason }),
+    body: JSON.stringify(input),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error(data.message ?? "Không từ chối được nhiệm vụ");
-  }
-  return res.json();
-}
-
-/** Xác nhận đã giao tới hiện trường + kết quả (READY → COMPLETED, báo admin + kho). */
-export async function completeMission(
-  token: string,
-  id: string,
-  outcome: DeliveryOutcome,
-  note?: string,
-): Promise<MissionDetail> {
-  const res = await request(apiUrl(`/api/missions/${id}/complete`), {
-    method: "POST",
-    headers: { ...authHeader(token), "Content-Type": "application/json" },
-    body: JSON.stringify({ outcome, note }),
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.message ?? "Không xác nhận được kết quả giao");
+    throw new Error(data.message ?? "Không gửi được cập nhật hiện trường");
   }
   return res.json();
 }

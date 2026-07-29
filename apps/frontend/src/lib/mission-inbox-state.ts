@@ -53,8 +53,11 @@ export function missionNeedsAction(
     return ["DRAFT", "REJECTED", "DEFERRED"].includes(mission.status);
   }
 
+  // Lực lượng hiện trường CHỈ ĐỌC: chỉ có MISSION_VIEW + MISSION_FIELD_UPDATE, không đổi
+  // trạng thái nhiệm vụ nào. Vì vậy không gắn cờ "Cần xử lý" — họ không có hành động điều
+  // phối để thực hiện, chỉ nhận thông tin và gửi cập nhật hiện trường.
   if (role === "RESCUE") {
-    return mission.status === "PENDING_RESCUE" || mission.status === "READY";
+    return false;
   }
 
   if (role !== "WAREHOUSE" || mission.status !== "PENDING_WAREHOUSE" || !warehouseId) {
@@ -119,7 +122,12 @@ export function filterMissionInbox(
     });
 }
 
-export function missionDeepLink(missionId: string) {
+export function missionDeepLink(missionId: string, fieldUpdateId?: string | null) {
   const normalizedId = missionId.trim();
-  return normalizedId ? `/mission?mission=${encodeURIComponent(normalizedId)}` : "/mission";
+  if (!normalizedId) return "/mission";
+  const normalizedFieldUpdateId = fieldUpdateId?.trim();
+  const target = normalizedFieldUpdateId
+    ? `&fieldUpdate=${encodeURIComponent(normalizedFieldUpdateId)}`
+    : "";
+  return `/mission?mission=${encodeURIComponent(normalizedId)}${target}`;
 }

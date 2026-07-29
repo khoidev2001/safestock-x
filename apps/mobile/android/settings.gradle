@@ -21,7 +21,7 @@ extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
   }
 }
 
-rootProject.name = 'SafeStock Cứu hộ'
+rootProject.name = 'Ứng phó nhanh'
 
 dependencyResolutionManagement {
   versionCatalogs {

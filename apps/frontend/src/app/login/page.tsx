@@ -24,7 +24,11 @@ export default function LoginPage() {
     try {
       const response = await fetch(`${BASE}/api/auth/login`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Transport": "web",
+        },
         body: JSON.stringify({ email, password }),
       });
       if (!response.ok) {
@@ -37,7 +41,7 @@ export default function LoginPage() {
         throw new Error("Chưa thể đăng nhập bằng tài khoản này.");
       }
       const data = await response.json();
-      setAuth(data.accessToken, data.refreshToken, data.user);
+      setAuth(data.accessToken, data.user);
       router.push("/readiness");
     } catch (err) {
       setError(

@@ -387,7 +387,15 @@ describe("MissionService.prepareByWarehouse", () => {
 describe("MissionController.prepare", () => {
   it("truyền warehouseId từ JWT xuống service để chặn IDOR", async () => {
     const missions = { prepareByWarehouse: jest.fn().mockResolvedValue(readyMission) };
-    const controller = new MissionController(missions as never, {} as never);
+    const controller = new MissionController(
+      missions as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
 
     await controller.prepare(
       { user: { userId: "user-1", warehouseId: "warehouse-a" } } as never,

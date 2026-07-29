@@ -90,6 +90,25 @@ export function logout(): void {
   auth.user = null;
 }
 
+/**
+ * Đăng xuất do người dùng chủ động: thu hồi phiên phía máy chủ (tokenVersion++) để refresh
+ * token cũ hết hiệu lực, rồi xoá phiên cục bộ. Best-effort — mất mạng vẫn đăng xuất cục bộ.
+ */
+export async function logoutServer(): Promise<void> {
+  const accessToken = auth.accessToken;
+  if (accessToken) {
+    try {
+      await fetch(`${auth.base}/api/auth/logout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+    } catch {
+      // Bỏ qua lỗi mạng — vẫn tiếp tục xoá phiên cục bộ bên dưới.
+    }
+  }
+  logout();
+}
+
 export async function apiFetch<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await rawFetch(path, options);
   if (res.status !== 401) return handle<T>(res);

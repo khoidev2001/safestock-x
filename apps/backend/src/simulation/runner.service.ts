@@ -197,6 +197,13 @@ export class RunnerService {
     });
   }
 
+  /**
+   * Reset = đưa con trỏ run về đầu (IDLE, cursorMs=0) để phát lại timeline.
+   * CHỦ ĐÍCH KHÔNG hoàn tác hiệu ứng đã sinh: sensorEvent (gắn runId), currentValue của
+   * thiết bị, giao dịch tồn kho từ loadcell và incident đã quét đều được GIỮ NGUYÊN —
+   * vì chúng trải nhiều bảng và không đều gắn runId; xoá một phần sẽ làm lệch tồn kho khỏi
+   * lịch sử. Muốn trạng thái sạch hoàn toàn: tạo run mới hoặc seed lại kho demo.
+   */
   reset(actorUserId: string, runId: string) {
     return this.withRunControl(runId, () => this.resetUnlocked(actorUserId, runId));
   }

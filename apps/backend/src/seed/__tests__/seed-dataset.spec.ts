@@ -49,7 +49,7 @@ describe("standard seed dataset", () => {
     );
   });
 
-  it("có đủ 17 thôn hiện hành của xã Đồng Xuân và chờ ghim tọa độ", () => {
+  it("có đủ 17 thôn, chỉ seed 5 Nhà văn hóa đã xác minh và giữ 12 điểm chờ ghim", () => {
     expect(HAMLET_WAREHOUSES.map((warehouse) => warehouse.name)).toEqual([
       "Kho thôn Long Châu",
       "Kho thôn Long Thăng",
@@ -70,7 +70,52 @@ describe("standard seed dataset", () => {
       "Kho thôn Triêm Đức",
     ]);
     expect(new Set(HAMLET_WAREHOUSES.map((warehouse) => warehouse.key)).size).toBe(17);
-    expect(HAMLET_WAREHOUSES.every(({ lat, lng }) => lat == null && lng == null)).toBe(true);
+    expect(
+      HAMLET_WAREHOUSES.filter((warehouse) => warehouse.locationVerified).map(
+        ({ key, location, lat, lng }) => ({ key, location, lat, lng }),
+      ),
+    ).toEqual([
+      {
+        key: "ky-du",
+        location: "Nhà Văn hóa thôn Kỳ Đu",
+        lat: 13.3636977,
+        lng: 109.062318,
+      },
+      {
+        key: "phuoc-hue",
+        location: "Nhà Văn hoá thôn Phước Huệ",
+        lat: 13.3698758,
+        lng: 109.0787774,
+      },
+      {
+        key: "tan-binh",
+        location: "Nhà sinh hoạt cộng đồng thôn Tân Bình",
+        lat: 13.365686,
+        lng: 109.144698,
+      },
+      {
+        key: "phu-son",
+        location: "Nhà Văn hóa thôn Phú Sơn",
+        lat: 13.3504381,
+        lng: 109.0451656,
+      },
+      {
+        key: "triem-duc",
+        location: "Nhà Văn hóa thôn Triêm Đức",
+        lat: 13.3615575,
+        lng: 109.0703455,
+      },
+    ]);
+    const pendingLocations = HAMLET_WAREHOUSES.filter(
+      (warehouse) => !warehouse.locationVerified,
+    );
+    expect(pendingLocations).toHaveLength(12);
+    expect(
+      pendingLocations.every(
+        ({ location, lat, lng }) =>
+          location.startsWith("Nhà văn hóa thôn ") && lat == null && lng == null,
+      ),
+    ).toBe(true);
     expect(HAMLET_WAREHOUSES.every(({ stock }) => stock.length >= 6)).toBe(true);
   });
 

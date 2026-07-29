@@ -6,6 +6,7 @@ import {
   getSessionVersion,
   login,
   logout,
+  logoutServer,
   refreshAccessToken,
   setBase,
   type AuthUser,
@@ -43,11 +44,16 @@ interface LogLine {
   tone?: "info" | "sensor" | "alert";
 }
 
-const ADMIN_EMAIL = "admin";
-const ADMIN_PASSWORD = "admin123@";
+// Không hard-code credential trong source. Prefill (tuỳ chọn) chỉ đến từ biến môi
+// trường build-time cho tiện demo local; production/đóng gói không đặt biến này nên
+// ô nhập rỗng và người dùng tự nhập tài khoản.
+const DEFAULT_ADMIN_EMAIL = import.meta.env.RENDERER_VITE_ADMIN_EMAIL ?? "";
+const DEFAULT_ADMIN_PASSWORD = import.meta.env.RENDERER_VITE_ADMIN_PASSWORD ?? "";
 
 export function App() {
   const [host, setHost] = useState("localhost:3100");
+  const [email, setEmail] = useState(DEFAULT_ADMIN_EMAIL);
+  const [password, setPassword] = useState(DEFAULT_ADMIN_PASSWORD);
   const [authed, setAuthed] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -91,34 +97,47 @@ export function App() {
 
   // ---- Đăng nhập + nạp danh mục + mở WS ----
   async function handleLogin() {
+    if (!email.trim() || !password) {
+      setLoginError("Nhập email và mật khẩu admin để đăng nhập.");
+      return;
+    }
     setBusy(true);
     setLoginError(null);
     try {
       setBase(host);
-      const u = await login(ADMIN_EMAIL, ADMIN_PASSWORD);
-      setUser(u);
-      setAuthed(true);
+      const u = await login(email.trim(), password);
       pushLog(`Đăng nhập thành công (${u.role}).`);
 
+      // Nạp toàn bộ trạng thái nền TRƯỚC khi chuyển sang màn hình đã đăng nhập. Nếu bất kỳ
+      // bước nào hỏng thì catch sẽ thu hồi phiên → tránh kẹt ở trạng thái "đăng nhập một
+      // nửa" (authed=true nhưng chưa có kho/thiết bị).
       const wh = await firstWarehouse();
       if (!wh) throw new Error("Không tìm thấy kho nào");
-      setWarehouse(wh);
-      pushLog(`Mở kho: ${wh.name}`);
 
       const [devs, scns] = await Promise.all([listDevices(wh.id), listScenarios()]);
-      setDevices(devs);
-      setScenarios(scns);
-      if (scns[0]) setScenarioKey(scns[0].key);
 
       const initValues: Record<string, number> = {};
       for (const d of devs) {
         if (ADJUSTABLE_TYPES.includes(d.type)) initValues[d.code] = d.currentValue ?? 0;
       }
+
+      setUser(u);
+      setWarehouse(wh);
+      pushLog(`Mở kho: ${wh.name}`);
+      setDevices(devs);
+      setScenarios(scns);
+      if (scns[0]) setScenarioKey(scns[0].key);
       setSliderValues(initValues);
+      setAuthed(true);
 
       await refreshReactions(wh.id);
       openSocket(wh.id);
     } catch (err) {
+      // Bootstrap hỏng sau khi login: xoá phiên cục bộ để không mắc kẹt nửa vời.
+      logout();
+      setAuthed(false);
+      setUser(null);
+      setWarehouse(null);
       setLoginError((err as Error).message);
     } finally {
       setBusy(false);
@@ -233,7 +252,9 @@ export function App() {
     if (!runId) return;
     try {
       await resetRun(runId);
-      pushLog("Đã reset kịch bản.");
+      // Reset chỉ đưa con trỏ run về 0 (IDLE) để chạy lại; KHÔNG xoá sensor event / tồn kho
+      // đã sinh. Muốn dữ liệu sạch hoàn toàn thì tạo run mới hoặc seed lại kho demo.
+      pushLog("Đã reset con trỏ kịch bản (dữ liệu đã sinh vẫn giữ). Tạo run mới nếu cần dữ liệu sạch.");
       if (warehouse) refreshReactions(warehouse.id);
     } catch (err) {
       pushLog(`Reset lỗi: ${(err as Error).message}`, "alert");
@@ -242,7 +263,7 @@ export function App() {
 
   function handleLogout() {
     socketRef.current?.disconnect();
-    logout();
+    void logoutServer();
     setAuthed(false);
     setUser(null);
     setWarehouse(null);
@@ -259,7 +280,7 @@ export function App() {
     <div className="app">
       <header className="topbar">
         <div>
-          <h1>SafeStock · Giả lập cảm biến</h1>
+          <h1>Ứng phó nhanh · Giả lập cảm biến</h1>
           <p className="sub">Chỉnh thông số → xem app phản ứng (readiness + cảnh báo sự cố)</p>
         </div>
         <div className="conn">
@@ -284,8 +305,30 @@ export function App() {
               placeholder="localhost:3100 hoặc 192.168.1.x"
             />
           </label>
+          <label className="field">
+            <span>Email admin</span>
+            <input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="username"
+              placeholder="admin@safestock.local"
+            />
+          </label>
+          <label className="field">
+            <span>Mật khẩu</span>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleLogin();
+              }}
+              placeholder="••••••••"
+            />
+          </label>
           <p className="hint">
-            Đăng nhập tài khoản admin ({ADMIN_EMAIL}) — app chỉ dùng để demo/test.
+            Nhập tài khoản admin do người tổ chức cấp — app chỉ dùng để demo/test.
           </p>
           {loginError && <p className="error">{loginError}</p>}
           <button className="btn primary" onClick={handleLogin} disabled={busy}>

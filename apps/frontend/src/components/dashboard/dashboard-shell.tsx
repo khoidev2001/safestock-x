@@ -5,27 +5,22 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ColorIcon, type ColorIconName, type ColorIconTone } from "@/components/shared/color-icon";
 import { useAuth } from "@/lib/auth-store";
+import { closeWebSession } from "@/lib/api";
 import { navGroups, navItems, type NavItem } from "@/lib/dashboard-nav";
 import { missionDeepLink } from "@/lib/mission-inbox-state";
 import { NotificationBell } from "@/components/mission/notification-bell";
 import { UserProfileButton } from "@/components/profile/user-profile-button";
-import { roleHasPermission } from "@safestock/shared-types";
+import { roleHasPermission, userRoleLabel } from "@safestock/shared-types";
 
 interface DashboardShellProps {
   children: React.ReactNode;
   warehouseName?: string;
 }
 
-const roleLabels: Record<string, string> = {
-  ADMIN: "Quản trị xã",
-  WAREHOUSE: "Phụ trách kho",
-  RESCUE: "Đội cứu hộ",
-};
-
 export function DashboardShell({ children, warehouseName }: DashboardShellProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, clear } = useAuth();
+  const user = useAuth((state) => state.user);
   const visibleNav = navItems.filter(
     (item) => user?.role && roleHasPermission(user.role, item.requiredPermission),
   );
@@ -34,8 +29,8 @@ export function DashboardShell({ children, warehouseName }: DashboardShellProps)
     return pathname === path || pathname.startsWith(`${path}/`);
   }
 
-  function logout() {
-    clear();
+  async function logout() {
+    await closeWebSession();
     router.replace("/login");
   }
 
@@ -89,13 +84,15 @@ export function DashboardShell({ children, warehouseName }: DashboardShellProps)
                   </p>
                   <p className="truncate text-xs text-[var(--text-muted)]">
                     {user?.fullName || user?.email || "Chưa xác định"} ·{" "}
-                    {roleLabels[user?.role ?? ""] ?? "Chưa xác định vai trò"}
+                    {user?.role ? userRoleLabel(user.role) : "Chưa xác định vai trò"}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <NotificationBell
-                  onOpenMission={(missionId) => router.push(missionDeepLink(missionId))}
+                  onOpenMission={(missionId, fieldUpdateId) =>
+                    router.push(missionDeepLink(missionId, fieldUpdateId))
+                  }
                 />
                 <UserProfileButton onLogout={logout} />
               </div>

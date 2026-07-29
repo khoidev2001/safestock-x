@@ -21,7 +21,7 @@ describe("authenticated Socket.IO rooms", () => {
   let baseUrl: string;
   let runner: { onEvent?: (warehouseId: string, payload: unknown) => void };
   let simulationEvents: { onEvent?: (warehouseId: string, payload: unknown) => void };
-  let notifications: { push?: (role: UserRole, payload: unknown) => void };
+  let notifications: { push?: (organizationId: string, role: UserRole, payload: unknown) => void };
 
   beforeEach(async () => {
     users.clear();
@@ -33,6 +33,13 @@ describe("authenticated Socket.IO rooms", () => {
       warehouseId: null,
       warehouse: null,
       organization: { warehouses: [{ id: "wh-a" }, { id: "wh-b" }] },
+    });
+    users.set("admin-b", {
+      ...warehouseUser("admin-b", "wh-b", "org-b"),
+      role: UserRole.ADMIN,
+      warehouseId: null,
+      warehouse: null,
+      organization: { warehouses: [{ id: "wh-b" }] },
     });
     prisma.user.findUnique.mockClear();
     prisma.user.findUnique.mockImplementation(({ where }: { where: { id: string } }) =>
@@ -69,9 +76,12 @@ describe("authenticated Socket.IO rooms", () => {
   });
 
   it("rejects missing, invalid, expired, and deleted-user tokens during handshake", async () => {
-    const invalid = await jwt.signAsync({ sub: "user-a" }, { secret: "wrong-secret" });
-    const expired = await jwt.signAsync({ sub: "user-a" }, { secret: SECRET, expiresIn: -1 });
-    const deletedUser = await jwt.signAsync({ sub: "deleted" }, { secret: SECRET });
+    const invalid = await jwt.signAsync({ sub: "user-a", tokenVersion: 0 }, { secret: "wrong-secret" });
+    const expired = await jwt.signAsync(
+      { sub: "user-a", tokenVersion: 0 },
+      { secret: SECRET, expiresIn: -1 },
+    );
+    const deletedUser = await jwt.signAsync({ sub: "deleted", tokenVersion: 0 }, { secret: SECRET });
 
     for (const token of [undefined, invalid, expired, deletedUser]) {
       const client = rejectedClient(baseUrl, token);
@@ -82,8 +92,8 @@ describe("authenticated Socket.IO rooms", () => {
   });
 
   it("isolates warehouses and ignores legacy room spoofing events", async () => {
-    const tokenA = await jwt.signAsync({ sub: "user-a" }, { secret: SECRET });
-    const tokenB = await jwt.signAsync({ sub: "user-b" }, { secret: SECRET });
+    const tokenA = await jwt.signAsync({ sub: "user-a", tokenVersion: 0 }, { secret: SECRET });
+    const tokenB = await jwt.signAsync({ sub: "user-b", tokenVersion: 0 }, { secret: SECRET });
     const [clientA, clientB] = await Promise.all([
       connect(baseUrl, tokenA),
       connect(baseUrl, tokenB),
@@ -114,44 +124,52 @@ describe("authenticated Socket.IO rooms", () => {
     expect(prisma.user.findUnique).toHaveBeenCalledTimes(2);
   });
 
-  it("derives notification role from the database and ignores role spoofing", async () => {
+  it("derives notification role from the database and isolates organization rooms", async () => {
     const staleAdminToken = await jwt.signAsync(
-      { sub: "user-a", role: UserRole.ADMIN },
+      { sub: "user-a", role: UserRole.ADMIN, tokenVersion: 0 },
       { secret: SECRET },
     );
-    const adminToken = await jwt.signAsync({ sub: "admin" }, { secret: SECRET });
-    const [warehouseClient, adminClient] = await Promise.all([
+    const adminToken = await jwt.signAsync({ sub: "admin", tokenVersion: 0 }, { secret: SECRET });
+    const adminBToken = await jwt.signAsync({ sub: "admin-b", tokenVersion: 0 }, { secret: SECRET });
+    const [warehouseClient, adminClient, adminBClient] = await Promise.all([
       connect(baseUrl, staleAdminToken),
       connect(baseUrl, adminToken),
+      connect(baseUrl, adminBToken),
     ]);
-    clients.push(warehouseClient, adminClient);
+    clients.push(warehouseClient, adminClient, adminBClient);
     const warehouseNotifications: string[] = [];
     const adminNotifications: string[] = [];
+    const adminBNotifications: string[] = [];
     warehouseClient.on("notification", (payload: { id: string }) =>
       warehouseNotifications.push(payload.id),
     );
     adminClient.on("notification", (payload: { id: string }) =>
       adminNotifications.push(payload.id),
     );
+    adminBClient.on("notification", (payload: { id: string }) =>
+      adminBNotifications.push(payload.id),
+    );
 
     warehouseClient.emit("join-role", { role: UserRole.ADMIN });
     await delay(30);
-    notifications.push?.(UserRole.ADMIN, { id: "admin-only" });
+    notifications.push?.("org-a", UserRole.ADMIN, { id: "admin-only" });
     await delay(50);
 
     expect(warehouseNotifications).toEqual([]);
     expect(adminNotifications).toEqual(["admin-only"]);
+    expect(adminBNotifications).toEqual([]);
   });
 });
 
-function warehouseUser(id: string, warehouseId: string) {
+function warehouseUser(id: string, warehouseId: string, organizationId = "org-a") {
   return {
     id,
     email: `${id}@example.test`,
     role: UserRole.WAREHOUSE,
-    organizationId: "org-a",
+    organizationId,
     warehouseId: warehouseId as string | null,
-    warehouse: { organizationId: "org-a" } as { organizationId: string } | null,
+    tokenVersion: 0,
+    warehouse: { organizationId } as { organizationId: string } | null,
     organization: { warehouses: [{ id: warehouseId }] },
   };
 }

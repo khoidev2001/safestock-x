@@ -21,7 +21,7 @@ describe("external surrounding-commune boundary", () => {
     );
 
     for (const commune of EXTERNAL_COMMUNES) expect(block).toContain(`"${commune}"`);
-    expect(block.match(/\[EXTERNAL\/MANUALLY REPORTED\]/g)).toHaveLength(1);
+    expect(block.match(/\[EXTERNAL\/AVAILABILITY UNKNOWN\]/g)).toHaveLength(1);
     expect(block).toContain("contactInfo: getVerifiedNeighborContact(commune)");
     expect(block).toContain("summary: []");
     expect(block).not.toContain("Xuân Sơn");
@@ -73,7 +73,7 @@ describe("external surrounding-commune boundary", () => {
       {} as never,
     );
     const externalRows = EXTERNAL_COMMUNES.map((commune) => ({
-      name: `[EXTERNAL/MANUALLY REPORTED] Xã ${commune}`,
+      name: `[EXTERNAL/AVAILABILITY UNKNOWN] UBND Xã ${commune}`,
       distanceKm: 0,
       summary: [],
     }));

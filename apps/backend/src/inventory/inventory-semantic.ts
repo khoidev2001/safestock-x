@@ -19,7 +19,7 @@ const PURPOSE_BY_SKU_PREFIX: Record<string, string> = {
   FIRSTAID: "sơ cứu, y tế, băng bó vết thương",
   TORCH: "chiếu sáng khi mất điện",
   BATT: "nguồn pin cho thiết bị",
-  RADIO: "liên lạc đội cứu hộ",
+  RADIO: "liên lạc lực lượng hiện trường",
   POWERBANK: "sạc điện thoại khi mất điện",
 };
 

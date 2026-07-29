@@ -6,10 +6,15 @@ import dynamic from "next/dynamic";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-store";
 import {
-  mergeCoordinateDrafts,
   mergeHamletCoordinateDrafts,
   type CoordinateDraft,
 } from "@/lib/map-marker-state";
+import {
+  beginWarehouseSave,
+  clearMatchingSavedDraft,
+  finishWarehouseSave,
+  mergeWarehouseDraft,
+} from "./map-view-state";
 import {
   listAllWarehouses,
   updateWarehouseLocation,
@@ -32,6 +37,9 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
   const [pickingTarget, setPickingTarget] = useState<MapMarkerTarget | null>(null);
   // Toạ độ tạm (chưa lưu) theo id — cho phép kéo/click nhiều lần rồi Lưu.
   const [warehouseDraft, setWarehouseDraft] = useState<CoordinateDraft>({});
+  const [pendingWarehouseSaves, setPendingWarehouseSaves] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [hamletDraft, setHamletDraft] = useState<CoordinateDraft>({});
   const [hamletForm, setHamletForm] = useState({ name: "", aliases: "", lat: "", lng: "" });
 
@@ -95,7 +103,12 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
     mutationFn: ({ id, lat, lng }: { id: string; lat: number; lng: number }) =>
       updateWarehouseLocation(id, lat, lng),
     onSuccess: (_, variables) => {
-      setWarehouseDraft((current) => omitDraft(current, variables.id));
+      setWarehouseDraft((current) =>
+        clearMatchingSavedDraft(current, variables.id, {
+          lat: variables.lat,
+          lng: variables.lng,
+        }),
+      );
       if (
         pickingTarget?.kind === "warehouse" &&
         pickingTarget.id === variables.id
@@ -104,9 +117,14 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
       }
       qc.invalidateQueries({ queryKey: ["all-warehouses", warehouseId] });
     },
+    onSettled: (_, __, variables) => {
+      setPendingWarehouseSaves((current) =>
+        finishWarehouseSave(current, variables.id),
+      );
+    },
   });
 
-  const warehouses = mergeCoordinateDrafts(query.data ?? [], warehouseDraft);
+  const warehouses = mergeWarehouseDraft(query.data ?? [], warehouseDraft);
   const hamlets = mergeHamletCoordinateDrafts(
     hamletsQuery.data ?? [],
     hamletDraft,
@@ -131,7 +149,8 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
 
   function saveOne(id: string) {
     const c = warehouseDraft[id];
-    if (!c) return;
+    if (!c || pendingWarehouseSaves.has(id)) return;
+    setPendingWarehouseSaves((current) => beginWarehouseSave(current, id) ?? current);
     save.mutate({ id, lat: c.lat, lng: c.lng });
   }
 
@@ -232,10 +251,15 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{w.name}</p>
+                        <p className="truncate text-xs text-[var(--text-muted)]">
+                          {w.location ?? "Chưa có tên địa điểm"}
+                        </p>
                         <p className="tabular text-xs text-[var(--text-muted)]">
                           {w.lat != null && w.lng != null
                             ? `${w.lat.toFixed(5)}, ${w.lng.toFixed(5)}`
-                            : "chưa ghim"}
+                            : w.kind === "HAMLET"
+                              ? "Chưa xác minh vị trí Nhà văn hóa thôn"
+                              : "Chưa ghim"}
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
@@ -261,7 +285,7 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
                           <button
                             type="button"
                             onClick={() => saveOne(w.id)}
-                            disabled={save.isPending}
+                            disabled={pendingWarehouseSaves.has(w.id)}
                             className="inline-flex items-center gap-1 rounded-md bg-[var(--color-accent)] px-2 py-1 text-xs font-semibold text-[var(--color-accent-fg)] disabled:opacity-60"
                           >
                             <ColorIcon name="save" size={15} tone="green" /> Lưu
@@ -279,11 +303,14 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
         {!devMode && unlocated.length > 0 && (
           <section className="rounded-md border bg-[var(--surface)] p-4">
             <h4 className="text-sm font-semibold text-[var(--color-attention)]">
-              Chưa ghim toạ độ ({unlocated.length})
+              Kho chờ xác minh vị trí ({unlocated.length})
             </h4>
             <ul className="mt-2 space-y-1 text-sm text-[var(--text-muted)]">
               {unlocated.map((w) => (
-                <li key={w.id}>• {w.name}</li>
+                <li key={w.id}>
+                  • {w.name}
+                  {w.kind === "HAMLET" ? " — Nhà văn hóa thôn" : ""}
+                </li>
               ))}
             </ul>
             {isAdmin && (

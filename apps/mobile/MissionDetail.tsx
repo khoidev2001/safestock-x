@@ -1,21 +1,26 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import {
-  completeMission,
-  confirmMission,
+  acceptWarehouseMaterialRequest,
   fetchMission,
-  rejectMission,
-  type DeliveryOutcome,
+  fetchWarehouseMaterialRequests,
+  prepareWarehouseMaterialRequest,
+  reportWarehouseMaterialDiscrepancy,
+  submitFieldUpdate,
+  transcribe,
   type MissionDetail,
+  type WarehouseMaterialRequest,
 } from "./api";
 import { c, styles } from "./styles";
 import { assessDanger, disasterOf, formatLongTime } from "./disaster";
 import { supplyOf, supplyProgress } from "./supplies";
 import { readOfflineCache, writeOfflineCache } from "./offline-cache";
+import { FIELD_FORCE_ROLE_LABEL } from "./role-labels";
+import { isRecordingSupported, startRecording, type AudioRecording } from "./audio";
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: "Nháp",
-  PENDING_RESCUE: "Chờ cứu hộ xác nhận",
+  PENDING_RESCUE: `Chờ ${FIELD_FORCE_ROLE_LABEL} xác nhận`,
   RESCUE_CONFIRMED: "Đã xác nhận",
   PENDING_WAREHOUSE: "Chờ kho chuẩn bị",
   READY: "Kho đã sẵn sàng",
@@ -25,42 +30,40 @@ const STATUS_LABEL: Record<string, string> = {
   CANCELLED: "Đã huỷ",
 };
 
-const REASON_SUGGESTIONS = ["Thiếu nhân lực", "Thiếu vật tư", "Xin trì hoãn", "Khác"];
-
-/** Trạng thái đội đã nhận nhưng chưa xong → cho phép "báo không tiếp tục được". */
-const AFTER_CONFIRM_STATES = ["RESCUE_CONFIRMED", "PENDING_WAREHOUSE"];
-
-const OUTCOME_OPTIONS: { key: DeliveryOutcome; label: string }[] = [
-  { key: "DELIVERED", label: "Đã giao đủ" },
-  { key: "PARTIAL", label: "Giao một phần" },
-  { key: "FAILED", label: "Không giao được" },
-];
-
-/** Màn chi tiết nhiệm vụ + hành động Chấp nhận / Từ chối (kèm lý do). */
+/** Màn chỉ đọc phương án, kèm Trợ lý hiện trường có xác nhận của người dùng. */
 export function MissionDetailScreen({
   token,
   userId,
+  role,
   missionId,
   onBack,
-  onResolved,
 }: {
   token: string;
   userId: string;
+  role: string;
   missionId: string;
   onBack: () => void;
-  onResolved: () => void;
 }) {
   const [mission, setMission] = useState<MissionDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cacheStoredAt, setCacheStoredAt] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [rejecting, setRejecting] = useState(false);
-  const [reason, setReason] = useState("");
-  const [selectedChip, setSelectedChip] = useState<string | null>(null);
-  const [completing, setCompleting] = useState(false);
-  const [outcome, setOutcome] = useState<DeliveryOutcome>("DELIVERED");
-  const [deliveryNote, setDeliveryNote] = useState("");
+  const [fieldUpdateText, setFieldUpdateText] = useState("");
+  const [fieldUpdateMode, setFieldUpdateMode] = useState<"TEXT" | "VOICE_TRANSCRIPT">("TEXT");
+  const [fieldUpdateBusy, setFieldUpdateBusy] = useState(false);
+  const [fieldVoiceBusy, setFieldVoiceBusy] = useState(false);
+  const [fieldRecording, setFieldRecording] = useState(false);
+  const [warehouseActionId, setWarehouseActionId] = useState<string | null>(null);
+  const [warehouseNotes, setWarehouseNotes] = useState<Record<string, string>>({});
+  const recordingRef = useRef<AudioRecording | null>(null);
+
+  useEffect(
+    () => () => {
+      void recordingRef.current?.stop();
+      recordingRef.current = null;
+    },
+    [],
+  );
 
   const load = useCallback(async () => {
     setError(null);
@@ -83,6 +86,12 @@ export function MissionDetailScreen({
     }
     try {
       const latest = await fetchMission(token, missionId);
+      if (role === "WAREHOUSE") {
+        const ownRequests = await fetchWarehouseMaterialRequests(token);
+        latest.warehouseRequests = ownRequests.filter(
+          (request) => request.missionId === missionId,
+        );
+      }
       setMission(latest);
       setCacheStoredAt(null);
       await writeOfflineCache(userId, `mission.${missionId}`, latest);
@@ -97,49 +106,89 @@ export function MissionDetailScreen({
     } finally {
       setLoading(false);
     }
-  }, [token, userId, missionId]);
+  }, [token, userId, missionId, role]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  async function accept() {
-    setBusy(true);
+  async function toggleFieldVoice() {
     setError(null);
-    try {
-      await confirmMission(token, missionId);
-      onResolved();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Không chấp nhận được");
-      setBusy(false);
-    }
-  }
-
-  async function submitReject() {
-    if (reason.trim().length < 3) {
-      setError("Vui lòng nhập lý do từ chối");
+    if (fieldRecording) {
+      setFieldVoiceBusy(true);
+      try {
+        const audioBase64 = await recordingRef.current?.stop();
+        recordingRef.current = null;
+        setFieldRecording(false);
+        if (!audioBase64) return;
+        const result = await transcribe(token, audioBase64);
+        if (result.text.trim()) {
+          setFieldUpdateText(result.text.trim());
+          setFieldUpdateMode("VOICE_TRANSCRIPT");
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Không nhận dạng được giọng nói");
+      } finally {
+        setFieldVoiceBusy(false);
+      }
       return;
     }
-    setBusy(true);
-    setError(null);
     try {
-      await rejectMission(token, missionId, reason.trim());
-      onResolved();
+      recordingRef.current = await startRecording();
+      setFieldRecording(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Không từ chối được");
-      setBusy(false);
+      setError(e instanceof Error ? e.message : "Không thể mở ghi âm");
     }
   }
 
-  async function submitComplete() {
-    setBusy(true);
+  async function submitFieldObservation() {
+    if (fieldUpdateText.trim().length === 0) {
+      setError("Hãy nhập hoặc ghi âm nội dung trước khi xác nhận gửi.");
+      return;
+    }
+    setFieldUpdateBusy(true);
     setError(null);
     try {
-      await completeMission(token, missionId, outcome, deliveryNote.trim() || undefined);
-      onResolved();
+      await submitFieldUpdate(token, missionId, {
+        requestId: fieldRequestId(),
+        inputMode: fieldUpdateMode,
+        confirmedText: fieldUpdateText.trim(),
+        confirmedByUser: true,
+        clientCapturedAt: new Date().toISOString(),
+      });
+      setFieldUpdateText("");
+      setFieldUpdateMode("TEXT");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Không xác nhận được kết quả giao");
-      setBusy(false);
+      setError(e instanceof Error ? e.message : "Không gửi được cập nhật hiện trường");
+    } finally {
+      setFieldUpdateBusy(false);
+    }
+  }
+
+  async function updateWarehouseRequest(
+    kind: "accept" | "prepare" | "discrepancy",
+    request: WarehouseMaterialRequest,
+  ) {
+    setWarehouseActionId(request.id);
+    setError(null);
+    try {
+      const note = warehouseNotes[request.id]?.trim();
+      if (kind === "discrepancy" && (!note || note.length < 3)) {
+        throw new Error("Cần ghi rõ chênh lệch (ít nhất 3 ký tự).");
+      }
+      if (kind === "accept") {
+        await acceptWarehouseMaterialRequest(token, request.id, note || undefined);
+      } else if (kind === "prepare") {
+        await prepareWarehouseMaterialRequest(token, request.id);
+      } else {
+        await reportWarehouseMaterialDiscrepancy(token, request.id, note as string);
+      }
+      setWarehouseNotes((current) => ({ ...current, [request.id]: "" }));
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không cập nhật được yêu cầu vật tư");
+    } finally {
+      setWarehouseActionId(null);
     }
   }
 
@@ -198,210 +247,197 @@ export function MissionDetailScreen({
 
           <SuppliesSection requirements={mission.requirements} />
 
+          {role === "WAREHOUSE" && (mission.warehouseRequests?.length ?? 0) > 0 ? (
+            <WarehouseMaterialRequestPanel
+              requests={mission.warehouseRequests ?? []}
+              notes={warehouseNotes}
+              busyRequestId={warehouseActionId}
+              onNoteChange={(requestId, note) =>
+                setWarehouseNotes((current) => ({ ...current, [requestId]: note }))
+              }
+              onAction={(kind, request) => void updateWarehouseRequest(kind, request)}
+              offline={Boolean(cacheStoredAt)}
+            />
+          ) : null}
+
+          {role === "RESCUE" && !cacheStoredAt ? (
+            <FieldUpdatePanel
+              text={fieldUpdateText}
+              onChange={(text) => {
+                setFieldUpdateText(text);
+                setFieldUpdateMode("TEXT");
+              }}
+              onVoice={() => void toggleFieldVoice()}
+              onSubmit={() => void submitFieldObservation()}
+              voiceAvailable={isRecordingSupported()}
+              recording={fieldRecording}
+              voiceBusy={fieldVoiceBusy}
+              submitting={fieldUpdateBusy}
+            />
+          ) : null}
+
           {error ? <Text style={[styles.errorText, { marginTop: 12 }]}>{error}</Text> : null}
 
-          {cacheStoredAt ? null : rejecting ? (
-            <View style={styles.reasonBox}>
-              <Text style={styles.reasonTitle}>
-                {mission.status === "PENDING_RESCUE"
-                  ? "Lý do từ chối"
-                  : "Lý do không tiếp tục được"}
+          <View style={{ marginTop: 20 }}>
+            <View style={[styles.statusBadge, { backgroundColor: c.surfaceAlt }]}>
+              <Text style={[styles.statusText, { color: c.text }]}>
+                {STATUS_LABEL[mission.status] ?? mission.status}
               </Text>
-              <View style={styles.chipRow}>
-                {REASON_SUGGESTIONS.map((s) => {
-                  const isOther = s === "Khác";
-                  const active = selectedChip === s;
-                  return (
-                    <Pressable
-                      key={s}
-                      onPress={() => {
-                        setSelectedChip(s);
-                        // "Khác": xoá ô để nhập tự do; chip gợi ý: điền sẵn text.
-                        setReason(isOther ? "" : s);
-                      }}
-                      style={[styles.reasonChip, active && styles.reasonChipActive]}
-                      accessibilityRole="button"
-                    >
-                      <Text style={active ? styles.reasonChipTextActive : styles.reasonChipText}>
-                        {s}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              <TextInput
-                style={styles.reasonInput}
-                value={reason}
-                onChangeText={(t) => {
-                  setReason(t);
-                  // Người dùng gõ tự do → coi như đang chọn "Khác".
-                  if (t !== selectedChip) setSelectedChip("Khác");
-                }}
-                placeholder={
-                  selectedChip === "Khác"
-                    ? "Nhập lý do khác (vd: đường ngập sâu, cầu bị cuốn…)"
-                    : "Mô tả chi tiết lý do (vd: cần thêm 5 người, thiếu áo phao…)"
-                }
-                placeholderTextColor={c.muted}
-                multiline
-                aria-label="Lý do không tiếp tục"
-              />
-              <View style={styles.actionRow}>
-                <Pressable
-                  style={[styles.btnReject, busy && { opacity: 0.6 }]}
-                  onPress={() => setRejecting(false)}
-                  disabled={busy}
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.btnRejectText}>Huỷ</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.btnAccept, { backgroundColor: c.red }, busy && { opacity: 0.6 }]}
-                  onPress={submitReject}
-                  disabled={busy}
-                  accessibilityRole="button"
-                >
-                  <Text style={[styles.btnAcceptText, { color: "#450a0a" }]}>
-                    {busy ? "Đang gửi…" : "Xác nhận"}
-                  </Text>
-                </Pressable>
-              </View>
             </View>
-          ) : completing ? (
-            <View style={styles.reasonBox}>
-              <Text style={styles.reasonTitle}>Kết quả giao tới hiện trường</Text>
-              <View style={styles.chipRow}>
-                {OUTCOME_OPTIONS.map((o) => {
-                  const active = outcome === o.key;
-                  return (
-                    <Pressable
-                      key={o.key}
-                      onPress={() => setOutcome(o.key)}
-                      style={[styles.reasonChip, active && styles.reasonChipActive]}
-                      accessibilityRole="button"
-                    >
-                      <Text style={active ? styles.reasonChipTextActive : styles.reasonChipText}>
-                        {o.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              <TextInput
-                style={styles.reasonInput}
-                value={deliveryNote}
-                onChangeText={setDeliveryNote}
-                placeholder="Ghi chú (vd: thiếu 20 áo phao, giao tại điểm tập kết xã)"
-                placeholderTextColor={c.muted}
-                multiline
-                aria-label="Ghi chú kết quả giao"
-              />
-              <View style={styles.actionRow}>
-                <Pressable
-                  style={[styles.btnReject, busy && { opacity: 0.6 }]}
-                  onPress={() => setCompleting(false)}
-                  disabled={busy}
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.btnRejectText}>Huỷ</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.btnAccept, busy && { opacity: 0.6 }]}
-                  onPress={submitComplete}
-                  disabled={busy}
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.btnAcceptText}>
-                    {busy ? "Đang gửi…" : "Xác nhận đã giao"}
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : mission.status === "PENDING_RESCUE" ? (
-            <View style={styles.actionRow}>
-              <Pressable
-                style={[styles.btnAccept, busy && { opacity: 0.6 }]}
-                onPress={accept}
-                disabled={busy}
-                accessibilityRole="button"
-              >
-                <Text style={styles.btnAcceptText}>{busy ? "Đang gửi…" : "Chấp nhận"}</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.btnReject, busy && { opacity: 0.6 }]}
-                onPress={() => {
-                  setError(null);
-                  setRejecting(true);
-                }}
-                disabled={busy}
-                accessibilityRole="button"
-              >
-                <Text style={styles.btnRejectText}>Từ chối</Text>
-              </Pressable>
-            </View>
-          ) : AFTER_CONFIRM_STATES.includes(mission.status) ? (
-            <View style={{ marginTop: 20 }}>
-              <View style={[styles.statusBadge, { backgroundColor: c.surfaceAlt }]}>
-                <Text style={[styles.statusText, { color: c.text }]}>
-                  {STATUS_LABEL[mission.status] ?? mission.status}
-                </Text>
-              </View>
-              <Pressable
-                style={[styles.btnReject, { marginTop: 12 }, busy && { opacity: 0.6 }]}
-                onPress={() => {
-                  setError(null);
-                  setReason("");
-                  setSelectedChip(null);
-                  setRejecting(true);
-                }}
-                disabled={busy}
-                accessibilityRole="button"
-              >
-                <Text style={styles.btnRejectText}>Không tiếp tục được</Text>
-              </Pressable>
-            </View>
-          ) : mission.status === "READY" ? (
-            <View style={{ marginTop: 20 }}>
-              <View style={[styles.statusBadge, { backgroundColor: c.surfaceAlt }]}>
-                <Text style={[styles.statusText, { color: c.text }]}>
-                  {STATUS_LABEL[mission.status] ?? mission.status}
-                </Text>
-              </View>
-              <Pressable
-                style={[styles.btnAccept, { marginTop: 12 }, busy && { opacity: 0.6 }]}
-                onPress={() => {
-                  setError(null);
-                  setCompleting(true);
-                }}
-                disabled={busy}
-                accessibilityRole="button"
-              >
-                <Text style={styles.btnAcceptText}>Xác nhận đã giao</Text>
-              </Pressable>
-            </View>
-          ) : (
-            <View style={{ marginTop: 20 }}>
-              <View style={[styles.statusBadge, { backgroundColor: c.surfaceAlt }]}>
-                <Text style={[styles.statusText, { color: c.text }]}>
-                  {STATUS_LABEL[mission.status] ?? mission.status}
-                </Text>
-              </View>
-              {mission.status === "REJECTED" && mission.rejectionReason ? (
-                <Text style={[styles.emptyText, { marginTop: 10, textAlign: "left" }]}>
-                  Lý do: {mission.rejectionReason}
-                </Text>
-              ) : null}
-              {mission.status === "COMPLETED" && mission.deliveryNote ? (
-                <Text style={[styles.emptyText, { marginTop: 10, textAlign: "left" }]}>
-                  Ghi chú giao: {mission.deliveryNote}
-                </Text>
-              ) : null}
-            </View>
-          )}
+            <Text style={[styles.emptyText, { marginTop: 10, textAlign: "left" }]}>
+              {mission.status === "READY"
+                ? "Các kho đã chuẩn bị xong vật tư. Việc liên hệ và triển khai do con người quyết định ngoài thực tế."
+                : "Bạn nhận thông tin phương án và tự đến các điểm lấy vật tư; ứng dụng không phân công cá nhân hoặc đội."}
+            </Text>
+            {mission.status === "COMPLETED" && mission.deliveryNote ? (
+              <Text style={[styles.emptyText, { marginTop: 8, textAlign: "left" }]}>
+                Ghi chú lịch sử: {mission.deliveryNote}
+              </Text>
+            ) : null}
+          </View>
         </ScrollView>
       ) : null}
     </View>
   );
+}
+
+function WarehouseMaterialRequestPanel({
+  requests,
+  notes,
+  busyRequestId,
+  onNoteChange,
+  onAction,
+  offline,
+}: {
+  requests: WarehouseMaterialRequest[];
+  notes: Record<string, string>;
+  busyRequestId: string | null;
+  onNoteChange: (requestId: string, note: string) => void;
+  onAction: (
+    kind: "accept" | "prepare" | "discrepancy",
+    request: WarehouseMaterialRequest,
+  ) => void;
+  offline: boolean;
+}) {
+  const prepared = requests.filter((request) => request.status === "PREPARED").length;
+  return (
+    <View style={{ marginTop: 18 }}>
+      <Text style={styles.sectionTitle}>
+        Chuẩn bị theo vật tư ({prepared}/{requests.length})
+      </Text>
+      <Text style={[styles.emptyText, { textAlign: "left", marginBottom: 10 }]}>
+        Tiếp nhận từng dòng, kiểm tra lô thực tế rồi mới xác nhận xuất. Mỗi dòng chỉ xuất một lần.
+      </Text>
+      {requests.map((request) => {
+        const busy = busyRequestId === request.id;
+        return (
+          <View
+            key={request.id}
+            style={{
+              backgroundColor: c.surface,
+              borderWidth: 1,
+              borderColor: request.status === "PREPARED" ? c.green : c.border,
+              borderRadius: 12,
+              padding: 14,
+              marginBottom: 10,
+            }}
+          >
+            <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: c.text, fontSize: 15, fontWeight: "800" }}>
+                  {request.itemName}
+                </Text>
+                <Text style={{ color: c.muted, fontSize: 12, marginTop: 3 }}>
+                  {request.sku}
+                </Text>
+              </View>
+              <View style={{ alignItems: "flex-end" }}>
+                <Text style={{ color: c.text, fontSize: 15, fontWeight: "800" }}>
+                  {request.status === "PREPARED"
+                    ? request.preparedQuantity
+                    : request.requestedQuantity}{" "}
+                  {request.unit}
+                </Text>
+                <Text style={{ color: request.status === "PREPARED" ? c.green : c.amber, fontSize: 11, fontWeight: "800", marginTop: 3 }}>
+                  {warehouseRequestStatus(request.status)}
+                </Text>
+              </View>
+            </View>
+
+            {request.adminNote ? (
+              <Text style={{ color: c.muted, fontSize: 12, lineHeight: 18, marginTop: 8 }}>
+                Điều phối: {request.adminNote}
+              </Text>
+            ) : null}
+            {request.warehouseNote ? (
+              <Text style={{ color: c.amber, fontSize: 12, lineHeight: 18, marginTop: 8 }}>
+                Đã báo: {request.warehouseNote}
+              </Text>
+            ) : null}
+
+            {request.status !== "PREPARED" && !offline ? (
+              <>
+                <TextInput
+                  value={notes[request.id] ?? ""}
+                  onChangeText={(text) => onNoteChange(request.id, text)}
+                  placeholder="Ghi chú tiếp nhận hoặc mô tả thiếu/sai"
+                  placeholderTextColor={c.muted}
+                  multiline
+                  maxLength={1_000}
+                  style={[styles.reasonInput, { marginTop: 10, marginBottom: 8 }]}
+                  accessibilityLabel={`Ghi chú cho ${request.itemName}`}
+                />
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  <Pressable
+                    disabled={busy}
+                    onPress={() =>
+                      onAction(request.status === "PENDING" ? "accept" : "prepare", request)
+                    }
+                    accessibilityRole="button"
+                    style={[
+                      styles.actionButton,
+                      { flexGrow: 1, opacity: busy ? 0.6 : 1 },
+                    ]}
+                  >
+                    <Text style={styles.actionButtonText}>
+                      {busy
+                        ? "Đang xử lý…"
+                        : request.status === "PENDING"
+                          ? "Tiếp nhận"
+                          : "Xác nhận xuất"}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    disabled={busy}
+                    onPress={() => onAction("discrepancy", request)}
+                    accessibilityRole="button"
+                    style={{
+                      borderWidth: 1,
+                      borderColor: c.amber,
+                      borderRadius: 10,
+                      paddingHorizontal: 12,
+                      paddingVertical: 11,
+                      opacity: busy ? 0.6 : 1,
+                    }}
+                  >
+                    <Text style={{ color: c.amber, fontSize: 13, fontWeight: "800" }}>
+                      Báo thiếu / sai
+                    </Text>
+                  </Pressable>
+                </View>
+              </>
+            ) : null}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function warehouseRequestStatus(status: WarehouseMaterialRequest["status"]): string {
+  if (status === "PENDING") return "CHỜ TIẾP NHẬN";
+  if (status === "ACCEPTED") return "ĐÃ TIẾP NHẬN";
+  return "ĐÃ XUẤT";
 }
 
 /** Banner đầu màn: mức nguy hiểm + loại thiên tai + số người gặp nạn (thứ bậc rõ). */
@@ -437,6 +473,72 @@ function Fact({ label, value }: { label: string; value: string }) {
   );
 }
 
+function FieldUpdatePanel({
+  text,
+  onChange,
+  onVoice,
+  onSubmit,
+  voiceAvailable,
+  recording,
+  voiceBusy,
+  submitting,
+}: {
+  text: string;
+  onChange: (text: string) => void;
+  onVoice: () => void;
+  onSubmit: () => void;
+  voiceAvailable: boolean;
+  recording: boolean;
+  voiceBusy: boolean;
+  submitting: boolean;
+}) {
+  return (
+    <View style={[styles.reasonBox, { marginTop: 16 }]}>
+      <Text style={styles.reasonTitle}>Trợ lý hiện trường</Text>
+      <Text style={[styles.emptyText, { textAlign: "left", marginBottom: 8 }]}>
+        Gõ hoặc nói, xem lại nội dung rồi xác nhận gửi. Không gửi audio thô hoặc vị trí GPS.
+      </Text>
+      <TextInput
+        style={styles.reasonInput}
+        value={text}
+        onChangeText={onChange}
+        multiline
+        placeholder="Ví dụ: đường vào thôn bị chắn, cần xác minh tuyến thay thế"
+        placeholderTextColor={c.muted}
+        accessibilityLabel="Nội dung cập nhật hiện trường"
+      />
+      <View style={styles.actionRow}>
+        {voiceAvailable ? (
+          <Pressable
+            style={[styles.btnReject, (voiceBusy || submitting) && { opacity: 0.6 }]}
+            onPress={onVoice}
+            disabled={voiceBusy || submitting}
+            accessibilityRole="button"
+            accessibilityLabel={recording ? "Dừng ghi âm và chuyển thành chữ" : "Ghi âm cập nhật hiện trường"}
+          >
+            <Text style={styles.btnRejectText}>
+              {voiceBusy ? "Đang nhận dạng…" : recording ? "Dừng ghi âm" : "Ghi âm"}
+            </Text>
+          </Pressable>
+        ) : null}
+        <Pressable
+          style={[styles.btnAccept, (submitting || text.trim().length === 0) && { opacity: 0.6 }]}
+          onPress={onSubmit}
+          disabled={submitting || text.trim().length === 0}
+          accessibilityRole="button"
+          accessibilityLabel="Xác nhận gửi cập nhật hiện trường"
+        >
+          <Text style={styles.btnAcceptText}>{submitting ? "Đang gửi…" : "Xác nhận gửi"}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function fieldRequestId() {
+  return `field-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 /** Danh sách vật tư dạng thẻ trực quan + tóm tắt "đủ / thiếu" ở đầu mục. */
 function SuppliesSection({ requirements }: { requirements: MissionDetail["requirements"] }) {
   if (requirements.length === 0) {
@@ -448,7 +550,7 @@ function SuppliesSection({ requirements }: { requirements: MissionDetail["requir
     );
   }
 
-  // Thiếu lên trước để đội cứu hộ thấy ngay cái cần chú ý.
+  // Thiếu lên trước để Lực lượng hiện trường thấy ngay điều cần chú ý.
   const sorted = [...requirements].sort((a, b) => b.shortage - a.shortage);
   const shortItems = requirements.filter((r) => r.shortage > 0).length;
 

@@ -2,7 +2,7 @@
 
 Nền tảng đánh giá mức sẵn sàng kho và điều phối vật tư cứu hộ. Hệ thống kết hợp quản lý tồn, Readiness theo blocker, Mission-to-Kit, mô phỏng cảm biến, AI local và web vận hành.
 
-> Trạng thái đối chiếu mới nhất: P09 routing offline, workflow kho ngày thường trên web/mobile, APK Android `0.5.0` có voice native → PhoWhisper, báo cáo kiểm kê tháng, dashboard/readiness/QR và bốn feature AI bắt buộc đã có code và kiểm thử mục tiêu. MVP end-to-end vẫn chưa an toàn để mở Internet production; browser, fresh-install/device/LAN acceptance trên Galaxy S23 Ultra, dependency hardening và full judged flow còn là release gate. Xem [báo cáo đánh giá dự thi](docs/bao-cao-danh-gia-san-sang-du-thi.md).
+> Trạng thái đối chiếu mới nhất (2026-07-28): P09 routing offline, workflow kho ngày thường web/mobile, APK Android `0.5.0` có voice native → PhoWhisper, dashboard/readiness/QR, AI điều phối/What-if/trợ lý hiện trường và quality gate CI đã có code/test. Audit dependency production hiện 0 advisory; web session HttpOnly đã qua browser acceptance. Gate còn lại là biên bản rehearsal hai lượt: fresh-install S23 Ultra, private-LAN/public-Internet-off, mission bốn role và desktop simulator → alert/email. Xem [báo cáo đánh giá dự thi](docs/bao-cao-danh-gia-san-sang-du-thi.md) và [runbook rehearsal](docs/COMPETITION-REHEARSAL.md).
 
 ## Nguồn sự thật
 
