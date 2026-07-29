@@ -49,6 +49,12 @@ jobs:
         run: pnpm lint
 
       - name: Validate Prisma schema
+        # `prisma validate` chỉ parse schema (không kết nối DB) nhưng vẫn cần
+        # env("DATABASE_URL") resolve được, nếu không sẽ P1012. CI không có
+        # apps/backend/.env nên cấp placeholder ở phạm vi step. Backend jest/build
+        # không đọc biến này (unit test mock Prisma, build là tsc) nên không cần.
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
         run: pnpm --filter @safestock/backend exec prisma validate
 
       - name: Backend unit and contract tests
