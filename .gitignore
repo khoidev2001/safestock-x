@@ -2,6 +2,9 @@ node_modules/
 dist/
 build/
 .next/
+# Thư mục build tách biệt cho instance frontend chạy song song (demo/preflight)
+# qua NEXT_DIST_DIR — là artifact sinh ra, không commit.
+.next-*/
 .expo/
 *.log
 .env

@@ -515,7 +515,7 @@ thích về dải excluded TCP của Windows (profile demo giữ port riêng đ�
 | Web | Gần hoàn thiện source (L1 đã đóng) | Browser acceptance đủ role, cookie/session, map và error state. |
 | Mobile Android | Feature source/APK path có (M2 đã đóng) | Fresh install S23 Ultra, LAN-offline/recovery, permission/voice/QR evidence. |
 | AI service | Boundary tốt (M3/M4/M5/L5 đã đóng; L4 chốt prompt-level) | Full pytest từ đúng cwd, live-model/RAG calibration khi model/corpus đổi. |
-| Desktop simulator | Dùng được cho demo (H5/M2/M6/L2/L3 đã đóng) | Package artifact và chứng minh isolation/realtime/SMTP. |
+| Desktop simulator | Đã kiểm chứng realtime + SMTP trực tiếp (H5/M2/M6/L2/L3 đã đóng; slider + kịch bản → sensor_event/incident realtime trên demo 3110; incident mới → email thật gửi qua Resend, đã hoàn nguyên invariant tắt mail) | Package portable artifact, firewall/port scan, backup-restore. |
 | Infrastructure/shared packages | Có compose/OSRM/CI (H3/H4/H6/L6 đã đóng) | M7/M8 refactor; firewall/port scan, backup-restore, reboot và clean-checkout evidence. |
 
 ## 6. Trạng thái kiểm chứng trong phiên audit
@@ -534,6 +534,27 @@ thích về dải excluded TCP của Windows (profile demo giữ port riêng đ�
 - Focused AI pytest chạy từ đúng `apps/ai-service`: **7 tests Pass**
   (`test_situation_analysis.py`, `test_field_update_intent.py`).
 
+- **Kiểm chứng trực tiếp bằng ứng dụng thật (BrowserOS + Electron, backend demo
+  `SAFESTOCK_RUNTIME=demo` cổng 3110 — không đụng stack vận hành 3100):**
+  - **Desktop simulator (Electron `apps/desktop`, chạy từ bản build `out/` thật):**
+    đăng nhập admin tới host `127.0.0.1:3110`, WebSocket báo *“Realtime đang chạy”*,
+    mở kho “Kho cứu trợ trung tâm Đồng Xuân”. **Luồng 1 — chỉnh tay:** kéo slider
+    *Cảm biến nhiệt độ A* lên 46°C → nhật ký realtime nhận `temp_A = 46°C
+    (TEMP_READING)`, điểm sẵn sàng tụt 94→89, cảnh báo *“Điều kiện bảo quản không
+    đạt”* kèm giải thích AI *“nhiệt độ đạt 39.9°C, vượt ngưỡng an toàn 35°C”*.
+    **Luồng 2 — kịch bản:** chạy *“Nhiệt tăng dần (cảnh báo sớm)”* (`heat_drift`)
+    x10 → realtime tuôn `temp_B` 28→30→31.5→33→34°C và bật cảnh báo dự đoán sớm
+    *“Dự đoán temp_B sẽ vượt ngưỡng — Nghiêm trọng, độ tin cậy 80%”*. Ảnh:
+    `DESK-02-dashboard`, `DESK-03-after-temp`, `DESK-05-scenario-settled`.
+  - **Mobile Expo Web (REPORTER, phạm vi xã):** trưởng thôn gửi báo cáo commune-scope
+    *“Thôn Long Châu: mưa lớn gây ngập cục bộ, 15 hộ dân vùng trũng cần nước sạch và
+    áo phao”* → `POST /api/missions/report` HTTP 201; ADMIN thấy Mission DRAFT +
+    Notification `INCIDENT_REPORTED` (cross-role verified). Diacritics byte-perfect.
+  - **Offline / backend-down:** cắt mọi `/api/**` giữa phiên (không reload) rồi điều
+    hướng client-side → app degrade gracefully (*“Kết nối dữ liệu đang gián đoạn.
+    Vui lòng thử lại sau ít phút”* + nút thử lại), không crash, không văng login;
+    bản đồ offline cụm Đồng Xuân vẫn render khi không có backend.
+
 ### Failed
 
 - Lần chạy focused pytest đầu tiên từ repository root dừng ở collection với
@@ -547,8 +568,15 @@ thích về dải excluded TCP của Windows (profile demo giữ port riêng đ�
 - Full AI pytest, live Ollama/PhoWhisper/GPU evaluation.
 - Samsung Galaxy S23 Ultra fresh install, APK signer/SHA, private-LAN with public
   Internet off, complete four-role UI flow, LAN-loss recovery.
-- Desktop → realtime alert → SMTP evidence, firewall/port scan, backup-restore,
-  reboot/autostart và production pilot.
+- Desktop → realtime alert → **SMTP đã kiểm chứng trong phiên**: slider + kịch bản
+  → `sensor_event`/`incident` realtime, và một lượt bật mail tạm trên runtime demo đã
+  gửi **email thật** tới hộp thư quản trị (log `AlertMailService`:
+  `Đã gửi email cảnh báo "Điều kiện bảo quản không đạt" tới 1 người nhận`, dùng
+  fallback `ALERT_EMAIL_TO`; AI service tắt nên nội dung là bản rule-based — đúng cơ
+  chế fail-safe). Sau kiểm chứng đã **hoàn nguyên** `.env.demo` về invariant
+  `ALERT_EMAIL_ENABLED=false` (guard demo cấm bật mail) và xoá script/khoá tạm.
+- Còn thiếu: đóng gói portable artifact, firewall/port scan, backup-restore,
+  reboot/autostart và pilot.
 
 ## 7. Phán quyết readiness
 
@@ -564,8 +592,10 @@ Sau khi vá blocker (§1.1):
 - **Competition rehearsal:** vẫn **no-go cho tới khi có bằng chứng thiết bị/LAN**.
   Source gate nay sạch, nhưng bảng ký trong runbook cần **hai lượt Pass trên cùng
   commit/artifact**: fresh install APK (Galaxy S23 Ultra, signer/SHA), luồng bốn
-  vai trò, private-LAN với Internet tắt, desktop→realtime→SMTP, khôi phục khi mất
-  LAN. Chưa có evidence nào trong phiên này.
+  vai trò, private-LAN với Internet tắt, khôi phục khi mất LAN. Mắt xích
+  **desktop→realtime→SMTP đã được kiểm chứng lẻ trong phiên** (email cảnh báo thật
+  gửi thành công), nhưng vẫn cần chạy lại trong một lượt rehearsal đủ trên thiết bị
+  thật để tính vào bảng ký. Các evidence còn lại chưa có trong phiên này.
 - **Public production:** **no-go**; cần thêm firewall/port-scan, backup-restore,
   observability, reboot/autostart và pilot thực tế.
 

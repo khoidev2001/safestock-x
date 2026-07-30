@@ -10,7 +10,9 @@ const compat = new FlatCompat({ baseDirectory: dirname(fileURLToPath(import.meta
 
 const config = [
   {
-    ignores: [...ignores, ".next/**", "out/**", "next-env.d.ts"],
+    // `.next-*/**` bắt cả build tách biệt qua NEXT_DIST_DIR (demo/preflight),
+    // là artifact sinh ra như `.next/` — không lint.
+    ignores: [...ignores, ".next/**", ".next-*/**", "out/**", "next-env.d.ts"],
   },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {

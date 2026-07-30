@@ -8,6 +8,7 @@ import prettier from "eslint-config-prettier";
 export const ignores = [
   "**/dist/**",
   "**/.next/**",
+  "**/.next-*/**",
   "**/out/**",
   "**/build/**",
   "**/release/**",

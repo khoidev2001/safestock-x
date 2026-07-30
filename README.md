@@ -11,6 +11,9 @@ Nền tảng đánh giá mức sẵn sàng kho và điều phối vật tư cứ
   điểm trước/sau, finding đã khắc phục và release gate còn chờ.
 - [Bàn giao chênh lệch so với GitHub](docs/BAN-GIAO-CHENH-LECH-SO-VOI-GITHUB.md):
   danh sách chức năng/file/schema để dev khác tiếp nhận.
+- ⭐ [Hướng dẫn test toàn diện (cho giám khảo)](docs/HUONG-DAN-TEST-TOAN-DIEN.md):
+  một file tất-tần-tật từ clone → chạy → test mọi thành phần (backend, web, AI, mobile,
+  desktop simulator, email cảnh báo, test tự động).
 - [Hướng dẫn cài đặt và chạy](docs/HUONG-DAN-CAI-DAT-VA-CHAY.md)
 - [Hướng dẫn kiểm thử](docs/HUONG-DAN-TEST.md)
 - [Bộ dữ liệu seed](docs/SEED-DATASET.md)
@@ -32,6 +35,9 @@ Các plan, work-log và báo cáo lịch sử đã được loại khỏi gói s
 | `infrastructure` | Docker và Windows pilot scripts | Có nền; chưa nghiệm thu production/offline đầy đủ |
 
 ## Chạy development
+
+> 📋 **Giám khảo/người tiếp nhận:** xem [Hướng dẫn test toàn diện](docs/HUONG-DAN-TEST-TOAN-DIEN.md)
+> để chạy và test mọi thành phần theo từng bước.
 
 Yêu cầu: Node.js 20+, pnpm 10+, Docker. AI local cần Python, Ollama và model được cấu hình.
 
