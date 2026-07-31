@@ -1,8 +1,12 @@
 # Hướng dẫn kiểm thử Ứng phó nhanh
 
-_Cập nhật: 2026-07-21 · Không yêu cầu Playwright_
+_Cập nhật: 2026-07-31 · Không yêu cầu Playwright_
 
 Tài liệu này dành cho người kiểm thử trực tiếp trên giao diện. Thực hiện theo thứ tự để kiểm tra từ dữ liệu kho, AI, Readiness đến điều phối cứu hộ.
+
+> Muốn test theo **luồng công việc xuyên web · điện thoại · desktop** thì xem
+> [HUONG-DAN-TEST-3-UNG-DUNG.md](HUONG-DAN-TEST-3-UNG-DUNG.md). Khi hai tài liệu
+> mâu thuẫn, lấy tài liệu đó làm chuẩn vì nó bám sát vai trò và luồng hiện tại.
 
 ## 1. Baseline mong đợi
 
@@ -118,7 +122,7 @@ Mở giao diện: [http://localhost:3200](http://localhost:3200).
 | `admin` | `admin123@` | Toàn xã, bản đồ, người dùng, lập Mission |
 | `staff@ungphonhanh.life` | `staff123` | Vận hành kho trung tâm |
 | `rescue@ungphonhanh.life` | `rescue123` | Vai trò đội cứu hộ |
-| `truongthon@ungphonhanh.life` | `reporter123` | Trưởng thôn gửi báo cáo tình huống |
+| `truongthon@ungphonhanh.life` | `reporter123` | Phụ trách kho thôn, kiêm báo cáo tình huống |
 | `truongthon1@ungphonhanh.life` | `truongthon123` | Kho thôn Long Châu |
 | `truongthon2@ungphonhanh.life` ... `truongthon17@ungphonhanh.life` | `truongthon123` | Các kho thôn còn lại theo thứ tự seed |
 
@@ -279,13 +283,21 @@ Luồng đúng:
 
 ```text
 DRAFT
-  -> ADMIN gửi
-PENDING_RESCUE
-  -> RESCUE xác nhận
+  -> ADMIN duyệt và phát hành thẳng tới kho
 PENDING_WAREHOUSE
-  -> WAREHOUSE chuẩn bị và xuất
+  -> WAREHOUSE tiếp nhận và chuẩn bị TỪNG vật tư
 READY
+  -> RESCUE đi giao và báo kết quả thực tế
+COMPLETED
 ```
+
+Xã phát hành phương án thẳng tới kho; lực lượng hiện trường không tham gia bước
+phát hành mà **đóng** nhiệm vụ ở cuối. Không có bước đóng thì nhiệm vụ nằm mãi ở
+`READY` trong khi vật tư đã trừ khỏi kho, và không ai biết hàng tới nơi hay chưa.
+
+Kho chuẩn bị **theo từng mã vật tư**, không phải cả nhiệm vụ một lần: một nhiệm vụ
+có thể lấy hàng từ nhiều kho, nếu gộp thì kho A phải chờ kho B mới ghi nhận được
+phần việc của mình.
 
 Đạt khi mỗi vai trò chỉ thực hiện được bước của mình; gọi sai vai trò phải trả `403`, gọi sai trạng thái phải bị từ chối.
 
@@ -300,8 +312,9 @@ Kiểm tra nhanh bằng dữ liệu seed:
 
 Kiểm tra upload:
 
-1. Đăng nhập một tài khoản trưởng thôn.
+1. Đăng nhập một tài khoản phụ trách kho thôn (ví dụ `truongthon@ungphonhanh.life`).
 2. Chuẩn bị file `.xlsx` gồm bảy cột: SKU, Tên vật tư, Số lượng, Đơn vị, Hạn dùng, Tình trạng, Ghi chú.
+   Khi một mã nằm ở nhiều lô, dòng phải ghi rõ lô đã kiểm đếm — hệ thống từ chối số tổng.
 3. Chọn kỳ báo cáo và gửi file.
 4. Đăng nhập lại ADMIN để duyệt.
 5. Chỉ sau khi duyệt, tồn kho mới được reconcile.
@@ -311,17 +324,21 @@ Kiểm tra upload:
 Không cần Playwright. Chạy:
 
 ```powershell
-pnpm --filter @safestock/backend test -- --runInBand
+# Dùng `exec jest`, KHÔNG dùng `test -- --runInBand`: pnpm 10.32.1 chuyển tiếp "--"
+# thành tham số của jest, jest hiểu nhầm là mẫu đường dẫn và báo "No tests found".
+pnpm --filter @safestock/backend exec jest --runInBand
 pnpm --filter @safestock/backend build
 pnpm --filter @safestock/frontend exec tsc --noEmit
 pnpm --filter @safestock/frontend build
 ```
 
-Baseline hiện tại:
+Baseline hiện tại (2026-07-31):
 
-- Backend: 51 test suite, 366 test pass ở refresh 2026-07-26.
-- Backend production build pass.
-- Frontend typecheck và production build pass.
+- Backend: **100 suite, 588 test** pass (unit + contract).
+- Backend e2e trên PostgreSQL thật: **7 suite, 58 test** pass — chạy bằng
+  `pnpm --filter @safestock/backend test:e2e`.
+- Mobile 21, desktop 7, AI service 74, định tuyến offline 8 — đều pass.
+- Backend, frontend và desktop production build pass.
 
 ## 8. Reset sau khi test
 

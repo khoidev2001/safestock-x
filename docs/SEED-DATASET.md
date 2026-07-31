@@ -81,7 +81,7 @@ Nhóm vật tư tham chiếu nhu cầu cứu trợ khẩn cấp của [IFRC](htt
 ```bash
 # Dừng backend và các tác vụ ghi DB trước khi reseed.
 pnpm --filter @safestock/backend seed
-pnpm --filter @safestock/backend test -- --runInBand
+pnpm --filter @safestock/backend exec jest --runInBand
 ```
 
 Seed reset toàn bộ dữ liệu demo trước khi nạp. Không chạy khi backend/frontend đang ghi vào DB và không chạy trên database cần giữ dữ liệu thật. Seed đã được kiểm tra chạy liên tiếp hai lần cho cùng kết quả: 18 kho, 20 user, 17 item, 126 batch, 126 inventory count, 68 device, 2 incident và 190 transaction.

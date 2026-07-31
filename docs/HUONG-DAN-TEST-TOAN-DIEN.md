@@ -6,6 +6,10 @@
 > chạy được trên Windows PowerShell.
 >
 > Tài liệu chi tiết sâu hơn (giữ nguyên, không thay thế):
+>
+> - [Test theo luồng ba ứng dụng](HUONG-DAN-TEST-3-UNG-DUNG.md) — kịch bản xuyên web ·
+>   điện thoại · desktop, bám sát vai trò và luồng hiện tại. **Khi mâu thuẫn, lấy tài
+>   liệu này làm chuẩn.**
 > - [Hướng dẫn cài đặt và chạy](HUONG-DAN-CAI-DAT-VA-CHAY.md) — chi tiết từng cấu hình, production, autostart.
 > - [Hướng dẫn kiểm thử theo UI](HUONG-DAN-TEST.md) — 11 ca test tính năng T01–T11 chi tiết.
 > - [Bộ dữ liệu seed](SEED-DATASET.md) · [Báo cáo đánh giá dự thi](bao-cao-danh-gia-san-sang-du-thi.md).
@@ -149,8 +153,8 @@ Mở giao diện: **http://localhost:3200**
 | `admin` | `admin123@` | ADMIN — toàn xã, bản đồ, người dùng, lập Mission |
 | `staff@ungphonhanh.life` | `staff123` | Vận hành kho trung tâm |
 | `rescue@ungphonhanh.life` | `rescue123` | Đội cứu hộ |
-| `truongthon@ungphonhanh.life` | `reporter123` | Trưởng thôn gửi báo cáo tình huống |
-| `truongthon1@ungphonhanh.life` | `truongthon123` | Trưởng thôn — Kho thôn Long Châu |
+| `truongthon@ungphonhanh.life` | `reporter123` | Phụ trách kho thôn, kiêm báo cáo tình huống |
+| `truongthon1@ungphonhanh.life` | `truongthon123` | Phụ trách kho thôn Long Châu |
 | `truongthon2..17@ungphonhanh.life` | `truongthon123` | Các kho thôn còn lại (theo thứ tự seed) |
 
 > Đây là mật khẩu **development**. Trước khi public phải đổi hết (mục §12
@@ -197,7 +201,7 @@ Tóm tắt để giám khảo chọn nhanh:
 | T07 | AI ngày thường | Dự báo cạn kho từ lịch sử; lỗi thời tiết không làm sập trang |
 | T08 | Trợ lý AI | Câu 1–9 dựa dữ liệu thật, **không bịa số**; câu ngoài phạm vi bị từ chối |
 | T09 | Mission-to-Kit | Số liệu do **backend** tính, AI chỉ diễn giải |
-| T10 | Workflow liên vai trò | `DRAFT→PENDING_RESCUE→PENDING_WAREHOUSE→READY`, sai role → 403 |
+| T10 | Workflow liên vai trò | `DRAFT→PENDING_WAREHOUSE→READY→COMPLETED`; kho chuẩn bị theo từng vật tư; sai vai → 403 |
 | T11 | Báo cáo tháng | Duyệt/từ chối cập nhật trạng thái + reconcile tồn sau duyệt |
 
 **Bảng câu hỏi test Trợ lý AI (T08)** — hỏi lần lượt, câu 10 phải bị từ chối:
@@ -265,8 +269,12 @@ Mobile trỏ backend qua cấu hình host trong app. Tính năng chính để te
 vai trò, dashboard/readiness, đọc offline (SecureStore cache), quét QR, ghi nhận kho, báo
 cáo tháng, và **voice native → PhoWhisper** (bản APK `0.5.0`).
 
-> Luồng REPORTER trên bản web mobile đã kiểm chứng trong phiên. Gate còn lại là
-> **fresh-install trên thiết bị thật (Galaxy S23 Ultra) + private-LAN** — thuộc rehearsal,
+> App điện thoại chỉ còn **hai giao diện**, chọn theo vai lúc đăng nhập: lực lượng
+> hiện trường (Lệnh · Báo cáo · Cảnh báo, không có nghiệp vụ kho) và phụ trách kho
+> tại chỗ (kiêm việc báo tình huống). Kịch bản chi tiết theo luồng xem
+> [HUONG-DAN-TEST-3-UNG-DUNG.md](HUONG-DAN-TEST-3-UNG-DUNG.md).
+>
+> Gate còn lại là **fresh-install trên thiết bị thật + private-LAN** — thuộc rehearsal,
 > xem [COMPETITION-REHEARSAL.md](COMPETITION-REHEARSAL.md).
 
 ---
@@ -278,13 +286,19 @@ cáo tháng, và **voice native → PhoWhisper** (bản APK `0.5.0`).
 ### 9.1 — Backend (NestJS + Prisma)
 
 ```powershell
-pnpm --filter @safestock/backend test -- --runInBand     # unit test (Jest)
-pnpm --filter @safestock/backend build                   # production build (nest build)
+# Dùng `exec jest`, KHÔNG dùng `test -- --runInBand`: pnpm 10.32.1 chuyển tiếp "--"
+# thành tham số của jest, jest hiểu nhầm là mẫu đường dẫn và báo "No tests found"
+# rồi thoát với mã lỗi — dễ bị hiểu nhầm là dự án hỏng.
+pnpm --filter @safestock/backend exec jest --runInBand    # unit test (Jest)
+pnpm --filter @safestock/backend build                    # production build (nest build)
 ```
 
-> Có ~94 file spec trong `apps/backend`. Đối chiếu **toàn bộ suite PASS (xanh)** ở dòng
-> tổng kết cuối; nếu Windows báo `EPERM` khi generate Prisma thì **dừng backend đang chạy**
-> rồi chạy lại (tiến trình Node khóa query-engine DLL).
+> Hiện có **100 suite / 588 test** trong `apps/backend`. Đối chiếu **toàn bộ suite PASS
+> (xanh)** ở dòng tổng kết cuối; nếu Windows báo `EPERM` khi generate Prisma thì **dừng
+> backend đang chạy** rồi chạy lại (tiến trình Node khóa query-engine DLL).
+>
+> Bộ e2e chạy riêng bằng `pnpm --filter @safestock/backend test:e2e` (7 suite / 58 test),
+> cần PostgreSQL sống. Nó tự dọn dữ liệu của mình, không đụng dữ liệu mẫu.
 
 ### 9.2 — Frontend (Next.js)
 

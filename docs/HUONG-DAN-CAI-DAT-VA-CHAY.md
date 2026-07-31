@@ -295,7 +295,7 @@ checklist domain nằm trong [PRD + checklist + kế hoạch cuối](PRD.md#p3--
 ## 12. Kiểm tra trước khi bàn giao
 
 ```powershell
-pnpm --filter @safestock/backend test -- --runInBand
+pnpm --filter @safestock/backend exec jest --runInBand
 pnpm --filter @safestock/backend build
 pnpm --filter @safestock/frontend build
 ```
