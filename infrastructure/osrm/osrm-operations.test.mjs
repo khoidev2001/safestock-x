@@ -23,17 +23,11 @@ test("build graph dùng đúng image khóa digest và đủ pipeline MLD", () =>
   );
   assert.ok(commands[1].args.includes("/data/dong-xuan.osrm"));
   assert.ok(commands[2].args.includes("/data/dong-xuan.osrm"));
-  assert.deepEqual(commands[0].args.slice(-3), [
-    "-p",
-    "/opt/car.lua",
-    "/data/dong-xuan.osm.pbf",
-  ]);
+  assert.deepEqual(commands[0].args.slice(-3), ["-p", "/opt/car.lua", "/data/dong-xuan.osm.pbf"]);
 });
 
 test("bbox parser khóa đúng thứ tự west,south,east,north", () => {
-  assert.deepEqual(parseBbox("108.6,13.1,109.3,13.7"), [
-    108.6, 13.1, 109.3, 13.7,
-  ]);
+  assert.deepEqual(parseBbox("108.6,13.1,109.3,13.7"), [108.6, 13.1, 109.3, 13.7]);
   assert.throws(() => parseBbox("109.3,13.1,108.6,13.7"), /bbox/i);
 });
 
@@ -45,11 +39,7 @@ test("offline acceptance chạy OSRM với network none và graph read-only", ()
   assert.equal(command.command, "docker");
   assert.ok(command.args.includes("--network"));
   assert.equal(command.args[command.args.indexOf("--network") + 1], "none");
-  assert.ok(
-    command.args.some(
-      (argument) => argument.endsWith(":/data:ro"),
-    ),
-  );
+  assert.ok(command.args.some((argument) => argument.endsWith(":/data:ro")));
   assert.ok(command.args.includes(OSRM_IMAGE));
   assert.match(command.args.at(-1), /route\/v1\/driving/);
 });
@@ -96,8 +86,7 @@ test("live verify chỉ pass khi OSRM trả route đường bộ có geometry v�
         graphVersion: "dong-xuan-2026-07-27",
         origin: { lat: 13.3667, lng: 109.0333 },
         destination: { lat: 13.42, lng: 109.08 },
-        fetchImpl: async () =>
-          new Response(JSON.stringify({ code: "NoRoute", routes: [] })),
+        fetchImpl: async () => new Response(JSON.stringify({ code: "NoRoute", routes: [] })),
       }),
     /không trả route/i,
   );

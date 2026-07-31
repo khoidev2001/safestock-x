@@ -41,6 +41,52 @@ describe("SimulationAccessService", () => {
     });
   });
 
+  it("người trực kho tắt được chuông dù không có quyền bơm số liệu mô phỏng", async () => {
+    // Chuông có thể do cảm biến thật kích hoạt; khoá nó sau quyền của simulator
+    // đồng nghĩa với việc không ai ở kho tắt được chuông.
+    config.get.mockReturnValue("false");
+    prisma.user.findUnique.mockResolvedValue({
+      id: "staff-1",
+      organizationId: "org-1",
+      role: UserRole.WAREHOUSE,
+      warehouseId: "warehouse-1",
+    });
+    prisma.warehouse.findUnique.mockResolvedValue({ organizationId: "org-1", kind: "CENTRAL" });
+
+    await expect(service.assertAlarmAccess("staff-1", "warehouse-1")).resolves.toMatchObject({
+      userId: "staff-1",
+      role: UserRole.WAREHOUSE,
+    });
+  });
+
+  it("cờ tắt simulator không làm chuông thật câm", async () => {
+    config.get.mockReturnValue(undefined);
+    prisma.user.findUnique.mockResolvedValue({
+      id: "admin-1",
+      organizationId: "org-1",
+      role: UserRole.ADMIN,
+      warehouseId: null,
+    });
+    prisma.warehouse.findUnique.mockResolvedValue({ organizationId: "org-1", kind: "CENTRAL" });
+
+    await expect(service.assertAlarmAccess("admin-1", "warehouse-1")).resolves.toMatchObject({
+      userId: "admin-1",
+    });
+  });
+
+  it("lực lượng hiện trường không tắt được chuông của kho", async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: "rescue-1",
+      organizationId: "org-1",
+      role: UserRole.RESCUE,
+      warehouseId: null,
+    });
+
+    await expect(service.assertAlarmAccess("rescue-1", "warehouse-1")).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+  });
+
   it("chặn token ADMIN cũ khi role hiện tại đã bị hạ", async () => {
     config.get.mockReturnValue("true");
     prisma.user.findUnique.mockResolvedValue({

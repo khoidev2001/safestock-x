@@ -1,8 +1,5 @@
 import { ForbiddenException } from "@nestjs/common";
-import {
-  assertActorCanAccessBatch,
-  assertBatchInScope,
-} from "../warehouse-scope";
+import { assertActorCanAccessBatch, assertBatchInScope } from "../warehouse-scope";
 
 // Prisma giả: chỉ cần itemBatch.findUnique trả warehouseId của batch.
 function fakePrisma(batchWarehouseId: string | null) {
@@ -59,23 +56,13 @@ describe("assertActorCanAccessBatch (organization boundary)", () => {
 
   it("allows a batch in the actor organization", async () => {
     await expect(
-      assertActorCanAccessBatch(
-        scopedPrisma("org-1", "org-1"),
-        "user-1",
-        null,
-        "batch-1",
-      ),
+      assertActorCanAccessBatch(scopedPrisma("org-1", "org-1"), "user-1", null, "batch-1"),
     ).resolves.toBeUndefined();
   });
 
   it("rejects an admin-style unassigned actor from another organization", async () => {
     await expect(
-      assertActorCanAccessBatch(
-        scopedPrisma("org-1", "org-2"),
-        "user-1",
-        null,
-        "batch-foreign",
-      ),
+      assertActorCanAccessBatch(scopedPrisma("org-1", "org-2"), "user-1", null, "batch-foreign"),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });

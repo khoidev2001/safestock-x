@@ -11,23 +11,15 @@ describe("InventoryService batch pagination", () => {
         findUnique: jest.fn().mockResolvedValue({ organizationId: "org-1" }),
       },
       itemBatch: {
-        findMany: jest.fn().mockResolvedValue([
-          { id: "batch-3" },
-          { id: "batch-2" },
-          { id: "batch-1" },
-        ]),
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ id: "batch-3" }, { id: "batch-2" }, { id: "batch-1" }]),
       },
     };
     const service = new InventoryService(prisma as never, {} as never);
 
     await expect(
-      service.listBatchesPage(
-        "warehouse-1",
-        null,
-        "admin-1",
-        undefined,
-        2,
-      ),
+      service.listBatchesPage("warehouse-1", null, "admin-1", undefined, 2),
     ).resolves.toEqual({
       data: [{ id: "batch-3" }, { id: "batch-2" }],
       nextCursor: "batch-2",
@@ -56,13 +48,7 @@ describe("InventoryService batch pagination", () => {
     const service = new InventoryService(prisma as never, {} as never);
 
     await expect(
-      service.listBatchesPage(
-        "warehouse-1",
-        null,
-        "admin-1",
-        "foreign-batch",
-        100,
-      ),
+      service.listBatchesPage("warehouse-1", null, "admin-1", "foreign-batch", 100),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.itemBatch.findMany).not.toHaveBeenCalled();
   });

@@ -101,9 +101,7 @@ export function InventoryHistory({ warehouseId }: { warehouseId: string }) {
           </table>
         </div>
       ) : (
-        <p className="p-5 text-sm text-[var(--text-muted)]">
-          Chưa có giao dịch nào trong kho này.
-        </p>
+        <p className="p-5 text-sm text-[var(--text-muted)]">Chưa có giao dịch nào trong kho này.</p>
       )}
     </section>
   );

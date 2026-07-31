@@ -129,8 +129,8 @@ describe("Report approve atomic (E2E PostgreSQL)", () => {
     await prisma.$disconnect();
   });
 
-  it("writes one count per batch and allocates oldest-first", async () => {
-    const fixture = await createFixture(9);
+  it("ghi đúng một lần kiểm đếm cho từng lô đã khai báo", async () => {
+    const fixture = await createFixture();
 
     const result = await reports.approve(fixture.reportId, actorId);
 
@@ -151,7 +151,7 @@ describe("Report approve atomic (E2E PostgreSQL)", () => {
   });
 
   it("rolls back the claim, prior reconciles, counts and audits when a later batch fails", async () => {
-    const fixture = await createFixture(9);
+    const fixture = await createFixture();
     const original = adjustment.reconcileInTx.bind(adjustment);
     let calls = 0;
     jest.spyOn(adjustment, "reconcileInTx").mockImplementation(async (...args) => {
@@ -174,7 +174,7 @@ describe("Report approve atomic (E2E PostgreSQL)", () => {
   });
 
   it("concurrent approve plus retry creates one mutation set", async () => {
-    const fixture = await createFixture(9);
+    const fixture = await createFixture();
 
     const concurrent = await Promise.allSettled([
       reports.approve(fixture.reportId, actorId),
@@ -199,7 +199,7 @@ describe("Report approve atomic (E2E PostgreSQL)", () => {
   });
 
   it("holds loan borrow writes until approval commits", async () => {
-    const fixture = await createFixture(9);
+    const fixture = await createFixture();
     const gate = pauseFirstReconcile();
 
     const approval = reports.approve(fixture.reportId, actorId);
@@ -215,7 +215,7 @@ describe("Report approve atomic (E2E PostgreSQL)", () => {
   });
 
   it("waits for a borrow snapshot captured before approval starts", async () => {
-    const fixture = await createFixture(0);
+    const fixture = await createFixture([0, 0]);
     const gate = pauseLoanCreate();
     const borrowing = gate.service.borrow(actorId, fixture.batchIds[0], 4);
     await gate.entered;
@@ -233,7 +233,7 @@ describe("Report approve atomic (E2E PostgreSQL)", () => {
   });
 
   it("holds partial-return writes until approval commits", async () => {
-    const fixture = await createFixture(9);
+    const fixture = await createFixture();
     const loan = await prisma.loanRecord.create({
       data: { batchId: fixture.batchIds[0], quantity: 2, borrowedByUserId: actorId },
     });
@@ -251,12 +251,15 @@ describe("Report approve atomic (E2E PostgreSQL)", () => {
     gate.release();
     await expect(Promise.all([approval, returning])).resolves.toHaveLength(2);
 
-    expect(await batchQuantities(fixture.batchIds)).toEqual([5, 6]);
+    // Lô A: đếm được 5 trên kệ, cộng 2 đang cho mượn vẫn thuộc kho = 7. Người đi
+    // đếm không thấy hàng đang ở ngoài, nên hệ thống không được coi đó là mất.
+    // Trả 1 cái tốt chỉ giảm số đang mượn, không đổi tồn vật lý.
+    expect(await batchQuantities(fixture.batchIds)).toEqual([7, 4]);
     expect(await openLoanQuantity(fixture.batchIds[0])).toBe(1);
   });
 
   it("rolls approval back when inventory changes after allocation", async () => {
-    const fixture = await createFixture(9);
+    const fixture = await createFixture();
     const gate = pauseFirstReconcile();
     const approval = reports.approve(fixture.reportId, actorId);
     await gate.entered;
@@ -275,7 +278,7 @@ describe("Report approve atomic (E2E PostgreSQL)", () => {
   });
 
   it("approve and reject race has exactly one coherent terminal winner", async () => {
-    const fixture = await createFixture(3);
+    const fixture = await createFixture([3, 0]);
 
     const outcomes = await Promise.allSettled([
       reports.approve(fixture.reportId, actorId),
@@ -298,7 +301,7 @@ describe("Report approve atomic (E2E PostgreSQL)", () => {
   });
 
   it("blocks an approving actor from another organization without writes", async () => {
-    const fixture = await createFixture(9);
+    const fixture = await createFixture();
 
     await expect(reports.approve(fixture.reportId, foreignActorId)).rejects.toBeInstanceOf(
       ForbiddenException,
@@ -311,7 +314,14 @@ describe("Report approve atomic (E2E PostgreSQL)", () => {
     expect(readiness.recalculateWarehouse).not.toHaveBeenCalled();
   });
 
-  async function createFixture(reportedQuantity: number) {
+  /**
+   * Báo cáo kiểm đếm ghi rõ đếm được bao nhiêu ở TỪNG LÔ.
+   *
+   * Khi một mã vật tư nằm ở nhiều lô, hệ thống không tự đoán số đếm thuộc lô
+   * nào: người đi đếm phải ghi rõ. Đoán hộ ở đây nghĩa là đoán hộ hạn dùng và
+   * tình trạng của hàng cứu trợ.
+   */
+  async function createFixture(countedPerBatch: [number, number] = [5, 4]) {
     const batches = await prisma.$transaction([
       prisma.itemBatch.create({
         data: {
@@ -337,9 +347,14 @@ describe("Report approve atomic (E2E PostgreSQL)", () => {
         warehouseId,
         submittedByUserId: submitterId,
         period: "2026-07",
-        rows: [
-          { sku, itemName: `${prefix}-item`, quantity: reportedQuantity, unit: "unit" },
-        ] as unknown as Prisma.InputJsonValue,
+        rows: batches.map((batch, index) => ({
+          sku,
+          itemName: `${prefix}-item`,
+          quantity: countedPerBatch[index] ?? 0,
+          unit: "unit",
+          batchId: batch.id,
+          batchCode: batch.batchCode,
+        })) as unknown as Prisma.InputJsonValue,
       },
     });
     return { reportId: report.id, batchIds: batches.map((batch) => batch.id) };

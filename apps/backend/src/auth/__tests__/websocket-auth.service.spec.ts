@@ -23,7 +23,10 @@ describe("WebSocketAuthService", () => {
   it("rejects missing, invalid, expired, and deleted-user access tokens", async () => {
     await expect(service.authenticate(fakeSocket())).rejects.toThrow("Unauthorized");
 
-    const invalid = await jwt.signAsync({ sub: "user-a", tokenVersion: 0 }, { secret: "wrong-secret" });
+    const invalid = await jwt.signAsync(
+      { sub: "user-a", tokenVersion: 0 },
+      { secret: "wrong-secret" },
+    );
     await expect(service.authenticate(fakeSocket(invalid))).rejects.toThrow();
 
     const expired = await jwt.signAsync(
@@ -32,7 +35,10 @@ describe("WebSocketAuthService", () => {
     );
     await expect(service.authenticate(fakeSocket(expired))).rejects.toThrow();
 
-    const deletedUserToken = await jwt.signAsync({ sub: "deleted", tokenVersion: 0 }, { secret: SECRET });
+    const deletedUserToken = await jwt.signAsync(
+      { sub: "deleted", tokenVersion: 0 },
+      { secret: SECRET },
+    );
     await expect(service.authenticate(fakeSocket(deletedUserToken))).rejects.toThrow(
       "Unauthorized",
     );

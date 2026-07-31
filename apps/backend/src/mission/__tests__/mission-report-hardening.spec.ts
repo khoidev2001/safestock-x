@@ -192,9 +192,7 @@ describe("MissionService report planning invariants", () => {
       _count: { requirements: 1 },
     });
 
-    await expect(state.service.dispatch(draft.id)).rejects.toThrow(
-      "Cần xác nhận địa điểm ứng phó",
-    );
+    await expect(state.service.dispatch(draft.id)).rejects.toThrow("Cần xác nhận địa điểm ứng phó");
     expect(state.mission.updateMany).not.toHaveBeenCalled();
   });
 });
@@ -249,9 +247,9 @@ describe("MissionService organization scope", () => {
   it("hides a mission from an actor in another organization", async () => {
     const state = makeScopedService();
 
-    await expect(
-      state.service.getMission(foreignMission.id, "actor-1"),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    await expect(state.service.getMission(foreignMission.id, "actor-1")).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   it("omits missions from other organizations in list results", async () => {
@@ -272,21 +270,57 @@ describe("MissionService organization scope", () => {
   it("blocks dispatching a mission from another organization before mutation", async () => {
     const state = makeScopedService();
 
-    await expect(
-      state.service.dispatch(foreignMission.id, "actor-1"),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    await expect(state.service.dispatch(foreignMission.id, "actor-1")).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
     expect(state.prisma.$transaction).not.toHaveBeenCalled();
     expect(state.notifications.pushPersisted).not.toHaveBeenCalled();
   });
 
   it.each([
-    ["approve", () => stateForTransition().service.approve(foreignMission.id, "actor-1", "warehouse-owned")],
-    ["confirm", () => stateForTransition().service.confirmByRescue(foreignMission.id, "warehouse-owned")],
-    ["reject", () => stateForTransition().service.rejectByRescue(foreignMission.id, "khong du nguoi", "warehouse-owned")],
-    ["defer", () => stateForTransition().service.deferByAdmin(foreignMission.id, undefined, "warehouse-owned")],
-    ["resend", () => stateForTransition().service.resendByAdmin(foreignMission.id, undefined, "warehouse-owned")],
-    ["cancel", () => stateForTransition().service.cancelByAdmin(foreignMission.id, undefined, "warehouse-owned")],
-    ["complete", () => stateForTransition().service.completeByRescue(foreignMission.id, "DELIVERED", "actor-1", undefined, "warehouse-owned")],
+    [
+      "approve",
+      () => stateForTransition().service.approve(foreignMission.id, "actor-1", "warehouse-owned"),
+    ],
+    [
+      "confirm",
+      () => stateForTransition().service.confirmByRescue(foreignMission.id, "warehouse-owned"),
+    ],
+    [
+      "reject",
+      () =>
+        stateForTransition().service.rejectByRescue(
+          foreignMission.id,
+          "khong du nguoi",
+          "warehouse-owned",
+        ),
+    ],
+    [
+      "defer",
+      () =>
+        stateForTransition().service.deferByAdmin(foreignMission.id, undefined, "warehouse-owned"),
+    ],
+    [
+      "resend",
+      () =>
+        stateForTransition().service.resendByAdmin(foreignMission.id, undefined, "warehouse-owned"),
+    ],
+    [
+      "cancel",
+      () =>
+        stateForTransition().service.cancelByAdmin(foreignMission.id, undefined, "warehouse-owned"),
+    ],
+    [
+      "complete",
+      () =>
+        stateForTransition().service.completeByRescue(
+          foreignMission.id,
+          "DELIVERED",
+          "actor-1",
+          undefined,
+          "warehouse-owned",
+        ),
+    ],
   ])("blocks %s for a mission outside warehouse scope", async (_name, transition) => {
     await expect(transition()).rejects.toBeInstanceOf(ForbiddenException);
   });
@@ -336,18 +370,20 @@ describe("MissionService reporter history", () => {
       {} as never,
     );
 
-    await expect(service.listOwnReports("reporter-1", undefined, "cursor-1", 999)).resolves.toEqual({
-      items: [
-        {
-          id: "mission-2",
-          createdAt: new Date("2026-07-29T02:00:00.000Z"),
-          reportText: "Nước dâng tại nhà văn hóa.",
-          status: MissionStatus.DRAFT,
-          warehouse: { name: "Kho tổng xã" },
-        },
-      ],
-      nextCursor: null,
-    });
+    await expect(service.listOwnReports("reporter-1", undefined, "cursor-1", 999)).resolves.toEqual(
+      {
+        items: [
+          {
+            id: "mission-2",
+            createdAt: new Date("2026-07-29T02:00:00.000Z"),
+            reportText: "Nước dâng tại nhà văn hóa.",
+            status: MissionStatus.DRAFT,
+            warehouse: { name: "Kho tổng xã" },
+          },
+        ],
+        nextCursor: null,
+      },
+    );
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
@@ -410,7 +446,8 @@ describe("MissionService publish atomicity", () => {
     const mission = {
       findUnique: jest.fn().mockImplementation(() => ({ ...missionState })),
       updateMany: jest.fn().mockImplementation(({ where, data }) => {
-        if (missionState.id !== where.id || missionState.status !== where.status) return { count: 0 };
+        if (missionState.id !== where.id || missionState.status !== where.status)
+          return { count: 0 };
         Object.assign(missionState, data);
         return { count: 1 };
       }),

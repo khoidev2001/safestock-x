@@ -44,7 +44,7 @@ describe("Mission prepare atomic (E2E PostgreSQL)", () => {
 
     const login = await http
       .post("/api/auth/login")
-      .send({ email: "staff@safestock.vn", password: "staff123" })
+      .send({ email: "staff@ungphonhanh.life", password: "staff123" })
       .expect(201);
     token = login.body.accessToken as string;
     adminToken = (
@@ -53,10 +53,12 @@ describe("Mission prepare atomic (E2E PostgreSQL)", () => {
     rescueToken = (
       await http
         .post("/api/auth/login")
-        .send({ email: "rescue@safestock.vn", password: "rescue123" })
+        .send({ email: "rescue@ungphonhanh.life", password: "rescue123" })
         .expect(201)
     ).body.accessToken as string;
-    const actor = await prisma.user.findUniqueOrThrow({ where: { email: "staff@safestock.vn" } });
+    const actor = await prisma.user.findUniqueOrThrow({
+      where: { email: "staff@ungphonhanh.life" },
+    });
     actorId = actor.id;
     warehouseId = actor.warehouseId as string;
 

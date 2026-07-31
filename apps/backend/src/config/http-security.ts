@@ -78,6 +78,9 @@ export function applyApiSecurityHeaders(
     response.setHeader("Referrer-Policy", "no-referrer");
     response.setHeader("X-Content-Type-Options", "nosniff");
     response.setHeader("X-Frame-Options", "DENY");
+    // API responses can cross the public Worker or the LAN Caddy proxy. Set
+    // this at the source so neither path can cache authenticated data.
+    response.setHeader("Cache-Control", "private, no-store, max-age=0");
   }
   next();
 }

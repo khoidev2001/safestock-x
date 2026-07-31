@@ -210,7 +210,9 @@ export function MissionInbox({
                   </div>
                   <div className="mt-4 flex items-end justify-between gap-3 text-xs">
                     <div>
-                      <p className="font-medium">{STATUS_LABELS[mission.status] ?? mission.status}</p>
+                      <p className="font-medium">
+                        {STATUS_LABELS[mission.status] ?? mission.status}
+                      </p>
                       <p className="mt-1 text-[var(--text-muted)]">
                         {mission.affectedPeople.toLocaleString("vi-VN")} người
                       </p>

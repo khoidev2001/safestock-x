@@ -143,9 +143,7 @@ function byNearestThenFefo(a: AvailableBatch, b: AvailableBatch): number {
   if (da !== db) return da - db;
   const expiry = byExpiryFefo(a, b);
   if (expiry !== 0) return expiry;
-  return `${a.warehouseId ?? ""}:${a.batchId}`.localeCompare(
-    `${b.warehouseId ?? ""}:${b.batchId}`,
-  );
+  return `${a.warehouseId ?? ""}:${a.batchId}`.localeCompare(`${b.warehouseId ?? ""}:${b.batchId}`);
 }
 
 /** FEFO: hạn gần nhất trước; lô không hạn xếp cuối. */

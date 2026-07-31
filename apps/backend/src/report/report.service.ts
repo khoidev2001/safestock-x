@@ -5,25 +5,14 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import {
-  CirculationStatus,
-  LoanStatus,
-  Prisma,
-  ReportStatus,
-} from "@prisma/client";
+import { CirculationStatus, LoanStatus, Prisma, ReportStatus } from "@prisma/client";
 import { InventoryAdjustmentService } from "../inventory/inventory-adjustment.service";
-import {
-  mutationFingerprint,
-  withMutationIdempotency,
-} from "../inventory/mutation-idempotency";
+import { mutationFingerprint, withMutationIdempotency } from "../inventory/mutation-idempotency";
 import { lockLoanTableForApproval } from "../loan/loan-table-lock";
 import { PrismaService } from "../prisma/prisma.service";
 import { parseReportExcel, ReportRow } from "./excel.parser";
 
-type ApprovalRow = Pick<
-  ReportRow,
-  "batchId" | "batchCode" | "shelfCode" | "sku" | "quantity"
->;
+type ApprovalRow = Pick<ReportRow, "batchId" | "batchCode" | "shelfCode" | "sku" | "quantity">;
 
 type ApprovalBatch = {
   id: string;
@@ -105,13 +94,7 @@ export class ReportService {
       condition: row.condition?.trim() || null,
       note: row.note?.trim() || null,
     }));
-    return this.createPendingReport(
-      userId,
-      warehouseId,
-      period,
-      normalizedRows,
-      requestId,
-    );
+    return this.createPendingReport(userId, warehouseId, period, normalizedRows, requestId);
   }
 
   async list(actorUserId: string, status?: ReportStatus, scopeWarehouseId?: string | null) {
@@ -494,17 +477,11 @@ function validateApprovalRows(value: Prisma.JsonValue): ApprovalRow[] {
     }
     const sku = typeof raw.sku === "string" ? raw.sku.trim() : "";
     const batchId =
-      typeof raw.batchId === "string" && raw.batchId.trim()
-        ? raw.batchId.trim()
-        : null;
+      typeof raw.batchId === "string" && raw.batchId.trim() ? raw.batchId.trim() : null;
     const batchCode =
-      typeof raw.batchCode === "string" && raw.batchCode.trim()
-        ? raw.batchCode.trim()
-        : null;
+      typeof raw.batchCode === "string" && raw.batchCode.trim() ? raw.batchCode.trim() : null;
     const shelfCode =
-      typeof raw.shelfCode === "string" && raw.shelfCode.trim()
-        ? raw.shelfCode.trim()
-        : null;
+      typeof raw.shelfCode === "string" && raw.shelfCode.trim() ? raw.shelfCode.trim() : null;
     const quantity = raw.quantity;
     if (!sku || !Number.isInteger(quantity) || (quantity as number) < 0) {
       throw new BadRequestException(`Dòng báo cáo ${index + 1} không hợp lệ`);
@@ -513,9 +490,7 @@ function validateApprovalRows(value: Prisma.JsonValue): ApprovalRow[] {
     const mode = batchId || batchCode ? "BATCH" : "LEGACY";
     const previousMode = skuModes.get(skuKey);
     if (previousMode && previousMode !== mode) {
-      throw new BadRequestException(
-        `SKU ${sku} không được trộn dòng theo lô và dòng tổng hợp`,
-      );
+      throw new BadRequestException(`SKU ${sku} không được trộn dòng theo lô và dòng tổng hợp`);
     }
     skuModes.set(skuKey, mode);
     const rowKey = batchId

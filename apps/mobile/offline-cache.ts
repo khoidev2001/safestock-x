@@ -15,11 +15,8 @@ interface NativeSecureCacheCipher {
 }
 
 function nativeSecureCacheCipher(): NativeSecureCacheCipher | null {
-  const module = NativeModules.SecureCacheCipher as
-    | Partial<NativeSecureCacheCipher>
-    | undefined;
-  return typeof module?.encrypt === "function" &&
-    typeof module?.decrypt === "function"
+  const module = NativeModules.SecureCacheCipher as Partial<NativeSecureCacheCipher> | undefined;
+  return typeof module?.encrypt === "function" && typeof module?.decrypt === "function"
     ? (module as NativeSecureCacheCipher)
     : null;
 }
@@ -53,11 +50,7 @@ export async function readOfflineCache<T>(
   }
 }
 
-export async function writeOfflineCache<T>(
-  userId: string,
-  scope: string,
-  data: T,
-): Promise<void> {
+export async function writeOfflineCache<T>(userId: string, scope: string, data: T): Promise<void> {
   const raw = serializeOfflineEnvelope(userId, data);
   if (Platform.OS === "web") {
     await AsyncStorage.setItem(cacheKey(userId, scope), raw);
@@ -70,10 +63,7 @@ export async function writeOfflineCache<T>(
   }
   try {
     const encrypted = await cipher.encrypt(raw);
-    await AsyncStorage.setItem(
-      cacheKey(userId, scope),
-      `${ENCRYPTED_PREFIX}${encrypted}`,
-    );
+    await AsyncStorage.setItem(cacheKey(userId, scope), `${ENCRYPTED_PREFIX}${encrypted}`);
   } catch {
     // Fail closed: dữ liệu live vẫn dùng được nhưng không để lại cache plaintext.
     await AsyncStorage.removeItem(cacheKey(userId, scope));
@@ -82,9 +72,7 @@ export async function writeOfflineCache<T>(
 
 export async function clearOfflineCache(userId: string): Promise<void> {
   const prefix = `${CACHE_PREFIX}.${userId}.`;
-  const keys = (await AsyncStorage.getAllKeys()).filter((key) =>
-    key.startsWith(prefix),
-  );
+  const keys = (await AsyncStorage.getAllKeys()).filter((key) => key.startsWith(prefix));
   if (keys.length > 0) await AsyncStorage.multiRemove(keys);
 }
 

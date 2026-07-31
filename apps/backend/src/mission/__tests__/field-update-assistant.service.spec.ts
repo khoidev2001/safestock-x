@@ -12,11 +12,15 @@ function makeService(overrides: Record<string, unknown> = {}) {
   const coordination = {
     recordFieldUpdate: jest.fn().mockResolvedValue(update),
     listAnalysisSnapshots: jest.fn().mockResolvedValue([]),
-    saveFieldUpdateIntent: jest.fn().mockImplementation(async (_missionId, _actorId, _scope, fieldUpdate, intent, provenance) => ({
-      ...fieldUpdate,
-      structuredIntent: intent,
-      intentProvenance: provenance,
-    })),
+    saveFieldUpdateIntent: jest
+      .fn()
+      .mockImplementation(
+        async (_missionId, _actorId, _scope, fieldUpdate, intent, provenance) => ({
+          ...fieldUpdate,
+          structuredIntent: intent,
+          intentProvenance: provenance,
+        }),
+      ),
   };
   const ai = {
     analyzeFieldUpdateIntent: jest.fn().mockRejectedValue(new Error("AI unavailable")),
@@ -113,14 +117,21 @@ describe("FieldUpdateAssistantService", () => {
       expect.any(String),
       null,
       expect.anything(),
-      expect.objectContaining({ resolvedReferenceIds: [], unresolvedReferences: ["Cầu La Hai không qua được"] }),
+      expect.objectContaining({
+        resolvedReferenceIds: [],
+        unresolvedReferences: ["Cầu La Hai không qua được"],
+      }),
       expect.objectContaining({ source: "AI_SERVICE" }),
     );
   });
 
   it("creates only an isolated preliminary What-if when a baseline exists", async () => {
     const { service, coordination, whatIf } = makeService({
-      coordination: { listAnalysisSnapshots: jest.fn().mockResolvedValue([{ id: "baseline-1", kind: "BASELINE" }]) },
+      coordination: {
+        listAnalysisSnapshots: jest
+          .fn()
+          .mockResolvedValue([{ id: "baseline-1", kind: "BASELINE" }]),
+      },
       whatIf: {
         simulate: jest.fn().mockResolvedValue({
           snapshot: { id: "simulation-1", expiresAt: "2026-07-28T02:30:00.000Z" },
@@ -140,7 +151,10 @@ describe("FieldUpdateAssistantService", () => {
       "mission-1",
       "rescue-1",
       null,
-      expect.objectContaining({ baselineSnapshotId: "baseline-1", assumptionText: update.confirmedText }),
+      expect.objectContaining({
+        baselineSnapshotId: "baseline-1",
+        assumptionText: update.confirmedText,
+      }),
     );
     expect(coordination.saveFieldUpdateIntent).toHaveBeenCalledWith(
       expect.any(String),
@@ -149,7 +163,10 @@ describe("FieldUpdateAssistantService", () => {
       expect.anything(),
       expect.anything(),
       expect.objectContaining({
-        preliminarySimulation: expect.objectContaining({ status: "CREATED", snapshotId: "simulation-1" }),
+        preliminarySimulation: expect.objectContaining({
+          status: "CREATED",
+          snapshotId: "simulation-1",
+        }),
       }),
     );
   });
@@ -209,9 +226,11 @@ describe("FieldUpdateAssistantService", () => {
     const warn = jest.spyOn(Logger.prototype, "warn").mockImplementation(() => undefined);
     const { service } = makeService({
       ai: {
-        analyzeFieldUpdateIntent: jest.fn().mockRejectedValue(
-          new Error("provider failed: token=secret-789 transcript=private field text"),
-        ),
+        analyzeFieldUpdateIntent: jest
+          .fn()
+          .mockRejectedValue(
+            new Error("provider failed: token=secret-789 transcript=private field text"),
+          ),
       },
     });
 

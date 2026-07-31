@@ -42,9 +42,9 @@ describe("NotificationService organization scope", () => {
     const { prisma, service } = makeService();
     prisma.notification.updateMany.mockResolvedValue({ count: 0 });
 
-    await expect(service.markRead("admin-a", "ADMIN" as never, "notification-org-b")).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      service.markRead("admin-a", "ADMIN" as never, "notification-org-b"),
+    ).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.notification.updateMany).toHaveBeenCalledWith({
       where: { id: "notification-org-b", organizationId: "org-a", recipientRole: "ADMIN" },
       data: { read: true },

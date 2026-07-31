@@ -63,25 +63,13 @@ export class InventoryController {
     @Param("id") id: string,
     @Query() query: TransactionHistoryQueryDto,
   ) {
-    return this.inv.listTransactions(
-      id,
-      req.user.warehouseId,
-      req.user.userId,
-      query.limit,
-    );
+    return this.inv.listTransactions(id, req.user.warehouseId, req.user.userId, query.limit);
   }
 
   @RequirePermission(Permission.INVENTORY_EXPORT)
   @Get("warehouses/:id/transfer-destinations")
-  transferDestinations(
-    @Request() req: AuthenticatedRequest,
-    @Param("id") id: string,
-  ) {
-    return this.inv.transferDestinations(
-      id,
-      req.user.warehouseId,
-      req.user.userId,
-    );
+  transferDestinations(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.inv.transferDestinations(id, req.user.warehouseId, req.user.userId);
   }
 
   @Get("warehouses/:id/semantic-search")
@@ -101,10 +89,7 @@ export class InventoryController {
 
   @RequirePermission(Permission.INVENTORY_IMPORT)
   @Post("normalize-input")
-  normalizeInput(
-    @Request() req: AuthenticatedRequest,
-    @Body() dto: NormalizeItemInputDto,
-  ) {
+  normalizeInput(@Request() req: AuthenticatedRequest, @Body() dto: NormalizeItemInputDto) {
     return this.semantic.normalizeInput(req.user.userId, dto.name, dto.limit);
   }
 
@@ -120,10 +105,7 @@ export class InventoryController {
 
   @RequirePermission(Permission.INVENTORY_IMPORT)
   @Post("batches")
-  receiveBatch(
-    @Request() req: AuthenticatedRequest,
-    @Body() dto: ReceiveBatchDto,
-  ) {
+  receiveBatch(@Request() req: AuthenticatedRequest, @Body() dto: ReceiveBatchDto) {
     return this.inv.receiveBatch(
       req.user.userId,
       {

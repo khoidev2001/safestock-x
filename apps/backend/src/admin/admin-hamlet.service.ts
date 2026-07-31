@@ -18,9 +18,7 @@ export interface SaveHamletInput {
 
 @Injectable()
 export class AdminHamletService {
-  constructor(
-    private readonly prisma: PrismaService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async list(actorId: string, communeId?: string) {
     const organizationId = await this.actorOrganizationId(actorId);
@@ -52,7 +50,9 @@ export class AdminHamletService {
 
   async update(actorId: string, id: string, input: SaveHamletInput) {
     const organizationId = await this.actorOrganizationId(actorId);
-    const current = await (this.prisma as HamletPrisma).hamlet.findFirst({ where: { id, organizationId } });
+    const current = await (this.prisma as HamletPrisma).hamlet.findFirst({
+      where: { id, organizationId },
+    });
     if (!current) throw new NotFoundException("Không tìm thấy thôn");
     const data = this.validatedData({
       name: input.name,
@@ -89,8 +89,9 @@ export class AdminHamletService {
     const normalizedName = normalizeHamletName(name);
     if (!normalizedName) throw new BadRequestException("Tên thôn không hợp lệ");
     const communeId = input.communeId?.trim() || "dong-xuan";
-    const aliases = [...new Set([normalizedName, ...(input.aliases ?? []).map(normalizeHamletName)])]
-      .filter(Boolean);
+    const aliases = [
+      ...new Set([normalizedName, ...(input.aliases ?? []).map(normalizeHamletName)]),
+    ].filter(Boolean);
     this.assertCoordinatePair(input.lat, input.lng);
     const verified = input.verified ?? false;
     if (verified && (input.lat == null || input.lng == null)) {
@@ -153,9 +154,10 @@ function auditData(actorId: string, action: string, hamlet: HamletRow) {
     entity: "Hamlet",
     entityId: hamlet.id,
     metadata: {
-      reason: action === "HAMLET_CREATE"
-        ? "ADMIN cấu hình danh mục thôn/điểm ứng phó"
-        : "ADMIN cập nhật danh mục thôn/điểm ứng phó",
+      reason:
+        action === "HAMLET_CREATE"
+          ? "ADMIN cấu hình danh mục thôn/điểm ứng phó"
+          : "ADMIN cập nhật danh mục thôn/điểm ứng phó",
       name: hamlet.name,
       communeId: hamlet.communeId,
       verified: hamlet.verified,

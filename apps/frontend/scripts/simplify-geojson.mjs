@@ -57,12 +57,19 @@ function simplifyRing(ring) {
   const a = dpOpen(ring.slice(0, far + 1));
   const b = dpOpen(ring.slice(far));
   let r = a.slice(0, -1).concat(b);
-  if (r.length < 4) r = [ring[0], ring[Math.floor(ring.length / 3)], ring[Math.floor((2 * ring.length) / 3)], ring[0]];
+  if (r.length < 4)
+    r = [
+      ring[0],
+      ring[Math.floor(ring.length / 3)],
+      ring[Math.floor((2 * ring.length) / 3)],
+      ring[0],
+    ];
   if (r[0][0] !== r[r.length - 1][0] || r[0][1] !== r[r.length - 1][1]) r.push(r[0]);
   return round(r);
 }
 
-const round = (ring) => ring.map(([x, y]) => [Number(x.toFixed(PRECISION)), Number(y.toFixed(PRECISION))]);
+const round = (ring) =>
+  ring.map(([x, y]) => [Number(x.toFixed(PRECISION)), Number(y.toFixed(PRECISION))]);
 
 function simplifyGeometry(geom) {
   if (geom.type === "Polygon") {
@@ -88,4 +95,6 @@ for (const f of g.features) f.geometry = simplifyGeometry(f.geometry);
 const after = countVertices(g);
 await fs.writeFile(input, `${JSON.stringify(g)}\n`, "utf8");
 const kb = ((await fs.stat(input)).size / 1024).toFixed(1);
-console.log(`Đỉnh: ${before} → ${after} (${((100 * after) / before).toFixed(0)}%), ${kb} KB, ${g.features.length} xã, eps=${eps}`);
+console.log(
+  `Đỉnh: ${before} → ${after} (${((100 * after) / before).toFixed(0)}%), ${kb} KB, ${g.features.length} xã, eps=${eps}`,
+);

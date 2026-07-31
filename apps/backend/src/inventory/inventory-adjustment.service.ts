@@ -15,18 +15,10 @@ import {
 import { TransactionType } from "@safestock/shared-types";
 import { PrismaService } from "../prisma/prisma.service";
 import { ReadinessService } from "../readiness/readiness.service";
-import {
-  lockLoanBatch,
-  lockLoanTableForApproval,
-} from "../loan/loan-table-lock";
+import { lockLoanBatch, lockLoanTableForApproval } from "../loan/loan-table-lock";
 import { sumOutstanding } from "./loan-math";
-import {
-  mutationFingerprint,
-  withMutationIdempotency,
-} from "./mutation-idempotency";
-import {
-  assertActorCanAccessBatch,
-} from "./warehouse-scope";
+import { mutationFingerprint, withMutationIdempotency } from "./mutation-idempotency";
+import { assertActorCanAccessBatch } from "./warehouse-scope";
 
 type ReconcileInTxOptions = {
   requireStableSnapshot?: boolean;
@@ -87,56 +79,52 @@ export class InventoryAdjustmentService {
         async () => {
           await lockLoanTableForApproval(tx);
           await lockLoanBatch(tx, batchId);
-      const before = await tx.itemBatch.findUnique({
-        where: { id: batchId },
-        include: { shelf: { select: { zone: { select: { warehouseId: true } } } } },
-      });
-      if (!before) throw new NotFoundException("Không tìm thấy lô vật tư");
-      const outstandingLoan = await this.sumOnLoan(tx, batchId);
-      if (newQuantity < outstandingLoan) {
-        throw new ConflictException(
-          `Tồn mới không được thấp hơn ${outstandingLoan} đơn vị đang cho mượn`,
-        );
-      }
+          const before = await tx.itemBatch.findUnique({
+            where: { id: batchId },
+            include: { shelf: { select: { zone: { select: { warehouseId: true } } } } },
+          });
+          if (!before) throw new NotFoundException("Không tìm thấy lô vật tư");
+          const outstandingLoan = await this.sumOnLoan(tx, batchId);
+          if (newQuantity < outstandingLoan) {
+            throw new ConflictException(
+              `Tồn mới không được thấp hơn ${outstandingLoan} đơn vị đang cho mượn`,
+            );
+          }
 
-      const claimed = await tx.itemBatch.updateMany({
-        where: {
-          id: batchId,
-          quantity: before.quantity,
-          ...(scopeWarehouseId
-            ? { shelf: { zone: { warehouseId: scopeWarehouseId } } }
-            : {}),
-        },
-        data: { quantity: newQuantity },
-      });
-      if (claimed.count === 0) {
-        throw new ConflictException(
-          "Tồn kho vừa thay đổi; hãy tải lại trước khi điều chỉnh",
-        );
-      }
-      await tx.inventoryTransaction.create({
-        data: {
-          batchId,
-          userId,
-          type: TransactionType.ADJUST,
-          source: TransactionSource.MANUAL,
-          quantity: Math.abs(newQuantity - before.quantity),
-          beforeQuantity: before.quantity,
-          afterQuantity: newQuantity,
-          quantityDelta: newQuantity - before.quantity,
-          note: reason,
-          warehouseId: before.shelf?.zone.warehouseId,
-        },
-      });
-      await tx.auditLog.create({
-        data: {
-          actorId: userId,
-          action: "INVENTORY_ADJUST",
-          entity: "ItemBatch",
-          entityId: batchId,
-          metadata: { before: before.quantity, after: newQuantity, reason },
-        },
-      });
+          const claimed = await tx.itemBatch.updateMany({
+            where: {
+              id: batchId,
+              quantity: before.quantity,
+              ...(scopeWarehouseId ? { shelf: { zone: { warehouseId: scopeWarehouseId } } } : {}),
+            },
+            data: { quantity: newQuantity },
+          });
+          if (claimed.count === 0) {
+            throw new ConflictException("Tồn kho vừa thay đổi; hãy tải lại trước khi điều chỉnh");
+          }
+          await tx.inventoryTransaction.create({
+            data: {
+              batchId,
+              userId,
+              type: TransactionType.ADJUST,
+              source: TransactionSource.MANUAL,
+              quantity: Math.abs(newQuantity - before.quantity),
+              beforeQuantity: before.quantity,
+              afterQuantity: newQuantity,
+              quantityDelta: newQuantity - before.quantity,
+              note: reason,
+              warehouseId: before.shelf?.zone.warehouseId,
+            },
+          });
+          await tx.auditLog.create({
+            data: {
+              actorId: userId,
+              action: "INVENTORY_ADJUST",
+              entity: "ItemBatch",
+              entityId: batchId,
+              metadata: { before: before.quantity, after: newQuantity, reason },
+            },
+          });
           return { batchId, before: before.quantity, after: newQuantity };
         },
       ),
@@ -171,46 +159,46 @@ export class InventoryAdjustmentService {
           }),
         },
         async () => {
-      await lockLoanTableForApproval(tx);
-      await lockLoanBatch(tx, batchId);
-      await assertActorCanAccessBatch(tx, userId, scopeWarehouseId, batchId);
-      const before = await tx.itemBatch.findUnique({
-        where: { id: batchId },
-        include: { shelf: { select: { zone: { select: { warehouseId: true } } } } },
-      });
-      if (!before) throw new NotFoundException("Không tìm thấy lô vật tư");
+          await lockLoanTableForApproval(tx);
+          await lockLoanBatch(tx, batchId);
+          await assertActorCanAccessBatch(tx, userId, scopeWarehouseId, batchId);
+          const before = await tx.itemBatch.findUnique({
+            where: { id: batchId },
+            include: { shelf: { select: { zone: { select: { warehouseId: true } } } } },
+          });
+          if (!before) throw new NotFoundException("Không tìm thấy lô vật tư");
 
-      await tx.itemBatch.update({
-        where: { id: batchId },
-        data: { condition },
-      });
-      await tx.inventoryTransaction.create({
-        data: {
-          batchId,
-          userId,
-          type: TransactionType.CONDITION,
-          source: TransactionSource.MANUAL,
-          quantity: 0,
-          beforeQuantity: before.quantity,
-          afterQuantity: before.quantity,
-          quantityDelta: 0,
-          note: normalizedNote,
-          warehouseId: before.shelf?.zone.warehouseId,
-        },
-      });
-      await tx.auditLog.create({
-        data: {
-          actorId: userId,
-          action: "INVENTORY_CONDITION",
-          entity: "ItemBatch",
-          entityId: batchId,
-          metadata: {
-            before: before.condition,
-            after: condition,
-            note: normalizedNote,
-          },
-        },
-      });
+          await tx.itemBatch.update({
+            where: { id: batchId },
+            data: { condition },
+          });
+          await tx.inventoryTransaction.create({
+            data: {
+              batchId,
+              userId,
+              type: TransactionType.CONDITION,
+              source: TransactionSource.MANUAL,
+              quantity: 0,
+              beforeQuantity: before.quantity,
+              afterQuantity: before.quantity,
+              quantityDelta: 0,
+              note: normalizedNote,
+              warehouseId: before.shelf?.zone.warehouseId,
+            },
+          });
+          await tx.auditLog.create({
+            data: {
+              actorId: userId,
+              action: "INVENTORY_CONDITION",
+              entity: "ItemBatch",
+              entityId: batchId,
+              metadata: {
+                before: before.condition,
+                after: condition,
+                note: normalizedNote,
+              },
+            },
+          });
           return { batchId, before: before.condition, after: condition };
         },
       ),

@@ -60,9 +60,7 @@ describe("AuditService organization scope", () => {
     const prisma = makePrisma();
     const service = new AuditService(prisma as never);
 
-    await expect(
-      service.list("reviewer-1", { actorId: "foreign-user" }),
-    ).resolves.toEqual([]);
+    await expect(service.list("reviewer-1", { actorId: "foreign-user" })).resolves.toEqual([]);
 
     expect(prisma.auditLog.findMany).not.toHaveBeenCalled();
   });

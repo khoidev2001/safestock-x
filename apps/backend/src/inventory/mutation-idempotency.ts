@@ -2,10 +2,7 @@ import { ConflictException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { createHash } from "node:crypto";
 
-type IdempotencyClient = Pick<
-  Prisma.TransactionClient,
-  "$executeRawUnsafe" | "auditLog"
->;
+type IdempotencyClient = Pick<Prisma.TransactionClient, "$executeRawUnsafe" | "auditLog">;
 
 type IdempotencyOptions = {
   actorId: string;
@@ -29,10 +26,7 @@ export async function withMutationIdempotency<T>(
   if (!options.requestId) return mutate();
 
   const lockKey = `${options.actorId}:${options.operation}:${options.requestId}`;
-  await tx.$executeRawUnsafe(
-    "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
-    lockKey,
-  );
+  await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", lockKey);
 
   const receipt = await tx.auditLog.findFirst({
     where: {
@@ -75,9 +69,7 @@ export async function withMutationIdempotency<T>(
 
 function readReceiptResponse<T>(
   metadata: Prisma.JsonValue | null | undefined,
-):
-  | { found: false }
-  | { found: true; response: T; fingerprint?: string } {
+): { found: false } | { found: true; response: T; fingerprint?: string } {
   if (!metadata || Array.isArray(metadata) || typeof metadata !== "object") {
     return { found: false };
   }
@@ -87,10 +79,7 @@ function readReceiptResponse<T>(
   return {
     found: true,
     response: metadata.response as T,
-    fingerprint:
-      typeof metadata.fingerprint === "string"
-        ? metadata.fingerprint
-        : undefined,
+    fingerprint: typeof metadata.fingerprint === "string" ? metadata.fingerprint : undefined,
   };
 }
 

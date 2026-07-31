@@ -3,10 +3,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import {
-  createGraphManifest,
-  verifyGraphArtifact,
-} from "./osrm-artifact.mjs";
+import { createGraphManifest, verifyGraphArtifact } from "./osrm-artifact.mjs";
 
 async function fixture() {
   const directory = await mkdtemp(path.join(tmpdir(), "safestock-osrm-"));

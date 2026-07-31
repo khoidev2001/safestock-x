@@ -24,19 +24,11 @@
 | Mobile | `apps/mobile` | React Native + Expo | Expo (Metro) |
 | Desktop simulator | `apps/desktop` | Electron (giả lập cảm biến kho) | — |
 | Shared types | `packages/shared-types` | Contract dùng chung | — |
-| Scenario definitions | `packages/scenario-definitions` | Kịch bản cảm biến | — |
 
-**Hai runtime tách biệt** (quan trọng khi test simulator):
-
-| Runtime | Mục đích | API | DB Postgres | Redis | Simulator ghi dữ liệu? | Email cảnh báo |
-|---|---|---|---|---|---|---|
-| **Vận hành** | Dữ liệu thật, production | 3100 | `safestock` @ 15432 | 16379 | **TẮT** (an toàn) | Bật (nếu cấu hình SMTP) |
-| **Demo** | Chạy simulator cô lập | 3110 | `safestock_demo` @ 55434 | 56381 | **BẬT** | **TẮT** (bắt buộc, có guard) |
-
-> Vì sao tách: simulator được phép sinh/reset dữ liệu, nên phải chạy trên DB demo riêng
-> để **không đụng dữ liệu vận hành**. Guard `infrastructure/demo/demo-environment-guard.mjs`
-> ép `.env.demo` phải có `ALERT_EMAIL_ENABLED=false` — đây là lý do email cảnh báo không
-> gửi khi test simulator trên demo (đúng thiết kế, xem [§11](#11-kiểm-chứng-email-cảnh-báo-smtp)).
+Desktop simulator dùng cùng backend/database đang cấu hình. Mặc định backend
+không nhận mutation; chỉ bật `SIMULATION_MUTATION_ENABLED=true` trong `.env`
+khi chủ động tạo sự kiện test, rồi restart backend. Sự kiện này có thể làm đổi
+readiness, incident và email alert.
 
 ---
 
@@ -155,10 +147,11 @@ Mở giao diện: **http://localhost:3200**
 | Tài khoản | Mật khẩu | Vai trò / phạm vi |
 |---|---|---|
 | `admin` | `admin123@` | ADMIN — toàn xã, bản đồ, người dùng, lập Mission |
-| `staff@safestock.vn` | `staff123` | Vận hành kho trung tâm |
-| `rescue@safestock.vn` | `rescue123` | Đội cứu hộ |
-| `truongthon1@safestock.vn` | `truongthon123` | Trưởng thôn — Kho thôn Long Châu |
-| `truongthon2..17@safestock.vn` | `truongthon123` | Các kho thôn còn lại (theo thứ tự seed) |
+| `staff@ungphonhanh.life` | `staff123` | Vận hành kho trung tâm |
+| `rescue@ungphonhanh.life` | `rescue123` | Đội cứu hộ |
+| `truongthon@ungphonhanh.life` | `reporter123` | Trưởng thôn gửi báo cáo tình huống |
+| `truongthon1@ungphonhanh.life` | `truongthon123` | Trưởng thôn — Kho thôn Long Châu |
+| `truongthon2..17@ungphonhanh.life` | `truongthon123` | Các kho thôn còn lại (theo thứ tự seed) |
 
 > Đây là mật khẩu **development**. Trước khi public phải đổi hết (mục §12
 > trong [HUONG-DAN-CAI-DAT-VA-CHAY.md](HUONG-DAN-CAI-DAT-VA-CHAY.md)).
@@ -224,29 +217,13 @@ Tóm tắt để giám khảo chọn nhanh:
 
 ---
 
-## 7. Test Desktop Simulator (Electron) — giả lập cảm biến kho
+## 7. Test Desktop Simulator (Electron) — snapshot đã xác nhận
 
-App desktop giả lập cảm biến IoT (nhiệt độ, độ ẩm, khói, loadcell) và bắn realtime tới
-backend. **Phải trỏ vào runtime DEMO (3110)** để được phép ghi dữ liệu.
+App desktop gửi một snapshot các giá trị cảm biến IoT đã được người vận hành
+xác nhận (nhiệt độ, độ ẩm, khói, loadcell) tới backend đang chạy. Trước khi mở app, đặt
+`SIMULATION_MUTATION_ENABLED=true` trong `.env` và restart backend.
 
-### 7.1 — Khởi động runtime demo
-
-```powershell
-# Hạ tầng demo (Postgres 55434 + Redis 56381)
-Copy-Item .env.demo.example .env.demo
-notepad .env.demo                       # thay hết placeholder secret/password
-pnpm demo:validate                      # phải: "Demo environment is valid ... port 3110"
-pnpm demo:infra:up
-pnpm demo:db:reset -- --confirm-demo-reset   # seed dữ liệu demo (guard bắt buộc cờ này)
-
-# Backend demo (terminal riêng)
-pnpm --filter @safestock/backend build
-pnpm demo:backend                       # phục vụ http://localhost:3110/api
-```
-
-Kiểm tra: `Invoke-RestMethod http://localhost:3110/api/health` → `status = ok`.
-
-### 7.2 — Chạy app desktop và test luồng realtime
+### 7.1 — Chạy app desktop và test luồng xác nhận
 
 ```powershell
 pnpm desktop:dev
@@ -254,28 +231,19 @@ pnpm desktop:dev
 
 Trong cửa sổ Electron:
 
-1. **Đăng nhập**: Host = `http://localhost:3110` · tài khoản `admin` / `admin123@` → bấm **Đăng nhập admin**.
-2. Chờ badge realtime chuyển xanh (**"Realtime đang chạy"**) — WebSocket đã kết nối.
-3. **Luồng A — Slider tay**: kéo slider **Nhiệt độ** vượt `35°C` (ví dụ `46°C`) rồi thả chuột.
-   - Kỳ vọng: nhật ký realtime nhận `sensor_event`, xuất hiện **cảnh báo sự cố** mới, điểm sẵn sàng đổi, có **giải thích AI** (nếu AI service đang chạy).
-4. **Luồng B — Chạy kịch bản**: chọn kịch bản **"Nhiệt tăng dần (cảnh báo sớm)"** → `x10` → **Chạy**.
-   - Kỳ vọng: log tuôn sự kiện theo thời gian, sinh **cảnh báo dự đoán sớm** trước khi vượt ngưỡng.
-5. Đối chiếu chéo: mở web http://localhost:3200 (đăng nhập host 3110 nếu web trỏ demo) hoặc gọi API để thấy sự cố vừa sinh.
+1. **Đăng nhập**: Host = `localhost:3100`, `ungphonhanh.life`, hoặc hostname/IP LAN; dùng tài khoản ADMIN đúng scope kho.
+2. Kéo slider **Nhiệt độ** vượt `35°C` (ví dụ `46°C`). Kỳ vọng: badge “đã chỉnh, chưa gửi” tăng, web/database chưa có snapshot mới.
+3. Bấm **Xác nhận và gửi**.
+   - Kỳ vọng: app lưu hàng chờ trước, nhật ký báo đã gửi một snapshot; web poll tối đa 10 giây sẽ thấy số đọc/timeline mới, readiness và Incident cập nhật.
+   - Chuông desktop kêu ngay theo policy cục bộ, kể cả khi gửi đang chờ. Chuông chỉ dừng khi bấm **Tắt chuông**; sau đó app gửi/lưu ACK vào lịch sử Incident.
+4. **Luồng offline**: khi đang đăng nhập, ngắt đường tới backend, đổi một slider rồi bấm **Xác nhận và gửi**. Kỳ vọng: thao tác hiện “chờ gửi”, chuông cục bộ vẫn hoạt động nếu vượt ngưỡng. Khôi phục đường kết nối → đúng một snapshot xuất hiện nhờ idempotency.
+5. **Luồng email**: tắt SMTP/Internet nhưng vẫn để backend chạy, xác nhận vượt ngưỡng. Kỳ vọng: Incident vẫn tạo; AlertEmailOutbox ở trạng thái chờ/retry. Khôi phục SMTP → email có giờ phát hiện, backend nhận và gửi khác nhau nếu bị trễ.
+6. Đặt `SIMULATION_MUTATION_ENABLED=false` và restart backend khi kết thúc.
 
-> **Đã kiểm chứng trong phiên đánh giá:** cả 2 luồng PASS — slider `temp_A→46°C` (readiness
-> 94→89, sinh sự cố + giải thích AI "nhiệt độ 39.9°C vượt ngưỡng 35°C"); kịch bản heat_drift
-> x10 (temp_B 28→34°C, cảnh báo dự đoán sớm 80%). Xem [báo cáo đánh giá](bao-cao-danh-gia-san-sang-du-thi.md).
-
-### 7.3 — Đóng gói bản portable (tùy chọn)
+### 7.2 — Đóng gói bản portable (tùy chọn)
 
 ```powershell
 pnpm --filter @safestock/desktop package     # electron-builder --win portable → apps/desktop/dist
-```
-
-### 7.4 — Dừng demo khi xong
-
-```powershell
-pnpm demo:infra:down     # dừng container demo, GIỮ dữ liệu trong volume
 ```
 
 ---
@@ -338,7 +306,6 @@ pnpm --filter @safestock/mobile test:resolution           # dependency resolutio
 
 ```powershell
 pnpm --filter @safestock/shared-types test:coordination   # contract test
-pnpm --filter @safestock/scenario-definitions build       # build kịch bản
 ```
 
 ### 9.5 — Lint + Format toàn repo
@@ -379,29 +346,10 @@ báo pytest để phân biệt.
 
 **Câu hỏi thường gặp: "Chạy simulator nhưng sao không nhận được email cảnh báo?"**
 
-Đây **không phải lỗi** — là thiết kế an toàn:
-
-- Test simulator chạy trên **runtime demo (3110)**, nơi guard ép `ALERT_EMAIL_ENABLED=false`.
-  Sự cố + cảnh báo realtime vẫn nổ đúng, chỉ bước gửi mail bị `AlertMailService` bỏ qua
-  (log: *"Email cảnh báo chưa bật — bỏ qua gửi mail"*).
-- **Runtime vận hành (3100)** có email nhưng **tắt simulator**, nên cảnh báo thật đến từ
-  cảm biến IoT thật, không từ giả lập.
-
-**Đã kiểm chứng đường gửi mail hoạt động thật** (bật SMTP tạm trên demo → bắn sự cố):
-
-```
-[AlertMailService] Đã gửi email cảnh báo "Điều kiện bảo quản không đạt" tới 1 người nhận.
-```
-
-Người nhận là fallback `ALERT_EMAIL_TO` (vì DB demo không có user đặt `notificationEmail`).
-AI service tắt → nội dung là bản rule-based (đúng cơ chế fail-safe: mất AI vẫn gửi được).
-Sau kiểm chứng đã **hoàn nguyên** `.env.demo` về invariant tắt mail.
-
-**Muốn khách hàng thật nhận email:** trên **runtime vận hành**, thêm user role
-ADMIN/RESCUE/WAREHOUSE có `notificationEmail`, và cấu hình `SMTP_*` + `ALERT_EMAIL_ENABLED=true`
-trong `.env` vận hành. Đường dẫn code: `IncidentService.enrichNewIncident` →
-`AlertMailService.sendIncidentAlert` (`apps/backend/src/incident/incident.service.ts`,
-`apps/backend/src/mail/alert-mail.service.ts`).
+Slider desktop dùng backend/database hiện tại. Nếu `ALERT_EMAIL_ENABLED=true`,
+một sự kiện vượt ngưỡng có thể gửi email thật theo cấu hình `SMTP_*`. Tắt email
+hoặc dùng địa chỉ nhận thử trước khi chạy slider. Đường dẫn code:
+`IncidentService.enrichNewIncident` → `AlertMailService.sendIncidentAlert`.
 
 ---
 
@@ -410,11 +358,7 @@ trong `.env` vận hành. Đường dẫn code: `IncidentService.enrichNewIncide
 Các ca pin tọa độ, kiểm kê, mượn-trả, xử lý sự cố, duyệt báo cáo, tạo Mission đều **đổi dữ liệu**.
 
 ```powershell
-# Runtime vận hành
 pnpm --filter @safestock/backend seed
-
-# Runtime demo
-pnpm demo:db:reset -- --confirm-demo-reset
 ```
 
 Sau reset phải quay lại: 18 kho, 17 thôn chưa ghim, 2 phiếu mượn mở, 2 sự cố, không Mission test.

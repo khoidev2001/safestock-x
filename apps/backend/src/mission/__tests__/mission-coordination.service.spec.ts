@@ -1,6 +1,9 @@
 import { BadRequestException, ConflictException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
-import { COORDINATION_ANALYSIS_SCHEMA_VERSION, CoordinationAnalysis } from "@safestock/shared-types";
+import {
+  COORDINATION_ANALYSIS_SCHEMA_VERSION,
+  CoordinationAnalysis,
+} from "@safestock/shared-types";
 import { MissionCoordinationService } from "../mission-coordination.service";
 
 const ACTOR_ID = "user-admin-1";
@@ -65,7 +68,9 @@ function makeService(overrides: Record<string, unknown> = {}) {
     },
     missionFieldUpdate: {
       findUnique: jest.fn().mockResolvedValue(null),
-      create: jest.fn().mockResolvedValue({ id: "field-update-1", confirmedText: "Đã đến điểm tập kết" }),
+      create: jest
+        .fn()
+        .mockResolvedValue({ id: "field-update-1", confirmedText: "Đã đến điểm tập kết" }),
       update: jest.fn().mockResolvedValue({ id: "field-update-1" }),
       findMany: jest.fn().mockResolvedValue([]),
     },
@@ -184,10 +189,14 @@ describe("MissionCoordinationService", () => {
     expect(prisma.missionFieldUpdate.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: "field-update-1" },
-        data: expect.objectContaining({ structuredIntent: expect.objectContaining({ kind: "ROUTE_HAZARD" }) }),
+        data: expect.objectContaining({
+          structuredIntent: expect.objectContaining({ kind: "ROUTE_HAZARD" }),
+        }),
       }),
     );
-    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: "MISSION_FIELD_UPDATE_INTENT_SAVED" }));
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "MISSION_FIELD_UPDATE_INTENT_SAVED" }),
+    );
   });
 
   it("persists a validated baseline snapshot with reproducibility stamps", async () => {
@@ -265,10 +274,7 @@ describe("MissionCoordinationService", () => {
     const winner = { id: "snapshot-winner", fingerprint: "sha256:baseline-1" };
     const { service, prisma, audit } = makeService({
       missionAnalysisSnapshot: {
-        findUnique: jest
-          .fn()
-          .mockResolvedValueOnce(null)
-          .mockResolvedValueOnce(winner),
+        findUnique: jest.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(winner),
         create: jest.fn().mockRejectedValue(
           new Prisma.PrismaClientKnownRequestError("duplicate request", {
             code: "P2002",

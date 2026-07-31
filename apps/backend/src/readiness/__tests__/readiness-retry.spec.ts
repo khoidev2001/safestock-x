@@ -1,69 +1,21 @@
-import { Logger } from "@nestjs/common";
-import {
-  isReadinessStale,
-  ReadinessService,
-} from "../readiness.service";
-
-describe("readiness freshness", () => {
-  it("marks scores older than fifteen minutes as stale", () => {
-    const now = new Date("2026-07-27T12:30:00.000Z");
-    expect(
-      isReadinessStale(new Date("2026-07-27T12:14:59.999Z"), now),
-    ).toBe(true);
-    expect(
-      isReadinessStale(new Date("2026-07-27T12:15:00.000Z"), now),
-    ).toBe(false);
-  });
-});
+import { ReadinessService } from "../readiness.service";
 
 describe("ReadinessService best-effort retry", () => {
-  it("retries a transient recalculation failure and reports success", async () => {
-    jest.spyOn(Logger.prototype, "warn").mockImplementation(() => undefined);
+  it("returns true when a derived recalculation succeeds", async () => {
     const service = new ReadinessService({} as never, {} as never);
     jest
-      .spyOn(
-        service as unknown as {
-          recalculateWarehouseOnce: () => Promise<unknown>;
-        },
-        "recalculateWarehouseOnce",
-      )
-      .mockRejectedValueOnce(new Error("transient-1"))
-      .mockRejectedValueOnce(new Error("transient-2"))
-      .mockResolvedValueOnce({ warehouseId: "warehouse-1" } as never);
-
-    await expect(
-      service.recalculateWarehouse("warehouse-1"),
-    ).resolves.toEqual({ warehouseId: "warehouse-1" });
-    expect(
-      (
-        service as unknown as {
-          recalculateWarehouseOnce: jest.Mock;
-        }
-      ).recalculateWarehouseOnce,
-    ).toHaveBeenCalledTimes(3);
+      .spyOn(service, "recalculateWarehouse")
+      .mockResolvedValue({ warehouseId: "warehouse-1" } as never);
+    await expect(service.recalculateWarehouseBestEffort("warehouse-1", "test")).resolves.toBe(true);
   });
 
-  it("throws after the bounded retry budget is exhausted", async () => {
-    jest.spyOn(Logger.prototype, "warn").mockImplementation(() => undefined);
+  it("returns false without turning a caller mutation into a readiness failure", async () => {
     const service = new ReadinessService({} as never, {} as never);
     jest
-      .spyOn(
-        service as unknown as {
-          recalculateWarehouseOnce: () => Promise<unknown>;
-        },
-        "recalculateWarehouseOnce",
-      )
+      .spyOn(service, "recalculateWarehouse")
       .mockRejectedValue(new Error("database unavailable"));
-
-    await expect(
-      service.recalculateWarehouse("warehouse-1"),
-    ).rejects.toThrow("database unavailable");
-    expect(
-      (
-        service as unknown as {
-          recalculateWarehouseOnce: jest.Mock;
-        }
-      ).recalculateWarehouseOnce,
-    ).toHaveBeenCalledTimes(3);
+    await expect(service.recalculateWarehouseBestEffort("warehouse-1", "test")).resolves.toBe(
+      false,
+    );
   });
 });

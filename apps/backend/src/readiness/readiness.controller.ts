@@ -27,10 +27,7 @@ export class ReadinessController {
     return this.getAuthorizedWarehouseScore(req, id);
   }
 
-  private async getAuthorizedWarehouseScore(
-    req: AuthenticatedRequest,
-    warehouseId: string,
-  ) {
+  private async getAuthorizedWarehouseScore(req: AuthenticatedRequest, warehouseId: string) {
     await this.assertWarehouseAccess(req, warehouseId);
     return this.readiness.getWarehouseScore(warehouseId);
   }
@@ -64,10 +61,7 @@ export class ReadinessController {
     return this.getAuthorizedRecommendations(req, id);
   }
 
-  private async getAuthorizedRecommendations(
-    req: AuthenticatedRequest,
-    warehouseId: string,
-  ) {
+  private async getAuthorizedRecommendations(req: AuthenticatedRequest, warehouseId: string) {
     await this.assertWarehouseAccess(req, warehouseId);
     return this.readiness.getRecommendations(warehouseId);
   }
@@ -79,18 +73,12 @@ export class ReadinessController {
     return this.recalculateAuthorizedWarehouse(req, id);
   }
 
-  private async recalculateAuthorizedWarehouse(
-    req: AuthenticatedRequest,
-    warehouseId: string,
-  ) {
+  private async recalculateAuthorizedWarehouse(req: AuthenticatedRequest, warehouseId: string) {
     await this.assertWarehouseAccess(req, warehouseId);
     return this.readiness.recalculateWarehouse(warehouseId);
   }
 
-  private assertWarehouseAccess(
-    req: AuthenticatedRequest,
-    warehouseId: string,
-  ): Promise<void> {
+  private assertWarehouseAccess(req: AuthenticatedRequest, warehouseId: string): Promise<void> {
     return assertActorCanAccessWarehouse(
       this.prisma,
       req.user.userId,

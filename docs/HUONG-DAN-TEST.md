@@ -116,10 +116,11 @@ Mở giao diện: [http://localhost:3200](http://localhost:3200).
 | Tài khoản | Mật khẩu | Dùng để test |
 |---|---|---|
 | `admin` | `admin123@` | Toàn xã, bản đồ, người dùng, lập Mission |
-| `staff@safestock.vn` | `staff123` | Vận hành kho trung tâm |
-| `rescue@safestock.vn` | `rescue123` | Vai trò đội cứu hộ |
-| `truongthon1@safestock.vn` | `truongthon123` | Kho thôn Long Châu |
-| `truongthon2@safestock.vn` ... `truongthon17@safestock.vn` | `truongthon123` | Các kho thôn còn lại theo thứ tự seed |
+| `staff@ungphonhanh.life` | `staff123` | Vận hành kho trung tâm |
+| `rescue@ungphonhanh.life` | `rescue123` | Vai trò đội cứu hộ |
+| `truongthon@ungphonhanh.life` | `reporter123` | Trưởng thôn gửi báo cáo tình huống |
+| `truongthon1@ungphonhanh.life` | `truongthon123` | Kho thôn Long Châu |
+| `truongthon2@ungphonhanh.life` ... `truongthon17@ungphonhanh.life` | `truongthon123` | Các kho thôn còn lại theo thứ tự seed |
 
 ## 5. Smoke test 10 phút
 
@@ -145,9 +146,9 @@ Nếu một trong S01-S05 thất bại, chưa nên tiếp tục demo Mission.
 ### T01 - Đăng nhập và phân quyền
 
 1. Đăng nhập `admin`: phải thấy menu **Người dùng** và **Bản đồ kho** có chế độ ghim.
-2. Đăng xuất, đăng nhập `staff@safestock.vn`: không được thấy chức năng quản trị người dùng.
-3. Đăng nhập `truongthon1@safestock.vn`: dữ liệu phải thuộc **Kho thôn Long Châu**, không được sửa kho thôn khác.
-4. Đăng nhập `rescue@safestock.vn`: không được có quyền quản trị hoặc xuất kho tùy ý.
+2. Đăng xuất, đăng nhập `staff@ungphonhanh.life`: không được thấy chức năng quản trị người dùng.
+3. Đăng nhập `truongthon1@ungphonhanh.life`: dữ liệu phải thuộc **Kho thôn Long Châu**, không được sửa kho thôn khác.
+4. Đăng nhập `rescue@ungphonhanh.life`: không được có quyền quản trị hoặc xuất kho tùy ý.
 
 Đạt khi quyền và phạm vi kho thay đổi đúng theo vai trò, không chỉ ẩn nút mà API cũng trả `403` cho thao tác trái quyền.
 
@@ -189,7 +190,7 @@ Ca này làm thay đổi dữ liệu. Reseed sau khi test nếu cần baseline s
 
 ### T05 - Mượn và trả vật tư
 
-Đăng nhập `staff@safestock.vn`, mở **Mượn-trả**:
+Đăng nhập `staff@ungphonhanh.life`, mở **Mượn-trả**:
 
 1. Chọn phiếu áo phao và bấm **Ghi nhận trả**.
 2. Nhập một tổ hợp hợp lệ, ví dụ hoàn tốt `10`, hoàn hỏng `1`, mất `1` nếu số còn nợ cho phép.
@@ -207,7 +208,11 @@ Ca này làm thay đổi dữ liệu. Reseed sau khi test nếu cần baseline s
 3. Bấm **Xử lý xong**; trạng thái chuyển sang đã xử lý.
 4. Kiểm tra **Hậu kiểm** và thông báo liên quan.
 
-Để tạo thêm sự kiện mô phỏng, mở [http://localhost:3100/sim.html](http://localhost:3100/sim.html), đăng nhập rồi chạy một scenario. Sau đó quay lại menu **Mô phỏng** và **Sự cố** để xem timeline.
+Để tạo thêm sự kiện mô phỏng, đặt `SIMULATION_MUTATION_ENABLED=true` trong
+`.env`, restart backend rồi chạy `pnpm desktop:dev`. Đăng nhập admin tại
+`localhost:3100`, `ungphonhanh.life` hoặc hostname/IP LAN, kéo slider rồi bấm
+**Xác nhận và gửi**. Web poll sẽ thấy timeline; khi vượt ngưỡng, kiểm tra chuông
+cục bộ và Incident/email outbox. Đặt cờ về `false` khi xong.
 
 ### T07 - AI quản trị ngày thường
 

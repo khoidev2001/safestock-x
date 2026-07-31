@@ -3,10 +3,7 @@ import { LoanStatus } from "@prisma/client";
 import { AiClientService } from "../ai/ai-client.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { buildCatalogSemanticText, lexicalCatalogScore } from "./inventory-semantic";
-import {
-  assertActorCanAccessWarehouse,
-  assertWarehouseInScope,
-} from "./warehouse-scope";
+import { assertActorCanAccessWarehouse, assertWarehouseInScope } from "./warehouse-scope";
 
 interface CatalogItem {
   id: string;
@@ -32,12 +29,7 @@ export class InventorySemanticService {
     actorUserId?: string,
   ) {
     if (actorUserId) {
-      await assertActorCanAccessWarehouse(
-        this.prisma,
-        actorUserId,
-        scopeWarehouseId,
-        warehouseId,
-      );
+      await assertActorCanAccessWarehouse(this.prisma, actorUserId, scopeWarehouseId, warehouseId);
     } else {
       assertWarehouseInScope(scopeWarehouseId, warehouseId);
     }
@@ -56,8 +48,7 @@ export class InventorySemanticService {
     const byItem = new Map<string, CatalogItem>();
     for (const batch of batches) {
       const onLoan = batch.loans.reduce(
-        (sum, loan) =>
-          sum + loan.quantity - loan.returnedOk - loan.returnedDamaged - loan.lost,
+        (sum, loan) => sum + loan.quantity - loan.returnedOk - loan.returnedDamaged - loan.lost,
         0,
       );
       const current = byItem.get(batch.itemId) ?? {
@@ -119,9 +110,7 @@ export class InventorySemanticService {
     minScore: number,
   ) {
     const cappedLimit = Math.max(1, Math.min(10, limit));
-    const textById = new Map(
-      catalog.map((item) => [item.id, buildCatalogSemanticText(item)]),
-    );
+    const textById = new Map(catalog.map((item) => [item.id, buildCatalogSemanticText(item)]));
     try {
       const ranking = await this.ai.semanticRank(
         query,

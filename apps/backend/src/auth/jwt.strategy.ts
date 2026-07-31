@@ -17,7 +17,10 @@ export interface JwtPayload {
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(config: ConfigService, @Optional() private readonly prisma?: PrismaService) {
+  constructor(
+    config: ConfigService,
+    @Optional() private readonly prisma?: PrismaService,
+  ) {
     const secret = config.get<string>("JWT_ACCESS_SECRET");
     if (!secret) throw new UnauthorizedException("JWT_ACCESS_SECRET chưa cấu hình");
     super({

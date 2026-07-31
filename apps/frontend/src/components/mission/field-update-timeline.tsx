@@ -4,11 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { type RefObject, useEffect, useRef } from "react";
 import { ColorIcon } from "@/components/shared/color-icon";
 import { ApiError } from "@/lib/api";
-import {
-  getSimulation,
-  listFieldUpdates,
-  type MissionFieldUpdate,
-} from "@/lib/mission-api";
+import { getSimulation, listFieldUpdates, type MissionFieldUpdate } from "@/lib/mission-api";
 
 const INTENT_LABEL: Record<string, string> = {
   ARRIVED: "Đã đến điểm",
@@ -24,7 +20,9 @@ const INTENT_LABEL: Record<string, string> = {
   OTHER: "Cập nhật khác",
 };
 
-type PreliminarySimulation = NonNullable<MissionFieldUpdate["intentProvenance"]>["preliminarySimulation"];
+type PreliminarySimulation = NonNullable<
+  MissionFieldUpdate["intentProvenance"]
+>["preliminarySimulation"];
 
 export function FieldUpdateTimeline({
   missionId,
@@ -41,7 +39,8 @@ export function FieldUpdateTimeline({
     refetchInterval: 10_000,
   });
   useEffect(() => {
-    if (!focusUpdateId || focusedOnceRef.current === focusUpdateId || !focusedItemRef.current) return;
+    if (!focusUpdateId || focusedOnceRef.current === focusUpdateId || !focusedItemRef.current)
+      return;
     focusedOnceRef.current = focusUpdateId;
     focusedItemRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
     focusedItemRef.current.focus({ preventScroll: true });
@@ -56,15 +55,20 @@ export function FieldUpdateTimeline({
             Bằng chứng từ Lực lượng hiện trường
           </h3>
           <p className="mt-1 text-sm text-[var(--text-muted)]">
-            Text/voice đã được người gửi xác nhận. AI chỉ gắn nhãn để tham khảo; ADMIN phải xác minh trước khi đổi phương án.
+            Text/voice đã được người gửi xác nhận. AI chỉ gắn nhãn để tham khảo; ADMIN phải xác minh
+            trước khi đổi phương án.
           </p>
         </div>
       </div>
 
-      {query.isLoading && <p className="mt-4 text-sm text-[var(--text-muted)]">Đang tải cập nhật hiện trường…</p>}
+      {query.isLoading && (
+        <p className="mt-4 text-sm text-[var(--text-muted)]">Đang tải cập nhật hiện trường…</p>
+      )}
       {query.error && (
         <p className="mt-4 text-sm text-[var(--color-critical)]">
-          {query.error instanceof ApiError ? query.error.message : "Không tải được cập nhật hiện trường."}
+          {query.error instanceof ApiError
+            ? query.error.message
+            : "Không tải được cập nhật hiện trường."}
         </p>
       )}
       {!query.isLoading && !query.error && query.data?.length === 0 && (
@@ -131,7 +135,9 @@ function FieldUpdateItem({
           <SimulationStatus simulation={simulation} simulationSnapshot={simulationQuery.data} />
         </div>
       ) : (
-        <p className="mt-3 text-xs text-[var(--text-muted)]">AI chưa gắn nhãn; nội dung gốc vẫn đã được lưu.</p>
+        <p className="mt-3 text-xs text-[var(--text-muted)]">
+          AI chưa gắn nhãn; nội dung gốc vẫn đã được lưu.
+        </p>
       )}
     </li>
   );
@@ -152,16 +158,27 @@ function SimulationStatus({
         <p>Đã tạo What-if sơ bộ trên snapshot tách biệt; phương án thực tế chưa đổi.</p>
         {metrics.length > 0 && (
           <p className="mt-1 text-[var(--text-muted)]">
-            Delta: {metrics.map((metric) => `${metric.key} ${formatDelta(metric.change, metric.unit)}`).join(" · ")}
+            Delta:{" "}
+            {metrics
+              .map((metric) => `${metric.key} ${formatDelta(metric.change, metric.unit)}`)
+              .join(" · ")}
           </p>
         )}
       </div>
     );
   }
   if (simulation.status === "BASELINE_MISSING") {
-    return <p className="mt-2 text-xs text-[var(--text-muted)]">Chưa có baseline để tạo What-if sơ bộ.</p>;
+    return (
+      <p className="mt-2 text-xs text-[var(--text-muted)]">
+        Chưa có baseline để tạo What-if sơ bộ.
+      </p>
+    );
   }
-  return <p className="mt-2 text-xs text-[var(--color-attention)]">Chưa tạo được What-if sơ bộ; cần ADMIN xem evidence gốc.</p>;
+  return (
+    <p className="mt-2 text-xs text-[var(--color-attention)]">
+      Chưa tạo được What-if sơ bộ; cần ADMIN xem evidence gốc.
+    </p>
+  );
 }
 
 function formatDelta(change: number | null, unit: string) {

@@ -47,16 +47,14 @@ describe("verified neighbor contact configuration", () => {
     });
 
     expect(
-      contacts.map(
-        ({ communeName, scope, contactTitle, phone, availability, referencePoint }) => ({
-          communeName,
-          scope,
-          contactTitle,
-          phone,
-          availability,
-          referencePoint,
-        }),
-      ),
+      contacts.map(({ communeName, scope, contactTitle, phone, availability, referencePoint }) => ({
+        communeName,
+        scope,
+        contactTitle,
+        phone,
+        availability,
+        referencePoint,
+      })),
     ).toEqual([
       {
         communeName: "Đồng Xuân",

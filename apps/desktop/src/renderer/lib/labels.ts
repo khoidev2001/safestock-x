@@ -41,6 +41,7 @@ export interface SliderConfig {
   min: number;
   max: number;
   step: number;
+  defaultValue: number;
   unit: string;
   eventType: string;
   hint?: string;
@@ -51,6 +52,7 @@ export const sliderConfigByType: Record<string, SliderConfig> = {
     min: 0,
     max: 60,
     step: 0.5,
+    defaultValue: 28,
     unit: "°C",
     eventType: "TEMP_READING",
     hint: "> 35°C → cảnh báo bảo quản sai",
@@ -59,6 +61,7 @@ export const sliderConfigByType: Record<string, SliderConfig> = {
     min: 0,
     max: 100,
     step: 1,
+    defaultValue: 60,
     unit: "%",
     eventType: "HUMID_READING",
     hint: "> 85% → cảnh báo bảo quản sai",
@@ -67,6 +70,7 @@ export const sliderConfigByType: Record<string, SliderConfig> = {
     min: 0,
     max: 100,
     step: 1,
+    defaultValue: 0,
     unit: "ppm",
     eventType: "SMOKE_READING",
     hint: "> 30ppm + nhiệt tăng > 15°C → nghi cháy",
@@ -75,6 +79,7 @@ export const sliderConfigByType: Record<string, SliderConfig> = {
     min: 0,
     max: 100,
     step: 0.5,
+    defaultValue: 50,
     unit: "kg",
     eventType: "WEIGHT_CHANGED",
     hint: "≤ 47kg → nghi thất thoát / lỗi cảm biến",

@@ -32,7 +32,7 @@ export type DangerLevel = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
 export interface DangerMeta {
   level: DangerLevel;
   label: string;
-  /** Màu chữ badge (đủ sáng trên nền tối). */
+  /** Màu chữ badge tương phản trên nền sáng. */
   color: string;
   /** Nền badge (mờ). */
   bg: string;
@@ -69,7 +69,7 @@ const DANGER: Record<DangerLevel, DangerMeta> = {
   CRITICAL: {
     level: "CRITICAL",
     label: "KHẨN CẤP",
-    color: "#f87171",
+    color: "#B42318",
     bg: "rgba(239,68,68,0.16)",
     stripe: "#ef4444",
     dangerous: true,
@@ -77,7 +77,7 @@ const DANGER: Record<DangerLevel, DangerMeta> = {
   HIGH: {
     level: "HIGH",
     label: "NGUY HIỂM",
-    color: "#fb923c",
+    color: "#B54708",
     bg: "rgba(249,115,22,0.16)",
     stripe: "#f97316",
     dangerous: true,
@@ -85,7 +85,7 @@ const DANGER: Record<DangerLevel, DangerMeta> = {
   MEDIUM: {
     level: "MEDIUM",
     label: "CẢNH BÁO",
-    color: "#fbbf24",
+    color: "#9A6700",
     bg: "rgba(245,158,11,0.16)",
     stripe: "#f59e0b",
     dangerous: false,
@@ -93,7 +93,7 @@ const DANGER: Record<DangerLevel, DangerMeta> = {
   LOW: {
     level: "LOW",
     label: "THEO DÕI",
-    color: "#4ade80",
+    color: "#167A3D",
     bg: "rgba(34,197,94,0.16)",
     stripe: "#22c55e",
     dangerous: false,

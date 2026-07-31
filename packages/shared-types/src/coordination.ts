@@ -1,12 +1,9 @@
 export const COORDINATION_ANALYSIS_SCHEMA_VERSION = "coordination-analysis.v1" as const;
 export const SITUATION_EXTRACTION_SCHEMA_VERSION = "situation-extraction.v1" as const;
 export const FIELD_UPDATE_INTENT_SCHEMA_VERSION = "field-update-intent.v1" as const;
-export const EXTERNAL_CONTACT_DISCLAIMER =
-  "Đề xuất liên hệ, chưa xác nhận có hàng" as const;
+export const EXTERNAL_CONTACT_DISCLAIMER = "Đề xuất liên hệ, chưa xác nhận có hàng" as const;
 
-export type VerifiedLocationKind =
-  | "COMMUNE_PEOPLES_COMMITTEE"
-  | "HAMLET_CULTURAL_HOUSE";
+export type VerifiedLocationKind = "COMMUNE_PEOPLES_COMMITTEE" | "HAMLET_CULTURAL_HOUSE";
 
 export interface VerifiedWarehouseLocation<
   Kind extends VerifiedLocationKind = VerifiedLocationKind,
@@ -45,11 +42,7 @@ export type CoordinationFactKey =
   | "OTHER";
 
 export type CoordinationFactValue =
-  | string
-  | number
-  | boolean
-  | string[]
-  | Record<string, string | number | boolean | null>;
+  string | number | boolean | string[] | Record<string, string | number | boolean | null>;
 
 export interface CoordinationFactSource {
   sourceType: "USER_REPORT" | "FIELD_UPDATE" | "INCIDENT" | "SYSTEM_TOOL";
@@ -104,10 +97,7 @@ export type CoordinationFact =
   | InferredCoordinationFact
   | MissingCoordinationFact;
 
-export type CoordinationAnalysisStatus =
-  | "PRELIMINARY"
-  | "NEEDS_CONFIRMATION"
-  | "VERIFIED";
+export type CoordinationAnalysisStatus = "PRELIMINARY" | "NEEDS_CONFIRMATION" | "VERIFIED";
 
 export interface CoordinationRequirementRecommendation {
   sku: string;
@@ -320,9 +310,7 @@ export interface UnresolvedWhatIfAssumption {
   }>;
 }
 
-export type WhatIfAssumption =
-  | ResolvedWhatIfAssumption
-  | UnresolvedWhatIfAssumption;
+export type WhatIfAssumption = ResolvedWhatIfAssumption | UnresolvedWhatIfAssumption;
 
 export interface WhatIfDelta {
   metrics: Array<{
@@ -389,17 +377,8 @@ export type CoordinationErrorCode =
   | "FORBIDDEN"
   | "NOT_FOUND";
 
-const FACT_PROVENANCE = new Set([
-  "REPORTED",
-  "VERIFIED",
-  "AI_INFERENCE",
-  "MISSING",
-]);
-const ANALYSIS_STATUSES = new Set([
-  "PRELIMINARY",
-  "NEEDS_CONFIRMATION",
-  "VERIFIED",
-]);
+const FACT_PROVENANCE = new Set(["REPORTED", "VERIFIED", "AI_INFERENCE", "MISSING"]);
+const ANALYSIS_STATUSES = new Set(["PRELIMINARY", "NEEDS_CONFIRMATION", "VERIFIED"]);
 const ASSUMPTION_KINDS = new Set<WhatIfAssumptionKind>([
   "AFFECTED_PEOPLE",
   "DURATION_HOURS",
@@ -464,13 +443,7 @@ export function validateCoordinationAnalysis(input: unknown): string[] {
   ]) {
     if (!asRecord(analysis[key])) errors.push(`${key} must be an object`);
   }
-  for (const key of [
-    "facts",
-    "missingData",
-    "conflicts",
-    "forecasts",
-    "adminControls",
-  ]) {
+  for (const key of ["facts", "missingData", "conflicts", "forecasts", "adminControls"]) {
     if (!Array.isArray(analysis[key])) errors.push(`${key} must be an array`);
   }
 
@@ -499,9 +472,9 @@ export function validateCoordinationAnalysis(input: unknown): string[] {
     if (provenance === "REPORTED") {
       if (fact.value == null) errors.push(`${path}.value is required`);
       validateFactSource(fact.source, `${path}.source`, errors);
-      if (!new Set(["EXACT", "APPROXIMATE", "POSSIBLE", "UNSPECIFIED"]).has(
-        String(fact.qualifier),
-      )) {
+      if (
+        !new Set(["EXACT", "APPROXIMATE", "POSSIBLE", "UNSPECIFIED"]).has(String(fact.qualifier))
+      ) {
         errors.push(`${path}.qualifier is invalid`);
       }
       validateReportedFactValue(String(fact.key), fact.value, path, errors);
@@ -590,7 +563,8 @@ export function validateSituationExtraction(input: unknown): string[] {
     "priorityQuestion",
   ]);
   for (const key of Object.keys(extraction)) {
-    if (!allowedKeys.has(key)) errors.push(`situation extraction contains unsupported field ${key}`);
+    if (!allowedKeys.has(key))
+      errors.push(`situation extraction contains unsupported field ${key}`);
   }
   if (extraction.schemaVersion !== SITUATION_EXTRACTION_SCHEMA_VERSION) {
     errors.push("situation extraction schemaVersion is unsupported");
@@ -809,7 +783,9 @@ export function validateFieldUpdateIntent(input: unknown): string[] {
     intent.unresolvedReferences.forEach((reference, index) => {
       const text = nonEmptyString(reference);
       if (!text || text.length > 500) {
-        errors.push(`field update intent unresolvedReferences[${index}] must contain 1..500 characters`);
+        errors.push(
+          `field update intent unresolvedReferences[${index}] must contain 1..500 characters`,
+        );
       }
     });
   }
@@ -834,12 +810,7 @@ export function validateFieldUpdateIntent(input: unknown): string[] {
   return errors;
 }
 
-function validateReportedFactValue(
-  key: string,
-  value: unknown,
-  path: string,
-  errors: string[],
-) {
+function validateReportedFactValue(key: string, value: unknown, path: string, errors: string[]) {
   if (key === "AFFECTED_PEOPLE" || key === "HOUSEHOLDS") {
     validateIntegerRange(value, 0, 100_000, `${path}.${key}`, errors);
     return;
@@ -853,7 +824,9 @@ function validateReportedFactValue(
     return;
   }
   if (key === "INCIDENT_TYPE") {
-    if (!new Set(["FLOOD", "STORM", "LANDSLIDE", "FIRE", "ISOLATION", "OTHER"]).has(String(value))) {
+    if (
+      !new Set(["FLOOD", "STORM", "LANDSLIDE", "FIRE", "ISOLATION", "OTHER"]).has(String(value))
+    ) {
       errors.push(`${path}.INCIDENT_TYPE is invalid`);
     }
   }
@@ -933,12 +906,7 @@ function validateNumberRange(
   path: string,
   errors: string[],
 ) {
-  if (
-    typeof input !== "number" ||
-    !Number.isFinite(input) ||
-    input < minimum ||
-    input > maximum
-  ) {
+  if (typeof input !== "number" || !Number.isFinite(input) || input < minimum || input > maximum) {
     errors.push(`${path} must be in ${minimum}..${maximum}`);
   }
 }

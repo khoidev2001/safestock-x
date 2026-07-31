@@ -55,7 +55,9 @@ Các giá trị bắt buộc và mô tả nằm trong [`.env.example`](../.env.e
 
 - Đổi `POSTGRES_PASSWORD` và cập nhật cùng mật khẩu trong `DATABASE_URL`.
 - Thay `JWT_ACCESS_SECRET` và `JWT_REFRESH_SECRET` bằng hai chuỗi ngẫu nhiên dài, khác nhau.
-- Giữ `SIMULATION_MUTATION_ENABLED=false` cho môi trường vận hành/production. Chỉ đặt `true` khi chạy simulator trên database demo đã cô lập, rồi restart backend.
+- Giữ `SIMULATION_MUTATION_ENABLED=false` theo mặc định. Chỉ đặt `true` trên
+  môi trường local đáng tin cậy khi chủ động gửi sự kiện từ app desktop, rồi
+  restart backend.
 - Giữ `AI_PROVIDER=ollama` nếu AI phải chạy local.
 - Giữ `OLLAMA_MODEL=qwen3.5:4b` và `OLLAMA_EMBED_MODEL=nomic-embed-text` nếu đã tải hai model này.
 
@@ -112,16 +114,16 @@ Trên Windows, generate khi backend đang chạy có thể lỗi `EPERM` vì ti�
 
 Đọc kỹ output của Prisma trước khi xác nhận nếu một thay đổi tương lai có cảnh báo mất dữ liệu. Không dùng `--accept-data-loss` trên database đang vận hành nếu chưa backup và duyệt thay đổi.
 
-### 5.2. Tạo mới hoặc chủ động reset dữ liệu demo
+### 5.2. Tạo mới hoặc chủ động reset dữ liệu local
 
-Chỉ chạy bước này khi tạo database mới hoặc chủ động muốn làm lại dữ liệu demo:
+Chỉ chạy bước này khi tạo database mới hoặc chủ động muốn làm lại dữ liệu local:
 
 ```powershell
 pnpm --filter @safestock/backend prisma:generate
 pnpm be:db
 ```
 
-> **Cảnh báo:** lệnh seed gọi `resetDatabase()` trong [`apps/backend/prisma/seed.ts`](../apps/backend/prisma/seed.ts). Nó xóa dữ liệu nghiệp vụ, người dùng và mật khẩu hiện có trước khi tạo lại bộ dữ liệu demo. Không chạy `pnpm be:db` trên database đang vận hành hoặc đã có dữ liệu cần giữ.
+> **Cảnh báo:** lệnh seed gọi `resetDatabase()` trong [`apps/backend/prisma/seed.ts`](../apps/backend/prisma/seed.ts). Nó xóa dữ liệu nghiệp vụ, người dùng và mật khẩu hiện có trước khi tạo lại bộ dữ liệu local. Không chạy `pnpm be:db` trên database đang vận hành hoặc đã có dữ liệu cần giữ.
 
 Tài khoản local sau seed được ghi trong [Hướng dẫn kiểm thử](HUONG-DAN-TEST.md). Các mật khẩu đó chỉ dành cho development. Trước khi mở domain Internet, đăng nhập ADMIN, vào **Tài khoản** và đổi toàn bộ mật khẩu demo.
 
@@ -184,59 +186,30 @@ pnpm ai:dev
 
 Backend health hợp lệ phải trả `status: "ok"`. AI health phải trả `status: "ok"` và provider `ollama`.
 
-### 7.1. Chạy simulator demo cô lập
+### 7.1. Gửi snapshot cảm biến đã xác nhận bằng app desktop
 
-Luồng này tạo runtime demo trên cùng máy nhưng tách PostgreSQL, Redis, Docker volumes, credentials và cổng backend khỏi runtime vận hành. Mục đích là cho phép simulator ghi/reset dữ liệu demo mà không đổi cấu hình hoặc dữ liệu vận hành. File `.env` vận hành phải tiếp tục giữ `SIMULATION_MUTATION_ENABLED=false`.
-
-Nguồn cấu hình và lệnh thực thi:
-
-- [`.env.demo.example`](../.env.demo.example): mẫu cấu hình operator sao chép thành `.env.demo`.
-- [`package.json`](../package.json): các lệnh `demo:*` được hỗ trợ.
-- [`infrastructure/docker-compose.yml`](../infrastructure/docker-compose.yml): manifest dùng chung cho hai stack.
-- [`infrastructure/demo/manage-demo-environment.mjs`](../infrastructure/demo/manage-demo-environment.mjs): owner của validate/lifecycle/schema/reset/backend demo.
-- [`infrastructure/demo/verify-demo-compose.mjs`](../infrastructure/demo/verify-demo-compose.mjs): owner của kiểm tra cấu hình Compose cô lập.
-- [`apps/backend/src/config/env.validation.ts`](../apps/backend/src/config/env.validation.ts): boundary startup của runtime simulator.
-
-Tạo cấu hình local riêng; thay toàn bộ placeholder secret/password trong `.env.demo`, nhưng không copy các giá trị vận hành sang file này:
+Không có runtime, database hay kịch bản demo riêng. Trên máy local, đặt
+`SIMULATION_MUTATION_ENABLED=true` trong `.env`, restart backend, sau đó chạy:
 
 ```powershell
-Copy-Item .env.demo.example .env.demo
-notepad .env.demo
-pnpm demo:validate
-pnpm demo:compose:verify
+pnpm desktop:dev
 ```
 
-`demo:validate` kiểm tra `.env.demo` vừa chỉnh. `demo:compose:verify` kiểm tra các template được commit vẫn resolve thành hai tập tài nguyên Compose riêng. Cả hai phải pass trước khi khởi động.
+Đăng nhập bằng `ungphonhanh.life` khi qua Internet; khi Internet ngoài mất nhưng
+LAN còn, dùng hostname/IP backend LAN (hoặc vẫn dùng cùng domain nếu DNS nội bộ đã
+split-horizon). Kéo slider chỉ sửa bản nháp. Bấm **Xác nhận và gửi** mới tạo một
+snapshot idempotent chứa các thông số đã đổi.
 
-Khởi động hạ tầng demo. Nếu cần bộ dữ liệu seed ở trạng thái biết trước, chạy reset có xác nhận rõ ràng:
+App lưu snapshot vào hàng chờ cục bộ trước khi gọi API, nên khi mất đường tới backend
+nó sẽ được gửi lại an toàn khi có kết nối. Policy ngưỡng đã cache làm chuông cục bộ
+kêu ngay sau xác nhận vượt ngưỡng; chuông chỉ dừng bằng nút **Tắt chuông**. Backend
+lưu lịch sử cảm biến, Incident và email outbox; email chưa gửi được sẽ retry với
+`observedAt`, `receivedAt`, `sentAt` tách bạch. Đặt cờ về `false` rồi restart backend
+khi không còn cần thao tác này.
 
-```powershell
-pnpm demo:infra:up
-pnpm demo:db:reset -- --confirm-demo-reset
-```
-
-> **Cảnh báo:** reset xóa và seed lại dữ liệu trong database demo. Guard `--confirm-demo-reset` là bắt buộc; không thay lệnh này bằng `pnpm be:db`, và không bật mutation trong `.env` vận hành.
-
-Build rồi chạy backend demo trong một terminal riêng:
-
-```powershell
-pnpm --filter @safestock/backend build
-pnpm demo:backend
-```
-
-Kiểm tra và sử dụng:
-
-- Backend demo: <http://localhost:3110/api/health>
-- Simulator do backend phục vụ: <http://localhost:3110/sim.html>
-- App desktop: chạy `pnpm desktop:dev`, rồi đặt backend host thành `http://localhost:3110`.
-
-Khi kết thúc:
-
-```powershell
-pnpm demo:infra:down
-```
-
-Lệnh `down` dừng container demo nhưng giữ dữ liệu trong Docker volumes; lần chạy sau không cần reset nếu muốn tiếp tục dữ liệu cũ. Hỗ trợ cấu hình cô lập đã hoàn tất, nhưng runbook này chưa phải bằng chứng nghiệm thu live chạy đồng thời stack vận hành và demo; bước smoke đó còn thuộc deployment/hardening pilot.
+Không chạy `pnpm be:db` để làm sạch sau thử nghiệm trên database đang dùng:
+lệnh seed sẽ reset dữ liệu. Nếu schema thay đổi, trước hết xem SQL từ
+`pnpm be:schema:diff`; không áp dụng lệnh drop khi chưa backup và duyệt.
 
 ## 8. Dừng development
 
@@ -282,6 +255,7 @@ cd "D:\duong-dan-den\safestock-x"
 .\infrastructure\windows\install-autostart-tasks.ps1
 Start-ScheduledTask -TaskName "UngPhoNhanh-Backend"
 Start-ScheduledTask -TaskName "UngPhoNhanh-Frontend"
+Start-ScheduledTask -TaskName "UngPhoNhanh-EdgeProxy"
 Start-ScheduledTask -TaskName "UngPhoNhanh-AiService"
 ```
 
@@ -296,6 +270,7 @@ Log nằm tại:
 ```text
 C:\ProgramData\UngPhoNhanh\logs\backend.log
 C:\ProgramData\UngPhoNhanh\logs\frontend.log
+C:\ProgramData\UngPhoNhanh\logs\edge-proxy.log
 C:\ProgramData\UngPhoNhanh\logs\ai-service.log
 ```
 
@@ -304,6 +279,7 @@ Các script thực thi là nguồn cấu hình chính:
 - [`infrastructure/windows/install-autostart-tasks.ps1`](../infrastructure/windows/install-autostart-tasks.ps1)
 - [`infrastructure/windows/run-backend.ps1`](../infrastructure/windows/run-backend.ps1)
 - [`infrastructure/windows/run-frontend.ps1`](../infrastructure/windows/run-frontend.ps1)
+- [`infrastructure/windows/run-edge-proxy.ps1`](../infrastructure/windows/run-edge-proxy.ps1)
 - [`infrastructure/windows/run-ai-service.ps1`](../infrastructure/windows/run-ai-service.ps1)
 
 Các task trên chưa quản lý Docker Desktop hoặc Ollama. Máy production phải cấu hình hai thành phần đó tự chạy riêng và nghiệm thu bằng một lần restart Windows.
@@ -312,7 +288,9 @@ Các task trên chưa quản lý Docker Desktop hoặc Ollama. Máy production p
 
 Clone repository không cần dùng chung tunnel của máy khác. Mỗi máy chủ phải tạo tunnel và credentials riêng; không sao chép hoặc commit `cert.pem` và file tunnel JSON.
 
-Kiến trúc, ingress và checklist domain nằm trong [PRD + checklist + kế hoạch cuối](PRD.md#p3---hardening-và-nghiệm-thu-pilot).
+Với deployment Vercel public và LAN dùng cùng `https://ungphonhanh.life`, làm theo
+[runbook hybrid cùng domain](HYBRID-DOMAIN-RUNBOOK.md). Kiến trúc, ingress và
+checklist domain nằm trong [PRD + checklist + kế hoạch cuối](PRD.md#p3---hardening-và-nghiệm-thu-pilot).
 
 ## 12. Kiểm tra trước khi bàn giao
 

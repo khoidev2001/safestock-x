@@ -70,8 +70,7 @@ export function missionNeedsAction(
   }
 
   return preparations.some(
-    (preparation) =>
-      preparation.warehouseId === warehouseId && preparation.preparedAt === null,
+    (preparation) => preparation.warehouseId === warehouseId && preparation.preparedAt === null,
   );
 }
 
@@ -103,16 +102,8 @@ export function filterMissionInbox(
       ).includes(query);
     })
     .sort((left, right) => {
-      const leftNeedsAction = missionNeedsAction(
-        left,
-        options.role,
-        options.warehouseId,
-      );
-      const rightNeedsAction = missionNeedsAction(
-        right,
-        options.role,
-        options.warehouseId,
-      );
+      const leftNeedsAction = missionNeedsAction(left, options.role, options.warehouseId);
+      const rightNeedsAction = missionNeedsAction(right, options.role, options.warehouseId);
 
       if (leftNeedsAction !== rightNeedsAction) {
         return leftNeedsAction ? -1 : 1;

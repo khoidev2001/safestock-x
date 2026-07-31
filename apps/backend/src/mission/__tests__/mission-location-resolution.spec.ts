@@ -25,13 +25,15 @@ describe("MissionService location resolution", () => {
     const { service, prisma } = makeService({});
 
     await expect(
-      (service as unknown as {
-        resolveIncidentLocation: (
-          warehouseId: string,
-          location?: string,
-          point?: { lat: number; lng: number },
-        ) => Promise<unknown>;
-      }).resolveIncidentLocation("warehouse-1"),
+      (
+        service as unknown as {
+          resolveIncidentLocation: (
+            warehouseId: string,
+            location?: string,
+            point?: { lat: number; lng: number },
+          ) => Promise<unknown>;
+        }
+      ).resolveIncidentLocation("warehouse-1"),
     ).rejects.toEqual(
       expect.objectContaining<Partial<BadRequestException>>({
         message: expect.stringContaining("Cần xác nhận địa điểm ứng phó"),
@@ -55,9 +57,11 @@ describe("MissionService location resolution", () => {
     });
 
     await expect(
-      (service as unknown as {
-        resolveIncidentLocation: (warehouseId: string, location: string) => Promise<unknown>;
-      }).resolveIncidentLocation("warehouse-1", "TÂN-BÌNH"),
+      (
+        service as unknown as {
+          resolveIncidentLocation: (warehouseId: string, location: string) => Promise<unknown>;
+        }
+      ).resolveIncidentLocation("warehouse-1", "TÂN-BÌNH"),
     ).resolves.toEqual({
       hamletId: "hamlet-1",
       name: "Tân Bình",
@@ -83,11 +87,15 @@ describe("MissionService location resolution", () => {
     });
 
     await expect(
-      (service as unknown as {
-        resolveIncidentLocation: (warehouseId: string, location: string) => Promise<unknown>;
-      }).resolveIncidentLocation("warehouse-1", "Tân Bình"),
-    ).rejects.toEqual(expect.objectContaining<Partial<BadRequestException>>({
-      message: expect.stringContaining(message),
-    }));
+      (
+        service as unknown as {
+          resolveIncidentLocation: (warehouseId: string, location: string) => Promise<unknown>;
+        }
+      ).resolveIncidentLocation("warehouse-1", "Tân Bình"),
+    ).rejects.toEqual(
+      expect.objectContaining<Partial<BadRequestException>>({
+        message: expect.stringContaining(message),
+      }),
+    );
   });
 });

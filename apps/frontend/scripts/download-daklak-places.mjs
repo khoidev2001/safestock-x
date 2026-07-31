@@ -26,11 +26,27 @@ const CATEGORIES = [
   // amenity quan trọng
   { tag: "amenity", values: ["hospital", "clinic", "doctors", "pharmacy"], group: "health" },
   { tag: "amenity", values: ["school", "college", "university", "kindergarten"], group: "school" },
-  { tag: "amenity", values: ["townhall", "community_centre", "police", "fire_station", "post_office"], group: "civic" },
+  {
+    tag: "amenity",
+    values: ["townhall", "community_centre", "police", "fire_station", "post_office"],
+    group: "civic",
+  },
   { tag: "amenity", values: ["marketplace", "fuel", "bank"], group: "commerce" },
   { tag: "amenity", values: ["place_of_worship"], group: "worship" },
   // place: thôn/xóm/làng — rất cần cho định vị
-  { tag: "place", values: ["hamlet", "village", "neighbourhood", "town", "suburb", "quarter", "isolated_dwelling"], group: "place" },
+  {
+    tag: "place",
+    values: [
+      "hamlet",
+      "village",
+      "neighbourhood",
+      "town",
+      "suburb",
+      "quarter",
+      "isolated_dwelling",
+    ],
+    group: "place",
+  },
   { tag: "shop", values: ["*"], group: "commerce" },
   { tag: "tourism", values: ["*"], group: "poi" },
 ];
@@ -40,7 +56,10 @@ const norm = (s) => (s ?? "").normalize("NFC").trim().toLowerCase();
 
 // bbox [minLat,minLng,maxLat,maxLng] của 1 geometry Polygon/MultiPolygon.
 function bboxOf(geometry) {
-  let minLat = 90, minLng = 180, maxLat = -90, maxLng = -180;
+  let minLat = 90,
+    minLng = 180,
+    maxLat = -90,
+    maxLng = -180;
   const scan = (coords) => {
     if (typeof coords[0] === "number") {
       const [lng, lat] = coords;
@@ -162,4 +181,6 @@ const collection = {
 
 await fs.mkdir(path.dirname(OUTPUT), { recursive: true });
 await fs.writeFile(OUTPUT, `${JSON.stringify(collection)}\n`, "utf8");
-console.log(`\nĐã ghi ${collection.features.length} địa danh vào ${OUTPUT} (bỏ ${dropped} mục có chữ 'huyện').`);
+console.log(
+  `\nĐã ghi ${collection.features.length} địa danh vào ${OUTPUT} (bỏ ${dropped} mục có chữ 'huyện').`,
+);

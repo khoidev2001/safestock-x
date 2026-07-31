@@ -1,0 +1,15 @@
+name = "ungphonhanh-hybrid-api-router"
+main = "src/worker.mjs"
+compatibility_date = "2026-07-31"
+workers_dev = false
+
+[vars]
+BACKEND_ORIGIN = "https://api.ungphonhanh.life"
+
+[[routes]]
+pattern = "https://ungphonhanh.life/api*"
+zone_name = "ungphonhanh.life"
+
+[[routes]]
+pattern = "https://ungphonhanh.life/socket.io*"
+zone_name = "ungphonhanh.life"

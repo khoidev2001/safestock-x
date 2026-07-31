@@ -3,10 +3,7 @@ import { ValidationPipe } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { NestExpressApplication } from "@nestjs/platform-express";
 import { AppModule } from "./app.module";
-import {
-  applyApiSecurityHeaders,
-  resolveAllowedCorsOrigins,
-} from "./config/http-security";
+import { applyApiSecurityHeaders, resolveAllowedCorsOrigins } from "./config/http-security";
 import { resolveBindAddress } from "./config/env.validation";
 
 async function bootstrap() {

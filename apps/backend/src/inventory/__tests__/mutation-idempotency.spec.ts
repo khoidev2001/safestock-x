@@ -1,8 +1,5 @@
 import { ConflictException } from "@nestjs/common";
-import {
-  mutationFingerprint,
-  withMutationIdempotency,
-} from "../mutation-idempotency";
+import { mutationFingerprint, withMutationIdempotency } from "../mutation-idempotency";
 
 describe("withMutationIdempotency", () => {
   it("replays the committed response and does not execute the mutation twice", async () => {

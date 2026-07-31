@@ -154,10 +154,7 @@ export function ActionPlanView({
           </div>
           {incidentPoint ? (
             <div className="mt-3">
-              <IncidentMap
-                warehouses={plan.warehouses}
-                incidentPoint={incidentPoint}
-              />
+              <IncidentMap warehouses={plan.warehouses} incidentPoint={incidentPoint} />
             </div>
           ) : null}
         </Panel>

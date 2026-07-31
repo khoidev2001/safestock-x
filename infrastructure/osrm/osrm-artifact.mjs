@@ -9,8 +9,7 @@ export const OSRM_IMAGE =
   "ghcr.io/project-osrm/osrm-backend:v5.27.1@sha256:855614a38f464b0558a2ad6eaa7cb8c139f39887da9b38b485ce453c6e6e6124";
 
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
-const PLACEHOLDER_VERSION_PATTERN =
-  /(unconfigured|placeholder|unknown|replace[-_ ]?me|todo)/i;
+const PLACEHOLDER_VERSION_PATTERN = /(unconfigured|placeholder|unknown|replace[-_ ]?me|todo)/i;
 
 function assertGraphVersion(graphVersion) {
   if (
@@ -24,23 +23,12 @@ function assertGraphVersion(graphVersion) {
 }
 
 function assertBbox(bbox) {
-  if (
-    !Array.isArray(bbox) ||
-    bbox.length !== 4 ||
-    !bbox.every(Number.isFinite)
-  ) {
+  if (!Array.isArray(bbox) || bbox.length !== 4 || !bbox.every(Number.isFinite)) {
     throw new Error("Bbox phải gồm bốn tọa độ hữu hạn.");
   }
 
   const [west, south, east, north] = bbox;
-  if (
-    west < -180 ||
-    east > 180 ||
-    south < -90 ||
-    north > 90 ||
-    west >= east ||
-    south >= north
-  ) {
+  if (west < -180 || east > 180 || south < -90 || north > 90 || west >= east || south >= north) {
     throw new Error("Bbox không hợp lệ.");
   }
 }
@@ -108,12 +96,7 @@ async function graphFiles(dataDirectory) {
   );
 }
 
-export async function createGraphManifest({
-  dataDirectory,
-  graphVersion,
-  source,
-  bbox,
-}) {
+export async function createGraphManifest({ dataDirectory, graphVersion, source, bbox }) {
   assertGraphVersion(graphVersion);
   assertBbox(bbox);
   assertSource(source);

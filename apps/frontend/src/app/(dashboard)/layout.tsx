@@ -14,11 +14,6 @@ import { useWarehouse } from "@/lib/use-warehouse";
 import { getNavItem, navItems } from "@/lib/dashboard-nav";
 import { roleHasPermission } from "@safestock/shared-types";
 
-/**
- * Layout dùng chung cho toàn bộ trang đã đăng nhập. Trước đây mọi thứ nằm trong
- * một page.tsx khổng lồ; nay khung điều hướng, chốt đăng nhập, cảnh báo realtime
- * và trợ lý nổi sống ở đây, còn nội dung từng route nằm trong page.tsx riêng.
- */
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -26,7 +21,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const token = useAuth((state) => state.token);
   const user = useAuth((state) => state.user);
   const hasHydrated = useAuth((state) => state.hasHydrated);
-
   const warehouseQuery = useWarehouse();
   const warehouseId = warehouseQuery.data?.id;
 
@@ -38,53 +32,33 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (!hasHydrated || !token || !user) return;
     const route = getNavItem(pathname);
     if (!route || roleHasPermission(user.role, route.requiredPermission)) return;
-    const fallback = navItems.find((item) =>
-      roleHasPermission(user.role, item.requiredPermission),
-    );
+    const fallback = navItems.find((item) => roleHasPermission(user.role, item.requiredPermission));
     router.replace(fallback?.path ?? "/login");
   }, [hasHydrated, pathname, router, token, user]);
 
-  // Sự cố đang mở — nuôi cầu nối cảnh báo AI cho trợ lý (chạy ở mọi trang).
   const incidentsQuery = useQuery({
     queryKey: ["open-incidents", warehouseId],
     queryFn: () => getOpenIncidents(warehouseId ?? ""),
     enabled: Boolean(warehouseId),
-    refetchInterval: 12_000, // fallback nếu WebSocket rớt — bắt kịp AI enrich
+    refetchInterval: 12_000,
   });
 
-  // Realtime room derived from the authenticated user; notifications trigger a refetch.
+  // Sensor snapshots are read by REST polling in their own pages. Socket.IO
+  // remains only for lightweight user notifications.
   useEffect(() => {
     if (!token) return;
-    let readinessTimer: ReturnType<typeof setTimeout> | undefined;
-    const socket: Socket = io(BASE, {
-      transports: ["websocket"],
-      auth: { token },
-    });
-    socket.on("sensor_event", () => {
-      queryClient.invalidateQueries({ queryKey: ["devices", warehouseId] });
-      queryClient.invalidateQueries({ queryKey: ["timeline", warehouseId] });
-      queryClient.invalidateQueries({ queryKey: ["inventory-batches", warehouseId] });
-
-      // Backend debounce readiness 300ms; đợi qua cửa sổ đó để không refetch giá trị cũ.
-      if (readinessTimer) clearTimeout(readinessTimer);
-      readinessTimer = setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ["warehouse-readiness", warehouseId] });
-      }, 400);
-    });
+    const socket: Socket = io(BASE, { transports: ["websocket"], auth: { token } });
     socket.on("notification", () => {
       queryClient.invalidateQueries({ queryKey: ["open-incidents", warehouseId] });
     });
     return () => {
-      if (readinessTimer) clearTimeout(readinessTimer);
       socket.disconnect();
     };
   }, [token, warehouseId, queryClient]);
 
-  // Cầu nối: sự cố có explanation (AI) → bong bóng cảnh báo trong trợ lý + tự mở nếu nghiêm trọng.
   useIncidentAlertsBridge(incidentsQuery.data);
 
   if (!hasHydrated || !token) return null;
-
   return (
     <DashboardShell warehouseName={warehouseQuery.data?.name}>
       {children}

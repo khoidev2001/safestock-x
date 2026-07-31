@@ -1,26 +1,53 @@
-# Q&A — Phase B (mô phỏng cảm biến / Digital Twin)
+# Q&A — Simulator cảm biến và kết nối hybrid
 
-> Sinh sự kiện cảm biến theo kịch bản, đẩy realtime WebSocket. 6 kịch bản thiên tai/sự cố.
+> Câu trả lời cho giám khảo về mô phỏng IoT, LAN và Internet. Đây là thiết kế đã
+> chốt tại [PRD](../PRD.md#44-simulator). Source đã có nút Xác nhận, hàng đợi
+> cục bộ idempotent, policy chuông cache và email outbox retry. Runbook cho
+> split-horizon DNS, TLS CA nội bộ và public API routing nằm tại
+> [HYBRID-DOMAIN-RUNBOOK.md](../HYBRID-DOMAIN-RUNBOOK.md); chỉ tick nghiệm thu
+> sau khi đã test trên hạ tầng thực.
 
 ---
 
-### H: Gọi là "Digital Twin" nhưng thực chất là gì? Nó đồng bộ với thiết bị thật nào?
-**Đ:** Thành thật: đây là **mô phỏng lớp cảm biến**, không phải Digital Twin công nghiệp (mô hình vật lý đồng bộ realtime với máy móc thật). Mục đích: **tái tạo luồng dữ liệu cảm biến để kiểm thử logic AI trước khi có phần cứng**. Điểm quan trọng — schema sự kiện giống hệt thứ cảm biến thật xuất ra, nên thay mock bằng thiết bị thật không đổi phần mềm.
+### H: Cơ quan đã có LAN nội bộ, dùng domain `ungphonhanh.life` có thừa không?
 
-### H: Kịch bản do các em tự viết, vậy AI "phát hiện sự cố" chỉ là đọc lại kịch bản?
-**Đ:** Câu hỏi hay. Để tránh chính điều đó, chúng em thêm **nhiễu ngẫu nhiên có kiểm soát** vào kịch bản bình thường — giá trị cảm biến dao động nhẹ như thực tế. Bộ phát hiện sự cố phải **phân biệt nhiễu bình thường vs bất thường thật**, không chỉ so khớp kịch bản. Đây là điều chứng minh nó không phải "đọc script".
+**Đ:** Không. Domain là tên dễ nhớ, còn LAN là đường truyền. Trong cơ quan, DNS nội bộ
+trả `ungphonhanh.life` về IP private của ingress LAN. Ingress này phát web local và
+chuyển `/api`/`/socket.io` vào backend, nên thiết bị đi thẳng trong LAN, không qua
+Internet. Người dùng không phải nhớ dải IP.
 
-### H: Làm sao đảm bảo demo chạy lại giống hệt mỗi lần?
-**Đ:** Dùng **bộ sinh số ngẫu nhiên có seed** (mulberry32) + mô hình timeline (danh sách sự kiện có mốc thời gian tính sẵn). Cùng một seed → cùng dãy sự kiện, kể cả phần nhiễu. **Đã kiểm thử: chạy 2 lần cùng seed ra 27 sự kiện y hệt**. Điều này giúp demo an toàn, không "lần trước chạy được lần này khác".
+### H: Mất Internet rồi có phải đổi sang IP LAN không?
 
-### H: Độ trễ từ lúc cảm biến báo tới lúc cảnh báo là bao lâu?
-**Đ:** Dưới 2 giây (mục tiêu). **Đã đo thực tế: sự kiện đầu tiên tới client qua WebSocket sau ~545ms**. Dùng Socket.IO với room theo từng kho — chỉ kho liên quan nhận sự kiện, không phát tràn lan.
+**Đ:** Không nếu đã có split-horizon DNS. Khi public Internet mất nhưng LAN và DNS nội bộ
+vẫn chạy, cùng tên `https://ungphonhanh.life` vẫn phân giải về backend LAN. Chỉ khi chưa
+có DNS nội bộ mới phải dùng IP/hostname LAN làm phương án dự phòng.
 
-### H: Vì sao không tua nhanh thời gian x5, x20 như một số hệ mô phỏng?
-**Đ:** Chúng em chọn x1/x10 cho MVP. Lý do kỹ thuật: tua thời gian kết hợp tạm dừng/tiếp tục + tính lặp lại được là 3 ràng buộc dễ xung đột nếu làm phức tạp. Mô hình "con trỏ chạy qua timeline" (như trình phát video) cho x1/x10 ổn định, đủ để trình diễn. Thêm tốc độ khác là mở rộng dễ, không phải rào cản kỹ thuật.
+### H: Người ở ngoài cơ quan còn truy cập được domain không?
 
-### H: Sao không lưu mọi giá trị cảm biến vào database?
-**Đ:** Có **ngưỡng lọc** — chỉ lưu sự kiện có ý nghĩa (đổi trạng thái, vượt ngưỡng), không lưu mỗi lần nhiệt độ nhích 0.1°C. Tránh phình database. Nhưng giá trị hiện tại của mỗi thiết bị luôn được cập nhật để Readiness đọc tức thời. Đã kiểm thử: đổi 40→40.1°C (nhỏ) không lưu, nhưng giá trị hiện tại vẫn cập nhật.
+**Đ:** Có thể. DNS public có thể đưa họ qua Cloudflare Tunnel hoặc VPN, trong khi DNS nội
+bộ cùng tên vẫn đưa máy trong cơ quan thẳng về backend LAN. Domain không tự cấp quyền:
+đăng nhập, phân quyền kho và giới hạn mạng vẫn áp dụng ở cả hai đường.
 
-### H: 6 kịch bản là những gì?
-**Đ:** Bình thường (có nhiễu), nghi thất thoát (loadcell giảm + cửa mở + RFID + không phiếu xuất), lỗi cảm biến, điều kiện bảo quản xấu (độ ẩm/nhiệt tăng), mất kết nối, vật tư sai vị trí. Đủ phủ các tình huống PRD và các loại cảnh báo hệ thống cần xử lý.
+### H: Cảm biến thật ESP32 gửi dữ liệu vào app desktop hay qua đâu?
+
+**Đ:** ESP32 kết nối Wi-Fi LAN rồi gửi telemetry tới MQTT broker/gateway hoặc backend tại
+kho. Web và desktop chỉ là client đọc API. Desktop simulator thay vai ESP32 trong buổi
+demo: operator xác nhận dữ liệu giả lập để đi vào cùng pipeline xử lý.
+
+### H: Mất Internet thì chuông và email thế nào?
+
+**Đ:** Chuông tại kho là cảnh báo cục bộ, phải hoạt động qua LAN/gateway và không phụ thuộc
+Internet. Email không thể gửi khi SMTP/Internet không tới được; backend lưu Incident và
+email chờ, retry khi kết nối hồi phục. Email gửi muộn nêu riêng giờ phát hiện và giờ gửi.
+
+### H: Làm sao không mất lần xác nhận khi desktop mất cả kết nối tới backend?
+
+**Đ:** Desktop lưu gói xác nhận bền vững trước khi gửi, có khóa idempotency và thời điểm
+operator xác nhận. Khi kết nối lại, backend nhận một lần, lưu lịch sử cảm biến/Incident và
+xử lý email. Vì vậy không nhầm giờ sự cố với giờ đồng bộ hoặc giờ email được chuyển đi.
+
+### H: Vì sao không gửi dữ liệu ngay khi kéo slider?
+
+**Đ:** Kéo chỉ là thao tác chuẩn bị. Người vận hành xem giá trị cuối rồi bấm **Xác nhận**;
+hệ thống mới ghi lịch sử, đánh giá ngưỡng, kích chuông và xử lý email. Điều này tránh tạo
+hàng trăm sự kiện vô nghĩa trong lúc kéo và làm bước tạo cảnh báo rõ ràng cho giám khảo.

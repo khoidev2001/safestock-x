@@ -34,8 +34,7 @@ const ESRI_IMAGERY =
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 const ESRI_TRANSPORT =
   "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}";
-const CARTO_ATTR =
-  '&copy; <a href="https://carto.com/attributions">CARTO</a>';
+const CARTO_ATTR = '&copy; <a href="https://carto.com/attributions">CARTO</a>';
 // Nền kiểu Google Maps vẽ Ô NHÀ (building footprint) + đường, KHÔNG chữ nào —
 // nhờ vậy không còn nhãn "huyện" nào lọt vào; tên địa danh do ta tự vẽ (đã lọc).
 const CARTO_VOYAGER_NOLABELS =
@@ -131,12 +130,7 @@ export interface MapCanvasProps {
   hamlets: AdminHamlet[];
   devMode: boolean;
   pickingTarget: MapMarkerTarget | null;
-  onMarkerMove: (
-    kind: MapMarkerTarget["kind"],
-    id: string,
-    lat: number,
-    lng: number,
-  ) => void;
+  onMarkerMove: (kind: MapMarkerTarget["kind"], id: string, lat: number, lng: number) => void;
   onPickOnMap: (lat: number, lng: number) => void;
 }
 
@@ -159,10 +153,7 @@ export function MapCanvas({
   // not silently switch the promised offline workflow back to a CDN layer.
   const [preferredBaseLayer] = useState<"offline" | "streets">("offline");
   const centralIcon = useMemo(() => pinIcon("var(--color-accent, #2f9e6e)"), []);
-  const warehouseHamletIcon = useMemo(
-    () => pinIcon("var(--text-muted, #8a8f98)", 26),
-    [],
-  );
+  const warehouseHamletIcon = useMemo(() => pinIcon("var(--text-muted, #8a8f98)", 26), []);
   const verifiedHamletIcon = useMemo(() => pinIcon("#7a2e12", 24), []);
   const unverifiedHamletIcon = useMemo(() => pinIcon("#d97706", 24), []);
 
@@ -194,9 +185,7 @@ export function MapCanvas({
   }, []);
 
   const located = warehouses.filter((w) => w.lat != null && w.lng != null);
-  const locatedHamlets = hamlets.filter(
-    (hamlet) => hamlet.lat != null && hamlet.lng != null,
-  );
+  const locatedHamlets = hamlets.filter((hamlet) => hamlet.lat != null && hamlet.lng != null);
   const boundsPoints = [
     ...located.map((w) => ({ lat: w.lat as number, lng: w.lng as number })),
     ...locatedHamlets.map((hamlet) => ({
@@ -249,18 +238,12 @@ export function MapCanvas({
           {/* Địa danh tự vẽ: ghim + tên tô màu (đã bỏ mọi nhãn "huyện"). */}
           <LayersControl.Overlay checked name="Địa danh (ghim + tên tô màu)">
             <LayerGroup>
-              <SemanticMapLabels
-                geo={geo}
-                places={places}
-                warehouses={warehouses}
-              />
+              <SemanticMapLabels geo={geo} places={places} warehouses={warehouses} />
             </LayerGroup>
           </LayersControl.Overlay>
           {/* Ranh giới + tên xã/phường — bật sẵn, tắt được khi cần. */}
           <LayersControl.Overlay checked name="Ranh giới xã/phường">
-            <LayerGroup>
-              {geo ? <CommuneBoundaries geo={geo} /> : null}
-            </LayerGroup>
+            <LayerGroup>{geo ? <CommuneBoundaries geo={geo} /> : null}</LayerGroup>
           </LayersControl.Overlay>
         </LayersControl>
         <FitBounds points={boundsPoints} />
@@ -325,8 +308,7 @@ export function MapCanvas({
               {hamlet.verified ? "Điểm thôn đã xác minh" : "Điểm thôn chờ xác minh"}
               <br />
               <span className="tabular">
-                {(hamlet.lat as number).toFixed(5)},{" "}
-                {(hamlet.lng as number).toFixed(5)}
+                {(hamlet.lat as number).toFixed(5)}, {(hamlet.lng as number).toFixed(5)}
               </span>
               {devMode ? (
                 <>

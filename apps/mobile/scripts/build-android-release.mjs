@@ -41,8 +41,19 @@ if (!javaHome) {
   );
   process.exitCode = 1;
 } else {
+  // Đường dẫn tuyệt đối: tên trần chỉ chạy được khi shell chịu tìm trong thư mục
+  // hiện hành, và điều đó không đúng ở mọi môi trường chạy lệnh trên Windows.
+  const gradleWrapper = join(androidRoot, isWindows ? "gradlew.bat" : "gradlew");
+  if (!existsSync(gradleWrapper)) {
+    console.error(`Không tìm thấy Gradle wrapper tại ${gradleWrapper}.`);
+    process.exitCode = 1;
+    throw new Error("Gradle wrapper missing");
+  }
+
   const result = spawnSync(
-    isWindows ? "gradlew.bat" : "./gradlew",
+    // Node bắt buộc shell cho .bat trên Windows, mà shell lại tách chuỗi theo
+    // khoảng trắng — đường dẫn dự án có dấu cách nên phải bọc ngoặc.
+    isWindows ? `"${gradleWrapper}"` : gradleWrapper,
     ["assembleRelease", "--no-daemon"],
     {
       cwd: androidRoot,
@@ -78,7 +89,9 @@ function isJdk17OrNewer(javaHome) {
 }
 
 function isAndroidSdk(androidSdk) {
-  return existsSync(join(androidSdk, "platform-tools")) && existsSync(join(androidSdk, "platforms"));
+  return (
+    existsSync(join(androidSdk, "platform-tools")) && existsSync(join(androidSdk, "platforms"))
+  );
 }
 
 function unique(values) {

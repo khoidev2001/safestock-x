@@ -76,14 +76,8 @@ test("ưu tiên mission mà vai trò hiện tại cần hành động", () => {
     }).map((mission) => mission.id),
     ["mission-waiting", "mission-ready"],
   );
-  assert.equal(
-    missionNeedsAction(missions[0], "WAREHOUSE", "warehouse-b"),
-    true,
-  );
-  assert.equal(
-    missionNeedsAction(missions[0], "WAREHOUSE", "warehouse-a"),
-    false,
-  );
+  assert.equal(missionNeedsAction(missions[0], "WAREHOUSE", "warehouse-b"), true);
+  assert.equal(missionNeedsAction(missions[0], "WAREHOUSE", "warehouse-a"), false);
   // Lực lượng hiện trường chỉ đọc → không bao giờ gắn cờ "Cần xử lý".
   assert.equal(missionNeedsAction(missions[1], "RESCUE", null), false);
 });
@@ -110,10 +104,7 @@ test("tìm kiếm không phân biệt dấu theo địa điểm hoặc loại t�
 });
 
 test("deep-link encode mission id để giữ lựa chọn qua refresh/tab mới", () => {
-  assert.equal(
-    missionDeepLink("mission/with spaces"),
-    "/mission?mission=mission%2Fwith%20spaces",
-  );
+  assert.equal(missionDeepLink("mission/with spaces"), "/mission?mission=mission%2Fwith%20spaces");
 });
 
 test("deep-link giữ evidence hiện trường cần ADMIN xem lại sau refresh", () => {

@@ -113,7 +113,5 @@ export function getMonthlyReport(warehouseId: string): Promise<MonthlyReport> {
 }
 
 export function getDailyBriefing(warehouseId: string): Promise<DailyBriefing> {
-  return apiFetch<DailyBriefing>(
-    `/api/insights/warehouses/${warehouseId}/daily-briefing`,
-  );
+  return apiFetch<DailyBriefing>(`/api/insights/warehouses/${warehouseId}/daily-briefing`);
 }

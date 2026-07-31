@@ -17,7 +17,9 @@ import {
 } from "@/lib/dashboard-api";
 
 export default function ReadinessPage() {
-  return <DashboardPage>{(warehouseId) => <ReadinessContent warehouseId={warehouseId} />}</DashboardPage>;
+  return (
+    <DashboardPage>{(warehouseId) => <ReadinessContent warehouseId={warehouseId} />}</DashboardPage>
+  );
 }
 
 function ReadinessContent({ warehouseId }: { warehouseId: string }) {
@@ -31,6 +33,7 @@ function ReadinessContent({ warehouseId }: { warehouseId: string }) {
   const readinessQuery = useQuery({
     queryKey: ["warehouse-readiness", warehouseId],
     queryFn: () => getWarehouseReadiness(warehouseId),
+    refetchInterval: 10_000,
   });
 
   const batchesQuery = useQuery({
@@ -41,6 +44,7 @@ function ReadinessContent({ warehouseId }: { warehouseId: string }) {
   const devicesQuery = useQuery({
     queryKey: ["devices", warehouseId],
     queryFn: () => getDevices(warehouseId),
+    refetchInterval: 10_000,
   });
 
   const timelineQuery = useQuery({

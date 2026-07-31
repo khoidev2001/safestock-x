@@ -25,17 +25,14 @@ function item(overrides: Partial<WeatherDemandInput> = {}): WeatherDemandInput {
 
 describe("computeWeatherDemandForecast", () => {
   it("mưa 72h từ 100mm nhân hệ số minh bạch và cảnh báo thiếu", () => {
-    const result = computeWeatherDemandForecast(
-      [item()],
-      {
-        totalRainMm: 150,
-        alert: true,
-        periodHours: 72,
-        daily: [],
-        fetchedAt: "2026-07-27T00:00:00.000Z",
-        source: "open-meteo",
-      },
-    )[0];
+    const result = computeWeatherDemandForecast([item()], {
+      totalRainMm: 150,
+      alert: true,
+      periodHours: 72,
+      daily: [],
+      fetchedAt: "2026-07-27T00:00:00.000Z",
+      source: "open-meteo",
+    })[0];
 
     expect(result.group).toBe("WASH");
     expect(result.baselineDemand72h).toBe(15);
@@ -48,33 +45,27 @@ describe("computeWeatherDemandForecast", () => {
 
   it("mưa dưới ngưỡng hoặc thiếu weather không tự tăng nhu cầu", () => {
     expect(
-      computeWeatherDemandForecast(
-        [item()],
-        {
-          totalRainMm: 80,
-          alert: false,
-          periodHours: 72,
-          daily: [],
-          fetchedAt: "2026-07-27T00:00:00.000Z",
-          source: "open-meteo",
-        },
-      ),
+      computeWeatherDemandForecast([item()], {
+        totalRainMm: 80,
+        alert: false,
+        periodHours: 72,
+        daily: [],
+        fetchedAt: "2026-07-27T00:00:00.000Z",
+        source: "open-meteo",
+      }),
     ).toEqual([]);
     expect(computeWeatherDemandForecast([item()], null)).toEqual([]);
   });
 
   it("không gắn cờ thiếu khi lịch sử xuất chưa đủ tin cậy", () => {
-    const [result] = computeWeatherDemandForecast(
-      [item({ confidence: 0.125 })],
-      {
-        totalRainMm: 240,
-        alert: true,
-        periodHours: 72,
-        daily: [],
-        fetchedAt: "2026-07-27T00:00:00.000Z",
-        source: "open-meteo",
-      },
-    );
+    const [result] = computeWeatherDemandForecast([item({ confidence: 0.125 })], {
+      totalRainMm: 240,
+      alert: true,
+      periodHours: 72,
+      daily: [],
+      fetchedAt: "2026-07-27T00:00:00.000Z",
+      source: "open-meteo",
+    });
     expect(result.dataSufficient).toBe(false);
     expect(result.atRisk).toBe(false);
   });

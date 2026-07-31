@@ -1,6 +1,6 @@
 # @safestock/mobile
 
-App hiện trường cho **REPORTER/RESCUE/WAREHOUSE/ADMIN** theo role — report, notification/mission, dashboard/readiness, QR và nghiệp vụ kho. Cut-line dự thi là APK Android cài ngoài Expo Go, kết nối backend qua private LAN khi public Internet tắt; Expo Web chỉ là dev fallback.
+App hiện trường cho **REPORTER/RESCUE/WAREHOUSE/ADMIN** theo role — report, notification/mission, dashboard/readiness, QR và nghiệp vụ kho. APK Android luôn gọi `https://ungphonhanh.life`: Internet dùng đường public, còn LAN mất Internet dùng split-DNS về máy chủ kho; Expo Web chỉ là dev fallback.
 
 ## Khả năng hiện tại
 
@@ -51,11 +51,11 @@ pnpm mobile:dev        # rồi bấm phím "w" để mở web, hoặc:
 pnpm --filter @safestock/mobile web
 ```
 
-Expo mở tab trình duyệt (thường `http://localhost:8081`). API release phải lấy từ `EXPO_PUBLIC_API_BASE_URL`/profile và trỏ IP/hostname private LAN; không dùng `localhost` trên điện thoại.
+Expo mở tab trình duyệt (thường `http://localhost:8081`). API release phải lấy từ `EXPO_PUBLIC_API_BASE_URL` và dùng đúng `https://ungphonhanh.life`; không dùng `localhost` hoặc IP riêng trên điện thoại.
 
 ## Build APK release Android
 
-Trước khi build, đặt `EXPO_PUBLIC_API_BASE_URL` trong `apps/mobile/.env.local` về địa chỉ backend private LAN. Khóa release chỉ tạo một lần; script không được dùng để thay khóa giữa các bản cập nhật:
+Trước khi build, đặt `EXPO_PUBLIC_API_BASE_URL=https://ungphonhanh.life` trong `apps/mobile/.env.local`. APK release chỉ dùng HTTPS và mang CA nội bộ dành riêng cho domain này để kết nối được khi split-DNS LAN đang hoạt động. Khóa release chỉ tạo một lần; script không được dùng để thay khóa giữa các bản cập nhật:
 
 ```powershell
 # Chỉ chạy một lần nếu chưa có release keystore

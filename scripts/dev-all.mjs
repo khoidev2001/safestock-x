@@ -107,7 +107,9 @@ for (const service of services) {
   children.push(child);
   prefixOutput(child.stdout, service.name, process.stdout);
   prefixOutput(child.stderr, service.name, process.stderr);
-  child.once("error", (error) => console.error(`[${service.name}] Không khởi động được: ${error.message}`));
+  child.once("error", (error) =>
+    console.error(`[${service.name}] Không khởi động được: ${error.message}`),
+  );
   child.once("exit", (code) => {
     if (!stopping) console.log(`[${service.name}] Đã dừng (exit ${code ?? "signal"}).`);
   });

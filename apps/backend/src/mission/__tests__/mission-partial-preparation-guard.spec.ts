@@ -62,9 +62,9 @@ describe("MissionService khi một phần kho đã xuất", () => {
   it("chặn ADMIN huỷ mission để không làm thất thoát phần đã xuất", async () => {
     const state = makeService();
 
-    await expect(
-      state.service.cancelByAdmin("mission-1", "Dừng nhiệm vụ"),
-    ).rejects.toThrow("đã có kho xuất vật tư");
+    await expect(state.service.cancelByAdmin("mission-1", "Dừng nhiệm vụ")).rejects.toThrow(
+      "đã có kho xuất vật tư",
+    );
 
     expect(state.mission.updateMany).not.toHaveBeenCalled();
     expect(state.notifications.create).not.toHaveBeenCalled();
@@ -73,9 +73,9 @@ describe("MissionService khi một phần kho đã xuất", () => {
   it("legacy RESCUE reject bị state machine chặn vì lực lượng hiện trường chỉ đọc", async () => {
     const state = makeService();
 
-    await expect(
-      state.service.rejectByRescue("mission-1", "Không tiếp cận được"),
-    ).rejects.toThrow("Không thể chuyển PENDING_WAREHOUSE → REJECTED");
+    await expect(state.service.rejectByRescue("mission-1", "Không tiếp cận được")).rejects.toThrow(
+      "Không thể chuyển PENDING_WAREHOUSE → REJECTED",
+    );
 
     expect(state.mission.updateMany).not.toHaveBeenCalled();
     expect(state.notifications.create).not.toHaveBeenCalled();

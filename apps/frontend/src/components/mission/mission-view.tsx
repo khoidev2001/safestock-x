@@ -157,13 +157,7 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
       warehouseId: assignedWarehouseId,
     })[0];
     selectMission(activeMission?.id ?? missionListQuery.data[0].id, true);
-  }, [
-    assignedWarehouseId,
-    missionId,
-    missionListQuery.data,
-    role,
-    selectMission,
-  ]);
+  }, [assignedWarehouseId, missionId, missionListQuery.data, role, selectMission]);
 
   const missionQuery = useQuery({
     queryKey: ["mission", missionId],
@@ -195,9 +189,7 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
         : undefined;
     return planFromReport(missionId as string, {
       incident,
-      ...(reportPoint
-        ? { incidentLat: reportPoint.lat, incidentLng: reportPoint.lng }
-        : {}),
+      ...(reportPoint ? { incidentLat: reportPoint.lat, incidentLng: reportPoint.lng } : {}),
     });
   };
 
@@ -297,8 +289,7 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
     mission?.incidentLat != null && mission?.incidentLng != null
       ? { lat: mission.incidentLat, lng: mission.incidentLng }
       : incidentPoint;
-  const missionHasIncidentPoint =
-    mission?.incidentLat != null && mission?.incidentLng != null;
+  const missionHasIncidentPoint = mission?.incidentLat != null && mission?.incidentLng != null;
   const reportHasIncidentPoint = isReportDraft && missionHasIncidentPoint;
   const canCalculatePlan = Boolean(
     incidentPoint || form.location?.trim() || reportHasIncidentPoint,
@@ -318,219 +309,222 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
       />
 
       <div className="grid gap-4 xl:grid-cols-[380px_1fr]">
-      {/* Cột trái: nhập tình huống (chỉ ADMIN lập) */}
-      <div className="space-y-4">
-        {isAdmin && (
-          <section className="app-panel p-5">
-            <h2 className="font-semibold">Tình huống khẩn cấp</h2>
-            <p className="mt-1 text-sm text-[var(--text-muted)]">
-              Nhập quy mô ảnh hưởng để hệ thống tính nhu cầu vật tư ban đầu.
-            </p>
-
-            <DescribeIncidentBlock
-              value={description}
-              onChange={setDescription}
-              onAnalyze={() => analyze.mutate()}
-              analyzing={analyze.isPending}
-              error={parseError}
-            />
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              {SAMPLES.map((s) => (
-                <button
-                  key={s.label}
-                  type="button"
-                  onClick={() =>
-                    setForm({ children: 0, elderly: 0, medicalSupportCases: 0, ...s.input })
-                  }
-                  className="rounded-full border bg-[var(--surface-2)] px-3 py-1.5 text-xs font-medium transition hover:bg-[var(--surface)] active:translate-y-px"
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-4 space-y-3">
-              <Field label="Loại tình huống">
-                <select
-                  value={form.incidentType}
-                  onChange={(e) => setForm({ ...form, incidentType: e.target.value })}
-                  className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
-                >
-                  {INCIDENT_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Địa điểm ứng phó">
-                <input
-                  value={form.location ?? ""}
-                  onChange={(e) => setForm({ ...form, location: e.target.value })}
-                  placeholder="Tên thôn đã được ADMIN xác minh"
-                  className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
-                />
-              </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <NumberField
-                  label="Số người"
-                  value={form.affectedPeople}
-                  onChange={(v) => setForm({ ...form, affectedPeople: v })}
-                />
-                <NumberField
-                  label="Số giờ dự kiến"
-                  value={form.durationHours}
-                  onChange={(v) => setForm({ ...form, durationHours: v })}
-                />
-                <NumberField
-                  label="Trẻ em"
-                  value={form.children}
-                  onChange={(v) => setForm({ ...form, children: v })}
-                />
-                <NumberField
-                  label="Người già"
-                  value={form.elderly}
-                  onChange={(v) => setForm({ ...form, elderly: v })}
-                />
-                <NumberField
-                  label="Ca y tế"
-                  value={form.medicalSupportCases}
-                  onChange={(v) => setForm({ ...form, medicalSupportCases: v })}
-                />
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => genPlan.mutate()}
-              disabled={genPlan.isPending || !canCalculatePlan}
-              title={
-                canCalculatePlan
-                  ? undefined
-                  : "Cần nhập thôn đã xác minh trước khi tính nhu cầu"
-              }
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-md bg-[var(--color-accent)] px-4 py-2.5 font-semibold text-[var(--color-accent-fg)] transition hover:brightness-95 active:translate-y-px disabled:opacity-60"
-            >
-              <ColorIcon name="mission" size={19} tone="orange" />
-              {genPlan.isPending ? "Đang tính nhu cầu" : "Tính nhu cầu vật tư"}
-            </button>
-            {!canCalculatePlan && (
-              <p className="mt-2 text-xs text-[var(--color-critical)]">
-                Cần nhập tên thôn đã được ADMIN xác minh trước khi tính nhu cầu vật tư.
+        {/* Cột trái: nhập tình huống (chỉ ADMIN lập) */}
+        <div className="space-y-4">
+          {isAdmin && (
+            <section className="app-panel p-5">
+              <h2 className="font-semibold">Tình huống khẩn cấp</h2>
+              <p className="mt-1 text-sm text-[var(--text-muted)]">
+                Nhập quy mô ảnh hưởng để hệ thống tính nhu cầu vật tư ban đầu.
               </p>
-            )}
-            {planError && <p className="mt-2 text-xs text-[var(--color-critical)]">{planError}</p>}
-          </section>
-        )}
 
-        {isAdmin && (
-          <section className="app-panel p-5">
-            <h3 className="text-sm font-semibold">Vị trí sự cố và các kho</h3>
-            <p className="mt-1 text-sm text-[var(--text-muted)]">
-              {mission
-                ? missionHasIncidentPoint
-                  ? "Vị trí đã được ghi nhận trong phương án."
-                  : "Nhiệm vụ chưa có điểm ứng phó. Hãy nhập thôn đã xác minh và tính lại phương án."
-                : "Nhập tên thôn đã được ADMIN xác minh để hệ thống xác định điểm ứng phó."}
-            </p>
-            <div className="mt-3">
-              <IncidentMap
-                warehouses={mission?.actionPlan?.warehouses ?? []}
-                incidentPoint={effectiveIncidentPoint}
-              />
-            </div>
-          </section>
-        )}
-
-        {/* Bảng phân bổ nhanh khi đã có mission */}
-        {mission && (
-          <section className="app-panel p-5">
-            <h3 className="text-sm font-semibold">Tóm tắt nhu cầu</h3>
-            <p className="mt-1 text-sm text-[var(--text-muted)]">
-              {INCIDENT_TYPES.find((item) => item.value === mission.incidentType)?.label ??
-                mission.incidentType}{" "}
-              · {mission.affectedPeople} người · có thể đáp ứng{" "}
-              <b
-                style={{
-                  color: mission.fulfillment >= 70 ? "var(--color-ready)" : "var(--color-critical)",
-                }}
-              >
-                {mission.fulfillment}%
-              </b>
-            </p>
-          </section>
-        )}
-      </div>
-
-      {/* Cột phải: workflow + Action Plan */}
-      <div className="space-y-4">
-        {missionId && missionQuery.isPending ? (
-          <MissionDetailLoading />
-        ) : missionQuery.isError ? (
-          <MissionDetailError
-            message={
-              missionQuery.error instanceof ApiError
-                ? missionQuery.error.message
-                : "Không mở được nhiệm vụ này. Nhiệm vụ có thể đã bị xóa hoặc bạn không có quyền truy cập."
-            }
-            onRetry={() => missionQuery.refetch()}
-          />
-        ) : !mission ? (
-          <EmptyState isAdmin={isAdmin} />
-        ) : (
-          <>
-            {isReportDraft && (
-              <ReportDraftBanner
-                reportText={mission.reportText ?? ""}
-                isAdmin={isAdmin}
+              <DescribeIncidentBlock
+                value={description}
+                onChange={setDescription}
                 onAnalyze={() => analyze.mutate()}
                 analyzing={analyze.isPending}
+                error={parseError}
               />
-            )}
-            {mission.readinessAssessment && (
-              <MissionReadinessPanel assessment={mission.readinessAssessment} />
-            )}
-            <WarehouseRequestPanel
-              missionId={mission.id}
-              requests={mission.warehouseRequests ?? []}
-              role={role}
-              assignedWarehouseId={assignedWarehouseId}
-            />
-            {isAdmin && <CoordinationAnalysisPanel missionId={mission.id} />}
-            {isAdmin && <FieldUpdateTimeline missionId={mission.id} focusUpdateId={fieldUpdateId} />}
-            <section className="app-panel p-5">
-              <WorkflowStepper status={mission.status} />
-              <div className="mt-5 border-t pt-4">
-                <RoleActions
-                  mission={mission}
-                  role={role}
-                  assignedWarehouseId={assignedWarehouseId}
-                  isReportDraft={isReportDraft}
-                  hasIncidentPoint={missionHasIncidentPoint}
-                  onGenerateActionPlan={() => genActionPlan.mutate()}
-                   onPublish={() => step.mutate(approveMission)}
-                   onPrepare={() => step.mutate(prepareMission)}
-                   onCancel={(note) => step.mutate((id) => cancelMission(id, note))}
-                   busy={genActionPlan.isPending || step.isPending}
-                />
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {SAMPLES.map((s) => (
+                  <button
+                    key={s.label}
+                    type="button"
+                    onClick={() =>
+                      setForm({ children: 0, elderly: 0, medicalSupportCases: 0, ...s.input })
+                    }
+                    className="rounded-full border bg-[var(--surface-2)] px-3 py-1.5 text-xs font-medium transition hover:bg-[var(--surface)] active:translate-y-px"
+                  >
+                    {s.label}
+                  </button>
+                ))}
               </div>
-              {workflowError && (
-                <p className="mt-3 text-sm text-[var(--color-critical)]">{workflowError}</p>
+
+              <div className="mt-4 space-y-3">
+                <Field label="Loại tình huống">
+                  <select
+                    value={form.incidentType}
+                    onChange={(e) => setForm({ ...form, incidentType: e.target.value })}
+                    className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+                  >
+                    {INCIDENT_TYPES.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Địa điểm ứng phó">
+                  <input
+                    value={form.location ?? ""}
+                    onChange={(e) => setForm({ ...form, location: e.target.value })}
+                    placeholder="Tên thôn đã được ADMIN xác minh"
+                    className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+                  />
+                </Field>
+                <div className="grid grid-cols-2 gap-3">
+                  <NumberField
+                    label="Số người"
+                    value={form.affectedPeople}
+                    onChange={(v) => setForm({ ...form, affectedPeople: v })}
+                  />
+                  <NumberField
+                    label="Số giờ dự kiến"
+                    value={form.durationHours}
+                    onChange={(v) => setForm({ ...form, durationHours: v })}
+                  />
+                  <NumberField
+                    label="Trẻ em"
+                    value={form.children}
+                    onChange={(v) => setForm({ ...form, children: v })}
+                  />
+                  <NumberField
+                    label="Người già"
+                    value={form.elderly}
+                    onChange={(v) => setForm({ ...form, elderly: v })}
+                  />
+                  <NumberField
+                    label="Ca y tế"
+                    value={form.medicalSupportCases}
+                    onChange={(v) => setForm({ ...form, medicalSupportCases: v })}
+                  />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => genPlan.mutate()}
+                disabled={genPlan.isPending || !canCalculatePlan}
+                title={
+                  canCalculatePlan ? undefined : "Cần nhập thôn đã xác minh trước khi tính nhu cầu"
+                }
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-md bg-[var(--color-accent)] px-4 py-2.5 font-semibold text-[var(--color-accent-fg)] transition hover:brightness-95 active:translate-y-px disabled:opacity-60"
+              >
+                <ColorIcon name="mission" size={19} tone="orange" />
+                {genPlan.isPending ? "Đang tính nhu cầu" : "Tính nhu cầu vật tư"}
+              </button>
+              {!canCalculatePlan && (
+                <p className="mt-2 text-xs text-[var(--color-critical)]">
+                  Cần nhập tên thôn đã được ADMIN xác minh trước khi tính nhu cầu vật tư.
+                </p>
+              )}
+              {planError && (
+                <p className="mt-2 text-xs text-[var(--color-critical)]">{planError}</p>
               )}
             </section>
+          )}
 
-            {mission.actionPlan ? (
-              <ActionPlanView plan={mission.actionPlan} incidentPoint={effectiveIncidentPoint} />
-            ) : (
-              <div className="rounded-md border border-dashed bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-muted)]">
-                Chọn <b>Lập kế hoạch cứu hộ</b> để tạo các bước thực hiện chi tiết.
+          {isAdmin && (
+            <section className="app-panel p-5">
+              <h3 className="text-sm font-semibold">Vị trí sự cố và các kho</h3>
+              <p className="mt-1 text-sm text-[var(--text-muted)]">
+                {mission
+                  ? missionHasIncidentPoint
+                    ? "Vị trí đã được ghi nhận trong phương án."
+                    : "Nhiệm vụ chưa có điểm ứng phó. Hãy nhập thôn đã xác minh và tính lại phương án."
+                  : "Nhập tên thôn đã được ADMIN xác minh để hệ thống xác định điểm ứng phó."}
+              </p>
+              <div className="mt-3">
+                <IncidentMap
+                  warehouses={mission?.actionPlan?.warehouses ?? []}
+                  incidentPoint={effectiveIncidentPoint}
+                />
               </div>
-            )}
-          </>
-        )}
+            </section>
+          )}
+
+          {/* Bảng phân bổ nhanh khi đã có mission */}
+          {mission && (
+            <section className="app-panel p-5">
+              <h3 className="text-sm font-semibold">Tóm tắt nhu cầu</h3>
+              <p className="mt-1 text-sm text-[var(--text-muted)]">
+                {INCIDENT_TYPES.find((item) => item.value === mission.incidentType)?.label ??
+                  mission.incidentType}{" "}
+                · {mission.affectedPeople} người · có thể đáp ứng{" "}
+                <b
+                  style={{
+                    color:
+                      mission.fulfillment >= 70 ? "var(--color-ready)" : "var(--color-critical)",
+                  }}
+                >
+                  {mission.fulfillment}%
+                </b>
+              </p>
+            </section>
+          )}
+        </div>
+
+        {/* Cột phải: workflow + Action Plan */}
+        <div className="space-y-4">
+          {missionId && missionQuery.isPending ? (
+            <MissionDetailLoading />
+          ) : missionQuery.isError ? (
+            <MissionDetailError
+              message={
+                missionQuery.error instanceof ApiError
+                  ? missionQuery.error.message
+                  : "Không mở được nhiệm vụ này. Nhiệm vụ có thể đã bị xóa hoặc bạn không có quyền truy cập."
+              }
+              onRetry={() => missionQuery.refetch()}
+            />
+          ) : !mission ? (
+            <EmptyState isAdmin={isAdmin} />
+          ) : (
+            <>
+              {isReportDraft && (
+                <ReportDraftBanner
+                  reportText={mission.reportText ?? ""}
+                  isAdmin={isAdmin}
+                  onAnalyze={() => analyze.mutate()}
+                  analyzing={analyze.isPending}
+                />
+              )}
+              {mission.readinessAssessment && (
+                <MissionReadinessPanel assessment={mission.readinessAssessment} />
+              )}
+              <WarehouseRequestPanel
+                missionId={mission.id}
+                requests={mission.warehouseRequests ?? []}
+                role={role}
+                assignedWarehouseId={assignedWarehouseId}
+              />
+              {isAdmin && <CoordinationAnalysisPanel missionId={mission.id} />}
+              {isAdmin && (
+                <FieldUpdateTimeline missionId={mission.id} focusUpdateId={fieldUpdateId} />
+              )}
+              <section className="app-panel p-5">
+                <WorkflowStepper status={mission.status} />
+                <div className="mt-5 border-t pt-4">
+                  <RoleActions
+                    mission={mission}
+                    role={role}
+                    assignedWarehouseId={assignedWarehouseId}
+                    isReportDraft={isReportDraft}
+                    hasIncidentPoint={missionHasIncidentPoint}
+                    onGenerateActionPlan={() => genActionPlan.mutate()}
+                    onPublish={() => step.mutate(approveMission)}
+                    onPrepare={() => step.mutate(prepareMission)}
+                    onCancel={(note) => step.mutate((id) => cancelMission(id, note))}
+                    busy={genActionPlan.isPending || step.isPending}
+                  />
+                </div>
+                {workflowError && (
+                  <p className="mt-3 text-sm text-[var(--color-critical)]">{workflowError}</p>
+                )}
+              </section>
+
+              {mission.actionPlan ? (
+                <ActionPlanView plan={mission.actionPlan} incidentPoint={effectiveIncidentPoint} />
+              ) : (
+                <div className="rounded-md border border-dashed bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-muted)]">
+                  Chọn <b>Lập kế hoạch cứu hộ</b> để tạo các bước thực hiện chi tiết.
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
-    </div>
     </div>
   );
 }
@@ -545,13 +539,7 @@ function MissionDetailLoading() {
   );
 }
 
-function MissionDetailError({
-  message,
-  onRetry,
-}: {
-  message: string;
-  onRetry: () => void;
-}) {
+function MissionDetailError({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <div
       role="alert"
@@ -610,17 +598,14 @@ function RoleActions({
     role === "WAREHOUSE" &&
     mission.status === "PENDING_WAREHOUSE" &&
     (mission.warehouseRequests?.length ?? 0) === 0 &&
-    (Boolean(assignedPreparation && !assignedPreparation.preparedAt) ||
-      isLegacySourceWarehouse);
+    (Boolean(assignedPreparation && !assignedPreparation.preparedAt) || isLegacySourceWarehouse);
   const warehouseAlreadyPrepared =
     role === "WAREHOUSE" &&
     mission.status === "PENDING_WAREHOUSE" &&
     Boolean(assignedPreparation?.preparedAt);
   // Admin huỷ được khi nhiệm vụ đang chạy nhưng kho CHƯA xuất vật tư.
   const adminCanCancelActive =
-    isAdmin &&
-    mission.status === "PENDING_WAREHOUSE" &&
-    preparedWarehouseCount === 0;
+    isAdmin && mission.status === "PENDING_WAREHOUSE" && preparedWarehouseCount === 0;
 
   return (
     <div className="space-y-4">
@@ -673,8 +658,8 @@ function RoleActions({
                   !hasIncidentPoint
                     ? "Cần xác nhận địa điểm ứng phó trước khi gửi"
                     : mission.readinessAssessment?.status === "NOT_DISPATCHABLE"
-                    ? "Cần xử lý phần vật tư còn thiếu trước khi gửi"
-                    : undefined
+                      ? "Cần xử lý phần vật tư còn thiếu trước khi gửi"
+                      : undefined
                 }
               >
                 <ColorIcon name="send" size={18} tone="blue" /> Duyệt và phát hành
@@ -683,14 +668,11 @@ function RoleActions({
           </>
         )}
 
-        {isAdmin &&
-          mission.status === "DRAFT" &&
-          !isReportDraft &&
-          !hasIncidentPoint && (
-            <p className="w-full text-sm text-[var(--color-critical)]">
-              Cần xác nhận địa điểm ứng phó trước khi lập kế hoạch hoặc gửi nhiệm vụ.
-            </p>
-          )}
+        {isAdmin && mission.status === "DRAFT" && !isReportDraft && !hasIncidentPoint && (
+          <p className="w-full text-sm text-[var(--color-critical)]">
+            Cần xác nhận địa điểm ứng phó trước khi lập kế hoạch hoặc gửi nhiệm vụ.
+          </p>
+        )}
 
         {warehouseCanPrepare && (
           <button className={actionBtn} style={primaryStyle} onClick={onPrepare} disabled={busy}>
@@ -891,7 +873,9 @@ function ReportDraftBanner({
           </button>
         </>
       ) : (
-        <p className="mt-3 text-xs text-[var(--text-muted)]">Chờ cơ quan phân tích và lập phương án.</p>
+        <p className="mt-3 text-xs text-[var(--text-muted)]">
+          Chờ cơ quan phân tích và lập phương án.
+        </p>
       )}
     </section>
   );

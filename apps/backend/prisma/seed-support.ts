@@ -40,7 +40,6 @@ export async function seedDevices(
       type: "LOADCELL",
       code: `scale_${shelf.code}`,
       unit: "kg",
-      currentValue: shelf.code === "C3" ? 22 : 80,
       online: shelf.code !== "C3",
     });
     if (!zone) throw new Error(`Kệ ${shelf.code} không có khu`);
@@ -52,7 +51,6 @@ export async function seedDevices(
       type: "TEMPERATURE",
       code: `temp_${zone.code}`,
       unit: "°C",
-      currentValue: zone.code === "A" ? 27.5 : 28,
     });
     await register({
       warehouseId: context.centralWarehouse.id,
@@ -60,7 +58,6 @@ export async function seedDevices(
       type: "HUMIDITY",
       code: `humid_${zone.code}`,
       unit: "%",
-      currentValue: zone.code === "A" ? 62 : 60,
     });
   }
   await register({
@@ -68,42 +65,36 @@ export async function seedDevices(
     type: "DOOR",
     code: "door_main",
     unit: "bool",
-    currentValue: 0,
   });
   await register({
     warehouseId: context.centralWarehouse.id,
     type: "GATEWAY",
     code: "gateway_01",
     unit: "bool",
-    currentValue: 1,
   });
   await register({
     warehouseId: context.centralWarehouse.id,
     type: "SMOKE",
     code: "smoke_main",
     unit: "ppm",
-    currentValue: 0,
   });
   await register({
     warehouseId: context.centralWarehouse.id,
     type: "POWER",
     code: "power_main",
     unit: "bool",
-    currentValue: 1,
   });
   await register({
     warehouseId: context.centralWarehouse.id,
     type: "RFID_GATEWAY",
     code: "rfid_main",
     unit: "tag",
-    currentValue: 0,
   });
   await register({
     warehouseId: context.centralWarehouse.id,
     type: "CAMERA_AI",
     code: "camera_main",
     unit: "detection",
-    currentValue: 0,
   });
 
   return deviceByCode;
@@ -159,7 +150,8 @@ export async function seedOperationalRecords(
         batchId: ref.batchId,
         countedQty: Math.max(0, ref.quantity - onLoan + (ref.definition.countedDelta ?? 0)),
         userId: context.hamletLeaderIds.get(ref.warehouseId) ?? context.warehouseUserId,
-        note: onLoan > 0 ? "Đã đối chiếu phần đang cấp cho lực lượng hiện trường" : "Kiểm kê định kỳ",
+        note:
+          onLoan > 0 ? "Đã đối chiếu phần đang cấp cho lực lượng hiện trường" : "Kiểm kê định kỳ",
         countedAt: dateFromOffset(-(ref.definition.countedOffsetDays ?? 7))!,
       },
     });

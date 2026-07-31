@@ -27,13 +27,7 @@ import {
 } from "./monthly-report-state";
 import { c } from "./styles";
 
-export function MonthlyReportScreen({
-  token,
-  user,
-}: {
-  token: string;
-  user: AuthUser;
-}) {
+export function MonthlyReportScreen({ token, user }: { token: string; user: AuthUser }) {
   const [reports, setReports] = useState<StockReport[]>([]);
   const [selected, setSelected] = useState<StockReport | null>(null);
   const [period, setPeriod] = useState(() => new Date().toISOString().slice(0, 7));
@@ -82,9 +76,7 @@ export function MonthlyReportScreen({
     setError(null);
     try {
       if (!user.warehouseId) {
-        throw new Error(
-          "Tài khoản lập kiểm kê chưa được gán kho; liên hệ quản trị viên.",
-        );
+        throw new Error("Tài khoản lập kiểm kê chưa được gán kho; liên hệ quản trị viên.");
       }
       const warehouse = {
         id: user.warehouseId,
@@ -97,9 +89,7 @@ export function MonthlyReportScreen({
       setDraftWarehouse(warehouse);
     } catch (prepareError) {
       setError(
-        prepareError instanceof Error
-          ? prepareError.message
-          : "Không lập được phiếu kiểm kê.",
+        prepareError instanceof Error ? prepareError.message : "Không lập được phiếu kiểm kê.",
       );
     } finally {
       setBusy(false);
@@ -176,10 +166,7 @@ export function MonthlyReportScreen({
 
   if (selected) {
     return (
-      <ScrollView
-        style={screenStyles.screen}
-        contentContainerStyle={screenStyles.content}
-      >
+      <ScrollView style={screenStyles.screen} contentContainerStyle={screenStyles.content}>
         <Pressable onPress={() => setSelected(null)} disabled={busy}>
           <Text style={screenStyles.link}>‹ Danh sách báo cáo</Text>
         </Pressable>
@@ -376,23 +363,14 @@ function ActionButton({
 }
 
 function statusLabel(status: StockReport["status"]) {
-  return status === "APPROVED"
-    ? "Đã duyệt"
-    : status === "REJECTED"
-      ? "Từ chối"
-      : "Chờ duyệt";
+  return status === "APPROVED" ? "Đã duyệt" : status === "REJECTED" ? "Từ chối" : "Chờ duyệt";
 }
 
 function statusStyle(status: StockReport["status"]) {
   return [
     screenStyles.status,
     {
-      color:
-        status === "APPROVED"
-          ? c.green
-          : status === "REJECTED"
-            ? c.red
-            : c.amber,
+      color: status === "APPROVED" ? c.green : status === "REJECTED" ? c.red : c.amber,
     },
   ];
 }

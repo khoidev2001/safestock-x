@@ -6,26 +6,14 @@ import {
   Logger,
   NotFoundException,
 } from "@nestjs/common";
-import {
-  ItemCondition,
-  ItemStatus,
-  LoanStatus,
-  Prisma,
-  TransactionSource,
-} from "@prisma/client";
+import { ItemCondition, ItemStatus, LoanStatus, Prisma, TransactionSource } from "@prisma/client";
 import { TransactionType } from "@safestock/shared-types";
 import { PrismaService } from "../prisma/prisma.service";
 import { ReadinessService } from "../readiness/readiness.service";
-import {
-  lockLoanBatch,
-  lockLoanTableForApproval,
-} from "../loan/loan-table-lock";
+import { lockLoanBatch, lockLoanTableForApproval } from "../loan/loan-table-lock";
 import { sumOutstanding } from "./loan-math";
 import { transferInventoryInTx } from "./inventory-transfer";
-import {
-  mutationFingerprint,
-  withMutationIdempotency,
-} from "./mutation-idempotency";
+import { mutationFingerprint, withMutationIdempotency } from "./mutation-idempotency";
 import {
   assertActorCanAccessWarehouse,
   assertActorCanAccessBatch,
@@ -74,18 +62,9 @@ export class InventoryService {
   }
 
   // Cây kho: warehouse → zones → shelves (+ số batch mỗi shelf)
-  async tree(
-    warehouseId: string,
-    scopeWarehouseId?: string | null,
-    actorUserId?: string,
-  ) {
+  async tree(warehouseId: string, scopeWarehouseId?: string | null, actorUserId?: string) {
     if (actorUserId) {
-      await assertActorCanAccessWarehouse(
-        this.prisma,
-        actorUserId,
-        scopeWarehouseId,
-        warehouseId,
-      );
+      await assertActorCanAccessWarehouse(this.prisma, actorUserId, scopeWarehouseId, warehouseId);
     } else {
       assertWarehouseInScope(scopeWarehouseId, warehouseId);
     }
@@ -103,18 +82,9 @@ export class InventoryService {
     return wh;
   }
 
-  async listBatches(
-    warehouseId: string,
-    scopeWarehouseId?: string | null,
-    actorUserId?: string,
-  ) {
+  async listBatches(warehouseId: string, scopeWarehouseId?: string | null, actorUserId?: string) {
     if (actorUserId) {
-      await assertActorCanAccessWarehouse(
-        this.prisma,
-        actorUserId,
-        scopeWarehouseId,
-        warehouseId,
-      );
+      await assertActorCanAccessWarehouse(this.prisma, actorUserId, scopeWarehouseId, warehouseId);
     } else {
       assertWarehouseInScope(scopeWarehouseId, warehouseId);
     }
@@ -133,11 +103,7 @@ export class InventoryService {
   }
 
   // Scan QR: FE quét ra SKU → trả batch + vị trí + trạng thái
-  async scanBySku(
-    sku: string,
-    scopeWarehouseId?: string | null,
-    actorUserId?: string,
-  ) {
+  async scanBySku(sku: string, scopeWarehouseId?: string | null, actorUserId?: string) {
     const actor = actorUserId
       ? await this.prisma.user.findUnique({
           where: { id: actorUserId },
@@ -177,12 +143,7 @@ export class InventoryService {
     actorUserId: string,
     limit = 100,
   ) {
-    await assertActorCanAccessWarehouse(
-      this.prisma,
-      actorUserId,
-      scopeWarehouseId,
-      warehouseId,
-    );
+    await assertActorCanAccessWarehouse(this.prisma, actorUserId, scopeWarehouseId, warehouseId);
     return this.prisma.inventoryTransaction.findMany({
       where: {
         OR: [
@@ -225,12 +186,7 @@ export class InventoryService {
     cursor?: string,
     limit = 100,
   ) {
-    await assertActorCanAccessWarehouse(
-      this.prisma,
-      actorUserId,
-      scopeWarehouseId,
-      warehouseId,
-    );
+    await assertActorCanAccessWarehouse(this.prisma, actorUserId, scopeWarehouseId, warehouseId);
     const pageSize = Math.min(Math.max(limit, 1), 200);
     if (cursor) {
       const scopedCursor = await this.prisma.itemBatch.findFirst({
@@ -271,7 +227,7 @@ export class InventoryService {
     const data = hasMore ? rows.slice(0, pageSize) : rows;
     return {
       data,
-      nextCursor: hasMore ? data[data.length - 1]?.id ?? null : null,
+      nextCursor: hasMore ? (data[data.length - 1]?.id ?? null) : null,
     };
   }
 
@@ -504,10 +460,7 @@ export class InventoryService {
       const { warehouseId: _warehouseId, ...response } = result;
       return response;
     } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2002"
-      ) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
         throw new ConflictException("SKU, danh mục hoặc mã lô đã tồn tại");
       }
       throw error;
@@ -537,9 +490,7 @@ export class InventoryService {
       }
       category = await tx.itemCategory.findUnique({ where: { name: categoryName } });
       if (category && category.unit !== unit) {
-        throw new ConflictException(
-          `Danh mục ${categoryName} đang dùng đơn vị ${category.unit}`,
-        );
+        throw new ConflictException(`Danh mục ${categoryName} đang dùng đơn vị ${category.unit}`);
       }
       category ??= await tx.itemCategory.create({
         data: { name: categoryName, unit },
@@ -807,8 +758,7 @@ export class InventoryService {
         tx,
         {
           actorId: userId,
-          operation:
-            type === TransactionType.IMPORT ? "inventory.import" : "inventory.export",
+          operation: type === TransactionType.IMPORT ? "inventory.import" : "inventory.export",
           requestId,
           fingerprint: mutationFingerprint({
             batchId,
@@ -914,9 +864,7 @@ export class InventoryService {
       // Phân biệt batch vừa bị chuyển khỏi scope với thiếu tồn; không trả lỗi 400
       // che mất vi phạm quyền khi shelfId đổi giữa scope check và update.
       await assertBatchInScope(tx, scopeWarehouseId, batchId);
-      throw new BadRequestException(
-        "Tồn khả dụng vừa thay đổi; hãy tải lại trước khi xuất",
-      );
+      throw new BadRequestException("Tồn khả dụng vừa thay đổi; hãy tải lại trước khi xuất");
     }
 
     const afterBatch = await tx.itemBatch.findUnique({ where: { id: batchId } });
@@ -1071,10 +1019,6 @@ export class InventoryService {
 }
 
 function isBeforeUtcToday(value: Date, now = new Date()): boolean {
-  const startOfTodayUtc = Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    now.getUTCDate(),
-  );
+  const startOfTodayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   return value.getTime() < startOfTodayUtc;
 }

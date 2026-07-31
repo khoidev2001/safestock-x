@@ -53,12 +53,12 @@ export function StocktakeView({ warehouseId }: { warehouseId: string }) {
       </div>
       <div className="divide-y">
         {batches.length === 0 ? (
-          <p className="p-5 text-sm text-[var(--text-muted)]">
-            Kho chưa có lô vật tư để kiểm kê.
-          </p>
-        ) : pagination.pageItems.map((b) => (
-          <StocktakeRow key={b.id} batch={b} warehouseId={warehouseId} />
-        ))}
+          <p className="p-5 text-sm text-[var(--text-muted)]">Kho chưa có lô vật tư để kiểm kê.</p>
+        ) : (
+          pagination.pageItems.map((b) => (
+            <StocktakeRow key={b.id} batch={b} warehouseId={warehouseId} />
+          ))
+        )}
       </div>
       <Pagination
         onPageChange={pagination.setPage}

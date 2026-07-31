@@ -8,7 +8,7 @@
 - [ollama-qwen35-4b-evaluation.md](ollama-qwen35-4b-evaluation.md) — benchmark Qwen 3.5 4B local và giới hạn đã biết
 - [ollama-qwen-evaluation.md](ollama-qwen-evaluation.md) — baseline Qwen 2.5 local
 - [phase-a-nen-tang.md](phase-a-nen-tang.md) — nền + auth + inventory
-- [phase-b-simulator.md](phase-b-simulator.md) — mô phỏng cảm biến (Digital Twin)
+- [phase-b-simulator.md](phase-b-simulator.md) — simulator cảm biến, IoT LAN và domain hybrid
 - [phase-bp-nhap-xuat-da-nguon.md](phase-bp-nhap-xuat-da-nguon.md) — 4 tầng nhập/xuất + mượn-trả
 - [phase-a2-rbac.md](phase-a2-rbac.md) — phân quyền + kiểm soát
 - [phase-c-readiness.md](phase-c-readiness.md) — Readiness Score (differentiator #1)

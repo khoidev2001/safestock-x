@@ -134,8 +134,7 @@ export function selectVisibleLabels(
   const projected = candidates
     .filter(
       (candidate) =>
-        zoom >= candidate.minZoom &&
-        (candidate.maxZoom == null || zoom <= candidate.maxZoom),
+        zoom >= candidate.minZoom && (candidate.maxZoom == null || zoom <= candidate.maxZoom),
     )
     .map((candidate) => {
       const point = project(candidate.lat, candidate.lng);
@@ -221,7 +220,12 @@ function candidateRect(candidate: LabelCandidate, x: number, y: number): ScreenR
 }
 
 function intersectsViewport(rect: ScreenRect, viewport: { width: number; height: number }) {
-  return rect.right >= 0 && rect.bottom >= 0 && rect.left <= viewport.width && rect.top <= viewport.height;
+  return (
+    rect.right >= 0 &&
+    rect.bottom >= 0 &&
+    rect.left <= viewport.width &&
+    rect.top <= viewport.height
+  );
 }
 
 function estimateTextWidth(text: string, fontSize: number, weight: number): number {
@@ -240,7 +244,10 @@ function hasKnownPrefix(name: string): boolean {
   return /^(Thôn|Buôn|Bon|Buôn làng|Xóm|Tổ dân phố|Khu phố|Khu vực|Địa điểm)\s/iu.test(name);
 }
 
-function polygonLabelPoint(geometry: { type: string; coordinates: unknown }): [number, number] | null {
+function polygonLabelPoint(geometry: {
+  type: string;
+  coordinates: unknown;
+}): [number, number] | null {
   type Ring = [number, number][];
   let rings: Ring[] = [];
   if (geometry.type === "Polygon") {
@@ -254,10 +261,7 @@ function polygonLabelPoint(geometry: { type: string; coordinates: unknown }): [n
   }
   const ring = rings.sort((a, b) => Math.abs(ringSignedArea(b)) - Math.abs(ringSignedArea(a)))[0];
   if (!ring?.length) return null;
-  const sums = ring.reduce(
-    (acc, [lng, lat]) => [acc[0] + lng, acc[1] + lat],
-    [0, 0],
-  );
+  const sums = ring.reduce((acc, [lng, lat]) => [acc[0] + lng, acc[1] + lat], [0, 0]);
   return [sums[0] / ring.length, sums[1] / ring.length];
 }
 

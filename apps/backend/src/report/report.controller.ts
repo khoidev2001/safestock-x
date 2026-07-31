@@ -100,10 +100,7 @@ export class ReportController {
   /** APK gửi snapshot kiểm kê JSON, không phụ thuộc bộ chọn tệp Excel. */
   @RequirePermission(Permission.REPORT_SUBMIT)
   @Post()
-  submitSnapshot(
-    @Request() req: AuthenticatedRequest,
-    @Body() dto: SubmitStockReportDto,
-  ) {
+  submitSnapshot(@Request() req: AuthenticatedRequest, @Body() dto: SubmitStockReportDto) {
     return this.reports.submitRows(
       req.user.userId,
       dto.warehouseId,

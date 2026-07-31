@@ -30,7 +30,10 @@ export function LoanView({ warehouseId }: { warehouseId: string }) {
         <p className="mt-1 text-sm text-[var(--text-muted)]">
           Lỗi kết nối được giữ nguyên, không hiển thị thành trạng thái “không có phiếu”.
         </p>
-        <button className="mt-4 rounded-md border px-3 py-2 text-sm font-semibold" onClick={() => void query.refetch()}>
+        <button
+          className="mt-4 rounded-md border px-3 py-2 text-sm font-semibold"
+          onClick={() => void query.refetch()}
+        >
           Tải lại
         </button>
       </section>
@@ -145,7 +148,9 @@ function LoanCard({ loan, warehouseId }: { loan: LoanRecord; warehouseId: string
           </div>
           {mutate.isError ? (
             <p className="mt-3 text-sm text-[var(--color-critical)]" role="alert">
-              {mutate.error instanceof Error ? mutate.error.message : "Không ghi nhận được phiếu hoàn."}
+              {mutate.error instanceof Error
+                ? mutate.error.message
+                : "Không ghi nhận được phiếu hoàn."}
             </p>
           ) : null}
         </div>

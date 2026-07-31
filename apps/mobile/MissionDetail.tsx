@@ -69,10 +69,7 @@ export function MissionDetailScreen({
     setError(null);
     let hasCachedData = false;
     try {
-      const cached = await readOfflineCache<MissionDetail>(
-        userId,
-        `mission.${missionId}`,
-      );
+      const cached = await readOfflineCache<MissionDetail>(userId, `mission.${missionId}`);
       if (cached) {
         hasCachedData = true;
         setMission(cached.data);
@@ -88,9 +85,7 @@ export function MissionDetailScreen({
       const latest = await fetchMission(token, missionId);
       if (role === "WAREHOUSE") {
         const ownRequests = await fetchWarehouseMaterialRequests(token);
-        latest.warehouseRequests = ownRequests.filter(
-          (request) => request.missionId === missionId,
-        );
+        latest.warehouseRequests = ownRequests.filter((request) => request.missionId === missionId);
       }
       setMission(latest);
       setCacheStoredAt(null);
@@ -98,7 +93,7 @@ export function MissionDetailScreen({
     } catch (e) {
       setError(
         hasCachedData
-          ? "Đang xem bản lưu vì không kết nối được máy chủ LAN."
+          ? "Đang xem bản lưu vì chưa kết nối được ungphonhanh.life."
           : e instanceof Error
             ? e.message
             : "Lỗi tải dữ liệu",
@@ -232,15 +227,17 @@ export function MissionDetailScreen({
               accessibilityRole="alert"
             >
               <Text style={{ color: c.amber, fontSize: 12, fontWeight: "700" }}>
-                Ngoại tuyến · chỉ đọc · bản lưu{" "}
-                {new Date(cacheStoredAt).toLocaleString("vi-VN")}
+                Ngoại tuyến · chỉ đọc · bản lưu {new Date(cacheStoredAt).toLocaleString("vi-VN")}
               </Text>
             </View>
           ) : null}
           <MissionHero mission={mission} />
 
           <View style={styles.factRow}>
-            <Fact label="Nhận lúc" value={mission.createdAt ? formatLongTime(mission.createdAt) : "—"} />
+            <Fact
+              label="Nhận lúc"
+              value={mission.createdAt ? formatLongTime(mission.createdAt) : "—"}
+            />
             <Fact label="Thời lượng" value={`${mission.durationHours} giờ`} />
             <Fact label="Đáp ứng" value={`${mission.fulfillment}%`} />
           </View>
@@ -313,10 +310,7 @@ function WarehouseMaterialRequestPanel({
   notes: Record<string, string>;
   busyRequestId: string | null;
   onNoteChange: (requestId: string, note: string) => void;
-  onAction: (
-    kind: "accept" | "prepare" | "discrepancy",
-    request: WarehouseMaterialRequest,
-  ) => void;
+  onAction: (kind: "accept" | "prepare" | "discrepancy", request: WarehouseMaterialRequest) => void;
   offline: boolean;
 }) {
   const prepared = requests.filter((request) => request.status === "PREPARED").length;
@@ -347,9 +341,7 @@ function WarehouseMaterialRequestPanel({
                 <Text style={{ color: c.text, fontSize: 15, fontWeight: "800" }}>
                   {request.itemName}
                 </Text>
-                <Text style={{ color: c.muted, fontSize: 12, marginTop: 3 }}>
-                  {request.sku}
-                </Text>
+                <Text style={{ color: c.muted, fontSize: 12, marginTop: 3 }}>{request.sku}</Text>
               </View>
               <View style={{ alignItems: "flex-end" }}>
                 <Text style={{ color: c.text, fontSize: 15, fontWeight: "800" }}>
@@ -358,7 +350,14 @@ function WarehouseMaterialRequestPanel({
                     : request.requestedQuantity}{" "}
                   {request.unit}
                 </Text>
-                <Text style={{ color: request.status === "PREPARED" ? c.green : c.amber, fontSize: 11, fontWeight: "800", marginTop: 3 }}>
+                <Text
+                  style={{
+                    color: request.status === "PREPARED" ? c.green : c.amber,
+                    fontSize: 11,
+                    fontWeight: "800",
+                    marginTop: 3,
+                  }}
+                >
                   {warehouseRequestStatus(request.status)}
                 </Text>
               </View>
@@ -394,10 +393,7 @@ function WarehouseMaterialRequestPanel({
                       onAction(request.status === "PENDING" ? "accept" : "prepare", request)
                     }
                     accessibilityRole="button"
-                    style={[
-                      styles.actionButton,
-                      { flexGrow: 1, opacity: busy ? 0.6 : 1 },
-                    ]}
+                    style={[styles.actionButton, { flexGrow: 1, opacity: busy ? 0.6 : 1 }]}
                   >
                     <Text style={styles.actionButtonText}>
                       {busy
@@ -514,7 +510,9 @@ function FieldUpdatePanel({
             onPress={onVoice}
             disabled={voiceBusy || submitting}
             accessibilityRole="button"
-            accessibilityLabel={recording ? "Dừng ghi âm và chuyển thành chữ" : "Ghi âm cập nhật hiện trường"}
+            accessibilityLabel={
+              recording ? "Dừng ghi âm và chuyển thành chữ" : "Ghi âm cập nhật hiện trường"
+            }
           >
             <Text style={styles.btnRejectText}>
               {voiceBusy ? "Đang nhận dạng…" : recording ? "Dừng ghi âm" : "Ghi âm"}

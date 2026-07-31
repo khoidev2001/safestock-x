@@ -72,7 +72,9 @@ export class FieldUpdateAssistantService {
       });
     } catch (error) {
       source = "BACKEND_FALLBACK";
-      this.log.warn(`AI intent unavailable for field update ${recorded.id}: ${safeErrorClass(error)}`);
+      this.log.warn(
+        `AI intent unavailable for field update ${recorded.id}: ${safeErrorClass(error)}`,
+      );
       intent = fallbackIntent(recorded);
     }
     const preliminarySimulation = await this.runPreliminarySimulation(
@@ -164,7 +166,9 @@ export class FieldUpdateAssistantService {
         unresolvedAssumptionCount: simulation?.unresolvedAssumptions?.length ?? 0,
       };
     } catch (error) {
-      this.log.warn(`Cannot run preliminary What-if for field update ${update.id}: ${safeErrorClass(error)}`);
+      this.log.warn(
+        `Cannot run preliminary What-if for field update ${update.id}: ${safeErrorClass(error)}`,
+      );
       return { status: "FAILED" as const };
     }
   }
@@ -202,13 +206,19 @@ function fallbackIntent(update: StoredFieldUpdate): FieldUpdateIntent {
 }
 
 function classify(text: string): FieldUpdateIntent["kind"] {
-  if (/\b(cau|duong|tuyen)\b/.test(text) && /khong qua duoc|sat lo|ngap|nguy hiem|bi chan/.test(text)) return "ROUTE_HAZARD";
+  if (
+    /\b(cau|duong|tuyen)\b/.test(text) &&
+    /khong qua duoc|sat lo|ngap|nguy hiem|bi chan/.test(text)
+  )
+    return "ROUTE_HAZARD";
   if (/khong tiep can|bi chan|khong vao duoc/.test(text)) return "ACCESS_BLOCKED";
   if (/khong the tiep tuc|khong tiep tuc duoc|phai dung/.test(text)) return "CANNOT_CONTINUE";
   if (/da den|da toi/.test(text)) return "ARRIVED";
-  if (/so nguoi.*(?:tang|giam|doi)|(?:tang|giam|doi).*so nguoi/.test(text)) return "AFFECTED_PEOPLE_CHANGED";
+  if (/so nguoi.*(?:tang|giam|doi)|(?:tang|giam|doi).*so nguoi/.test(text))
+    return "AFFECTED_PEOPLE_CHANGED";
   if (/tre em|nguoi gia|nguoi benh|phu nu mang thai/.test(text)) return "VULNERABLE_GROUP_REPORTED";
-  if (/(can them|bo sung|thieu)/.test(text) && /(vat tu|nuoc|ao phao|thuoc)/.test(text)) return "MORE_SUPPLIES_NEEDED";
+  if (/(can them|bo sung|thieu)/.test(text) && /(vat tu|nuoc|ao phao|thuoc)/.test(text))
+    return "MORE_SUPPLIES_NEEDED";
   if (/da nhan/.test(text) && /(vat tu|nuoc|ao phao|thuoc)/.test(text)) return "SUPPLIES_RECEIVED";
   if (/da giao/.test(text) && /(vat tu|nuoc|ao phao|thuoc)/.test(text)) return "SUPPLIES_DELIVERED";
   if (/on dinh|an toan|da on/.test(text)) return "SITUATION_STABLE";
@@ -216,9 +226,7 @@ function classify(text: string): FieldUpdateIntent["kind"] {
 }
 
 function notificationBody(intent: FieldUpdateIntent, preliminarySimulation: { status: string }) {
-  const unresolved = intent.unresolvedReferences.length
-    ? " Có địa danh/tuyến chưa xác minh."
-    : "";
+  const unresolved = intent.unresolvedReferences.length ? " Có địa danh/tuyến chưa xác minh." : "";
   const simulation =
     preliminarySimulation.status === "CREATED"
       ? " Đã có What-if sơ bộ để đối chiếu; không có thay đổi vận hành."
@@ -229,7 +237,9 @@ function notificationBody(intent: FieldUpdateIntent, preliminarySimulation: { st
 }
 
 function needsPreliminarySimulation(kind: FieldUpdateIntent["kind"]): boolean {
-  return ["ACCESS_BLOCKED", "ROUTE_HAZARD", "AFFECTED_PEOPLE_CHANGED", "CANNOT_CONTINUE"].includes(kind);
+  return ["ACCESS_BLOCKED", "ROUTE_HAZARD", "AFFECTED_PEOPLE_CHANGED", "CANNOT_CONTINUE"].includes(
+    kind,
+  );
 }
 
 function iso(value: Date | string | null | undefined): string | null {

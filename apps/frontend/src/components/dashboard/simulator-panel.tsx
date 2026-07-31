@@ -160,7 +160,7 @@ export function SimulatorPanel({ devices, timeline, isLoading }: SimulatorPanelP
                   {new Intl.DateTimeFormat("vi-VN", {
                     hour: "2-digit",
                     minute: "2-digit",
-                  }).format(new Date(event.createdAt))}
+                  }).format(new Date(event.observedAt))}
                 </time>
                 <div>
                   <p className="font-medium">
@@ -170,6 +170,15 @@ export function SimulatorPanel({ devices, timeline, isLoading }: SimulatorPanelP
                   <p className="tabular text-xs text-[var(--text-muted)]">
                     {formatEventDetail(event)}
                   </p>
+                  {event.submission && (
+                    <p className="mt-1 text-xs text-[var(--text-muted)]">
+                      Backend nhận:{" "}
+                      {new Intl.DateTimeFormat("vi-VN", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      }).format(new Date(event.submission.receivedAt))}
+                    </p>
+                  )}
                 </div>
               </li>
             ))}

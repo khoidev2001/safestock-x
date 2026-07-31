@@ -16,10 +16,9 @@ const {
   validateWhatIfAssumptions,
 } = require("../dist");
 
-const fixture = require(path.resolve(
-  __dirname,
-  "../../../apps/ai-service/tests/fixtures/phuoc-loc-analysis.json",
-));
+const fixture = require(
+  path.resolve(__dirname, "../../../apps/ai-service/tests/fixtures/phuoc-loc-analysis.json"),
+);
 
 test("uses one user-facing label for the RESCUE technical role", () => {
   assert.equal(USER_ROLE_LABELS[UserRole.RESCUE], "Lực lượng hiện trường");
@@ -75,8 +74,8 @@ test("requires confirmed text and rejects excluded field-assignment/media/GPS fi
 
   for (const forbiddenKey of ["assigneeId", "imageUrl", "gpsTrack"]) {
     assert.ok(
-      validateFieldUpdatePayload({ ...validPayload, [forbiddenKey]: "forbidden" }).some(
-        (error) => error.includes(forbiddenKey),
+      validateFieldUpdatePayload({ ...validPayload, [forbiddenKey]: "forbidden" }).some((error) =>
+        error.includes(forbiddenKey),
       ),
     );
   }
@@ -188,8 +187,5 @@ test("rejects malformed or out-of-range reported operational numbers", () => {
 });
 
 test("uses an explicit no-stock-claim disclaimer for external contacts", () => {
-  assert.equal(
-    EXTERNAL_CONTACT_DISCLAIMER,
-    "Đề xuất liên hệ, chưa xác nhận có hàng",
-  );
+  assert.equal(EXTERNAL_CONTACT_DISCLAIMER, "Đề xuất liên hệ, chưa xác nhận có hàng");
 });

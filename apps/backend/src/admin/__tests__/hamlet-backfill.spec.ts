@@ -1,6 +1,4 @@
-import {
-  hamletSeedFromWarehouse,
-} from "../../../prisma/hamlet-backfill";
+import { hamletSeedFromWarehouse } from "../../../prisma/hamlet-backfill";
 
 describe("hamlet backfill", () => {
   it("derives the response-point name without copying a fake coordinate", () => {

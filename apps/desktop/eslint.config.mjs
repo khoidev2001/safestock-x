@@ -5,8 +5,16 @@ import reactHooks from "eslint-plugin-react-hooks";
 import { base, ignores } from "../../eslint.config.base.mjs";
 
 export default [
-  { ignores },
+  // .test-out là JS đã biên dịch của test state — lint mã nguồn, không lint sản phẩm build.
+  { ignores: [...ignores, ".test-out/**"] },
   ...base,
+  {
+    // Test state chạy bằng node --test.
+    files: ["__tests__/**/*.ts"],
+    languageOptions: {
+      globals: { ...globals.node },
+    },
+  },
   {
     // Tiến trình main + preload chạy trong Node.
     files: ["src/main/**/*.ts", "src/preload/**/*.ts"],

@@ -1,6 +1,5 @@
-// Wrapper các endpoint backend dùng trong app desktop. Kiểu dữ liệu tối giản
-// (chỉ field cần render), không phụ thuộc @prisma/client để tránh kéo backend types.
 import { apiFetch } from "./api";
+import type { SimulatorAlarmPolicy } from "./simulator-queue";
 
 export interface Warehouse {
   id: string;
@@ -12,14 +11,9 @@ export interface VirtualDevice {
   code: string;
   type: string;
   currentValue: number | null;
+  currentAt: string | null;
   unit: string | null;
   warehouseId: string;
-}
-
-export interface Scenario {
-  key: string;
-  name: string;
-  description: string;
 }
 
 export interface ReadinessComponent {
@@ -31,7 +25,6 @@ export interface ReadinessComponent {
 export interface ReadinessScore {
   score: number;
   zone?: string;
-  // Kết luận vận hành từ assessOperationalReadiness (READY | NEEDS_ACTION | NOT_DISPATCHABLE).
   operationalStatus?: string;
   components?: ReadinessComponent[];
   [key: string]: unknown;
@@ -45,8 +38,37 @@ export interface Incident {
   title: string;
   state: string;
   detectedAt: string;
-  // LLM diễn giải (tiếng Việt) — backend tự sinh khi sự cố mới bật; list() trả sẵn nếu có.
   explanation?: string | null;
+}
+
+export interface ConfirmedSnapshotBody {
+  warehouseId: string;
+  idempotencyKey: string;
+  observedAt: string;
+  readings: { deviceCode: string; value: number }[];
+}
+
+export interface SnapshotResponse {
+  accepted: boolean;
+  duplicate: boolean;
+  submission: {
+    id: string;
+    idempotencyKey: string;
+    observedAt: string;
+    receivedAt: string;
+    policyVersion: string;
+  };
+  incidents: { id: string; title: string }[];
+}
+
+export interface AlarmAcknowledgementBody {
+  warehouseId: string;
+  /** Lô số liệu do chính máy này gửi. */
+  submissionKey?: string;
+  /** Sự cố nhận qua realtime — nguồn phần cứng không đi kèm lô của máy này. */
+  incidentIds?: string[];
+  acknowledgementKey: string;
+  acknowledgedAt: string;
 }
 
 export function firstWarehouse() {
@@ -57,53 +79,31 @@ export function listDevices(warehouseId: string) {
   return apiFetch<VirtualDevice[]>(`/api/simulator/warehouses/${warehouseId}/devices`);
 }
 
-export function listScenarios() {
-  return apiFetch<Scenario[]>("/api/simulator/scenarios");
+export function getAlarmPolicy(warehouseId: string) {
+  return apiFetch<SimulatorAlarmPolicy>(`/api/simulator/warehouses/${warehouseId}/alarm-policy`);
 }
 
-export interface EmitBody {
-  warehouseId: string;
-  deviceCode: string;
-  eventType: string;
-  value: number;
-}
-
-export function emitEvent(body: EmitBody) {
-  return apiFetch("/api/simulator/events", {
+export function submitSnapshot(body: ConfirmedSnapshotBody) {
+  return apiFetch<SnapshotResponse>("/api/simulator/snapshots", {
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+export function acknowledgeAlarm(body: AlarmAcknowledgementBody) {
+  return apiFetch<{ pending: boolean; acknowledgedIncidentIds: string[] }>(
+    "/api/simulator/alarm-acks",
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+    },
+  );
 }
 
 export function getReadiness(warehouseId: string) {
   return apiFetch<ReadinessScore | null>(`/api/readiness/warehouses/${warehouseId}`);
 }
 
-export function recalcReadiness(warehouseId: string) {
-  return apiFetch(`/api/readiness/warehouses/${warehouseId}/recalculate`, { method: "POST" });
-}
-
 export function listIncidents(warehouseId: string) {
   return apiFetch<Incident[]>(`/api/incidents/warehouses/${warehouseId}`);
-}
-
-// Runner (kịch bản).
-export interface Run {
-  id: string;
-  status?: string;
-}
-
-export function createRun(scenarioKey: string, warehouseId: string, speed: number) {
-  return apiFetch<Run>("/api/simulator/runs", {
-    method: "POST",
-    body: JSON.stringify({ scenarioKey, warehouseId, speed }),
-  });
-}
-
-export function playRun(id: string) {
-  return apiFetch(`/api/simulator/runs/${id}/play`, { method: "POST" });
-}
-
-export function resetRun(id: string) {
-  return apiFetch(`/api/simulator/runs/${id}/reset`, { method: "POST" });
 }

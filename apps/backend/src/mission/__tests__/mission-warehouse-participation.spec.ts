@@ -137,9 +137,9 @@ describe("MissionService warehouse participation", () => {
     };
     const service = serviceWithPrisma(prisma);
 
-    await expect(
-      service.getMission("mission-1", "user-b", "warehouse-b"),
-    ).resolves.toEqual(multiWarehouseMission);
+    await expect(service.getMission("mission-1", "user-b", "warehouse-b")).resolves.toEqual(
+      multiWarehouseMission,
+    );
   });
 
   it("danh sách của kho gồm cả mission mà kho đó tham gia", async () => {

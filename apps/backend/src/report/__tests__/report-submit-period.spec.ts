@@ -8,9 +8,7 @@ describe("ReportService monthly period invariant", () => {
       const prisma = {
         user: { findUnique: jest.fn().mockResolvedValue({ organizationId: "org-a" }) },
         warehouse: {
-          findUnique: jest
-            .fn()
-            .mockResolvedValue({ id: "warehouse-a", organizationId: "org-a" }),
+          findUnique: jest.fn().mockResolvedValue({ id: "warehouse-a", organizationId: "org-a" }),
         },
       };
       const service = new ReportService(prisma as never, {} as never);
@@ -42,14 +40,16 @@ describe("ReportService monthly period invariant", () => {
     const tx = {
       $executeRawUnsafe: jest.fn().mockResolvedValue(0),
       monthlyStockReport: {
-        findFirst: jest.fn().mockImplementation(({ where }) =>
-          reports.find(
-            (report) =>
-              report.warehouseId === where.warehouseId &&
-              report.period === where.period &&
-              ["PENDING", "APPROVED"].includes(String(report.status)),
+        findFirst: jest
+          .fn()
+          .mockImplementation(({ where }) =>
+            reports.find(
+              (report) =>
+                report.warehouseId === where.warehouseId &&
+                report.period === where.period &&
+                ["PENDING", "APPROVED"].includes(String(report.status)),
+            ),
           ),
-        ),
         create: jest.fn().mockImplementation(({ data }) => {
           const report = { id: `report-${reports.length + 1}`, createdAt: new Date(), ...data };
           reports.push(report);

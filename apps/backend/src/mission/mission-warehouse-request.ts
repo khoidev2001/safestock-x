@@ -54,15 +54,12 @@ export function buildWarehouseRequestCreates(
   }
   return [...grouped.values()].sort(
     (left, right) =>
-      left.warehouseId.localeCompare(right.warehouseId) ||
-      left.sku.localeCompare(right.sku),
+      left.warehouseId.localeCompare(right.warehouseId) || left.sku.localeCompare(right.sku),
   );
 }
 
 /** Convert persisted allocation JSON into the inventory bulk-export contract. */
-export function requestBatchItems(
-  allocations: unknown,
-): { batchId: string; quantity: number }[] {
+export function requestBatchItems(allocations: unknown): { batchId: string; quantity: number }[] {
   return validAllocationRows(allocations).map((allocation) => ({
     batchId: allocation.batchId,
     quantity: allocation.qty,
@@ -110,6 +107,8 @@ function validAllocationRows(value: unknown): MissionAllocationRow[] {
     ) {
       return [];
     }
-    return [{ ...record, batchId: record.batchId, warehouseId: record.warehouseId, qty: record.qty }];
+    return [
+      { ...record, batchId: record.batchId, warehouseId: record.warehouseId, qty: record.qty },
+    ];
   });
 }

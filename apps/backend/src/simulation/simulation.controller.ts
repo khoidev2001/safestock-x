@@ -1,47 +1,54 @@
 import { Body, Controller, Get, Param, Post, Query, Request, UseGuards } from "@nestjs/common";
-import { IsIn, IsInt, IsNumber, IsOptional, IsString } from "class-validator";
-import { scenarios } from "@safestock/scenario-definitions";
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsISO8601,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+} from "class-validator";
 import { Permission } from "@safestock/shared-types";
-import { JwtAuthGuard } from "../auth/guards";
 import { AuthenticatedRequest } from "../auth/authenticated-request";
+import { JwtAuthGuard } from "../auth/guards";
 import { PermissionGuard } from "../rbac/permission.guard";
 import { RequirePermission } from "../rbac/permissions.decorator";
 import { SimulationService } from "./simulation.service";
-import { RunnerService } from "./runner.service";
-import { SimulationAccessService } from "./simulation-access.service";
+import { ConfirmSnapshotDto } from "./snapshot.dto";
 
-class EmitDto {
-  @IsString() warehouseId!: string;
-  @IsString() deviceCode!: string;
-  @IsString() eventType!: string;
-  @IsNumber() value!: number;
-  @IsOptional() @IsString() scenarioId?: string;
-}
+class AlarmAcknowledgementDto {
+  @IsString()
+  warehouseId!: string;
 
-class CreateRunDto {
-  @IsString() scenarioKey!: string;
-  @IsString() warehouseId!: string;
-  @IsOptional() @IsInt() seed?: number;
-  @IsOptional() @IsIn([1, 10]) speed?: number;
+  /** Lô số liệu do chính máy này gửi. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  @Matches(/^[A-Za-z0-9._:-]+$/)
+  submissionKey?: string;
+
+  /** Sự cố nhận qua realtime — nguồn phần cứng không đi kèm lô của máy này. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @IsString({ each: true })
+  @MaxLength(80, { each: true })
+  incidentIds?: string[];
+
+  @IsString()
+  @MaxLength(160)
+  @Matches(/^[A-Za-z0-9._:-]+$/)
+  acknowledgementKey!: string;
+
+  @IsISO8601()
+  acknowledgedAt!: string;
 }
 
 @UseGuards(JwtAuthGuard, PermissionGuard)
 @Controller("simulator")
 export class SimulationController {
-  constructor(
-    private sim: SimulationService,
-    private runner: RunnerService,
-    private access: SimulationAccessService,
-  ) {}
+  constructor(private readonly sim: SimulationService) {}
 
-  @Get("scenarios")
-  @RequirePermission(Permission.SIMULATION_VIEW)
-  async listScenarios(@Request() req: AuthenticatedRequest) {
-    await this.access.assertPermission(req.user.userId, Permission.SIMULATION_VIEW);
-    return scenarios.map((s) => ({ key: s.key, name: s.name, description: s.description }));
-  }
-
-  // IoT/simulator chỉ thuộc kho trung tâm; kho thôn vận hành thủ công qua web/mobile.
   @Get("first-warehouse")
   @RequirePermission(Permission.SIMULATION_VIEW)
   firstWarehouse(@Request() req: AuthenticatedRequest) {
@@ -64,40 +71,27 @@ export class SimulationController {
     return this.sim.timeline(req.user.userId, id, limit ? Number(limit) : 50);
   }
 
-  // Bắn 1 event thủ công (slider ở G2/B3)
-  @Post("events")
-  @RequirePermission(Permission.SIMULATION_MUTATE)
-  emit(@Request() req: AuthenticatedRequest, @Body() dto: EmitDto) {
-    return this.sim.emit(req.user.userId, dto);
+  @Get("warehouses/:id/alarm-policy")
+  @RequirePermission(Permission.SIMULATION_VIEW)
+  alarmPolicy(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.sim.getPolicy(req.user.userId, id);
   }
 
-  @Post("runs")
+  /** The only simulator mutation: an operator-confirmed batch of changed readings. */
+  @Post("snapshots")
   @RequirePermission(Permission.SIMULATION_MUTATE)
-  createRun(@Request() req: AuthenticatedRequest, @Body() dto: CreateRunDto) {
-    return this.runner.createRun(
-      req.user.userId,
-      dto.scenarioKey,
-      dto.warehouseId,
-      dto.seed ?? 42,
-      dto.speed ?? 1,
-    );
+  confirmSnapshot(@Request() req: AuthenticatedRequest, @Body() dto: ConfirmSnapshotDto) {
+    return this.sim.submit(req.user.userId, dto);
   }
 
-  @Post("runs/:id/play")
-  @RequirePermission(Permission.SIMULATION_MUTATE)
-  play(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
-    return this.runner.play(req.user.userId, id);
-  }
-
-  @Post("runs/:id/pause")
-  @RequirePermission(Permission.SIMULATION_MUTATE)
-  pause(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
-    return this.runner.pause(req.user.userId, id);
-  }
-
-  @Post("runs/:id/reset")
-  @RequirePermission(Permission.SIMULATION_MUTATE)
-  reset(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
-    return this.runner.reset(req.user.userId, id);
+  /**
+   * Tắt chuông. Quyền tách khỏi simulation:mutate: chuông có thể do cảm biến
+   * thật kích hoạt, nên người trực kho phải tắt được mà không cần quyền bơm số
+   * liệu mô phỏng.
+   */
+  @Post("alarm-acks")
+  @RequirePermission(Permission.INCIDENT_ALARM_ACK)
+  acknowledgeAlarm(@Request() req: AuthenticatedRequest, @Body() dto: AlarmAcknowledgementDto) {
+    return this.sim.acknowledgeAlarm(req.user.userId, dto);
   }
 }

@@ -15,10 +15,26 @@ const MAX_RETRY = 6;
 const CATEGORIES = [
   { tag: "amenity", values: ["hospital", "clinic", "doctors", "pharmacy"], group: "health" },
   { tag: "amenity", values: ["school", "college", "university", "kindergarten"], group: "school" },
-  { tag: "amenity", values: ["townhall", "community_centre", "police", "fire_station", "post_office"], group: "civic" },
+  {
+    tag: "amenity",
+    values: ["townhall", "community_centre", "police", "fire_station", "post_office"],
+    group: "civic",
+  },
   { tag: "amenity", values: ["marketplace", "fuel", "bank"], group: "commerce" },
   { tag: "amenity", values: ["place_of_worship"], group: "worship" },
-  { tag: "place", values: ["hamlet", "village", "neighbourhood", "town", "suburb", "quarter", "isolated_dwelling"], group: "place" },
+  {
+    tag: "place",
+    values: [
+      "hamlet",
+      "village",
+      "neighbourhood",
+      "town",
+      "suburb",
+      "quarter",
+      "isolated_dwelling",
+    ],
+    group: "place",
+  },
   { tag: "shop", values: ["*"], group: "commerce" },
   { tag: "tourism", values: ["*"], group: "poi" },
 ];
@@ -27,12 +43,17 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const norm = (s) => (s ?? "").normalize("NFC").trim().toLowerCase();
 
 function bboxOf(geometry) {
-  let minLat = 90, minLng = 180, maxLat = -90, maxLng = -180;
+  let minLat = 90,
+    minLng = 180,
+    maxLat = -90,
+    maxLng = -180;
   const scan = (c) => {
     if (typeof c[0] === "number") {
       const [lng, lat] = c;
-      minLat = Math.min(minLat, lat); maxLat = Math.max(maxLat, lat);
-      minLng = Math.min(minLng, lng); maxLng = Math.max(maxLng, lng);
+      minLat = Math.min(minLat, lat);
+      maxLat = Math.max(maxLat, lat);
+      minLng = Math.min(minLng, lng);
+      maxLng = Math.max(maxLng, lng);
       return;
     }
     for (const x of c) scan(x);
@@ -49,7 +70,10 @@ function buildQuery(bbox) {
       clauses.push(`node["${cat.tag}"]["name"](${b});`, `way["${cat.tag}"]["name"](${b});`);
     } else {
       const re = cat.values.join("|");
-      clauses.push(`node["${cat.tag}"~"^(${re})$"]["name"](${b});`, `way["${cat.tag}"~"^(${re})$"]["name"](${b});`);
+      clauses.push(
+        `node["${cat.tag}"~"^(${re})$"]["name"](${b});`,
+        `way["${cat.tag}"~"^(${re})$"]["name"](${b});`,
+      );
     }
   }
   return `[out:json][timeout:60];(${clauses.join("")});out center tags;`;
@@ -86,7 +110,7 @@ function groupOf(tags) {
 
 const targets = process.argv.slice(2);
 if (!targets.length) {
-  console.error("Cần truyền tên xã, ví dụ: node scripts/patch-daklak-places.mjs \"Hòa Phú\"");
+  console.error('Cần truyền tên xã, ví dụ: node scripts/patch-daklak-places.mjs "Hòa Phú"');
   process.exit(1);
 }
 
@@ -124,7 +148,12 @@ for (const target of targets) {
     if (lat == null || lng == null) continue;
     byId.set(key, {
       type: "Feature",
-      properties: { name: nm, group: groupOf(tags), kind: tags.amenity || tags.shop || tags.tourism || tags.place || "poi", osmId: key },
+      properties: {
+        name: nm,
+        group: groupOf(tags),
+        kind: tags.amenity || tags.shop || tags.tourism || tags.place || "poi",
+        osmId: key,
+      },
       geometry: { type: "Point", coordinates: [Number(lng.toFixed(6)), Number(lat.toFixed(6))] },
     });
     added++;

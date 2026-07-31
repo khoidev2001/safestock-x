@@ -68,7 +68,8 @@ describe("Mission report flow (E2E)", () => {
 
   async function createReport(options?: { requestId?: string; reportText?: string }) {
     const reportText =
-      options?.reportText ?? `${fixturePrefix}${randomUUID()}: Nước lũ dâng nhanh tại điểm tránh trú.`;
+      options?.reportText ??
+      `${fixturePrefix}${randomUUID()}: Nước lũ dâng nhanh tại điểm tránh trú.`;
     fixtureReports.add(reportText);
     const response = await http
       .post("/api/missions/report")
@@ -95,9 +96,9 @@ describe("Mission report flow (E2E)", () => {
     await cleanupFixtures();
 
     adminToken = await login("admin", "admin123@");
-    reporterToken = await login("truongthon@safestock.vn", "reporter123");
+    reporterToken = await login("truongthon@ungphonhanh.life", "reporter123");
     const reporter = await prisma.user.findUniqueOrThrow({
-      where: { email: "truongthon@safestock.vn" },
+      where: { email: "truongthon@ungphonhanh.life" },
     });
     reporterUserId = reporter.id;
     reporterWarehouseId = reporter.warehouseId!;
@@ -113,7 +114,7 @@ describe("Mission report flow (E2E)", () => {
     if (app) await app.close();
   });
 
-  it("REPORTER gửi một report draft và ADMIN nhận đúng một notification", async () => {
+  it("người báo cáo gửi một report draft và ADMIN nhận đúng một notification", async () => {
     const beforeCount = await prisma.mission.count();
     const { missionId, reportText } = await createReport();
 
@@ -152,7 +153,7 @@ describe("Mission report flow (E2E)", () => {
     expect(adminView.body).toMatchObject({ id: missionId, reportText });
   });
 
-  it("REPORTER chỉ được report/parse/transcribe, không được điều phối mission", async () => {
+  it("người báo cáo chỉ được report/parse/transcribe, không được điều phối mission", async () => {
     const { missionId } = await createReport();
 
     await http
@@ -176,7 +177,7 @@ describe("Mission report flow (E2E)", () => {
       .set(auth(reporterToken))
       .send({ incident })
       .expect(403);
-    await http.post(`/api/missions/${missionId}/dispatch`).set(auth(reporterToken)).expect(403);
+    await http.post(`/api/missions/${missionId}/approve`).set(auth(reporterToken)).expect(403);
   });
 
   it("ADMIN phân tích chính report draft, reset dữ liệu dẫn xuất và không tạo mission thứ hai", async () => {
@@ -219,11 +220,12 @@ describe("Mission report flow (E2E)", () => {
     expect(planned.actionPlan).toBeNull();
     expect(planned.explanation).toBeNull();
 
-    const dispatched = await http
-      .post(`/api/missions/${missionId}/dispatch`)
+    // Xã phát hành phương án thẳng tới kho: DRAFT → PENDING_WAREHOUSE.
+    const approved = await http
+      .post(`/api/missions/${missionId}/approve`)
       .set(auth(adminToken))
       .expect(201);
-    expect(dispatched.body.status).toBe("PENDING_RESCUE");
+    expect(approved.body.status).toBe("PENDING_WAREHOUSE");
 
     await http
       .post(`/api/missions/${missionId}/plan-from-report`)
@@ -232,13 +234,13 @@ describe("Mission report flow (E2E)", () => {
       .expect(400);
   });
 
-  it("không dispatch được report thô chưa có phương án", async () => {
+  it("không phát hành được report thô chưa có phương án", async () => {
     const { missionId } = await createReport();
 
-    await http.post(`/api/missions/${missionId}/dispatch`).set(auth(adminToken)).expect(400);
-    await expect(prisma.mission.findUniqueOrThrow({ where: { id: missionId } })).resolves.toMatchObject(
-      { status: "DRAFT" },
-    );
+    await http.post(`/api/missions/${missionId}/approve`).set(auth(adminToken)).expect(400);
+    await expect(
+      prisma.mission.findUniqueOrThrow({ where: { id: missionId } }),
+    ).resolves.toMatchObject({ status: "DRAFT" });
   });
 
   it("retry tuần tự cùng requestId trả cùng mission và không nhân notification", async () => {
@@ -252,7 +254,11 @@ describe("Mission report flow (E2E)", () => {
       incidentLng: incidentPoint.lng,
     };
 
-    const first = await http.post("/api/missions/report").set(auth(reporterToken)).send(payload).expect(201);
+    const first = await http
+      .post("/api/missions/report")
+      .set(auth(reporterToken))
+      .send(payload)
+      .expect(201);
     const second = await http
       .post("/api/missions/report")
       .set(auth(reporterToken))
@@ -261,7 +267,9 @@ describe("Mission report flow (E2E)", () => {
 
     expect(second.body.missionId).toBe(first.body.missionId);
     expect(
-      await prisma.mission.count({ where: { createdByUserId: reporterUserId, reportRequestId: requestId } }),
+      await prisma.mission.count({
+        where: { createdByUserId: reporterUserId, reportRequestId: requestId },
+      }),
     ).toBe(1);
     expect(await prisma.notification.count({ where: { missionId: first.body.missionId } })).toBe(1);
   });
@@ -285,9 +293,13 @@ describe("Mission report flow (E2E)", () => {
     expect(responses.map((response) => response.status)).toEqual([201, 201]);
     expect(responses[0].body.missionId).toBe(responses[1].body.missionId);
     expect(
-      await prisma.mission.count({ where: { createdByUserId: reporterUserId, reportRequestId: requestId } }),
+      await prisma.mission.count({
+        where: { createdByUserId: reporterUserId, reportRequestId: requestId },
+      }),
     ).toBe(1);
-    expect(await prisma.notification.count({ where: { missionId: responses[0].body.missionId } })).toBe(1);
+    expect(
+      await prisma.notification.count({ where: { missionId: responses[0].body.missionId } }),
+    ).toBe(1);
   });
 
   it("chặn report có tọa độ ngoài miền hoặc thiếu nửa cặp", async () => {

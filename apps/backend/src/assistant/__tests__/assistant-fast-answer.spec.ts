@@ -40,7 +40,9 @@ describe("resolveAssistantFastAnswer", () => {
   it("nhắc bổ sung khi vật tư đã cạn", () => {
     const empty: AssistantSnapshot = {
       ...snapshot,
-      stock: [{ sku: "RICE-01", itemName: "Gạo cứu trợ", quantity: 0, unit: "kg", nearestExpiry: null }],
+      stock: [
+        { sku: "RICE-01", itemName: "Gạo cứu trợ", quantity: 0, unit: "kg", nearestExpiry: null },
+      ],
     };
     expect(resolveAssistantFastAnswer("Còn bao nhiêu gạo cứu trợ?", empty)).toBe(
       "Dạ, Kho thôn Phú Xuân hiện còn 0 kg Gạo cứu trợ.\n\n" +

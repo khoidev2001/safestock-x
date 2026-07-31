@@ -30,8 +30,11 @@ import { resolveEnvFilePaths } from "./config/env-file-path";
       envFilePath: resolveEnvFilePaths(),
       validate: validateEnv,
     }),
-    // Serve UI tối thiểu B3 tại /sim.html — public ở apps/backend/public (dist/src → ../../public)
-    ServeStaticModule.forRoot({ rootPath: join(__dirname, "..", "..", "public") }),
+    // Serve trang thông tin API tĩnh từ apps/backend/public (dist/src → ../../public).
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, "..", "..", "public"),
+      exclude: ["/api/{*path}"],
+    }),
     PrismaModule,
     RbacModule,
     AiModule,

@@ -67,7 +67,9 @@ describe("AiClientService observability and redaction", () => {
     const errorLog = jest.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
     global.fetch = jest
       .fn()
-      .mockRejectedValue(new Error("connect failed with token=secret-456 and raw transcript")) as never;
+      .mockRejectedValue(
+        new Error("connect failed with token=secret-456 and raw transcript"),
+      ) as never;
     const service = new AiClientService(config as never);
 
     await expect(

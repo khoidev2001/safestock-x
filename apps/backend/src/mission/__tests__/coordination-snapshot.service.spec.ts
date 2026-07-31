@@ -67,9 +67,11 @@ function makeService() {
   const prisma = {
     mission: { findUnique: jest.fn().mockResolvedValue(mission) },
     warehouse: {
-      findMany: jest.fn().mockResolvedValue([
-        { id: "central", name: "Kho UBND Đồng Xuân", lat: 13.3782, lng: 109.1043 },
-      ]),
+      findMany: jest
+        .fn()
+        .mockResolvedValue([
+          { id: "central", name: "Kho UBND Đồng Xuân", lat: 13.3782, lng: 109.1043 },
+        ]),
     },
     missionAnalysisSnapshot: { create: jest.fn(), update: jest.fn(), delete: jest.fn() },
     missionFieldUpdate: { create: jest.fn(), update: jest.fn(), delete: jest.fn() },
@@ -152,7 +154,10 @@ describe("CoordinationSnapshotService", () => {
     expect(result.analysis.coordination.externalContacts.length).toBeGreaterThan(0);
     expect(result.analysis.coordination.externalContacts).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ availability: "UNKNOWN", disclaimer: EXTERNAL_CONTACT_DISCLAIMER }),
+        expect.objectContaining({
+          availability: "UNKNOWN",
+          disclaimer: EXTERNAL_CONTACT_DISCLAIMER,
+        }),
       ]),
     );
   });
@@ -166,7 +171,9 @@ describe("CoordinationSnapshotService", () => {
     });
 
     expect(result.analysis.forecasts).toEqual(
-      expect.arrayContaining([expect.objectContaining({ horizonHours: 72, status: "UNAVAILABLE", risk: null })]),
+      expect.arrayContaining([
+        expect.objectContaining({ horizonHours: 72, status: "UNAVAILABLE", risk: null }),
+      ]),
     );
   });
 });

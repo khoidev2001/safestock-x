@@ -13,14 +13,7 @@ describe("SimulationService.firstWarehouse", () => {
     assertPermission: jest.fn(),
     assertWarehouseAccess: jest.fn(),
   };
-  const service = new SimulationService(
-    prisma as never,
-    {} as never,
-    {} as never,
-    {} as never,
-    access as never,
-    {} as never,
-  );
+  const service = new SimulationService(prisma as never, {} as never, access as never);
 
   beforeEach(() => jest.clearAllMocks());
 

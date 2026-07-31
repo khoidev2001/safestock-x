@@ -79,10 +79,10 @@ export function supplyProgress(required: number, allocated: number): SupplyProgr
   const ratio = req === 0 ? 1 : Math.min(1, got / req);
 
   if (got >= req && req > 0) {
-    return { status: "FULL", ratio: 1, color: "#22c55e", label: "Đủ" };
+    return { status: "FULL", ratio: 1, color: "#15803d", label: "Đủ" };
   }
   if (got <= 0) {
-    return { status: "MISSING", ratio: 0, color: "#ef4444", label: "Chưa có" };
+    return { status: "MISSING", ratio: 0, color: "#dc2626", label: "Chưa có" };
   }
-  return { status: "PARTIAL", ratio, color: "#f59e0b", label: "Thiếu" };
+  return { status: "PARTIAL", ratio, color: "#C55A06", label: "Thiếu" };
 }

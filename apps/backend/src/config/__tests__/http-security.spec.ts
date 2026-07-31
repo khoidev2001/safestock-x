@@ -49,10 +49,11 @@ describe("HTTP security configuration", () => {
 
     expect(setHeader).toHaveBeenCalledWith("X-Frame-Options", "DENY");
     expect(setHeader).toHaveBeenCalledWith("X-Content-Type-Options", "nosniff");
+    expect(setHeader).toHaveBeenCalledWith("Cache-Control", "private, no-store, max-age=0");
     expect(next).toHaveBeenCalledTimes(1);
 
     setHeader.mockClear();
-    applyApiSecurityHeaders({ path: "/sim.html" } as never, { setHeader } as never, next);
+    applyApiSecurityHeaders({ path: "/" } as never, { setHeader } as never, next);
     expect(setHeader).not.toHaveBeenCalled();
   });
 });

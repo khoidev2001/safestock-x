@@ -43,11 +43,7 @@ export function clearMatchingSavedDraft(
   savedCoordinate: WarehouseCoordinate,
 ): WarehouseDraft {
   const current = draft[warehouseId];
-  if (
-    !current ||
-    current.lat !== savedCoordinate.lat ||
-    current.lng !== savedCoordinate.lng
-  ) {
+  if (!current || current.lat !== savedCoordinate.lat || current.lng !== savedCoordinate.lng) {
     return draft;
   }
   const next = { ...draft };

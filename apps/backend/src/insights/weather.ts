@@ -22,10 +22,7 @@ export interface WeatherAlert {
 @Injectable()
 export class WeatherService {
   private readonly log = new Logger(WeatherService.name);
-  private readonly cache = new Map<
-    string,
-    { value: WeatherAlert; storedAt: number }
-  >();
+  private readonly cache = new Map<string, { value: WeatherAlert; storedAt: number }>();
   private readonly inFlight = new Map<string, Promise<WeatherAlert | null>>();
 
   async forecastRain(lat: number, lng: number): Promise<WeatherAlert | null> {
@@ -64,10 +61,7 @@ export class WeatherService {
       };
       const precipitation = data.daily?.precipitation_sum ?? [];
       const dates = data.daily?.time ?? [];
-      const totalRainMm = precipitation.reduce(
-        (sum, v) => sum + (v ?? 0),
-        0,
-      );
+      const totalRainMm = precipitation.reduce((sum, v) => sum + (v ?? 0), 0);
       return {
         totalRainMm: Math.round(totalRainMm * 10) / 10,
         alert: totalRainMm >= RAIN_ALERT_MM_72H,

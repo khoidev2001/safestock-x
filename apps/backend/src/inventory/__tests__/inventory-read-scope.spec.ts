@@ -28,17 +28,8 @@ describe("mobile/web warehouse read scope", () => {
     expect(inv.listBatches).toHaveBeenCalledWith("warehouse-a", "warehouse-a", "user-1");
     expect(inv.scanBySku).toHaveBeenCalledWith("LIFE-CHILD", "warehouse-a", "user-1");
     expect(inv.listCatalog).toHaveBeenCalledWith("user-1");
-    expect(inv.listTransactions).toHaveBeenCalledWith(
-      "warehouse-a",
-      "warehouse-a",
-      "user-1",
-      50,
-    );
-    expect(inv.transferDestinations).toHaveBeenCalledWith(
-      "warehouse-a",
-      "warehouse-a",
-      "user-1",
-    );
+    expect(inv.listTransactions).toHaveBeenCalledWith("warehouse-a", "warehouse-a", "user-1", 50);
+    expect(inv.transferDestinations).toHaveBeenCalledWith("warehouse-a", "warehouse-a", "user-1");
   });
 
   it("chặn readiness kho khác trước khi query", () => {
@@ -83,10 +74,7 @@ describe("mobile/web warehouse read scope", () => {
     const controller = new ReadinessController(readiness as never, prisma as never);
 
     await expect(
-      controller.get(
-        { user: { userId: "admin-a", warehouseId: null } } as never,
-        "warehouse-b",
-      ),
+      controller.get({ user: { userId: "admin-a", warehouseId: null } } as never, "warehouse-b"),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(readiness.getWarehouseScore).not.toHaveBeenCalled();
   });

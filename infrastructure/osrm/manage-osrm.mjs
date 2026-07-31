@@ -3,11 +3,7 @@ import { readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import {
-  createGraphManifest,
-  sha256File,
-  verifyGraphArtifact,
-} from "./osrm-artifact.mjs";
+import { createGraphManifest, sha256File, verifyGraphArtifact } from "./osrm-artifact.mjs";
 import {
   buildGraphDockerCommands,
   buildOfflineAcceptanceCommand,
@@ -19,10 +15,7 @@ const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(scriptDirectory, "..", "..");
 const dataDirectory = path.resolve(scriptDirectory, "data");
 const composeFile = path.resolve(scriptDirectory, "docker-compose.yml");
-const manifestPath = path.resolve(
-  dataDirectory,
-  "dong-xuan.osrm.manifest.json",
-);
+const manifestPath = path.resolve(dataDirectory, "dong-xuan.osrm.manifest.json");
 const defaultBbox = [108.6, 13.1, 109.3, 13.7];
 const action = process.argv[2];
 const options = parseOptions(process.argv.slice(3));
@@ -86,8 +79,7 @@ async function build() {
 
 async function writeManifest(overrides = {}) {
   const sourcePath = overrides.sourcePath ?? resolveSource();
-  const graphVersion =
-    overrides.graphVersion ?? requiredOption("graph-version");
+  const graphVersion = overrides.graphVersion ?? requiredOption("graph-version");
   const bbox = overrides.bbox ?? parseBbox(options.bbox ?? defaultBbox);
   const sourceMetadata = await loadSourceMetadata(sourcePath);
   const manifest = await createGraphManifest({
@@ -103,9 +95,7 @@ async function writeManifest(overrides = {}) {
 
 async function preflight() {
   if (!existsSync(manifestPath)) {
-    throw new Error(
-      `Thiếu ${path.basename(manifestPath)}. Hãy chạy osrm:build trước.`,
-    );
+    throw new Error(`Thiếu ${path.basename(manifestPath)}. Hãy chạy osrm:build trước.`);
   }
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
   const result = await verifyGraphArtifact(dataDirectory, manifest);

@@ -77,7 +77,10 @@ export async function parseReportExcel(buffer: Buffer): Promise<ReportRow[]> {
 /** Tiêu đề mẫu để FE/tài liệu biết đúng cột. */
 export const REPORT_HEADERS = HEADERS;
 
-async function readSheet(files: { path: string; buffer: () => Promise<Buffer> }[], sheetPath: string) {
+async function readSheet(
+  files: { path: string; buffer: () => Promise<Buffer> }[],
+  sheetPath: string,
+) {
   return parseXml(await readArchiveFile(files, sheetPath));
 }
 
@@ -185,7 +188,7 @@ function parseCell(cellNode: XmlRecord, sharedStrings: string[], dateStyles: boo
 
   if (type === "s") {
     const index = Number(value);
-    return { text: Number.isInteger(index) ? sharedStrings[index] ?? "" : "", isDate: false };
+    return { text: Number.isInteger(index) ? (sharedStrings[index] ?? "") : "", isDate: false };
   }
   if (type === "inlineStr") {
     return { text: extractText(record(cellNode.is)).trim(), isDate: false };
@@ -217,9 +220,7 @@ function parseXml(xml: string): XmlRecord {
 }
 
 function record(value: unknown): XmlRecord {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as XmlRecord)
-    : {};
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as XmlRecord) : {};
 }
 
 function records(value: unknown): XmlRecord[] {
@@ -250,7 +251,10 @@ function extractText(value: XmlRecord): string {
 function columnIndex(reference: string): number | null {
   const match = /^([A-Z]+)\d+$/i.exec(reference);
   if (!match) return null;
-  return [...match[1].toUpperCase()].reduce((column, char) => column * 26 + char.charCodeAt(0) - 64, 0);
+  return [...match[1].toUpperCase()].reduce(
+    (column, char) => column * 26 + char.charCodeAt(0) - 64,
+    0,
+  );
 }
 
 function cell(cells: Map<number, CellValue>, column: number): CellValue {

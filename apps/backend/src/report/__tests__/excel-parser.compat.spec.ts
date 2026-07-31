@@ -34,7 +34,7 @@ describe("SpreadsheetML report parser", () => {
       "xl/_rels/workbook.xml.rels":
         '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>',
       "xl/sharedStrings.xml":
-        '<sst><si><t>WATER-02</t></si><si><t>Nước uống đóng chai</t></si><si><t>thùng</t></si><si><t>GOOD</t></si><si><t>batch-2</t></si></sst>',
+        "<sst><si><t>WATER-02</t></si><si><t>Nước uống đóng chai</t></si><si><t>thùng</t></si><si><t>GOOD</t></si><si><t>batch-2</t></si></sst>",
       "xl/styles.xml":
         '<styleSheet><cellXfs><xf numFmtId="0"/><xf numFmtId="14"/></cellXfs></styleSheet>',
       "xl/worksheets/sheet1.xml":

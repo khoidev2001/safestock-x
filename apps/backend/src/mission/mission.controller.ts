@@ -20,6 +20,7 @@ import { AiClientService } from "../ai/ai-client.service";
 import {
   AdminNoteDto,
   AnalyzeMissionDto,
+  CompleteMissionDto,
   FieldUpdateDto,
   GeneratePlanDto,
   ParseDto,
@@ -136,7 +137,13 @@ export class MissionController {
       dto.incidentLat != null && dto.incidentLng != null
         ? { lat: dto.incidentLat, lng: dto.incidentLng }
         : undefined;
-    return this.missions.planFromReport(id, incident, incidentPoint, actor.userId, actor.warehouseId);
+    return this.missions.planFromReport(
+      id,
+      incident,
+      incidentPoint,
+      actor.userId,
+      actor.warehouseId,
+    );
   }
 
   /** Danh sách nhiệm vụ, lọc theo trạng thái (vd ?status=DEFERRED,REJECTED). */
@@ -158,12 +165,7 @@ export class MissionController {
     @Query("limit") limit?: string,
   ) {
     const parsedLimit = limit == null || limit.trim() === "" ? undefined : Number(limit);
-    return this.missions.listOwnReports(
-      req.user.userId,
-      req.user.warehouseId,
-      cursor,
-      parsedLimit,
-    );
+    return this.missions.listOwnReports(req.user.userId, req.user.warehouseId, cursor, parsedLimit);
   }
 
   /** Chi tiết một báo cáo text thuộc đúng reporter đang đăng nhập. */
@@ -216,11 +218,7 @@ export class MissionController {
     @Request() req: AuthenticatedRequest,
     @Param("requestId") requestId: string,
   ) {
-    return this.warehouseRequestService.prepare(
-      requestId,
-      req.user.userId,
-      req.user.warehouseId,
-    );
+    return this.warehouseRequestService.prepare(requestId, req.user.userId, req.user.warehouseId);
   }
 
   @RequirePermission(Permission.MISSION_APPROVE)
@@ -326,7 +324,10 @@ export class MissionController {
   /** Kho tổng + thôn trong cụm xã (có toạ độ) — cho map ghim điểm nạn trước khi lập phương án. */
   @RequirePermission(Permission.MISSION_VIEW)
   @Get(":warehouseId/warehouses")
-  clusterWarehouses(@Request() req: AuthenticatedRequest, @Param("warehouseId") warehouseId: string) {
+  clusterWarehouses(
+    @Request() req: AuthenticatedRequest,
+    @Param("warehouseId") warehouseId: string,
+  ) {
     return this.missions.listClusterWarehouses(warehouseId, req.user.userId, req.user.warehouseId);
   }
 
@@ -370,6 +371,30 @@ export class MissionController {
   @Post(":id/prepare")
   prepare(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
     return this.missions.prepareByWarehouse(id, req.user.userId, req.user.warehouseId);
+  }
+
+  /**
+   * Bước đóng nhiệm vụ: người đi giao báo kết quả thực tế (READY → COMPLETED).
+   *
+   * Xã phát hành phương án thẳng tới kho, nên hiện trường không tham gia bước
+   * phát hành. Nhưng họ phải đóng được nhiệm vụ, nếu không vật tư đã trừ khỏi
+   * kho mà không ai biết hàng tới nơi hay chưa. Giao thất bại thì service tự
+   * hoàn vật tư về kho trong cùng transaction.
+   */
+  @RequirePermission(Permission.MISSION_CONFIRM)
+  @Post(":id/complete")
+  complete(
+    @Request() req: AuthenticatedRequest,
+    @Param("id") id: string,
+    @Body() dto: CompleteMissionDto,
+  ) {
+    return this.missions.completeByRescue(
+      id,
+      dto.outcome,
+      req.user.userId,
+      dto.note,
+      req.user.warehouseId,
+    );
   }
 
   // ---- helpers ----

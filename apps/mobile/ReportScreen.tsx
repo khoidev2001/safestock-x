@@ -16,7 +16,8 @@ import { c, styles } from "./styles";
 type MicStatus = "idle" | "recording" | "transcribing";
 
 /**
- * Màn báo cáo tình huống cho trưởng thôn (role REPORTER) trên mobile.
+ * Màn báo cáo tình huống, dùng chung cho quản lý kho tại chỗ (kiêm trưởng thôn)
+ * và lực lượng hiện trường: ai đứng tại chỗ xảy ra sự việc thì người đó báo.
  * Mô tả tình huống bằng GÕ TAY hoặc GHI ÂM (voice → PhoWhisper → text) rồi gửi lên
  * cơ quan điều phối. Backend tạo DRAFT + báo ADMIN; admin mở tin trên web sẽ tự
  * phân tích AI. Android APK dùng AudioRecord native; Expo Web dùng Web Audio.
@@ -184,9 +185,7 @@ export function ReportScreen({
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Báo cáo tình huống</Text>
-          <Text style={styles.subtitle}>
-            {user.fullName ?? user.email} · Trưởng thôn
-          </Text>
+          <Text style={styles.subtitle}>{user.fullName ?? user.email} · Trưởng thôn</Text>
         </View>
         <Pressable onPress={onLogout} accessibilityRole="button">
           <Text style={[styles.pillText, { color: c.amber }]}>Đăng xuất</Text>
@@ -233,9 +232,7 @@ export function ReportScreen({
             >
               <Text
                 style={
-                  micStatus === "recording"
-                    ? styles.micButtonTextRecording
-                    : styles.micButtonText
+                  micStatus === "recording" ? styles.micButtonTextRecording : styles.micButtonText
                 }
               >
                 {micLabel}
@@ -280,10 +277,7 @@ export function ReportScreen({
           {detailLoading ? (
             <Text style={styles.reportHistoryEmpty}>Đang tải chi tiết báo cáo…</Text>
           ) : selectedReport ? (
-            <OwnReportDetailPanel
-              report={selectedReport}
-              onBack={() => setSelectedReport(null)}
-            />
+            <OwnReportDetailPanel report={selectedReport} onBack={() => setSelectedReport(null)} />
           ) : (
             <OwnReportHistory
               reports={history}
@@ -340,13 +334,7 @@ function OwnReportHistory({
   );
 }
 
-function OwnReportDetailPanel({
-  report,
-  onBack,
-}: {
-  report: OwnReportDetail;
-  onBack: () => void;
-}) {
+function OwnReportDetailPanel({ report, onBack }: { report: OwnReportDetail; onBack: () => void }) {
   return (
     <View style={styles.reportDetailPanel}>
       <Pressable onPress={onBack} accessibilityRole="button">

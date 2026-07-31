@@ -6,24 +6,6 @@ const valid = {
   JWT_REFRESH_SECRET: "refresh-secret-different",
 };
 
-const validDemo = {
-  ...valid,
-  SAFESTOCK_RUNTIME: "demo",
-  STACK_NAME: "safestock_demo",
-  BIND_ADDRESS: "127.0.0.1",
-  POSTGRES_USER: "safestock_demo",
-  POSTGRES_PASSWORD: "demo-database-password",
-  POSTGRES_DB: "safestock_demo",
-  POSTGRES_PORT: "55434",
-  DATABASE_URL:
-    "postgresql://safestock_demo:demo-database-password@localhost:55434/safestock_demo?schema=public",
-  REDIS_PORT: "56381",
-  REDIS_URL: "redis://localhost:56381",
-  POSTGRES_CONTAINER: "safestock_demo_postgres",
-  API_PORT: "3110",
-  SIMULATION_MUTATION_ENABLED: "true",
-};
-
 describe("validateEnv", () => {
   it("qua khi đủ biến bắt buộc + secret hợp lệ", () => {
     expect(() => validateEnv(valid)).not.toThrow();
@@ -67,70 +49,12 @@ describe("validateEnv", () => {
     },
   );
 
-  it.each(["true", "TRUE"])(
-    "chấp nhận SIMULATION_MUTATION_ENABLED=%p trong runtime demo",
-    (value) => {
-      expect(() => validateEnv({ ...validDemo, SIMULATION_MUTATION_ENABLED: value })).not.toThrow();
-    },
-  );
-
-  it("từ chối bật simulator ngoài runtime demo", () => {
-    expect(() => validateEnv({ ...valid, SIMULATION_MUTATION_ENABLED: "true" })).toThrow(
-      /SAFESTOCK_RUNTIME=demo/,
-    );
-  });
-
-  it("từ chối bật simulator trên database không có tên demo", () => {
-    expect(() =>
-      validateEnv({
-        ...validDemo,
-        POSTGRES_DB: "safestock",
-        DATABASE_URL:
-          "postgresql://safestock_demo:demo-database-password@localhost:55434/safestock?schema=public",
-      }),
-    ).toThrow(/PostgreSQL demo/);
-  });
-
-  it("từ chối Redis vận hành trong runtime demo", () => {
-    expect(() =>
-      validateEnv({
-        ...validDemo,
-        REDIS_PORT: "56380",
-        REDIS_URL: "redis://localhost:56380",
-      }),
-    ).toThrow(/Redis demo/);
-  });
-
-  it.each([
-    "redis://localhost:56381/15",
-    "redis://localhost:56381?source=other",
-    "redis://user:pass@localhost:56381",
-  ])("từ chối Redis demo không đúng endpoint cố định: %s", (REDIS_URL) => {
-    expect(() => validateEnv({ ...validDemo, REDIS_URL })).toThrow(/Redis demo/);
-  });
-
-  it("từ chối cấu hình database không khớp user hoặc port", () => {
-    expect(() => validateEnv({ ...validDemo, POSTGRES_PORT: "55435" })).toThrow(/PostgreSQL demo/);
-  });
-
-  it("từ chối backend demo dùng cổng vận hành", () => {
-    expect(() => validateEnv({ ...validDemo, API_PORT: "3100" })).toThrow(/API_PORT riêng/);
-  });
-
-  it("từ chối demo bind database và Redis ra ngoài loopback", () => {
-    expect(() => validateEnv({ ...validDemo, BIND_ADDRESS: "0.0.0.0" })).toThrow(/BIND_ADDRESS/);
-  });
-
-  it("từ chối runtime không hợp lệ", () => {
-    expect(() => validateEnv({ ...valid, SAFESTOCK_RUNTIME: "staging" })).toThrow(
-      /SAFESTOCK_RUNTIME/,
-    );
+  it("cho phép bật cảm biến trực tiếp trên database hiện tại", () => {
+    expect(() => validateEnv({ ...valid, SIMULATION_MUTATION_ENABLED: "true" })).not.toThrow();
   });
 
   it("bắt production khai báo CORS allowlist thay vì âm thầm chặn web", () => {
-    expect(() => validateEnv({ ...valid, NODE_ENV: "production" })).toThrow(
-      /CORS_ALLOWED_ORIGINS/,
-    );
+    expect(() => validateEnv({ ...valid, NODE_ENV: "production" })).toThrow(/CORS_ALLOWED_ORIGINS/);
     expect(() =>
       validateEnv({
         ...valid,
@@ -146,15 +70,35 @@ describe("validateEnv", () => {
     );
   });
 
-  it.each([
-    "change_me_access",
-    "change_me_refresh",
-    "CHANGE_ME_ACCESS",
-    "your_secret_here",
-  ])("H3: từ chối secret placeholder công khai %p (đủ dài nhưng nằm trong denylist)", (placeholder) => {
-    // Các placeholder này >= 16 ký tự nên chỉ bị chặn nhờ denylist, không nhờ độ dài.
-    expect(placeholder.length).toBeGreaterThanOrEqual(16);
-    expect(() => validateEnv({ ...valid, JWT_ACCESS_SECRET: placeholder })).toThrow(/placeholder/);
+  it.each(["change_me_access", "change_me_refresh", "CHANGE_ME_ACCESS", "your_secret_here"])(
+    "H3: từ chối secret placeholder công khai %p (đủ dài nhưng nằm trong denylist)",
+    (placeholder) => {
+      // Các placeholder này >= 16 ký tự nên chỉ bị chặn nhờ denylist, không nhờ độ dài.
+      expect(placeholder.length).toBeGreaterThanOrEqual(16);
+      expect(() => validateEnv({ ...valid, JWT_ACCESS_SECRET: placeholder })).toThrow(
+        /placeholder/,
+      );
+    },
+  );
+
+  it("từ chối chu kỳ watchdog không phải số giây nguyên", () => {
+    // Gõ nhầm biến này mà vẫn khởi động được thì kho chạy nhưng không ai canh
+    // cảm biến — im lặng nguy hiểm hơn nhiều so với việc chặn ngay lúc boot.
+    expect(() => validateEnv({ ...valid, INCIDENT_WATCHDOG_INTERVAL_SECONDS: "sáu mươi" })).toThrow(
+      /INCIDENT_WATCHDOG_INTERVAL_SECONDS/,
+    );
+    expect(() => validateEnv({ ...valid, INCIDENT_WATCHDOG_INTERVAL_SECONDS: "-5" })).toThrow(
+      /INCIDENT_WATCHDOG_INTERVAL_SECONDS/,
+    );
+    expect(() => validateEnv({ ...valid, INCIDENT_WATCHDOG_INTERVAL_SECONDS: "1.5" })).toThrow(
+      /INCIDENT_WATCHDOG_INTERVAL_SECONDS/,
+    );
+  });
+
+  it("chấp nhận chu kỳ watchdog hợp lệ, kể cả 0 để tắt có chủ đích", () => {
+    expect(() => validateEnv({ ...valid, INCIDENT_WATCHDOG_INTERVAL_SECONDS: "60" })).not.toThrow();
+    expect(() => validateEnv({ ...valid, INCIDENT_WATCHDOG_INTERVAL_SECONDS: "0" })).not.toThrow();
+    expect(() => validateEnv({ ...valid, INCIDENT_WATCHDOG_INTERVAL_SECONDS: "" })).not.toThrow();
   });
 
   it("H3: chấp nhận secret placeholder chỉ khi không nằm trong denylist", () => {

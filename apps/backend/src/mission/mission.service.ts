@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from "@nestjs/common";
 import {
   DeliveryOutcome,
   MissionStatus,
@@ -70,7 +76,11 @@ export class MissionService {
     scopeWarehouseId?: string | null,
   ) {
     await this.assertWarehouseAccess(warehouseId, userId, scopeWarehouseId);
-    const resolved = await this.resolveIncidentLocation(warehouseId, incident.location, incidentPoint);
+    const resolved = await this.resolveIncidentLocation(
+      warehouseId,
+      incident.location,
+      incidentPoint,
+    );
     const plan = await this.computePlan(warehouseId, incident, resolved.point);
     return this.prisma.mission.create({
       data: {
@@ -101,7 +111,13 @@ export class MissionService {
    * đối chiếu. Chỉ áp dụng khi mission còn ở trạng thái nháp. Toạ độ ưu tiên điểm
    * admin ghim; không có thì dùng lại toạ độ trưởng thôn gửi kèm (nếu có).
    */
-  async planFromReport(missionId: string, incident: IncidentInput, incidentPoint?: LatLng, actorUserId?: string, scopeWarehouseId?: string | null) {
+  async planFromReport(
+    missionId: string,
+    incident: IncidentInput,
+    incidentPoint?: LatLng,
+    actorUserId?: string,
+    scopeWarehouseId?: string | null,
+  ) {
     const draft = await this.getMission(missionId, actorUserId, scopeWarehouseId);
     if (!draft) throw new NotFoundException("Không tìm thấy báo cáo");
     if (draft.status !== MissionStatus.DRAFT) {
@@ -383,10 +399,17 @@ export class MissionService {
     assertMissionWarehouseInScope(scopeWarehouseId, mission);
     if (actorUserId) {
       const [actor, warehouse] = await Promise.all([
-        this.prisma.user.findUnique({ where: { id: actorUserId }, select: { organizationId: true } }),
-        this.prisma.warehouse.findUnique({ where: { id: mission.warehouseId }, select: { organizationId: true } }),
+        this.prisma.user.findUnique({
+          where: { id: actorUserId },
+          select: { organizationId: true },
+        }),
+        this.prisma.warehouse.findUnique({
+          where: { id: mission.warehouseId },
+          select: { organizationId: true },
+        }),
       ]);
-      if (!actor || !warehouse || actor.organizationId !== warehouse.organizationId) throw new NotFoundException("Khong tim thay nhiem vu");
+      if (!actor || !warehouse || actor.organizationId !== warehouse.organizationId)
+        throw new NotFoundException("Khong tim thay nhiem vu");
     }
     return mission;
   }
@@ -455,7 +478,10 @@ export class MissionService {
     if (!actorUserId) return;
     const [actor, warehouse] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: actorUserId }, select: { organizationId: true } }),
-      this.prisma.warehouse.findUnique({ where: { id: warehouseId }, select: { organizationId: true } }),
+      this.prisma.warehouse.findUnique({
+        where: { id: warehouseId },
+        select: { organizationId: true },
+      }),
     ]);
     if (!actor || !warehouse || actor.organizationId !== warehouse.organizationId) {
       throw new NotFoundException("Khong tim thay kho");
@@ -484,10 +510,7 @@ export class MissionService {
     }
     this.assertMissionHasIncidentPoint(mission);
     this.assertMissionDispatchable(mission.readinessAssessment, mission._count.requirements);
-    const warehouseIds = missionParticipantWarehouseIds(
-      mission.requirements,
-      mission.warehouseId,
-    );
+    const warehouseIds = missionParticipantWarehouseIds(mission.requirements, mission.warehouseId);
     const warehouseRequests = buildWarehouseRequestCreates(id, mission.requirements);
     const result = await this.prisma.$transaction(async (tx) => {
       const approved = await tx.mission.updateMany({
@@ -549,7 +572,12 @@ export class MissionService {
   }
 
   /** Lưu giải thích AI (proxy từ ai-service) vào nhiệm vụ. */
-  async setExplanation(id: string, explanation: string, actorUserId?: string, scopeWarehouseId?: string | null) {
+  async setExplanation(
+    id: string,
+    explanation: string,
+    actorUserId?: string,
+    scopeWarehouseId?: string | null,
+  ) {
     await this.getMission(id, actorUserId, scopeWarehouseId);
     return this.prisma.mission.update({ where: { id }, data: { explanation } });
   }
@@ -604,10 +632,7 @@ export class MissionService {
     if (!mission) throw new NotFoundException("Không tìm thấy nhiệm vụ");
     assertWarehouseInScope(scopeWarehouseId, mission.warehouseId);
     this.guardTransition(mission.status, MissionStatus.RESCUE_CONFIRMED);
-    const warehouseIds = missionParticipantWarehouseIds(
-      mission.requirements,
-      mission.warehouseId,
-    );
+    const warehouseIds = missionParticipantWarehouseIds(mission.requirements, mission.warehouseId);
     const updated = await this.prisma.$transaction(async (tx) => {
       const claimed = await tx.mission.updateMany({
         where: { id, status: mission.status },
@@ -790,7 +815,13 @@ export class MissionService {
    * Update mission + hoàn kho gói trong CÙNG một transaction: guard COMPLETED→*
    * chặn bấm 2 lần, nên không hoàn kho trùng (retry-safe).
    */
-  async completeByRescue(id: string, outcome: DeliveryOutcome, userId: string, note?: string, scopeWarehouseId?: string | null) {
+  async completeByRescue(
+    id: string,
+    outcome: DeliveryOutcome,
+    userId: string,
+    note?: string,
+    scopeWarehouseId?: string | null,
+  ) {
     const mission = await this.prisma.mission.findUnique({
       where: { id },
       include: { requirements: true },
@@ -854,7 +885,11 @@ export class MissionService {
   }
 
   /** Danh sách nhiệm vụ (lọc theo trạng thái nếu truyền) — mới nhất trước. */
-  async listMissions(statuses?: MissionStatus[], actorUserId?: string, scopeWarehouseId?: string | null) {
+  async listMissions(
+    statuses?: MissionStatus[],
+    actorUserId?: string,
+    scopeWarehouseId?: string | null,
+  ) {
     const actor = actorUserId
       ? await this.prisma.user.findUnique({
           where: { id: actorUserId },
@@ -917,23 +952,29 @@ export class MissionService {
       take: limit + 1,
       include: {
         warehouse: { select: { id: true, name: true } },
-        requirements: { select: { id: true, sku: true, itemName: true, required: true, allocated: true, shortage: true, unit: true } },
+        requirements: {
+          select: {
+            id: true,
+            sku: true,
+            itemName: true,
+            required: true,
+            allocated: true,
+            shortage: true,
+            unit: true,
+          },
+        },
       },
     });
     const hasNext = rows.length > limit;
     const items = hasNext ? rows.slice(0, limit) : rows;
     return {
       items,
-      nextCursor: hasNext ? items[items.length - 1]?.id ?? null : null,
+      nextCursor: hasNext ? (items[items.length - 1]?.id ?? null) : null,
     };
   }
 
   /** Chi tiết báo cáo text của chính trưởng thôn; không trả media/audio/GPS liên tục. */
-  async getOwnReport(
-    missionId: string,
-    actorUserId: string,
-    scopeWarehouseId?: string | null,
-  ) {
+  async getOwnReport(missionId: string, actorUserId: string, scopeWarehouseId?: string | null) {
     const actor = await this.prisma.user.findUnique({
       where: { id: actorUserId },
       select: { organizationId: true },
@@ -948,7 +989,17 @@ export class MissionService {
       },
       include: {
         warehouse: { select: { id: true, name: true } },
-        requirements: { select: { id: true, sku: true, itemName: true, required: true, allocated: true, shortage: true, unit: true } },
+        requirements: {
+          select: {
+            id: true,
+            sku: true,
+            itemName: true,
+            required: true,
+            allocated: true,
+            shortage: true,
+            unit: true,
+          },
+        },
         fieldUpdates: {
           select: { id: true, confirmedText: true, inputMode: true, createdAt: true },
           orderBy: { createdAt: "asc" },
@@ -983,16 +1034,14 @@ export class MissionService {
       }
 
       let preparation =
-        mission.warehousePreparations.find((item) => item.warehouseId === warehouseId) ??
-        null;
+        mission.warehousePreparations.find((item) => item.warehouseId === warehouseId) ?? null;
       // Tương thích mission PENDING_WAREHOUSE đã tồn tại trước khi triển khai bảng tiến độ.
       if (mission.warehousePreparations.length === 0) {
         const participantIds = missionParticipantWarehouseIds(
           mission.requirements,
           mission.warehouseId,
         );
-        const legacyPreparedAt =
-          mission.status === MissionStatus.READY ? new Date() : null;
+        const legacyPreparedAt = mission.status === MissionStatus.READY ? new Date() : null;
         await tx.missionWarehousePreparation.createMany({
           data: participantIds.map((participantWarehouseId) => ({
             missionId: id,
@@ -1008,9 +1057,9 @@ export class MissionService {
         }
       }
       if (!preparation) {
-        throw new BadRequestException(
-          "Kho của bạn không được phân bổ vật tư trong nhiệm vụ này",
-        );
+        // Từ chối truy cập, không phải dữ liệu gửi lên sai: kho này không nằm
+        // trong nhiệm vụ đó. Trả 403 để chặn dò tìm nhiệm vụ của kho khác.
+        throw new ForbiddenException("Kho của bạn không được phân bổ vật tư trong nhiệm vụ này");
       }
 
       // Retry sau khi kho này đã commit là idempotent, kể cả mission còn chờ kho khác.
@@ -1062,13 +1111,7 @@ export class MissionService {
         mission.warehouseId,
       );
       if (items.length > 0) {
-        await this.inventory.bulkExportInTx(
-          tx,
-          userId,
-          items,
-          `Nhiệm vụ ${id}`,
-          warehouseId,
-        );
+        await this.inventory.bulkExportInTx(tx, userId, items, `Nhiệm vụ ${id}`, warehouseId);
       }
 
       // Serialize bước đếm cuối trên mission row để hai kho hoàn tất đồng thời
@@ -1127,7 +1170,9 @@ export class MissionService {
       );
       for (const notification of notifications) {
         if (notification.status === "rejected") {
-          this.log.warn(`Tạo thông báo sau prepare ${id} lỗi: ${errorMessage(notification.reason)}`);
+          this.log.warn(
+            `Tạo thông báo sau prepare ${id} lỗi: ${errorMessage(notification.reason)}`,
+          );
         }
       }
     }
@@ -1225,10 +1270,7 @@ export class MissionService {
     }
   }
 
-  private assertMissionDispatchable(
-    value: Prisma.JsonValue | null,
-    requirementCount: number,
-  ) {
+  private assertMissionDispatchable(value: Prisma.JsonValue | null, requirementCount: number) {
     if (!value || requirementCount === 0) {
       throw new BadRequestException("Chưa thể điều phối báo cáo chưa được lập phương án.");
     }
@@ -1257,7 +1299,11 @@ export class MissionService {
    * (chống LLM bịa) → gom context → LLM viết phần diễn giải → ghép → lưu.
    * LLM lỗi/mất mạng → template fallback (demo không bao giờ trắng màn hình).
    */
-  async generateActionPlan(id: string, actorUserId?: string, scopeWarehouseId?: string | null): Promise<ActionPlan> {
+  async generateActionPlan(
+    id: string,
+    actorUserId?: string,
+    scopeWarehouseId?: string | null,
+  ): Promise<ActionPlan> {
     const mission = await this.prisma.mission.findUnique({
       where: { id },
       include: { requirements: true },
@@ -1333,7 +1379,8 @@ export class MissionService {
     }[];
   }): Promise<WarehouseEta[]> {
     const contributions = warehouseContributionsOf(mission.requirements);
-    if (mission.incidentLat == null || mission.incidentLng == null || contributions.size === 0) return [];
+    if (mission.incidentLat == null || mission.incidentLng == null || contributions.size === 0)
+      return [];
 
     const warehouse = await this.prisma.warehouse.findUnique({
       where: { id: mission.warehouseId },
@@ -1375,7 +1422,11 @@ export class MissionService {
   }
 
   /** Toàn bộ kho (tổng + thôn) trong cụm xã, có toạ độ — cho map ghim điểm nạn (FE-K). */
-  async listClusterWarehouses(warehouseId: string, actorUserId?: string, scopeWarehouseId?: string | null) {
+  async listClusterWarehouses(
+    warehouseId: string,
+    actorUserId?: string,
+    scopeWarehouseId?: string | null,
+  ) {
     assertWarehouseInScope(scopeWarehouseId, warehouseId);
     const warehouse = await this.prisma.warehouse.findUnique({ where: { id: warehouseId } });
     if (!warehouse) throw new NotFoundException("Không tìm thấy kho");
@@ -1563,13 +1614,15 @@ export class MissionService {
 
 interface MissionHamletPrisma {
   hamlet: {
-    findMany(args: unknown): Promise<{
-      id: string;
-      name: string;
-      lat: number | null;
-      lng: number | null;
-      verified: boolean;
-    }[]>;
+    findMany(args: unknown): Promise<
+      {
+        id: string;
+        name: string;
+        lat: number | null;
+        lng: number | null;
+        verified: boolean;
+      }[]
+    >;
   };
 }
 
@@ -1630,17 +1683,15 @@ function missionParticipantWarehouseIds(
   const warehouseIds = new Set<string>();
   for (const requirement of requirements) {
     const allocations =
-      (requirement.allocations as {
-        batchId?: string;
-        qty?: number;
-        warehouseId?: string;
-      }[] | null) ?? [];
+      (requirement.allocations as
+        | {
+            batchId?: string;
+            qty?: number;
+            warehouseId?: string;
+          }[]
+        | null) ?? [];
     for (const allocation of allocations) {
-      if (
-        allocation.batchId &&
-        Number.isFinite(allocation.qty) &&
-        (allocation.qty ?? 0) > 0
-      ) {
+      if (allocation.batchId && Number.isFinite(allocation.qty) && (allocation.qty ?? 0) > 0) {
         warehouseIds.add(allocation.warehouseId ?? sourceWarehouseId);
       }
     }
@@ -1701,7 +1752,11 @@ function warehouseContributionsOf(
     const allocations =
       (requirement.allocations as { warehouseId?: string; qty?: number }[] | null) ?? [];
     for (const allocation of allocations) {
-      if (!allocation.warehouseId || !Number.isFinite(allocation.qty) || (allocation.qty ?? 0) <= 0) {
+      if (
+        !allocation.warehouseId ||
+        !Number.isFinite(allocation.qty) ||
+        (allocation.qty ?? 0) <= 0
+      ) {
         continue;
       }
       const perWarehouse = grouped.get(allocation.warehouseId) ?? new Map();

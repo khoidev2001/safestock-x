@@ -42,9 +42,7 @@ describe("per-SKU warehouse request helpers", () => {
         itemName: "Nước uống",
         unit: "chai",
         requestedQuantity: 3,
-        allocations: [
-          { batchId: "batch-b1", qty: 3, warehouseId: "warehouse-b" },
-        ],
+        allocations: [{ batchId: "batch-b1", qty: 3, warehouseId: "warehouse-b" }],
       },
     ]);
   });
@@ -92,11 +90,7 @@ describe("MissionWarehouseRequestService concurrency", () => {
       },
       $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     };
-    const service = new MissionWarehouseRequestService(
-      prisma as never,
-      {} as never,
-      {} as never,
-    );
+    const service = new MissionWarehouseRequestService(prisma as never, {} as never, {} as never);
 
     await expect(
       service.review("request-1", "admin-1", {
@@ -108,10 +102,9 @@ describe("MissionWarehouseRequestService concurrency", () => {
       expect.objectContaining({
         where: expect.objectContaining({
           id: "request-1",
-          status: { in: [
-            MissionWarehouseRequestStatus.PENDING,
-            MissionWarehouseRequestStatus.ACCEPTED,
-          ] },
+          status: {
+            in: [MissionWarehouseRequestStatus.PENDING, MissionWarehouseRequestStatus.ACCEPTED],
+          },
           preparationClaimToken: null,
           updatedAt: stale.updatedAt,
         }),
@@ -143,10 +136,7 @@ describe("MissionWarehouseRequestService concurrency", () => {
     };
     const missionWarehouseRequest = {
       findFirst: jest.fn().mockResolvedValue(request),
-      updateMany: jest
-        .fn()
-        .mockResolvedValueOnce({ count: 1 })
-        .mockResolvedValueOnce({ count: 1 }),
+      updateMany: jest.fn().mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 1 }),
       count: jest.fn().mockResolvedValueOnce(0).mockResolvedValueOnce(0),
       findUniqueOrThrow: jest.fn().mockResolvedValue(prepared),
     };
@@ -171,9 +161,9 @@ describe("MissionWarehouseRequestService concurrency", () => {
       notifications as never,
     );
 
-    await expect(
-      service.prepare("request-1", "warehouse-user", "warehouse-a"),
-    ).resolves.toEqual(prepared);
+    await expect(service.prepare("request-1", "warehouse-user", "warehouse-a")).resolves.toEqual(
+      prepared,
+    );
     expect(inventory.bulkExportInTx).toHaveBeenCalledWith(
       tx,
       "warehouse-user",

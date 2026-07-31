@@ -2,12 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import {
-  approveReport,
-  getReport,
-  rejectReport,
-  type ReportRow,
-} from "@/lib/report-api";
+import { approveReport, getReport, rejectReport, type ReportRow } from "@/lib/report-api";
 
 export function ReportReviewDialog({
   id,
@@ -27,9 +22,7 @@ export function ReportReviewDialog({
   });
   const action = useMutation({
     mutationFn: (kind: "APPROVE" | "REJECT") =>
-      kind === "APPROVE"
-        ? approveReport(id)
-        : rejectReport(id, rejectNote.trim()),
+      kind === "APPROVE" ? approveReport(id) : rejectReport(id, rejectNote.trim()),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["reports"] }),
@@ -40,9 +33,7 @@ export function ReportReviewDialog({
     },
     onError: (mutationError) =>
       setError(
-        mutationError instanceof Error
-          ? mutationError.message
-          : "Không xử lý được báo cáo.",
+        mutationError instanceof Error ? mutationError.message : "Không xử lý được báo cáo.",
       ),
   });
 
@@ -65,9 +56,7 @@ export function ReportReviewDialog({
       <section className="my-8 w-full max-w-5xl rounded-lg border bg-[var(--surface)] p-5 shadow-2xl">
         <header className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold text-[var(--color-accent)]">
-              BÁO CÁO KIỂM KÊ
-            </p>
+            <p className="text-xs font-semibold text-[var(--color-accent)]">BÁO CÁO KIỂM KÊ</p>
             <h2 className="mt-1 text-xl font-semibold" id="report-review-title">
               Xem trước số liệu trước khi xử lý
             </h2>
@@ -101,18 +90,22 @@ export function ReportReviewDialog({
         ) : (
           <>
             <div className="mt-5 grid gap-2 rounded-md bg-[var(--surface-2)] p-4 text-sm sm:grid-cols-3">
-              <p><b>Kho:</b> {report.data.warehouse?.name ?? report.data.warehouseId}</p>
-              <p><b>Kỳ:</b> {report.data.period}</p>
-              <p><b>Người gửi:</b> {report.data.submittedBy?.fullName ?? "—"}</p>
+              <p>
+                <b>Kho:</b> {report.data.warehouse?.name ?? report.data.warehouseId}
+              </p>
+              <p>
+                <b>Kỳ:</b> {report.data.period}
+              </p>
+              <p>
+                <b>Người gửi:</b> {report.data.submittedBy?.fullName ?? "—"}
+              </p>
             </div>
             <ReportRows rows={report.data.rows ?? []} />
 
             {isAdmin && report.data.status === "PENDING" ? (
               <div className="mt-5 border-t pt-5">
                 <label className="block">
-                  <span className="mb-1.5 block text-sm font-medium">
-                    Lý do nếu từ chối
-                  </span>
+                  <span className="mb-1.5 block text-sm font-medium">Lý do nếu từ chối</span>
                   <textarea
                     className="min-h-20 w-full rounded-md border bg-transparent px-3 py-2"
                     onChange={(event) => setRejectNote(event.target.value)}
@@ -185,9 +178,7 @@ function ReportRows({ rows }: { rows: ReportRow[] }) {
               </td>
               <td className="px-3 py-2">
                 <b className="block">{row.batchCode || "Chưa định danh lô"}</b>
-                <span className="text-xs text-[var(--text-muted)]">
-                  Kệ {row.shelfCode || "—"}
-                </span>
+                <span className="text-xs text-[var(--text-muted)]">Kệ {row.shelfCode || "—"}</span>
               </td>
               <td className="px-3 py-2 text-right font-semibold">{row.quantity}</td>
               <td className="px-3 py-2">{row.unit || "—"}</td>

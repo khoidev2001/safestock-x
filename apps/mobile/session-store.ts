@@ -1,11 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
-import {
-  parseStoredSession,
-  serializeSession,
-  type StoredSession,
-} from "./session-state";
+import { parseStoredSession, serializeSession, type StoredSession } from "./session-state";
 
 const SESSION_KEY = "safestock.mobile.session.v1";
 
@@ -17,9 +13,7 @@ export async function loadStoredSession(): Promise<StoredSession | null> {
   return parseStoredSession(raw);
 }
 
-export async function saveStoredSession(
-  session: StoredSession,
-): Promise<void> {
+export async function saveStoredSession(session: StoredSession): Promise<void> {
   const raw = serializeSession(session);
   if (Platform.OS === "web") {
     await AsyncStorage.setItem(SESSION_KEY, raw);

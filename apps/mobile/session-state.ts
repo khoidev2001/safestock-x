@@ -48,9 +48,7 @@ export function parseStoredSession(value: string | null): StoredSession | null {
         ...(parsed.user.fullName !== undefined
           ? { fullName: optionalString(parsed.user.fullName) }
           : {}),
-        ...(parsed.user.phone !== undefined
-          ? { phone: optionalString(parsed.user.phone) }
-          : {}),
+        ...(parsed.user.phone !== undefined ? { phone: optionalString(parsed.user.phone) } : {}),
         ...(parsed.user.warehouseId !== undefined
           ? { warehouseId: optionalString(parsed.user.warehouseId) }
           : {}),

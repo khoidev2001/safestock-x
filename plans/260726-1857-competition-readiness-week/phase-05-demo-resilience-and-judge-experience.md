@@ -11,18 +11,22 @@ dependencies: [3, 4, 5]
 
 ## Context Links
 
-- [Demo environment manager](../../infrastructure/demo/manage-demo-environment.mjs)
-- [Demo compose verifier](../../infrastructure/demo/verify-demo-compose.mjs)
+- [Desktop simulator](../../apps/desktop/src/renderer/App.tsx)
+- [Simulation API](../../apps/backend/src/simulation/simulation.controller.ts)
 - [Knowledge corpus](../../docs/knowledge/README.md)
 
 ## Overview
 
-Giảm rủi ro sân khấu và làm cho giá trị kỹ thuật nhìn thấy trong 5–7 phút: preflight, reset, timeline, provenance và boundary offline rõ ràng.
+Giảm rủi ro sân khấu và làm cho giá trị kỹ thuật nhìn thấy trong 5–7 phút:
+desktop slider gửi sự kiện cảm biến trực tiếp, timeline, provenance và boundary
+offline rõ ràng. Kịch bản chạy sẵn, runtime demo riêng và reset database không
+nằm trong luồng này.
 
 ## Requirements
 
 - Preflight checks backend, PostgreSQL, Redis, AI health, Ollama models/index, frontend, WebSocket and selected local map layer.
-- Reset is explicit, isolated to demo stack, repeatable and never targets operational `.env` by accident.
+- Sensor input is deliberate from the desktop app and protected by the
+  simulator mutation flag in the single local .env.
 - Preflight/reset/seed kết thúc trước judged flow; terminal được đóng và không xuất hiện lại trừ recovery exercise công bố trước.
 - Timeline shows report → parse → plan → dispatch → confirm → prepare → complete, with readiness before/after and audit IDs.
 - Provenance panel identifies backend/rule/RAG source; LLM cannot alter quantities.
@@ -30,14 +34,14 @@ Giảm rủi ro sân khấu và làm cho giá trị kỹ thuật nhìn thấy tr
 
 ## Related Code Files
 
-- Modify/create: `infrastructure/demo/manage-demo-environment.mjs`, root `package.json` scripts.
+- Modify: desktop simulation controls and the backend simulation API.
 - Modify: frontend command timeline/provenance components and dashboard banner.
 - Modify: map/font loading boundary to make local AI, local tiles and local fonts the default for promised screens.
 - Modify: `docs/HUONG-DAN-CAI-DAT-VA-CHAY.md`, `docs/HUONG-DAN-TEST.md`.
 
 ## Implementation Steps
 
-1. Add `demo:preflight` and `demo:reset` wrappers with confirmation and structured output.
+1. Keep manual desktop slider input and surface its resulting timeline.
 2. Show timeline events from persisted mission/audit state; avoid client-only fabricated progress.
 3. Surface RAG citation/source and rule calculation next to AI narrative.
 4. Add routing-engine health, graph version/checksum and route-not-found status to preflight/UI evidence.
@@ -46,8 +50,7 @@ Giảm rủi ro sân khấu và làm cho giá trị kỹ thuật nhìn thấy tr
 
 ## Todo
 
-- [ ] Preflight returns actionable pass/fail per dependency.
-- [ ] Reset/reseed is isolated and repeatable.
+- [ ] Desktop input returns actionable authorization and connection errors.
 - [ ] Timeline/provenance visible in the main demo path.
 - [ ] Offline/local boundary tested and documented.
 - [ ] No CDN asset is required for the promised flow, or claim is narrowed.
@@ -56,14 +59,15 @@ Giảm rủi ro sân khấu và làm cho giá trị kỹ thuật nhìn thấy tr
 
 ## Success Criteria
 
-- [ ] Two resets produce the same baseline counts and same deterministic incident.
+- [ ] A desktop slider event produces a traceable sensor, readiness and incident reaction.
 - [ ] Judge can trace one quantity to backend/rule and one knowledge answer to RAG citation.
 - [ ] Demo still completes after intentionally stopping Internet, within the documented local boundary.
 
 ## Risk Assessment
 
 - Full-country offline GIS is outside scope. Mitigation: bundle only Đồng Xuân + sáu xã giáp ranh and keep that claim explicit.
-- Reset can destroy wrong data. Mitigation: demo env guard, container identity, explicit confirmation, no production `.env` mutation.
+- Direct sensor input can affect local test data. Mitigation: it remains
+  permission-gated and runs only when an operator enables the flag deliberately.
 
 ## Next Steps
 

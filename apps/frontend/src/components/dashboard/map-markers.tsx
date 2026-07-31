@@ -1,12 +1,4 @@
-import {
-  BuildingFour,
-  ChurchOne,
-  Home,
-  Hospital,
-  School,
-  Shop,
-  Strongbox,
-} from "@icon-park/react";
+import { BuildingFour, ChurchOne, Home, Hospital, School, Shop, Strongbox } from "@icon-park/react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 export type MapMarkerKind =
@@ -99,13 +91,7 @@ export function markerStyle(kind: MapMarkerKind) {
   return MARKER_STYLES[kind];
 }
 
-export function MapMarkerGlyph({
-  kind,
-  size,
-}: {
-  kind: MapMarkerKind;
-  size?: number;
-}) {
+export function MapMarkerGlyph({ kind, size }: { kind: MapMarkerKind; size?: number }) {
   const style = MARKER_STYLES[kind];
   const Icon = style.icon;
   const markerSize = size ?? style.size;

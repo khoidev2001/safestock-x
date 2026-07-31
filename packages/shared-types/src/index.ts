@@ -52,16 +52,19 @@ export enum CirculationStatus {
 }
 
 /**
- * Vai trò người dùng — 3 role (xã thường 1 người phụ trách kho → gộp staff+manager).
- * WAREHOUSE: phụ trách kho, toàn quyền vận hành + thao tác nhạy cảm (tự chịu, hậu kiểm).
- * RESCUE: Lực lượng hiện trường — xem phương án và gửi cập nhật đã xác nhận.
- * ADMIN: quản trị/giám sát — quản lý user, xem toàn bộ nhật ký, hậu kiểm.
+ * Vai trò người dùng — 3 role.
+ *
+ * WAREHOUSE: quản lý kho tại chỗ, KIÊM LUÔN vai trưởng thôn. Một xã chỉ có một
+ * người phụ trách kho, và chính người đó báo cáo tình huống của thôn mình — tách
+ * thành hai tài khoản chỉ tạo thêm việc đăng nhập chứ không thêm quyền kiểm soát.
+ * RESCUE: Lực lượng hiện trường — nhận lệnh, gửi ghi nhận đã xác nhận, và báo
+ * tình huống mới thấy được ngoài thực địa.
+ * ADMIN: quản trị/giám sát — lập và duyệt phương án, quản lý user, hậu kiểm.
  */
 export enum UserRole {
   WAREHOUSE = "WAREHOUSE",
   RESCUE = "RESCUE",
   ADMIN = "ADMIN",
-  REPORTER = "REPORTER", // trưởng thôn — báo cáo tình huống từ hiện trường (mobile)
 }
 
 export const FIELD_FORCE_ROLE_LABEL = "Lực lượng hiện trường" as const;
@@ -70,7 +73,6 @@ export const USER_ROLE_LABELS: Readonly<Record<UserRole, string>> = {
   [UserRole.ADMIN]: "Quản trị xã",
   [UserRole.WAREHOUSE]: "Phụ trách kho",
   [UserRole.RESCUE]: FIELD_FORCE_ROLE_LABEL,
-  [UserRole.REPORTER]: "Trưởng thôn (báo cáo)",
 };
 
 export function userRoleLabel(role: UserRole | string): string {
@@ -94,7 +96,8 @@ export enum Permission {
   MISSION_APPROVE = "mission:approve",
   MISSION_ANALYZE = "mission:analyze", // ADMIN chạy/xem snapshot phân tích AI
   MISSION_SIMULATE = "mission:simulate", // ADMIN chạy What-if tách biệt
-  MISSION_CONFIRM = "mission:confirm", // legacy compatibility; không cấp cho role mới
+  // Lực lượng hiện trường xác nhận nhận lệnh, từ chối kèm lý do, và báo kết quả giao.
+  MISSION_CONFIRM = "mission:confirm",
   MISSION_FIELD_UPDATE = "mission:field_update", // Lực lượng hiện trường gửi ghi nhận đã xác nhận
   MISSION_FULFILL = "mission:fulfill", // WAREHOUSE chuẩn bị + xuất
   NOTIFICATION_VIEW = "notification:view",
@@ -102,6 +105,10 @@ export enum Permission {
   READINESS_VIEW = "readiness:view",
   SIMULATION_VIEW = "simulation:view",
   SIMULATION_MUTATE = "simulation:mutate",
+  // Tắt chuông báo động tại kho. TÁCH khỏi simulation:mutate có chủ đích: chuông
+  // có thể do cảm biến thật kích hoạt, nên người trực kho phải tắt được dù họ
+  // không có quyền bơm số liệu mô phỏng.
+  INCIDENT_ALARM_ACK = "incident:alarm_ack",
   LOAN_MANAGE = "loan:manage",
   WAREHOUSE_MANAGE = "warehouse:manage",
   AUDIT_VIEW = "audit:view",
@@ -129,27 +136,31 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.MISSION_FULFILL, // chuẩn bị + xuất kho theo phương án
     Permission.READINESS_VIEW,
     Permission.SIMULATION_VIEW,
+    Permission.INCIDENT_ALARM_ACK, // người trực kho phải tắt được chuông tại chỗ
     Permission.LOAN_MANAGE,
     Permission.WAREHOUSE_MANAGE,
     Permission.NOTIFICATION_VIEW,
-    Permission.REPORT_SUBMIT, // trưởng thôn gửi báo cáo tháng
+    Permission.REPORT_SUBMIT, // gửi báo cáo kiểm kê tháng
     Permission.REPORT_VIEW,
+    // Kiêm vai trưởng thôn: báo tình huống của thôn mình và xem lại báo cáo đã gửi.
+    Permission.INCIDENT_REPORT_SUBMIT,
+    Permission.INCIDENT_REPORT_VIEW_OWN,
   ],
   [UserRole.RESCUE]: [
-    // Lực lượng hiện trường chỉ nhận thông tin và gửi evidence đã tự xác nhận.
+    // Lực lượng hiện trường: nhận lệnh, xác nhận/từ chối, báo kết quả giao, gửi
+    // evidence đã tự xác nhận, và báo tình huống mới thấy ngoài thực địa.
     Permission.MISSION_VIEW,
+    Permission.MISSION_CONFIRM, // xác nhận nhận lệnh, từ chối, báo kết quả giao
     Permission.MISSION_FIELD_UPDATE,
     Permission.NOTIFICATION_VIEW,
+    // Người đứng tại chỗ xảy ra sự việc phải báo được ngay, không phải gọi điện
+    // nhờ người khác nhập hộ.
+    Permission.INCIDENT_REPORT_SUBMIT,
+    Permission.INCIDENT_REPORT_VIEW_OWN,
   ],
   [UserRole.ADMIN]: [
     // ADMIN có mọi quyền.
     ...Object.values(Permission),
-  ],
-  [UserRole.REPORTER]: [
-    // Trưởng thôn: báo cáo tình huống + xem lại báo cáo text của chính mình + thông báo.
-    Permission.INCIDENT_REPORT_SUBMIT,
-    Permission.INCIDENT_REPORT_VIEW_OWN,
-    Permission.NOTIFICATION_VIEW,
   ],
 };
 

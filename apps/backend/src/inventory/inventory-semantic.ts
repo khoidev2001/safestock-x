@@ -47,7 +47,13 @@ export function lexicalCatalogScore(query: string, candidateText: string): numbe
 }
 
 function meaningfulTokens(value: string): string[] {
-  return [...new Set(normalize(value).split(/[^a-z0-9]+/).filter((token) => token.length >= 2))];
+  return [
+    ...new Set(
+      normalize(value)
+        .split(/[^a-z0-9]+/)
+        .filter((token) => token.length >= 2),
+    ),
+  ];
 }
 
 function normalize(value: string): string {

@@ -5,13 +5,7 @@ import { Pagination, usePagination } from "@/components/shared/pagination";
 import type { InventoryBatch } from "@/lib/dashboard-api";
 
 export type InventoryRowAction =
-  | "IMPORT"
-  | "EXPORT"
-  | "TRANSFER"
-  | "ADJUST"
-  | "RECONCILE"
-  | "CONDITION"
-  | "BORROW";
+  "IMPORT" | "EXPORT" | "TRANSFER" | "ADJUST" | "RECONCILE" | "CONDITION" | "BORROW";
 
 const conditionLabels: Record<string, string> = {
   NEW: "Mới",
@@ -53,7 +47,12 @@ export function InventoryTable({
   const pagination = usePagination(sorted);
 
   if (isLoading) {
-    return <div aria-busy="true" className="h-[360px] animate-pulse rounded-md border bg-[var(--surface)]" />;
+    return (
+      <div
+        aria-busy="true"
+        className="h-[360px] animate-pulse rounded-md border bg-[var(--surface)]"
+      />
+    );
   }
   if (isError) {
     return (
@@ -62,7 +61,10 @@ export function InventoryTable({
         <p className="mt-1 text-sm text-[var(--text-muted)]">
           Dữ liệu chưa được thay bằng danh sách rỗng. Hãy kiểm tra kết nối rồi thử lại.
         </p>
-        <button className="mt-4 rounded-md border px-3 py-2 text-sm font-semibold" onClick={onRetry}>
+        <button
+          className="mt-4 rounded-md border px-3 py-2 text-sm font-semibold"
+          onClick={onRetry}
+        >
           Tải lại
         </button>
       </section>
@@ -86,7 +88,9 @@ export function InventoryTable({
         <div className="flex min-h-48 flex-col items-center justify-center p-6 text-center">
           <ColorIcon name="packageCheck" size={28} tone="green" />
           <p className="mt-3 text-sm font-medium">Kho chưa có lô vật tư</p>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">Dùng “Tiếp nhận lô mới” để bắt đầu.</p>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            Dùng “Tiếp nhận lô mới” để bắt đầu.
+          </p>
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -118,7 +122,9 @@ export function InventoryTable({
                       </p>
                     </td>
                     <td className="px-4 py-3">
-                      {batch.shelf ? `${batch.shelf.zone.code} / ${batch.shelf.code}` : "Chưa xếp kệ"}
+                      {batch.shelf
+                        ? `${batch.shelf.zone.code} / ${batch.shelf.code}`
+                        : "Chưa xếp kệ"}
                     </td>
                     <td className="px-4 py-3">
                       <span className="rounded-md bg-[var(--surface-2)] px-2 py-1 text-xs font-medium">
@@ -137,20 +143,23 @@ export function InventoryTable({
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex max-w-[290px] flex-wrap justify-end gap-1.5">
-                        <button className="rounded border px-2 py-1 text-xs" onClick={() => onPrint(batch)}>
+                        <button
+                          className="rounded border px-2 py-1 text-xs"
+                          onClick={() => onPrint(batch)}
+                        >
                           In QR
                         </button>
                         {actions
                           .filter((action) => allowedActions.includes(action.key))
                           .map((action) => (
-                              <button
-                                className="rounded border px-2 py-1 text-xs hover:border-[var(--color-accent)]"
-                                key={action.key}
-                                onClick={() => onAction(batch, action.key)}
-                              >
-                                {action.label}
-                              </button>
-                            ))}
+                            <button
+                              className="rounded border px-2 py-1 text-xs hover:border-[var(--color-accent)]"
+                              key={action.key}
+                              onClick={() => onAction(batch, action.key)}
+                            >
+                              {action.label}
+                            </button>
+                          ))}
                       </div>
                     </td>
                   </tr>

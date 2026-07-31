@@ -19,10 +19,7 @@ async function main() {
   const seedsByKey = new Map(
     warehouses.map((warehouse) => {
       const seed = hamletSeedFromWarehouse(warehouse);
-      return [
-        `${seed.organizationId}:${seed.communeId}:${seed.normalizedName}`,
-        seed,
-      ] as const;
+      return [`${seed.organizationId}:${seed.communeId}:${seed.normalizedName}`, seed] as const;
     }),
   );
   const existing = await prisma.hamlet.findMany({
@@ -33,9 +30,7 @@ async function main() {
     },
   });
   for (const hamlet of existing) {
-    seedsByKey.delete(
-      `${hamlet.organizationId}:${hamlet.communeId}:${hamlet.normalizedName}`,
-    );
+    seedsByKey.delete(`${hamlet.organizationId}:${hamlet.communeId}:${hamlet.normalizedName}`);
   }
 
   const result = await prisma.hamlet.createMany({

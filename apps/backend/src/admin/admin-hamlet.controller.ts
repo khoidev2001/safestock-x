@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Request, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Request,
+  UseGuards,
+} from "@nestjs/common";
 import {
   ArrayMaxSize,
   IsArray,
@@ -25,10 +35,16 @@ class SaveHamletDto {
   @IsOptional() @IsArray() @ArrayMaxSize(20) @IsString({ each: true }) aliases?: string[];
   @IsOptional()
   @ValidateIf((dto: SaveHamletDto) => dto.lat != null || dto.lng != null)
-  @IsNumber() @Min(-90) @Max(90) lat?: number | null;
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  lat?: number | null;
   @IsOptional()
   @ValidateIf((dto: SaveHamletDto) => dto.lat != null || dto.lng != null)
-  @IsNumber() @Min(-180) @Max(180) lng?: number | null;
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  lng?: number | null;
   @IsOptional() @IsBoolean() verified?: boolean;
 }
 

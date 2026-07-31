@@ -1,4 +1,12 @@
-import { IsInt, IsOptional, IsPositive, IsString, MaxLength, Min, MinLength } from "class-validator";
+import {
+  IsInt,
+  IsOptional,
+  IsPositive,
+  IsString,
+  MaxLength,
+  Min,
+  MinLength,
+} from "class-validator";
 
 export class BorrowDto {
   @IsString()

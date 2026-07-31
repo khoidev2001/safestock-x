@@ -5,14 +5,7 @@ import {
   type BarcodeScanningResult,
   type CameraViewProps,
 } from "expo-camera";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ComponentType,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -73,8 +66,7 @@ interface BatchAction {
   label: string;
 }
 
-const CompatibleCameraView =
-  ExpoCameraView as unknown as ComponentType<CameraViewProps>;
+const CompatibleCameraView = ExpoCameraView as unknown as ComponentType<CameraViewProps>;
 
 const BATCH_ACTIONS: BatchAction[] = [
   { key: "import", label: "Nhập kho" },
@@ -86,13 +78,7 @@ const BATCH_ACTIONS: BatchAction[] = [
   { key: "borrow", label: "Mượn vật tư" },
 ];
 
-export function InventoryScreen({
-  token,
-  user,
-}: {
-  token: string;
-  user: AuthUser;
-}) {
+export function InventoryScreen({ token, user }: { token: string; user: AuthUser }) {
   const [snapshot, setSnapshot] = useState<InventorySnapshot | null>(null);
   const [cacheStoredAt, setCacheStoredAt] = useState<string | null>(null);
   const [section, setSection] = useState<"stock" | "loans">("stock");
@@ -102,9 +88,7 @@ export function InventoryScreen({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [selectedBatch, setSelectedBatch] = useState<InventoryBatch | null>(null);
-  const [selectedAction, setSelectedAction] = useState<InventoryAction | null>(
-    null,
-  );
+  const [selectedAction, setSelectedAction] = useState<InventoryAction | null>(null);
   const [selectedLoan, setSelectedLoan] = useState<LoanRecord | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -164,9 +148,7 @@ export function InventoryScreen({
             setLoading(false);
             return;
           }
-          warehouse =
-            warehouseList.find((option) => option.id === preferredWarehouseId) ??
-            null;
+          warehouse = warehouseList.find((option) => option.id === preferredWarehouseId) ?? null;
           if (!warehouse) {
             throw new Error("Kho đã chọn không còn thuộc đơn vị.");
           }
@@ -176,10 +158,7 @@ export function InventoryScreen({
         const cacheScope = `inventory:${warehouse.id}`;
         if (!snapshotRef.current && !options?.skipCache) {
           try {
-            const cached = await readOfflineCache<InventorySnapshot>(
-              user.id,
-              cacheScope,
-            );
+            const cached = await readOfflineCache<InventorySnapshot>(user.id, cacheScope);
             if (cached) {
               hasCachedData = true;
               snapshotRef.current = cached.data;
@@ -204,7 +183,7 @@ export function InventoryScreen({
       } catch (loadError) {
         setError(
           hasCachedData
-            ? "Không kết nối được máy chủ LAN. Dữ liệu kho đang ở chế độ chỉ đọc."
+            ? "Không kết nối được ungphonhanh.life. Dữ liệu kho đang ở chế độ chỉ đọc."
             : loadError instanceof Error
               ? loadError.message
               : "Không tải được nghiệp vụ kho",
@@ -295,11 +274,7 @@ export function InventoryScreen({
     setSemanticLoading(true);
     setError(null);
     try {
-      const result = await semanticSearchInventory(
-        token,
-        snapshot.warehouse.id,
-        value,
-      );
+      const result = await semanticSearchInventory(token, snapshot.warehouse.id, value);
       setSemanticSkus(result.results.map((item) => item.sku));
       setSuccess(
         result.mode === "EMBEDDING"
@@ -308,9 +283,7 @@ export function InventoryScreen({
       );
     } catch (searchError) {
       setError(
-        searchError instanceof Error
-          ? searchError.message
-          : "Không tìm ngữ nghĩa được vật tư",
+        searchError instanceof Error ? searchError.message : "Không tìm ngữ nghĩa được vật tư",
       );
     } finally {
       setSemanticLoading(false);
@@ -326,11 +299,7 @@ export function InventoryScreen({
     );
   }
 
-  if (
-    !snapshot &&
-    user.role === "ADMIN" &&
-    warehouseOptions.length > 0
-  ) {
+  if (!snapshot && user.role === "ADMIN" && warehouseOptions.length > 0) {
     return (
       <View style={local.chooserScreen}>
         <Text style={local.eyebrow}>PHẠM VI VẬN HÀNH</Text>
@@ -394,15 +363,13 @@ export function InventoryScreen({
               onPress={() => selectWarehouse(warehouse.id)}
               style={[
                 local.warehouseChip,
-                warehouse.id === snapshot.warehouse.id &&
-                  local.warehouseChipActive,
+                warehouse.id === snapshot.warehouse.id && local.warehouseChipActive,
               ]}
             >
               <Text
                 style={[
                   local.warehouseChipText,
-                  warehouse.id === snapshot.warehouse.id &&
-                    local.warehouseChipTextActive,
+                  warehouse.id === snapshot.warehouse.id && local.warehouseChipTextActive,
                 ]}
               >
                 {warehouse.name}
@@ -415,20 +382,14 @@ export function InventoryScreen({
       {offline ? (
         <View style={local.offline} accessibilityRole="alert">
           <Text style={local.offlineTitle}>Ngoại tuyến · chỉ đọc</Text>
-          <Text style={local.offlineText}>
-            Mọi thao tác nhập/xuất/chuyển/hoàn đều đã khóa.
-          </Text>
+          <Text style={local.offlineText}>Mọi thao tác nhập/xuất/chuyển/hoàn đều đã khóa.</Text>
         </View>
       ) : null}
       {error ? <Text style={local.error}>{error}</Text> : null}
       {success ? <Text style={local.success}>{success}</Text> : null}
 
       <View style={local.segment}>
-        <Segment
-          label="Tồn kho"
-          active={section === "stock"}
-          onPress={() => setSection("stock")}
-        />
+        <Segment label="Tồn kho" active={section === "stock"} onPress={() => setSection("stock")} />
         <Segment
           label={`Mượn · trả (${snapshot.loans.length})`}
           active={section === "loans"}
@@ -454,16 +415,11 @@ export function InventoryScreen({
             />
             <Pressable
               disabled={offline || query.trim().length < 2 || semanticLoading}
-              style={[
-                local.aiSearchButton,
-                (offline || query.trim().length < 2) && local.disabled,
-              ]}
+              style={[local.aiSearchButton, (offline || query.trim().length < 2) && local.disabled]}
               onPress={() => void runSemanticSearch()}
               accessibilityRole="button"
             >
-              <Text style={local.aiSearchText}>
-                {semanticLoading ? "…" : "AI"}
-              </Text>
+              <Text style={local.aiSearchText}>{semanticLoading ? "…" : "AI"}</Text>
             </Pressable>
             <Pressable
               style={local.scanButton}
@@ -538,9 +494,7 @@ export function InventoryScreen({
           renderItem={({ item }) => (
             <LoanCard
               loan={item}
-              readOnly={
-                offline || !canPerformInventoryAction(user.role, "return")
-              }
+              readOnly={offline || !canPerformInventoryAction(user.role, "return")}
               onReturn={() => {
                 setError(null);
                 setSuccess(null);
@@ -558,11 +512,7 @@ export function InventoryScreen({
           setQuery(batchCode ?? sku);
           setSemanticSkus(null);
           setScannerOpen(false);
-          setSuccess(
-            batchCode
-              ? `Đã quét SKU ${sku} · lô ${batchCode}`
-              : `Đã quét SKU ${sku}`,
-          );
+          setSuccess(batchCode ? `Đã quét SKU ${sku} · lô ${batchCode}` : `Đã quét SKU ${sku}`);
         }}
         onError={setError}
       />
@@ -621,15 +571,9 @@ function BatchCard({
   readOnly: boolean;
   onAction: (action: InventoryAction) => void;
 }) {
-  const actions = BATCH_ACTIONS.filter((action) =>
-    canPerformInventoryAction(role, action.key),
-  );
+  const actions = BATCH_ACTIONS.filter((action) => canPerformInventoryAction(role, action.key));
   const conditionColor =
-    batch.condition === "DAMAGED"
-      ? c.red
-      : batch.condition === "NEEDS_CHECK"
-        ? c.amber
-        : c.green;
+    batch.condition === "DAMAGED" ? c.red : batch.condition === "NEEDS_CHECK" ? c.amber : c.green;
   return (
     <View style={local.card}>
       <View style={local.cardHead}>
@@ -682,8 +626,7 @@ function LoanCard({
   readOnly: boolean;
   onReturn: () => void;
 }) {
-  const outstanding =
-    loan.quantity - loan.returnedOk - loan.returnedDamaged - loan.lost;
+  const outstanding = loan.quantity - loan.returnedOk - loan.returnedDamaged - loan.lost;
   return (
     <View style={local.card}>
       <Text style={local.sku}>{loan.batch.item.sku}</Text>
@@ -721,16 +664,14 @@ function BatchActionModal({
   onClose: () => void;
   onSuccess: (message: string) => Promise<void>;
 }) {
-  const [quantity, setQuantity] = useState(
-    action === "adjust" ? String(batch.quantity) : "1",
-  );
+  const [quantity, setQuantity] = useState(action === "adjust" ? String(batch.quantity) : "1");
   const [note, setNote] = useState("");
   const [missionId, setMissionId] = useState("");
   const [toShelfId, setToShelfId] = useState("");
   const [applyOverride, setApplyOverride] = useState(false);
-  const [condition, setCondition] = useState<
-    "NEW" | "USED" | "NEEDS_CHECK" | "DAMAGED"
-  >("NEEDS_CHECK");
+  const [condition, setCondition] = useState<"NEW" | "USED" | "NEEDS_CHECK" | "DAMAGED">(
+    "NEEDS_CHECK",
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [requestId] = useState(() => createMutationRequestId("inventory"));
@@ -757,9 +698,7 @@ function BatchActionModal({
   }, [loadDestinations]);
 
   const shelves = (destinationTrees ?? []).flatMap((warehouse) =>
-    warehouse.zones.flatMap((zone) =>
-      zone.shelves.map((shelf) => ({ ...shelf, zone, warehouse })),
-    ),
+    warehouse.zones.flatMap((zone) => zone.shelves.map((shelf) => ({ ...shelf, zone, warehouse }))),
   );
 
   const submit = async () => {
@@ -772,10 +711,7 @@ function BatchActionModal({
       setError("Số lượng phải lớn hơn 0.");
       return;
     }
-    if (
-      (action === "condition" || action === "adjust") &&
-      note.trim().length < 3
-    ) {
+    if ((action === "condition" || action === "adjust") && note.trim().length < 3) {
       setError("Cần ghi lý do ít nhất 3 ký tự.");
       return;
     }
@@ -788,21 +724,9 @@ function BatchActionModal({
     setError(null);
     try {
       if (action === "import") {
-        await importBatch(
-          token,
-          batch.id,
-          numeric,
-          note.trim() || undefined,
-          requestId,
-        );
+        await importBatch(token, batch.id, numeric, note.trim() || undefined, requestId);
       } else if (action === "export") {
-        await exportBatch(
-          token,
-          batch.id,
-          numeric,
-          note.trim() || undefined,
-          requestId,
-        );
+        await exportBatch(token, batch.id, numeric, note.trim() || undefined, requestId);
       } else if (action === "transfer") {
         await transferBatch(
           token,
@@ -824,27 +748,13 @@ function BatchActionModal({
       } else if (action === "adjust") {
         await adjustBatch(token, batch.id, numeric, note.trim(), requestId);
       } else if (action === "condition") {
-        await setBatchCondition(
-          token,
-          batch.id,
-          condition,
-          note.trim(),
-          requestId,
-        );
+        await setBatchCondition(token, batch.id, condition, note.trim(), requestId);
       } else if (action === "borrow") {
-        await borrowBatch(
-          token,
-          batch.id,
-          numeric,
-          missionId.trim() || undefined,
-          requestId,
-        );
+        await borrowBatch(token, batch.id, numeric, missionId.trim() || undefined, requestId);
       }
       await onSuccess(`${actionLabel(action)} thành công cho ${batch.item.sku}.`);
     } catch (submitError) {
-      setError(
-        submitError instanceof Error ? submitError.message : "Thao tác thất bại",
-      );
+      setError(submitError instanceof Error ? submitError.message : "Thao tác thất bại");
     } finally {
       setBusy(false);
     }
@@ -857,24 +767,21 @@ function BatchActionModal({
           <Text style={local.modalEyebrow}>{actionLabel(action)}</Text>
           <Text style={local.modalTitle}>{batch.item.name}</Text>
           <Text style={local.modalMeta}>
-            {batch.item.sku} · lô {batch.batchCode ?? batch.code} · tồn{" "}
-            {batch.quantity}
+            {batch.item.sku} · lô {batch.batchCode ?? batch.code} · tồn {batch.quantity}
           </Text>
 
           {action === "condition" ? (
             <>
               <FieldLabel text="Tình trạng mới" />
               <View style={local.optionWrap}>
-                {(["NEW", "USED", "NEEDS_CHECK", "DAMAGED"] as const).map(
-                  (value) => (
-                    <Option
-                      key={value}
-                      label={conditionLabel(value)}
-                      active={condition === value}
-                      onPress={() => setCondition(value)}
-                    />
-                  ),
-                )}
+                {(["NEW", "USED", "NEEDS_CHECK", "DAMAGED"] as const).map((value) => (
+                  <Option
+                    key={value}
+                    label={conditionLabel(value)}
+                    active={condition === value}
+                    onPress={() => setCondition(value)}
+                  />
+                ))}
               </View>
             </>
           ) : (
@@ -930,17 +837,9 @@ function BatchActionModal({
           {action === "reconcile" ? (
             <Pressable
               onPress={() => setApplyOverride((value) => !value)}
-              style={[
-                local.overrideToggle,
-                applyOverride && { borderColor: c.amber },
-              ]}
+              style={[local.overrideToggle, applyOverride && { borderColor: c.amber }]}
             >
-              <View
-                style={[
-                  local.checkbox,
-                  applyOverride && { backgroundColor: c.amber },
-                ]}
-              />
+              <View style={[local.checkbox, applyOverride && { backgroundColor: c.amber }]} />
               <View style={{ flex: 1 }}>
                 <Text style={local.overrideTitle}>Áp dụng chênh lệch vào tồn</Text>
                 <Text style={local.overrideNote}>
@@ -965,11 +864,7 @@ function BatchActionModal({
           ) : null}
 
           <FieldLabel
-            text={
-              action === "condition" || action === "adjust"
-                ? "Lý do bắt buộc"
-                : "Ghi chú"
-            }
+            text={action === "condition" || action === "adjust" ? "Lý do bắt buộc" : "Ghi chú"}
           />
           <TextInput
             value={note}
@@ -989,9 +884,7 @@ function BatchActionModal({
               onPress={() => void submit()}
               style={[local.primary, busy && local.disabled]}
             >
-              <Text style={local.primaryText}>
-                {busy ? "Đang xử lý…" : "Xác nhận"}
-              </Text>
+              <Text style={local.primaryText}>{busy ? "Đang xử lý…" : "Xác nhận"}</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -1011,8 +904,7 @@ function ReturnLoanModal({
   onClose: () => void;
   onSuccess: (message: string) => Promise<void>;
 }) {
-  const outstanding =
-    loan.quantity - loan.returnedOk - loan.returnedDamaged - loan.lost;
+  const outstanding = loan.quantity - loan.returnedOk - loan.returnedDamaged - loan.lost;
   const [ok, setOk] = useState("0");
   const [damaged, setDamaged] = useState("0");
   const [lost, setLost] = useState("0");
@@ -1037,9 +929,7 @@ function ReturnLoanModal({
       await returnLoan(token, loan.id, { ...input, requestId });
       await onSuccess(`Đã hoàn ${validation.total} ${loan.batch.item.name}.`);
     } catch (submitError) {
-      setError(
-        submitError instanceof Error ? submitError.message : "Không hoàn được phiếu",
-      );
+      setError(submitError instanceof Error ? submitError.message : "Không hoàn được phiếu");
     } finally {
       setBusy(false);
     }
@@ -1065,9 +955,7 @@ function ReturnLoanModal({
               onPress={() => void submit()}
               style={[local.primary, busy && local.disabled]}
             >
-              <Text style={local.primaryText}>
-                {busy ? "Đang xử lý…" : "Xác nhận hoàn"}
-              </Text>
+              <Text style={local.primaryText}>{busy ? "Đang xử lý…" : "Xác nhận hoàn"}</Text>
             </Pressable>
           </View>
         </View>
@@ -1103,19 +991,13 @@ function ReceiveBatchModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [requestId] = useState(() => createMutationRequestId("receive"));
-  const shelves = tree.zones.flatMap((zone) =>
-    zone.shelves.map((shelf) => ({ ...shelf, zone })),
-  );
+  const shelves = tree.zones.flatMap((zone) => zone.shelves.map((shelf) => ({ ...shelf, zone })));
 
   useEffect(() => {
     fetchInventoryCatalog(token)
       .then(setCatalog)
       .catch((loadError) =>
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : "Không tải được danh mục vật tư",
-        ),
+        setError(loadError instanceof Error ? loadError.message : "Không tải được danh mục vật tư"),
       );
   }, [token]);
 
@@ -1129,10 +1011,7 @@ function ReceiveBatchModal({
       setError("Chọn vật tư trong danh mục.");
       return;
     }
-    if (
-      mode === "new" &&
-      [sku, name, categoryName, unit].some((value) => !value.trim())
-    ) {
+    if (mode === "new" && [sku, name, categoryName, unit].some((value) => !value.trim())) {
       setError("Vật tư mới cần SKU, tên, danh mục và đơn vị.");
       return;
     }
@@ -1159,19 +1038,13 @@ function ReceiveBatchModal({
         shelfId,
         batchCode: batchCode.trim(),
         quantity: amount,
-        expiryDate: expiryDate
-          ? new Date(`${expiryDate}T12:00:00`).toISOString()
-          : undefined,
+        expiryDate: expiryDate ? new Date(`${expiryDate}T12:00:00`).toISOString() : undefined,
         note: note.trim() || undefined,
         requestId,
       });
       await onSuccess(`Đã tiếp nhận lô ${batchCode.trim()} và tạo payload QR.`);
     } catch (submitError) {
-      setError(
-        submitError instanceof Error
-          ? submitError.message
-          : "Không tiếp nhận được lô mới",
-      );
+      setError(submitError instanceof Error ? submitError.message : "Không tiếp nhận được lô mới");
     } finally {
       setBusy(false);
     }
@@ -1192,11 +1065,7 @@ function ReceiveBatchModal({
               label="Vật tư có sẵn"
               onPress={() => setMode("existing")}
             />
-            <Option
-              active={mode === "new"}
-              label="Vật tư mới"
-              onPress={() => setMode("new")}
-            />
+            <Option active={mode === "new"} label="Vật tư mới" onPress={() => setMode("new")} />
           </View>
 
           {mode === "existing" ? (
@@ -1217,11 +1086,7 @@ function ReceiveBatchModal({
             <>
               <MobileTextField label="SKU" onChange={setSku} value={sku} />
               <MobileTextField label="Tên vật tư" onChange={setName} value={name} />
-              <MobileTextField
-                label="Danh mục"
-                onChange={setCategoryName}
-                value={categoryName}
-              />
+              <MobileTextField label="Danh mục" onChange={setCategoryName} value={categoryName} />
               <MobileTextField label="Đơn vị tính" onChange={setUnit} value={unit} />
               <Pressable
                 onPress={() => setConsumable((value) => !value)}
@@ -1270,9 +1135,7 @@ function ReceiveBatchModal({
               onPress={() => void submit()}
               style={[local.primary, busy && local.disabled]}
             >
-              <Text style={local.primaryText}>
-                {busy ? "Đang tiếp nhận…" : "Tạo lô"}
-              </Text>
+              <Text style={local.primaryText}>{busy ? "Đang tiếp nhận…" : "Tạo lô"}</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -1333,19 +1196,10 @@ function BulkExportModal({
     setBusy(true);
     setError(null);
     try {
-      await bulkExportBatches(
-        token,
-        chosen,
-        note.trim() || undefined,
-        requestId,
-      );
+      await bulkExportBatches(token, chosen, note.trim() || undefined, requestId);
       await onSuccess(`Đã xuất đồng thời ${chosen.length} lô.`);
     } catch (submitError) {
-      setError(
-        submitError instanceof Error
-          ? submitError.message
-          : "Không xuất được nhiều lô",
-      );
+      setError(submitError instanceof Error ? submitError.message : "Không xuất được nhiều lô");
     } finally {
       setBusy(false);
     }
@@ -1358,9 +1212,7 @@ function BulkExportModal({
           <View style={local.modalContent}>
             <Text style={local.modalEyebrow}>XUẤT KHẨN CẤP</Text>
             <Text style={local.modalTitle}>Xuất nhiều lô nguyên tử</Text>
-            <Text style={local.modalMeta}>
-              Một lô lỗi sẽ rollback toàn bộ danh sách.
-            </Text>
+            <Text style={local.modalMeta}>Một lô lỗi sẽ rollback toàn bộ danh sách.</Text>
           </View>
           <FlatList
             data={batches}
@@ -1472,10 +1324,7 @@ function QrScanner({
         ) : !permission.granted ? (
           <View style={local.center}>
             <Text style={local.errorTitle}>Cần quyền camera để quét QR</Text>
-            <Pressable
-              onPress={() => void requestPermission()}
-              style={local.primary}
-            >
+            <Pressable onPress={() => void requestPermission()} style={local.primary}>
               <Text style={local.primaryText}>Cho phép camera</Text>
             </Pressable>
             <Pressable onPress={onClose} style={local.secondary}>
@@ -1494,10 +1343,7 @@ function QrScanner({
               <Text style={local.scannerTitle}>Đưa QR vật tư vào khung</Text>
               <View style={local.scanFrame} />
               {scanned ? (
-                <Pressable
-                  onPress={() => setScanned(false)}
-                  style={local.primary}
-                >
+                <Pressable onPress={() => setScanned(false)} style={local.primary}>
                   <Text style={local.primaryText}>Quét lại</Text>
                 </Pressable>
               ) : null}
@@ -1522,13 +1368,8 @@ function Segment({
   onPress: () => void;
 }) {
   return (
-    <Pressable
-      onPress={onPress}
-      style={[local.segmentButton, active && local.segmentActive]}
-    >
-      <Text style={[local.segmentText, active && local.segmentTextActive]}>
-        {label}
-      </Text>
+    <Pressable onPress={onPress} style={[local.segmentButton, active && local.segmentActive]}>
+      <Text style={[local.segmentText, active && local.segmentTextActive]}>{label}</Text>
     </Pressable>
   );
 }
@@ -1543,13 +1384,8 @@ function Option({
   onPress: () => void;
 }) {
   return (
-    <Pressable
-      onPress={onPress}
-      style={[local.option, active && local.optionActive]}
-    >
-      <Text style={[local.optionText, active && local.optionTextActive]}>
-        {label}
-      </Text>
+    <Pressable onPress={onPress} style={[local.option, active && local.optionActive]}>
+      <Text style={[local.optionText, active && local.optionTextActive]}>{label}</Text>
     </Pressable>
   );
 }
@@ -1581,10 +1417,7 @@ function ReturnField({
 }
 
 function actionLabel(action: InventoryAction): string {
-  return (
-    BATCH_ACTIONS.find((candidate) => candidate.key === action)?.label ??
-    action
-  );
+  return BATCH_ACTIONS.find((candidate) => candidate.key === action)?.label ?? action;
 }
 
 function conditionLabel(condition: string): string {

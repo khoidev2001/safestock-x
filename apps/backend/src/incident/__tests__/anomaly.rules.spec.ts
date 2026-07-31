@@ -1,4 +1,3 @@
-import { mulberry32 } from "@safestock/scenario-definitions";
 import { detectStatisticalAnomaly, detectPredictiveWarning } from "../anomaly.rules";
 import { RULES, type SensorSignal } from "../incident.rules";
 
@@ -15,11 +14,10 @@ const sig = (over: Partial<SensorSignal>): SensorSignal => ({
 });
 
 describe("detectStatisticalAnomaly", () => {
-  it("should NOT flag false positive on normal scenario noise (base 28, amplitude 0.6, seed 42)", () => {
-    // Dùng đúng tham số nhiễu scenario `normal` — chống báo giả, case quan trọng nhất.
-    const rand = mulberry32(42);
+  it("should NOT flag false positive on stable bounded noise", () => {
+    const offsets = [-0.6, -0.3, 0, 0.3, 0.6];
     const signals: SensorSignal[] = Array.from({ length: 30 }, (_, i) =>
-      sig({ value: +(28 + (rand() * 2 - 1) * 0.6).toFixed(2), occurredAt: at(i * 5) }),
+      sig({ value: 28 + offsets[i % offsets.length], occurredAt: at(i * 5) }),
     );
     const incidents = detectStatisticalAnomaly(signals);
     expect(incidents.find((i) => i.kind === "STAT_ANOMALY")).toBeUndefined();

@@ -1,16 +1,19 @@
 import { StyleSheet } from "react-native";
 
-/** Tông màu khớp dashboard web (nền slate tối, accent amber). */
+/** Bảng màu light mode: nền sáng, tương phản cao và nhất quán với nhận diện xanh/cam. */
 export const c = {
-  bg: "#0f172a",
-  surface: "#1e293b",
-  surfaceAlt: "#334155",
-  border: "#334155",
-  text: "#f1f5f9",
-  muted: "#94a3b8",
-  amber: "#f59e0b",
-  green: "#22c55e",
-  red: "#ef4444",
+  bg: "#FFFFFF",
+  surface: "#FFFFFF",
+  surfaceAlt: "#EEF3F8",
+  border: "#D9E2EC",
+  text: "#102A43",
+  muted: "#62748A",
+  primary: "#0B5FC6",
+  primarySoft: "#E8F1FF",
+  amber: "#EA7A12",
+  amberSoft: "#FFF1E5",
+  green: "#15803D",
+  red: "#DC2626",
 };
 
 export const styles = StyleSheet.create({
@@ -27,6 +30,7 @@ export const styles = StyleSheet.create({
     paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: c.border,
+    backgroundColor: c.surface,
   },
   title: { color: c.text, fontSize: 20, fontWeight: "700" },
   subtitle: { color: c.muted, fontSize: 13, marginTop: 2 },
@@ -36,35 +40,56 @@ export const styles = StyleSheet.create({
   dot: { width: 9, height: 9, borderRadius: 5 },
   pillText: { color: c.muted, fontSize: 12, fontWeight: "600" },
 
-  // Login
-  logo: { color: c.amber, fontSize: 28, fontWeight: "800", marginBottom: 4 },
+  // Đăng nhập
+  loginContainer: {
+    flex: 1,
+    width: "100%",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    paddingVertical: 28,
+  },
+  brandLogo: { width: "100%", height: 168, marginBottom: 18 },
+  restoreLogo: { width: 252, height: 142, marginBottom: 18 },
+  loginCard: {
+    width: "100%",
+    backgroundColor: c.surface,
+    borderColor: c.border,
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: "#17324D",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    elevation: 3,
+  },
   label: {
-    color: c.muted,
+    color: c.text,
     fontSize: 13,
-    fontWeight: "600",
+    fontWeight: "700",
     marginBottom: 6,
     alignSelf: "flex-start",
   },
   input: {
     width: "100%",
-    backgroundColor: c.surface,
+    backgroundColor: c.surfaceAlt,
     borderWidth: 1,
     borderColor: c.border,
-    borderRadius: 10,
+    borderRadius: 12,
     color: c.text,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    marginBottom: 16,
+    marginBottom: 18,
   },
   button: {
     width: "100%",
-    backgroundColor: c.amber,
-    borderRadius: 10,
-    paddingVertical: 14,
+    backgroundColor: c.primary,
+    borderRadius: 12,
+    paddingVertical: 15,
     alignItems: "center",
   },
-  buttonText: { color: "#0f172a", fontSize: 15, fontWeight: "700" },
+  buttonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" },
   errorText: { color: c.red, fontSize: 13, marginBottom: 12, textAlign: "center" },
 
   // ===== Thẻ nhiệm vụ (nổi bật) =====
@@ -77,6 +102,11 @@ export const styles = StyleSheet.create({
     borderColor: c.border,
     marginBottom: 12,
     overflow: "hidden",
+    shadowColor: "#17324D",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
   missionCardNew: { borderColor: c.amber, borderWidth: 1.5 },
   stripe: { width: 6 },
@@ -121,6 +151,11 @@ export const styles = StyleSheet.create({
     borderColor: c.border,
     padding: 14,
     marginBottom: 12,
+    shadowColor: "#17324D",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 1,
   },
   infoCardNew: { borderColor: c.amber, borderWidth: 1.5 },
   infoIcon: { fontSize: 22 },
@@ -193,7 +228,7 @@ export const styles = StyleSheet.create({
     paddingVertical: 4,
     marginBottom: 8,
   },
-  shortSummaryText: { color: "#f87171", fontSize: 12, fontWeight: "800" },
+  shortSummaryText: { color: "#B42318", fontSize: 12, fontWeight: "800" },
   fullSummary: {
     backgroundColor: "rgba(34,197,94,0.16)",
     borderRadius: 8,
@@ -201,7 +236,7 @@ export const styles = StyleSheet.create({
     paddingVertical: 4,
     marginBottom: 8,
   },
-  fullSummaryText: { color: "#4ade80", fontSize: 12, fontWeight: "800" },
+  fullSummaryText: { color: "#167A3D", fontSize: 12, fontWeight: "800" },
 
   supplyCard: {
     flexDirection: "row",
@@ -246,7 +281,7 @@ export const styles = StyleSheet.create({
   },
   supplyQtyStrong: { color: c.text, fontSize: 18, fontWeight: "900" },
   supplyQtyMuted: { color: c.muted, fontSize: 13, fontWeight: "600" },
-  supplyShort: { color: "#f87171", fontSize: 13, fontWeight: "800" },
+  supplyShort: { color: "#B42318", fontSize: 13, fontWeight: "800" },
 
   // Status badge
   statusBadge: { borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, alignItems: "center" },
@@ -294,7 +329,7 @@ export const styles = StyleSheet.create({
   reasonChipText: { color: c.text, fontSize: 13, fontWeight: "600" },
   reasonChipTextActive: { color: "#0f172a", fontSize: 13, fontWeight: "700" },
   reasonInput: {
-    backgroundColor: c.bg,
+    backgroundColor: c.surfaceAlt,
     borderWidth: 1,
     borderColor: c.border,
     borderRadius: 10,
@@ -315,7 +350,7 @@ export const styles = StyleSheet.create({
   },
   actionButtonText: { color: "#0f172a", fontSize: 13, fontWeight: "800" },
 
-  // ===== Màn báo cáo trưởng thôn (REPORTER) =====
+  // ===== Màn báo cáo tình huống (kho tại chỗ + lực lượng hiện trường) =====
   reportScroll: { padding: 16, paddingBottom: 32 },
   reportIntro: { color: c.muted, fontSize: 14, lineHeight: 20, marginBottom: 16 },
   // Ô mô tả tình huống — cao hơn reasonInput, để gõ dài.
@@ -358,7 +393,7 @@ export const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
   },
-  successTitle: { color: "#4ade80", fontSize: 16, fontWeight: "800", marginBottom: 4 },
+  successTitle: { color: "#167A3D", fontSize: 16, fontWeight: "800", marginBottom: 4 },
   successText: { color: c.text, fontSize: 14, lineHeight: 20 },
   reportHistorySection: {
     marginTop: 24,

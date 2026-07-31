@@ -73,13 +73,13 @@ CI clean-checkout và security hardening còn mở trong tài liệu này.
 | Email cảnh báo sự cố | SMTP tùy chọn; gửi tới email cá nhân đúng tổ chức/kho, loại trùng, dùng BCC; `ALERT_EMAIL_TO` chỉ fallback; template không hiển thị điểm tin cậy | `apps/backend/src/mail/`, `apps/backend/src/incident/incident.service.ts`, `.env.example` | Chưa có email verification/outbox/retry bền vững; SMTP lỗi chỉ log và không chặn luồng sự cố |
 | AI diễn giải sự cố | Sự cố rule-based tạo ngay; AI chạy nền để lưu explanation, cập nhật notification và email; AI lỗi vẫn giữ sự cố/email rule-based | `apps/backend/src/incident/incident.context.ts`, `apps/backend/src/incident/__tests__/incident-enrich.spec.ts`, `apps/frontend/src/components/dashboard/incident-view.tsx` | Chưa có bộ redaction/output-safety đầy đủ cho AI service; AI không được quyết định severity hoặc bịa số |
 | Cảnh báo trong trợ lý web | Sau khi query/refetch thấy sự cố đã có AI explanation, dữ liệu được đồng bộ sang bong bóng trợ lý; sự cố nghiêm trọng có thể tự mở cảnh báo | `apps/frontend/src/components/assistant/use-incident-alerts.ts`, `apps/frontend/src/lib/incident-alert-store.ts`, `apps/frontend/src/components/assistant/floating-assistant.tsx` | Incident view vẫn polling; chưa có browser E2E và notification chưa partition theo warehouse |
-| App desktop giả lập cảm biến | Electron app đăng nhập admin demo, chọn backend, xem/chỉnh thiết bị, chạy scenario, theo dõi readiness, incident và log realtime | `apps/desktop/`, lệnh `pnpm desktop:dev` | Chỉ là công cụ demo/test; credentials tài khoản seed đang hard-code trong renderer; chưa được phép ghi production |
+| App desktop giả lập cảm biến | Electron app đăng nhập admin, chọn backend, xem/chỉnh thiết bị, gửi event từ slider, theo dõi readiness, incident và log realtime | `apps/desktop/`, lệnh `pnpm desktop:dev` | Thiết kế đã chốt chuyển sang snapshot có xác nhận, không đẩy khi kéo slider và không dùng push realtime; chưa triển khai toàn bộ |
 | Sensor emit tự kích hoạt incident | Event cảm biến đã persist sẽ lên lịch scan incident debounce 1,2 giây; burst event được gộp, lỗi scan không chặn cập nhật sensor | `apps/backend/src/simulation/simulation.service.ts`, `apps/backend/src/simulation/__tests__/incident-scan-debounce.spec.ts` | Dedupe chỉ chặn sự cố cùng loại/thiết bị còn mở |
-| Biên an toàn simulator | Mutation vận hành mặc định tắt; runtime demo có cấu hình PostgreSQL/Redis/volume/credentials/backend port riêng và launcher guard reset/start | `apps/backend/src/simulation/`, `.env.demo.example`, `infrastructure/docker-compose.yml`, `infrastructure/demo/`, `apps/backend/src/config/env.validation.ts` | Hỗ trợ cấu hình cô lập đã hoàn tất; chưa có biên bản smoke live chạy đồng thời stack vận hành và demo trên máy pilot |
+| Biên an toàn simulator | Mutation mặc định tắt; backend chỉ nhận slider event khi cờ môi trường được bật và actor có quyền | `apps/backend/src/simulation/`, `.env.example`, `apps/backend/src/config/env.validation.ts` | Không có reset hay database demo riêng; operator chịu trách nhiệm dùng database local phù hợp |
 
 Các blocker lịch sử dưới đây đã được xử lý một phần hoặc thay đổi trạng thái; không dùng danh sách này thay cho bảng blocker trong báo cáo readiness hiện tại:
 
-1. Simulator đã có cấu hình runtime demo tách biệt; deployment vận hành vẫn phải giữ mutation flag ở `false`, và pilot còn phải smoke live hai stack đồng thời.
+1. Simulator dùng slider trực tiếp; giữ mutation flag ở `false` ngoài lúc test chủ động và không coi đây là đường ghi dữ liệu production.
 2. Transfer partial đã có transaction/CAS/concurrency coverage; vẫn cần giữ regression khi refactor.
 3. Mission backend đa role đã có state transition/scope tests; web đã có inbox, lọc/ưu tiên theo vai trò và URL `?mission=...`; browser acceptance qua các phiên độc lập vẫn chưa khép kín.
 4. Web loan mapper hiện gửi `{ok, damaged, lost}`; browser contract test vẫn chưa có.
@@ -126,7 +126,7 @@ Phần mềm kho thông thường trả lời kho đang ghi nhận bao nhiêu h�
 - Khép workflow desktop simulator -> APK REPORTER -> web ADMIN -> web/APK WAREHOUSE
   -> APK Lực lượng hiện trường (`RESCUE`) -> web ADMIN
   qua các phiên độc lập và UI nhìn thấy.
-- Mô phỏng cảm biến deterministic, realtime nhưng không gây rủi ro cho dữ liệu production.
+- Mô phỏng cảm biến có xác nhận, tái lập được và không gây rủi ro cho dữ liệu production.
 - Chạy được online qua domain và offline trong LAN với AI local.
 - Có bộ kiểm thử đủ chứng minh quyền, concurrency và workflow chính.
 - Android APK là deliverable bắt buộc: build, cài và test trên thiết bị thật.
@@ -219,22 +219,54 @@ Thứ tự quyết định bắt buộc:
 ### 4.4. Simulator
 
 - Simulator là môi trường demo/test, không phải nguồn được phép tự do sửa tồn production.
-- Production mặc định disable mutation simulator.
-- Nếu bật trong demo mode: permission riêng, warehouse scope, system actor riêng và dữ liệu/tenant tách biệt.
-- Cùng seed phải sinh cùng chuỗi sự kiện.
+- Mutation simulator mặc định tắt.
+- Khi operator bật mutation để test, permission riêng và warehouse scope vẫn được giữ.
+
+Contract source hiện tại:
+
+- Desktop giữ mọi thao tác kéo slider ở bản nháp cục bộ. Chỉ nút **Xác nhận** mới phát gói dữ
+  liệu IoT mà operator đã chỉnh; không phát event trong lúc kéo và không dùng WebSocket để đồng
+  bộ dữ liệu cảm biến sang web.
+- Desktop có hai đường kết nối cùng một contract API: online dùng nguyên URL HTTPS
+  `https://ungphonhanh.life`; khi Internet ngoài tắt nhưng LAN còn hoạt động, split-DNS đưa
+  chính hostname này đến ingress LAN. Đăng nhập và quyền kho áp dụng như nhau ở cả hai đường. Sau đăng nhập, app chỉ
+  hiển thị IoT của kho trong scope tài khoản; client không được tự chọn hay truy cập thiết bị của
+  kho khác.
+- Snapshot có idempotency key, thời điểm operator xác nhận (`observedAt`) và thời điểm backend
+  nhận (`receivedAt`). Backend lưu lịch sử cảm biến để vẽ biểu đồ, Incident và lịch sử gửi email;
+  không duy trì một bản ghi DB riêng cho giá trị IoT/readiness hiện hành. Giá trị hiện hành là
+  trạng thái runtime, có thể dựng lại từ snapshot lịch sử gần nhất khi backend khởi động lại.
+- Desktop phải ghi hàng đợi snapshot bền vững tại máy trước khi thử gửi. Mất kết nối backend chỉ
+  làm chậm đồng bộ, không làm mất lần xác nhận; khi có mạng lại, snapshot được gửi lại idempotent.
+- Desktop dùng bản policy ngưỡng đã cache để bật chuông cục bộ ngay khi snapshot xác nhận vượt
+  ngưỡng; backend lặp lại đánh giá đó với policy có version làm nguồn quyết định Incident/email.
+  Email không thể gửi khi Internet/SMTP không sẵn; Incident và email chờ phải được lưu outbox bền
+  vững, retry sau khi kết nối phục hồi. Email gửi muộn phải nêu rõ `observedAt`, `sentAt` và độ
+  trễ, không được nhầm thời điểm phát hiện với thời điểm chuyển phát.
+- Chuông desktop là mô phỏng IoT chấp hành tại kho: sau khi operator xác nhận snapshot vượt ngưỡng,
+  nó kêu liên tục và chỉ người dùng bấm tắt mới dừng. Hành động tắt được ghi nhận cùng Incident khi
+  kết nối có lại. Chuông vật lý tương lai nhận lệnh/ACK từ gateway LAN; email không phải kênh an
+  toàn duy nhất khi mất Internet.
+- Không có scenario/run hoặc reset dữ liệu.
 
 ### 4.5. Online/offline
 
-- Online: `ungphonhanh.life` qua Cloudflare Tunnel, same-origin web/API.
-- Offline trong LAN: backend, PostgreSQL, Redis, AI Service và Ollama chạy local.
-- Mất LAN ngoài hiện trường: chỉ offline-read; nhập bù bằng quy trình có kiểm soát khi mạng về.
-- Không phụ thuộc CDN cho kịch bản demo offline.
+- Online: Vercel phục vụ web tại `https://ungphonhanh.life`; Cloudflare Worker định tuyến
+  `/api` và `/socket.io` cùng hostname về backend Cloudflare Tunnel.
+- Internet ngoài tắt nhưng LAN còn: split-horizon DNS giữ nguyên `https://ungphonhanh.life`
+  nhưng trả IP private ingress. Ingress phát web Next.js local và định tuyến `/api`/`/socket.io`
+  đến backend local; Backend, PostgreSQL, Redis, AI Service và Ollama đều chạy local. Đây vẫn là
+  kết nối trực tiếp tới backend, không phải offline-write.
+- Mất cả đường tới backend: chỉ snapshot simulator đã bấm **Xác nhận** được giữ ở hàng đợi cục bộ
+  bền vững để gửi idempotent lại khi backend có thể nhận; các mutation vận hành khác vẫn fail-closed.
+- Không phụ thuộc CDN cho giao diện demo offline; CA nội bộ của ingress phải được tin cậy trên
+  client LAN. Xem [runbook hybrid cùng domain](HYBRID-DOMAIN-RUNBOOK.md).
 
 ### 4.6. Quy ước “mọi bước qua UI” cho bài thi
 
 Đây là **release contract bắt buộc**, không phải ưu tiên UX. “Qua UI” nghĩa là giám khảo/operator có thể hoàn tất workflow đã hứa bằng control nhìn thấy trên web, desktop simulator hoặc APK Android: đăng nhập, nhập report, xem lại lịch sử text, mở notification/inbox, phân tích/What-if, ADMIN phát hành phương án, kho tiếp nhận/báo chênh lệch/xuất từng SKU, Lực lượng hiện trường xem phương án và gửi cập nhật đã xác nhận, rồi xem trạng thái cuối. Không dùng curl/Postman, SQL, sửa source/API URL, copy ID ẩn hoặc seed giữa chừng để thay cho thao tác nghiệp vụ.
 
-Được phép trước khi bắt đầu: dùng terminal/launcher để khởi động service, chạy preflight và reset/seed một lần theo runbook; mở desktop simulator vì đây là công cụ demo có UI để phát scenario deterministic. Từ lúc bắt đầu câu chuyện chấm thi đến khi hiện kết quả cuối, mọi nghiệp vụ phải qua UI. Không tính script/API fallback hoặc video dự phòng là bằng chứng hoàn thành UI. Nếu mất LAN, app phải hiển thị stale/offline rõ ràng và không tự xếp hàng mutation.
+Được phép trước khi bắt đầu: dùng terminal/launcher để khởi động service, chạy preflight và reset/seed một lần theo runbook; mở desktop simulator vì đây là công cụ UI để gửi snapshot đã xác nhận. Từ lúc bắt đầu câu chuyện chấm thi đến khi hiện kết quả cuối, mọi nghiệp vụ phải qua UI. Không tính script/API fallback hoặc video dự phòng là bằng chứng hoàn thành UI. Nếu mất LAN, app phải hiển thị stale/offline rõ ràng; chỉ snapshot simulator đã xác nhận được vào hàng đợi cục bộ theo mục 4.4.
 
 Luồng acceptance: (1) desktop simulator phát incident; (2) APK REPORTER gửi report
 text/voice đã xác nhận và mở lại lịch sử; (3) web ADMIN xem bản phân tích AI có
@@ -248,7 +280,7 @@ con người quyết định ngoài ứng dụng.
 
 | Chặng | UI bắt buộc | Bằng chứng pass | Không được dùng để thay thế |
 |---|---|---|---|
-| Khởi tạo tình huống | Desktop simulator | Scenario/incident xuất hiện và trạng thái realtime đổi | Gọi API phát event sau khi demo đã bắt đầu |
+| Khởi tạo tình huống | Desktop simulator | Bấm Xác nhận snapshot, chuông cục bộ và Incident/email được xử lý theo trạng thái kết nối | Gọi API phát event sau khi demo đã bắt đầu |
 | Báo cáo hiện trường | APK REPORTER | Gửi text hoặc voice→text đã xác nhận, thấy report reference | Insert DB, curl/Postman, voice không cho xem/sửa hoặc không có fallback gõ |
 | Phân tích/What-if | Web ADMIN | Xem provenance, dữ liệu thiếu, nhu cầu, kho-tuyến, dự báo; nhập giả định tự nhiên và thấy delta so với baseline | Cho LLM tự bịa số, ghi giả định vào dữ liệu thật, gọi API/script mô phỏng ngoài UI |
 | Điều phối | Web ADMIN | Hệ thống tự chọn/ghép kho nội xã, xem tuyến rồi ADMIN duyệt và dispatch | AI tự duyệt/dispatch, tự chọn người, tạo điểm ngẫu nhiên, copy/paste ID, mở URL ID chuẩn bị trước, chạy seed giữa luồng |
@@ -432,7 +464,7 @@ E2E vẫn là điều kiện nghiệm thu MVP/production.
 - [x] Có mission inbox, tìm kiếm, filter đang xử lý/đã kết thúc và ưu tiên việc theo ADMIN/RESCUE/WAREHOUSE.
 - [x] Web notification deep-link tới URL mission cụ thể; selection không còn chỉ nằm trong RAM.
 - [ ] Browser acceptance chứng minh F5, tab mới và logout/login vẫn mở lại mission bằng inbox/notification của đúng actor.
-- [ ] REPORTER, ADMIN, RESCUE, WAREHOUSE hoàn thành workflow qua phiên độc lập; desktop simulator là UI khởi tạo scenario.
+- [ ] REPORTER, ADMIN, RESCUE, WAREHOUSE hoàn thành workflow qua phiên độc lập; desktop simulator là UI gửi event khởi tạo.
 - [ ] REPORTER submit/history trả reference hoặc lỗi/retry rõ; RESCUE reconnect
   ở chế độ chỉ đọc và WAREHOUSE prepare SKU không được false success.
 - [ ] ADMIN nhìn thấy trạng thái, readiness và audit cuối sau khi mọi SKU kho đã `PREPARED`.
@@ -449,23 +481,22 @@ E2E vẫn là điều kiện nghiệm thu MVP/production.
 
 ### 5.6. Simulator, realtime và incident
 
-- [x] Có virtual device, scenario deterministic, runner và event timeline.
+- [x] Có virtual device, snapshot xác nhận idempotent và event timeline lịch sử.
 - [x] Có rule incident, evidence, anomaly và predictive warning.
-- [x] Sensor event đã persist tự kích hoạt incident scan nền có debounce; không chặn luồng emit khi scan lỗi.
-- [x] App desktop Electron có điều khiển thiết bị/scenario, readiness, incident và log realtime cho demo local.
-- [x] Sự cố mới được AI diễn giải nền, lưu explanation, cập nhật notification/email; AI lỗi vẫn giữ cảnh báo rule-based.
-- [x] Email sự cố hỗ trợ SMTP, người nhận theo profile + organization/warehouse scope, BCC và fallback vận hành.
+- [x] Snapshot đã persist kích hoạt incident scan nền; lỗi enrich không làm mất Incident/outbox.
+- [x] App desktop Electron có bản nháp slider, nút Xác nhận, hàng chờ cục bộ, chuông thủ công và log xác nhận.
+- [x] Sự cố mới được AI diễn giải nền, lưu explanation, cập nhật notification; AI lỗi vẫn giữ cảnh báo rule-based.
+- [x] Email sự cố hỗ trợ SMTP, người nhận theo profile + organization/warehouse scope, BCC, outbox retry và timestamps phát hiện/nhận/gửi.
 - [x] Web hiển thị explanation và đưa sự cố vào bong bóng trợ lý sau khi query/refetch thấy bản AI enrichment.
-- [x] Simulator mutation mặc định khóa trong runtime vận hành; permission/scope riêng và cấu hình runtime demo cô lập đã có.
-- [ ] Next.js có play/pause/reset/x1/x10 và chỉnh thiết bị; hiện panel chủ yếu read-only.
+- [x] Simulator mutation mặc định khóa; chỉ snapshot bấm Xác nhận mới gửi khi operator bật cờ và có quyền.
+- [x] Web panel chỉ đọc; thao tác test cảm biến thuộc app desktop.
 - [x] Socket.IO handshake xác thực access JWT; role/warehouse room do server cấp từ assignment DB, client không tự join.
 - [ ] Readiness/incident UI subscribe realtime đúng kho.
 - [ ] Incident view có detail, evidence timeline và acknowledge/resolve đúng permission;
   không có action phân công lực lượng cứu hộ.
 - [ ] Redaction, prompt-injection defense và output-safety test cho AI explain-incident hoàn chỉnh.
-- [ ] `sim.html` không dùng CDN/credential hard-code nếu còn dùng cho demo.
 
-**Verdict:** demo path đã có app desktop, phản ứng sensor -> readiness/incident và cấu hình runtime demo cô lập. Đây là mức implementation/config; live pilot dual-stack smoke, session revocation và hardening mạng vẫn chưa nghiệm thu.
+**Verdict:** desktop gửi snapshot xác nhận -> lịch sử/readiness/incident/email outbox qua backend đang cấu hình. Đây là công cụ test chủ động; không có runtime demo riêng hoặc kịch bản tự chạy.
 
 ### 5.7. Normal Mode, assistant và report
 
@@ -528,7 +559,6 @@ E2E vẫn là điều kiện nghiệm thu MVP/production.
 | Production dependency audit | Pass: 0 critical, 0 high, 0 moderate, 0 low (`pnpm audit --prod --audit-level=low`) |
 | Backend coverage | Chưa chạy lại ngày 2026-07-22; số audit 2026-07-21 là 69,44% statements; 60,42% branches; 65,35% functions; 69,38% lines |
 | Shared types build | Pass |
-| Scenario definitions build | Pass |
 | Backend build | Pass |
 | Frontend production build | Pass |
 | Desktop typecheck/build | Pass (`tsc --noEmit`, `electron-vite build`) |
@@ -603,18 +633,18 @@ scope, retry/concurrency test và progress trên màn mission. Web inbox/deep-li
 Bản phân tích AI mới, What-if, Trợ lý hiện trường, browser acceptance qua các phiên
 độc lập, notification partition đúng actor và các bước APK vẫn là blocker mở.
 
-### 7.3. Workflow simulator demo
+### 7.3. Workflow slider desktop
 
 ```text
-ADMIN bật demo mode
-  -> chọn kho/scenario/seed
-  -> play/pause/x10/reset
+ADMIN bật SIMULATION_MUTATION_ENABLED trên local
+  -> mở app desktop và chọn kho
+  -> kéo slider cảm biến
   -> event realtime đúng room
   -> Readiness/incident đổi dưới 2 giây
-  -> reset đưa dữ liệu demo về trạng thái biết trước
+  -> tắt mutation sau khi kết thúc
 ```
 
-Hiện trạng: **Một phần**. App desktop đã có slider thiết bị, chạy scenario x1/x10, reset, WebSocket auth và quan sát Readiness/incident; cấu hình demo đã tách database/Redis/volume/credentials/backend port khỏi vận hành. Chưa nghiệm thu live hai stack đồng thời, pause, Next.js control đầy đủ, portable package hoặc Ollama/SMTP live.
+Hiện trạng: **Một phần**. App desktop có slider thiết bị, WebSocket auth và quan sát Readiness/incident. Chưa nghiệm thu portable package hoặc Ollama/SMTP live.
 
 ### 7.4. Workflow online/offline pilot
 
@@ -673,14 +703,14 @@ Hiện trạng: **Chưa nghiệm thu**.
 
 Điều kiện thoát P1:
 
-- Terminal/launcher chỉ dùng startup/preflight/reset trước lúc chấm; đóng trước bước scenario và không reset/reseed/restart giữa core flow, trừ recovery exercise được công bố.
+- Terminal/launcher chỉ dùng startup/preflight/reset trước lúc chấm; đóng trước bước slider và không reset/reseed/restart giữa core flow, trừ recovery exercise được công bố.
 - Browser automation ADMIN/WAREHOUSE chỉ là web subgate; không thay full live acceptance gồm desktop simulator và APK REPORTER/RESCUE/WAREHOUSE.
-- Bốn tài khoản REPORTER/ADMIN/RESCUE/WAREHOUSE chạy trọn workflow; REPORTER/RESCUE dùng APK, WAREHOUSE được kiểm tra cả web và APK, ADMIN dùng web context độc lập, desktop simulator phát scenario.
+- Bốn tài khoản REPORTER/ADMIN/RESCUE/WAREHOUSE chạy trọn workflow; REPORTER/RESCUE dùng APK, WAREHOUSE được kiểm tra cả web và APK, ADMIN dùng web context độc lập, desktop simulator gửi event từ slider.
 - Mỗi role tìm lại cùng mission từ inbox/notification sau F5, tab mới, logout/login hoặc app restart; không copy mission ID.
 - Lỗi submit/history report, WebSocket reconnect, cập nhật hiện trường và WAREHOUSE prepare SKU phải hiển thị rõ, không thành success/empty giả.
 - Sau khi mọi SKU kho đã `PREPARED`, web ADMIN thấy mission `READY`, readiness và audit cuối.
 - Workflow kho thường ngày dùng được từ UI, không cần script/API thủ công.
-- Demo simulator không chạm dữ liệu production.
+- Desktop slider không dùng trên dữ liệu production.
 
 ### P2 - Hoàn thiện contract sản phẩm và test
 
@@ -718,7 +748,7 @@ Hiện trạng: **Chưa nghiệm thu**.
 - [ ] Secret production ngoài Git; bỏ credential demo/hard-code.
 - [ ] Backup retry/checksum/retention; restore drill ghi nhận RPO/RTO.
 - [ ] Reboot test toàn bộ Windows services, Docker, AI và Ollama.
-- [ ] Smoke live đồng thời runtime vận hành và demo trên máy pilot; xác nhận runtime vận hành giữ `SIMULATION_MUTATION_ENABLED=false`, demo dùng cổng 3110 và không chia sẻ dữ liệu/volume.
+- [ ] Smoke desktop slider trên môi trường local đã bật `SIMULATION_MUTATION_ENABLED=true`; xác nhận tắt lại sau test và không dùng trên dữ liệu production.
 - [ ] Online/LAN/offline/recovery acceptance test.
 - [ ] Offline tiles/package không phụ thuộc CDN.
 - [ ] Scan cổng public chỉ có thể tick sau khi triển khai đúng hạ tầng pilot; dependency audit production đã sạch.
@@ -788,7 +818,7 @@ kho ngày thường tại mục 1.1.
 - [ ] Readiness nêu đúng blocker, lý do, hành động và unknown state.
 - [ ] Mission bốn role chạy qua UI/phiên độc lập, không mất state khi refresh, relogin, tab mới hoặc APK restart.
 - [ ] Fulfillment không double-export và đúng warehouse scope.
-- [ ] Simulator demo realtime, reproducible và không sửa production stock.
+- [ ] Diễn tập Simulator theo runbook: xác nhận, queue offline, polling web, chuông và email outbox; không sửa production stock.
 - [ ] APK Android REPORTER/Lực lượng hiện trường chạy trên thiết bị thật qua private LAN khi public Internet tắt.
 - [ ] ADMIN cấu hình trước marker thôn và marker kho; nhập tên thôn resolve đúng điểm, không tạo tọa độ ngẫu nhiên.
 - [ ] Bản phân tích AI biến text/voice tự nhiên thành bản tham mưu có provenance,
@@ -837,7 +867,6 @@ kho ngày thường tại mục 1.1.
 | `apps/ai-service` | Parse/narrative bằng Gemini/Ollama | `pnpm ai:dev` | Mục 5.7 và P2 |
 | `apps/mobile` | App Android hiện trường | `pnpm mobile:dev`, `pnpm --filter @safestock/mobile android:release` | Mục 5.8 và P4 |
 | `packages/shared-types` | Enum/type/permission contract dùng chung | build theo workspace | Phải đổi cùng public contract |
-| `packages/scenario-definitions` | Scenario deterministic | build theo workspace | Mục 5.6 |
 | `infrastructure` | Docker, tunnel, Windows services, backup/offline | `pnpm infra:up` | P3 |
 
 ### 11.2. Nội dung roadmap backend đã hấp thụ
@@ -860,7 +889,7 @@ Còn phải làm hoặc chứng minh:
 
 - Inventory CRUD/write workflow, adjust/reconcile và mutation error handling.
 - Mission inbox, stable route, deep-link và bốn phiên role độc lập; REPORTER/RESCUE dùng APK, ADMIN/WAREHOUSE dùng web.
-- Simulator controls trên Next.js; app desktop đã có control và quan sát realtime nhưng chưa thay thế workflow role-facing trên web.
+- Simulator controls trên Next.js; app desktop đã có control xác nhận, hàng chờ và chuông, còn web là viewer poll theo scope.
 - Permission-aware navigation.
 - Readiness theo zone/shelf nếu cần cho quyết định vận hành.
 - Voice input, readiness trước/sau, PDF và presentation health view là P4/polish; không chặn P0.
@@ -913,7 +942,7 @@ Plan/audit/work-log lịch sử đã được loại khỏi gói source dự thi
 ### 13.1. Ngày 2026-07-27
 
 1. Thiết bị thi chính là Samsung Galaxy S23 Ultra, cài bản cập nhật ổn định mới nhất tại buổi rehearsal; biên bản rehearsal phải lưu phiên bản Android, One UI và build cụ thể. APK release ký bằng local keystore riêng của dự án, không dùng debug signing.
-2. Digital Twin/IoT chỉ áp dụng cho kho trung tâm. Desktop simulator dùng cho demo/test: chỉnh thiết bị phải phát realtime sang web/mobile; khi vượt ngưỡng, rule tạo incident ngay, AI làm giàu cảnh báo cho trợ lý và email. Kho thôn không có thiết bị IoT, vận hành nhập/xuất/chuyển/kiểm kê bằng web/mobile và không bị trừ Readiness vì thiếu cảm biến. Production không bật mutation simulator; phần cứng thật tương lai chỉ nối tại kho trung tâm.
+2. Digital Twin/IoT chỉ áp dụng cho kho trung tâm. Operator kéo ở bản nháp rồi bấm **Xác nhận** để gửi snapshot IoT idempotent; online và Internet-off/LAN đều dùng `https://ungphonhanh.life` qua public routing hoặc split-DNS ingress tương ứng. Đăng nhập chỉ hiển thị IoT thuộc kho trong scope tài khoản; web đọc trạng thái qua API polling, không nhận luồng cảm biến realtime. Khi vượt ngưỡng, chuông desktop kêu tại chỗ, backend tạo Incident và gửi hoặc xếp hàng email tùy kết nối SMTP. Kho thôn không có thiết bị IoT, vận hành nhập/xuất/chuyển/kiểm kê bằng web/mobile và không bị trừ Readiness vì thiếu cảm biến. Production không bật mutation simulator; phần cứng thật tương lai chỉ nối tại kho trung tâm.
 3. Mỗi tài khoản WAREHOUSE chỉ prepare/fulfill phần allocation thuộc kho được gán; không được vận hành thay cả cụm xã.
 4. Offline tiles và OSRM graph Đồng Xuân/vùng đệm được prebuild, gắn version/checksum và đóng gói cùng release; máy pilot không build graph trong lúc demo.
 5. Liên hệ Đồng Xuân và sáu xã lân cận là thông tin công khai phục vụ người dân và điều phối thủ công. Chủ dự án đã xác minh trực tiếp các số hiện có là số của Chủ tịch UBND xã; trang `/contacts` hiển thị không cần đăng nhập. Bốn số đã xác minh có fallback trong registry code và có thể được ghi đè bằng biến môi trường; xã chưa có số giữ `null`. OSM/Google Maps chỉ là provenance vị trí, không phải nguồn số điện thoại hay cam kết tồn kho.

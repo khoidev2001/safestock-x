@@ -12,10 +12,7 @@ test("Metro uses Expo's monorepo-aware defaults", () => {
   delete require.cache[configPath];
   const config = mobileRequire("./metro.config.js");
   const workspaceRoot = path.resolve(mobileRoot, "../..");
-  const configSource = readFileSync(
-    path.join(mobileRoot, "metro.config.js"),
-    "utf8",
-  );
+  const configSource = readFileSync(path.join(mobileRoot, "metro.config.js"), "utf8");
 
   assert.equal(
     config.server?.unstable_serverRoot,

@@ -37,19 +37,13 @@ export interface MonthlyReportDraftRow extends Omit<MonthlyReportRow, "quantity"
   countedQuantity: string;
 }
 
-export function buildMonthlyReportRows(
-  batches: MonthlyReportBatch[],
-): MonthlyReportRow[] {
+export function buildMonthlyReportRows(batches: MonthlyReportBatch[]): MonthlyReportRow[] {
   return batches
     .filter((batch) => batch.item.sku.trim() && batch.id.trim())
     .map((batch) => {
       const outstanding = (batch.loans ?? []).reduce(
         (total, loan) =>
-          total +
-          Math.max(
-            0,
-            loan.quantity - loan.returnedOk - loan.returnedDamaged - loan.lost,
-          ),
+          total + Math.max(0, loan.quantity - loan.returnedOk - loan.returnedDamaged - loan.lost),
         0,
       );
       return {
@@ -73,9 +67,7 @@ export function buildMonthlyReportRows(
     );
 }
 
-export function buildMonthlyReportDraft(
-  batches: MonthlyReportBatch[],
-): MonthlyReportDraftRow[] {
+export function buildMonthlyReportDraft(batches: MonthlyReportBatch[]): MonthlyReportDraftRow[] {
   return buildMonthlyReportRows(batches).map(({ quantity, ...row }) => ({
     ...row,
     systemQuantity: quantity,
@@ -83,16 +75,12 @@ export function buildMonthlyReportDraft(
   }));
 }
 
-export function finalizeMonthlyReportDraft(
-  draft: MonthlyReportDraftRow[],
-): MonthlyReportRow[] {
+export function finalizeMonthlyReportDraft(draft: MonthlyReportDraftRow[]): MonthlyReportRow[] {
   return draft.map(({ systemQuantity: _systemQuantity, countedQuantity, ...row }) => {
     const normalized = countedQuantity.trim();
     const quantity = Number(normalized);
     if (!/^\d+$/.test(normalized) || !Number.isSafeInteger(quantity)) {
-      throw new Error(
-        `Nhập số đếm thực tế cho ${row.sku} · lô ${row.batchCode}`,
-      );
+      throw new Error(`Nhập số đếm thực tế cho ${row.sku} · lô ${row.batchCode}`);
     }
     return { ...row, quantity };
   });

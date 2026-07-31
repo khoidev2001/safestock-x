@@ -51,10 +51,7 @@ export type ReadinessComponentKey =
   | "environment"
   | "dataReliability";
 
-export type OperationalStatus =
-  | "READY"
-  | "NEEDS_ACTION"
-  | "NOT_DISPATCHABLE";
+export type OperationalStatus = "READY" | "NEEDS_ACTION" | "NOT_DISPATCHABLE";
 
 export interface WarehouseReadiness {
   id: string;
@@ -243,9 +240,7 @@ export async function login(email: string, password: string): Promise<LoginResul
   return res.json();
 }
 
-export async function refreshSession(
-  refreshToken: string,
-): Promise<LoginResult> {
+export async function refreshSession(refreshToken: string): Promise<LoginResult> {
   const res = await request(apiUrl("/api/auth/refresh"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -323,13 +318,7 @@ export async function submitReport(
 }
 
 export type OwnReportStatus =
-  | "DRAFT"
-  | "PENDING_WAREHOUSE"
-  | "READY"
-  | "CANCELLED"
-  | "APPROVED"
-  | "IN_PROGRESS"
-  | "COMPLETED";
+  "DRAFT" | "PENDING_WAREHOUSE" | "READY" | "CANCELLED" | "APPROVED" | "IN_PROGRESS" | "COMPLETED";
 
 export interface OwnReportSummary {
   id: string;
@@ -440,6 +429,29 @@ export async function fetchMission(token: string, id: string): Promise<MissionDe
   return res.json();
 }
 
+/**
+ * Danh sách lệnh của đơn vị.
+ *
+ * Trước đây chỉ vào được nhiệm vụ bằng cách bấm vào một thông báo, nên thông báo
+ * trôi đi là mất luôn đường vào. Lực lượng hiện trường phải có chỗ để hỏi "tôi
+ * đang có lệnh nào?".
+ */
+export async function fetchMissions(token: string): Promise<MissionDetail[]> {
+  const res = await request(apiUrl("/api/missions"), { headers: authHeader(token) });
+  if (!res.ok) throw await apiFailure(res, "Không tải được danh sách nhiệm vụ");
+  return res.json();
+}
+
+/** Báo kết quả giao; giao thất bại thì máy chủ tự hoàn vật tư về kho. */
+export async function completeMission(
+  token: string,
+  id: string,
+  outcome: DeliveryOutcome,
+  note?: string,
+): Promise<unknown> {
+  return postAuthorized(token, `/api/missions/${id}/complete`, { outcome, note });
+}
+
 export async function fetchWarehouseMaterialRequests(
   token: string,
 ): Promise<WarehouseMaterialRequest[]> {
@@ -521,9 +533,7 @@ export async function submitFieldUpdate(
   return res.json();
 }
 
-export async function fetchFirstWarehouse(
-  token: string,
-): Promise<WarehouseSummary> {
+export async function fetchFirstWarehouse(token: string): Promise<WarehouseSummary> {
   const res = await request(apiUrl("/api/simulator/first-warehouse"), {
     headers: authHeader(token),
   });
@@ -531,9 +541,7 @@ export async function fetchFirstWarehouse(
   return res.json();
 }
 
-export async function fetchWarehouses(
-  token: string,
-): Promise<WarehouseSummary[]> {
+export async function fetchWarehouses(token: string): Promise<WarehouseSummary[]> {
   const res = await request(apiUrl("/api/admin/warehouses"), {
     headers: authHeader(token),
   });
@@ -571,13 +579,9 @@ export async function fetchWarehouseBatches(
   const seenCursors = new Set<string>();
   let cursor: string | null = null;
   do {
-    const query: string = cursor
-      ? `?cursor=${encodeURIComponent(cursor)}`
-      : "";
+    const query: string = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
     const res = await request(
-      apiUrl(
-        `/api/inventory/warehouses/${encodeURIComponent(warehouseId)}/batches-page${query}`,
-      ),
+      apiUrl(`/api/inventory/warehouses/${encodeURIComponent(warehouseId)}/batches-page${query}`),
       { headers: authHeader(token) },
     );
     if (!res.ok) throw await apiFailure(res, "Không tải được tồn kho");
@@ -613,10 +617,9 @@ export async function fetchWarehouseInsights(
   token: string,
   warehouseId: string,
 ): Promise<WarehouseInsights> {
-  const res = await request(
-    apiUrl(`/api/insights/warehouses/${encodeURIComponent(warehouseId)}`),
-    { headers: authHeader(token) },
-  );
+  const res = await request(apiUrl(`/api/insights/warehouses/${encodeURIComponent(warehouseId)}`), {
+    headers: authHeader(token),
+  });
   if (!res.ok) throw await apiFailure(res, "Không tải được dự báo vận hành");
   return res.json();
 }
@@ -626,9 +629,7 @@ export async function fetchDailyBriefing(
   warehouseId: string,
 ): Promise<DailyBriefing> {
   const res = await request(
-    apiUrl(
-      `/api/insights/warehouses/${encodeURIComponent(warehouseId)}/daily-briefing`,
-    ),
+    apiUrl(`/api/insights/warehouses/${encodeURIComponent(warehouseId)}/daily-briefing`),
     { headers: authHeader(token) },
   );
   if (!res.ok) throw await apiFailure(res, "Không tạo được bản tin đầu ngày");
@@ -667,9 +668,7 @@ export async function fetchTransferDestinations(
   warehouseId: string,
 ): Promise<WarehouseTree[]> {
   const res = await request(
-    apiUrl(
-      `/api/inventory/warehouses/${encodeURIComponent(warehouseId)}/transfer-destinations`,
-    ),
+    apiUrl(`/api/inventory/warehouses/${encodeURIComponent(warehouseId)}/transfer-destinations`),
     { headers: authHeader(token) },
   );
   if (!res.ok) throw await apiFailure(res, "Không tải được kho/kệ đích");
@@ -684,10 +683,7 @@ export async function fetchStockReports(token: string): Promise<StockReport[]> {
   return res.json();
 }
 
-export async function fetchStockReport(
-  token: string,
-  id: string,
-): Promise<StockReport> {
+export async function fetchStockReport(token: string, id: string): Promise<StockReport> {
   const res = await request(apiUrl(`/api/reports/${encodeURIComponent(id)}`), {
     headers: authHeader(token),
   });
@@ -708,25 +704,14 @@ export function submitStockReport(
 }
 
 export function approveStockReport(token: string, id: string) {
-  return postAuthorized(
-    token,
-    `/api/reports/${encodeURIComponent(id)}/approve`,
-    {},
-  );
+  return postAuthorized(token, `/api/reports/${encodeURIComponent(id)}/approve`, {});
 }
 
 export function rejectStockReport(token: string, id: string, note: string) {
-  return postAuthorized(
-    token,
-    `/api/reports/${encodeURIComponent(id)}/reject`,
-    { note },
-  );
+  return postAuthorized(token, `/api/reports/${encodeURIComponent(id)}/reject`, { note });
 }
 
-export async function fetchOpenLoans(
-  token: string,
-  warehouseId: string,
-): Promise<LoanRecord[]> {
+export async function fetchOpenLoans(token: string, warehouseId: string): Promise<LoanRecord[]> {
   const res = await request(
     apiUrl(`/api/loans/warehouses/${encodeURIComponent(warehouseId)}/open`),
     { headers: authHeader(token) },
@@ -735,9 +720,7 @@ export async function fetchOpenLoans(
   return res.json();
 }
 
-export async function fetchInventoryCatalog(
-  token: string,
-): Promise<InventoryCatalogItem[]> {
+export async function fetchInventoryCatalog(token: string): Promise<InventoryCatalogItem[]> {
   const res = await request(apiUrl("/api/inventory/catalog"), {
     headers: authHeader(token),
   });
@@ -894,29 +877,23 @@ export function returnLoan(
   loanId: string,
   input: { ok: number; damaged: number; lost: number; requestId?: string },
 ) {
-  return postAuthorized(
-    token,
-    `/api/loans/${encodeURIComponent(loanId)}/return`,
-    input,
-  );
+  return postAuthorized(token, `/api/loans/${encodeURIComponent(loanId)}/return`, input);
 }
 
 function apiUrl(path: string): string {
   return `${requireApiBase()}${path}`;
 }
 
-async function request(
-  input: string,
-  init?: RequestInit,
-  timeoutMs = 10_000,
-): Promise<Response> {
+async function request(input: string, init?: RequestInit, timeoutMs = 10_000): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(input, { ...init, signal: controller.signal });
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error("Máy chủ LAN không phản hồi. Kiểm tra Wi-Fi nội bộ.");
+      throw new Error(
+        "Không kết nối được ungphonhanh.life. Kiểm tra Internet hoặc mạng LAN nội bộ.",
+      );
     }
     throw error;
   } finally {
@@ -928,17 +905,11 @@ async function apiFailure(response: Response, fallback: string): Promise<ApiErro
   const data = (await response.json().catch(() => ({}))) as {
     message?: string | string[];
   };
-  const message = Array.isArray(data.message)
-    ? data.message.join(". ")
-    : data.message;
+  const message = Array.isArray(data.message) ? data.message.join(". ") : data.message;
   return new ApiError(message ?? fallback, response.status);
 }
 
-async function postAuthorized<T = unknown>(
-  token: string,
-  path: string,
-  body: unknown,
-): Promise<T> {
+async function postAuthorized<T = unknown>(token: string, path: string, body: unknown): Promise<T> {
   const response = await request(apiUrl(path), {
     method: "POST",
     headers: {

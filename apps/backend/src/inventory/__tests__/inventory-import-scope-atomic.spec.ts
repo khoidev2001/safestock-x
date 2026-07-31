@@ -62,10 +62,7 @@ describe("InventoryService scoped import atomicity", () => {
       inventoryTransaction: { create: jest.fn().mockResolvedValue({ id: "txn-1" }) },
       auditLog: { create: jest.fn().mockResolvedValue({ id: "audit-1" }) },
     };
-    const service = new InventoryService(
-      {} as never,
-      { recalculateWarehouse: jest.fn() } as never,
-    );
+    const service = new InventoryService({} as never, { recalculateWarehouse: jest.fn() } as never);
 
     await expect(
       service.importInTx(

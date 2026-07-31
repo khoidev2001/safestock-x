@@ -131,9 +131,8 @@ function WeatherDemandCard({ data }: { data: WarehouseInsights }) {
       ) : risks.length === 0 ? (
         <div className="mt-4">
           <p className="text-sm">
-            Mưa dự báo{" "}
-            <b className="tabular">{data.weatherAlert.totalRainMm.toFixed(1)} mm</b>, nhưng chưa đủ
-            lịch sử xuất kho tin cậy để kết luận thiếu.
+            Mưa dự báo <b className="tabular">{data.weatherAlert.totalRainMm.toFixed(1)} mm</b>,
+            nhưng chưa đủ lịch sử xuất kho tin cậy để kết luận thiếu.
           </p>
           <RainDays daily={data.weatherAlert.daily} />
         </div>

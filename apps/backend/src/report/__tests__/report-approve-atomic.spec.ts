@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  Logger,
-} from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Logger } from "@nestjs/common";
 import { LoanStatus, ReportStatus } from "@prisma/client";
 import { InventoryAdjustmentService } from "../../inventory/inventory-adjustment.service";
 import { ReportService } from "../report.service";
@@ -21,12 +16,8 @@ describe("ReportService.approve atomic", () => {
 
     const result = await state.service.approve(reportId, actorId);
 
-    expect(result.applied).toEqual([
-      { sku, batchId: "batch-b", countedQty: 3 },
-    ]);
-    expect(reconcileTargets(state)).toEqual([
-      { batchId: "batch-b", countedQty: 3 },
-    ]);
+    expect(result.applied).toEqual([{ sku, batchId: "batch-b", countedQty: 3 }]);
+    expect(reconcileTargets(state)).toEqual([{ batchId: "batch-b", countedQty: 3 }]);
   });
 
   it("rejects a legacy SKU-level count when the SKU has multiple batches", async () => {
@@ -132,9 +123,7 @@ describe("ReportService.approve atomic", () => {
 
     await state.service.approve(reportId, actorId);
 
-    expect(reconcileTargets(state)).toEqual([
-      { batchId: "batch-a", countedQty: 6 },
-    ]);
+    expect(reconcileTargets(state)).toEqual([{ batchId: "batch-a", countedQty: 6 }]);
   });
 
   it("locks loan writes before reading approval batches", async () => {
@@ -335,15 +324,13 @@ function makeState(
       updateMany: jest.fn().mockResolvedValue({ count: options.claimCount ?? 1 }),
     },
     itemBatch: {
-      findFirst: jest
-        .fn()
-        .mockImplementation((args: { where: { id: string } }) =>
-          Promise.resolve(
-            Object.values(options.batchesBySku ?? { [sku]: defaultBatches })
-              .flat()
-              .find((candidate) => candidate.id === args.where.id) ?? null,
-          ),
+      findFirst: jest.fn().mockImplementation((args: { where: { id: string } }) =>
+        Promise.resolve(
+          Object.values(options.batchesBySku ?? { [sku]: defaultBatches })
+            .flat()
+            .find((candidate) => candidate.id === args.where.id) ?? null,
         ),
+      ),
       findMany: jest
         .fn()
         .mockImplementation((args: { where: { item: { sku: string } } }) =>

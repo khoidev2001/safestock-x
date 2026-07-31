@@ -31,10 +31,7 @@ describe("inventory and loan physical-stock integrity", () => {
 
   it("rejects a manual adjustment below the outstanding loan quantity", async () => {
     const state = makeInventoryState({ quantity: 10, outstandingLoan: 8 });
-    const service = new InventoryAdjustmentService(
-      state.prisma as never,
-      state.readiness as never,
-    );
+    const service = new InventoryAdjustmentService(state.prisma as never, state.readiness as never);
 
     await expect(service.adjust("user-1", "batch-1", 7, "Đối chiếu tay")).rejects.toBeInstanceOf(
       ConflictException,
@@ -143,12 +140,10 @@ function makeInventoryState({
           return { count: 1 };
         },
       ),
-      update: jest.fn(
-        async ({ data }: { data: { quantity?: number; condition?: string } }) => {
-          if (typeof data.quantity === "number") quantity = data.quantity;
-          return { ...batch(), ...data };
-        },
-      ),
+      update: jest.fn(async ({ data }: { data: { quantity?: number; condition?: string } }) => {
+        if (typeof data.quantity === "number") quantity = data.quantity;
+        return { ...batch(), ...data };
+      }),
     },
     loanRecord: {
       findMany: jest.fn().mockResolvedValue(
@@ -213,8 +208,7 @@ function makeInventoryState({
     readiness: { recalculateWarehouse: jest.fn().mockResolvedValue(undefined) },
     quantity: () => quantity,
     transactions,
-    lockStatements: () =>
-      tx.$executeRawUnsafe.mock.calls.map(([statement]) => statement as string),
+    lockStatements: () => tx.$executeRawUnsafe.mock.calls.map(([statement]) => statement as string),
   };
 }
 
@@ -259,9 +253,7 @@ function makeLoanState({
     $executeRawUnsafe: jest.fn().mockResolvedValue(0),
     loanRecord: {
       findUnique: jest.fn(async () => ({ ...loan })),
-      findMany: jest.fn(async () =>
-        loan.status === LoanStatus.CLOSED ? [] : [{ ...loan }],
-      ),
+      findMany: jest.fn(async () => (loan.status === LoanStatus.CLOSED ? [] : [{ ...loan }])),
       updateMany: jest.fn(
         async ({
           where,

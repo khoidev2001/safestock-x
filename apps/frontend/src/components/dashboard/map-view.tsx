@@ -5,20 +5,14 @@ import { ColorIcon } from "@/components/shared/color-icon";
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-store";
-import {
-  mergeHamletCoordinateDrafts,
-  type CoordinateDraft,
-} from "@/lib/map-marker-state";
+import { mergeHamletCoordinateDrafts, type CoordinateDraft } from "@/lib/map-marker-state";
 import {
   beginWarehouseSave,
   clearMatchingSavedDraft,
   finishWarehouseSave,
   mergeWarehouseDraft,
 } from "./map-view-state";
-import {
-  listAllWarehouses,
-  updateWarehouseLocation,
-} from "@/lib/warehouse-api";
+import { listAllWarehouses, updateWarehouseLocation } from "@/lib/warehouse-api";
 import { createHamlet, listHamlets, updateHamlet, type AdminHamlet } from "@/lib/hamlet-api";
 import type { MapMarkerTarget } from "./map-canvas";
 
@@ -37,48 +31,46 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
   const [pickingTarget, setPickingTarget] = useState<MapMarkerTarget | null>(null);
   // Toạ độ tạm (chưa lưu) theo id — cho phép kéo/click nhiều lần rồi Lưu.
   const [warehouseDraft, setWarehouseDraft] = useState<CoordinateDraft>({});
-  const [pendingWarehouseSaves, setPendingWarehouseSaves] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const [pendingWarehouseSaves, setPendingWarehouseSaves] = useState<Set<string>>(() => new Set());
   const [hamletDraft, setHamletDraft] = useState<CoordinateDraft>({});
   const [hamletForm, setHamletForm] = useState({ name: "", aliases: "", lat: "", lng: "" });
 
   const query = useQuery({ queryKey: ["all-warehouses", warehouseId], queryFn: listAllWarehouses });
-  const hamletsQuery = useQuery({ queryKey: ["admin-hamlets"], queryFn: () => listHamlets("dong-xuan") });
+  const hamletsQuery = useQuery({
+    queryKey: ["admin-hamlets"],
+    queryFn: () => listHamlets("dong-xuan"),
+  });
   const hamletMutation = useMutation({
-    mutationFn: () => createHamlet({
-      name: hamletForm.name,
-      aliases: hamletForm.aliases.split(",").map((value) => value.trim()).filter(Boolean),
-      lat: hamletForm.lat === "" ? null : Number(hamletForm.lat),
-      lng: hamletForm.lng === "" ? null : Number(hamletForm.lng),
-      verified: false,
-    }),
+    mutationFn: () =>
+      createHamlet({
+        name: hamletForm.name,
+        aliases: hamletForm.aliases
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean),
+        lat: hamletForm.lat === "" ? null : Number(hamletForm.lat),
+        lng: hamletForm.lng === "" ? null : Number(hamletForm.lng),
+        verified: false,
+      }),
     onSuccess: () => {
       setHamletForm({ name: "", aliases: "", lat: "", lng: "" });
       qc.invalidateQueries({ queryKey: ["admin-hamlets"] });
     },
   });
   const verifyHamlet = useMutation({
-    mutationFn: (hamlet: AdminHamlet) => updateHamlet(hamlet.id, {
-      name: hamlet.name,
-      aliases: hamlet.aliases,
-      communeId: hamlet.communeId,
-      lat: hamlet.lat,
-      lng: hamlet.lng,
-      verified: true,
-    }),
+    mutationFn: (hamlet: AdminHamlet) =>
+      updateHamlet(hamlet.id, {
+        name: hamlet.name,
+        aliases: hamlet.aliases,
+        communeId: hamlet.communeId,
+        lat: hamlet.lat,
+        lng: hamlet.lng,
+        verified: true,
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-hamlets"] }),
   });
   const saveHamletLocation = useMutation({
-    mutationFn: ({
-      hamlet,
-      lat,
-      lng,
-    }: {
-      hamlet: AdminHamlet;
-      lat: number;
-      lng: number;
-    }) =>
+    mutationFn: ({ hamlet, lat, lng }: { hamlet: AdminHamlet; lat: number; lng: number }) =>
       updateHamlet(hamlet.id, {
         name: hamlet.name,
         aliases: hamlet.aliases,
@@ -89,10 +81,7 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
       }),
     onSuccess: (_, variables) => {
       setHamletDraft((current) => omitDraft(current, variables.hamlet.id));
-      if (
-        pickingTarget?.kind === "hamlet" &&
-        pickingTarget.id === variables.hamlet.id
-      ) {
+      if (pickingTarget?.kind === "hamlet" && pickingTarget.id === variables.hamlet.id) {
         setPickingTarget(null);
       }
       qc.invalidateQueries({ queryKey: ["admin-hamlets"] });
@@ -109,34 +98,21 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
           lng: variables.lng,
         }),
       );
-      if (
-        pickingTarget?.kind === "warehouse" &&
-        pickingTarget.id === variables.id
-      ) {
+      if (pickingTarget?.kind === "warehouse" && pickingTarget.id === variables.id) {
         setPickingTarget(null);
       }
       qc.invalidateQueries({ queryKey: ["all-warehouses", warehouseId] });
     },
     onSettled: (_, __, variables) => {
-      setPendingWarehouseSaves((current) =>
-        finishWarehouseSave(current, variables.id),
-      );
+      setPendingWarehouseSaves((current) => finishWarehouseSave(current, variables.id));
     },
   });
 
   const warehouses = mergeWarehouseDraft(query.data ?? [], warehouseDraft);
-  const hamlets = mergeHamletCoordinateDrafts(
-    hamletsQuery.data ?? [],
-    hamletDraft,
-  );
+  const hamlets = mergeHamletCoordinateDrafts(hamletsQuery.data ?? [], hamletDraft);
   const unlocated = warehouses.filter((w) => w.lat == null || w.lng == null);
 
-  function setDraftCoord(
-    kind: MapMarkerTarget["kind"],
-    id: string,
-    lat: number,
-    lng: number,
-  ) {
+  function setDraftCoord(kind: MapMarkerTarget["kind"], id: string, lat: number, lng: number) {
     if (kind === "warehouse") {
       setWarehouseDraft((current) => ({
         ...current,
@@ -174,10 +150,7 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
           onMarkerMove={setDraftCoord}
           onPickOnMap={(lat, lng) => {
             if (!pickingTarget) return;
-            if (
-              pickingTarget.kind === "hamlet" &&
-              pickingTarget.id === "__new__"
-            ) {
+            if (pickingTarget.kind === "hamlet" && pickingTarget.id === "__new__") {
               setHamletForm((current) => ({
                 ...current,
                 lat: lat.toFixed(6),
@@ -243,9 +216,7 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
             <ul className="mt-3 space-y-2">
               {warehouses.map((w) => {
                 const dirty = dirtyIds.includes(w.id);
-                const picking =
-                  pickingTarget?.kind === "warehouse" &&
-                  pickingTarget.id === w.id;
+                const picking = pickingTarget?.kind === "warehouse" && pickingTarget.id === w.id;
                 return (
                   <li key={w.id} className="rounded-md border bg-[var(--surface-2)] px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
@@ -266,11 +237,7 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
                         <button
                           type="button"
                           onClick={() =>
-                            setPickingTarget(
-                              picking
-                                ? null
-                                : { kind: "warehouse", id: w.id },
-                            )
+                            setPickingTarget(picking ? null : { kind: "warehouse", id: w.id })
                           }
                           className={`rounded-md px-2 py-1 text-xs font-medium transition ${
                             picking
@@ -383,32 +350,25 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
                   setPickingTarget({ kind: "hamlet", id: "__new__" });
                 }}
                 className={`w-full rounded-md border px-3 py-2 text-sm font-medium ${
-                  pickingTarget?.kind === "hamlet" &&
-                  pickingTarget.id === "__new__"
+                  pickingTarget?.kind === "hamlet" && pickingTarget.id === "__new__"
                     ? "border-[var(--color-accent)] text-[var(--color-accent)]"
                     : ""
                 }`}
               >
-                {pickingTarget?.kind === "hamlet" &&
-                pickingTarget.id === "__new__"
+                {pickingTarget?.kind === "hamlet" && pickingTarget.id === "__new__"
                   ? "Bấm vị trí thôn trên bản đồ…"
                   : "Chọn tọa độ trên bản đồ"}
               </button>
               <button
                 type="button"
-                disabled={
-                  hamletMutation.isPending || !hamletForm.name.trim()
-                }
+                disabled={hamletMutation.isPending || !hamletForm.name.trim()}
                 onClick={() => hamletMutation.mutate()}
                 className="w-full rounded-md bg-[var(--color-accent)] px-3 py-2 text-sm font-semibold text-[var(--color-accent-fg)] disabled:opacity-50"
               >
                 {hamletMutation.isPending ? "Đang lưu…" : "Tạo thôn"}
               </button>
               {hamletMutation.error ? (
-                <p
-                  role="alert"
-                  className="text-xs text-[var(--color-critical)]"
-                >
+                <p role="alert" className="text-xs text-[var(--color-critical)]">
                   Không lưu được cấu hình thôn.
                 </p>
               ) : null}
@@ -416,9 +376,7 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
             <ul className="mt-4 space-y-2">
               {hamlets.map((hamlet) => {
                 const dirty = dirtyHamletIds.includes(hamlet.id);
-                const picking =
-                  pickingTarget?.kind === "hamlet" &&
-                  pickingTarget.id === hamlet.id;
+                const picking = pickingTarget?.kind === "hamlet" && pickingTarget.id === hamlet.id;
                 return (
                   <li
                     key={hamlet.id}
@@ -440,11 +398,7 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
                             : "text-[var(--color-attention)]"
                         }`}
                       >
-                        {dirty
-                          ? "Chờ lưu"
-                          : hamlet.verified
-                            ? "Đã xác minh"
-                            : "Chờ xác minh"}
+                        {dirty ? "Chờ lưu" : hamlet.verified ? "Đã xác minh" : "Chờ xác minh"}
                       </span>
                     </div>
                     <div className="mt-2 flex flex-wrap justify-end gap-1">
@@ -452,11 +406,7 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
                         type="button"
                         onClick={() => {
                           setDevMode(true);
-                          setPickingTarget(
-                            picking
-                              ? null
-                              : { kind: "hamlet", id: hamlet.id },
-                          );
+                          setPickingTarget(picking ? null : { kind: "hamlet", id: hamlet.id });
                         }}
                         className={`rounded-md px-2 py-1 text-xs ${
                           picking
@@ -497,10 +447,7 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
               })}
             </ul>
             {saveHamletLocation.error ? (
-              <p
-                role="alert"
-                className="mt-2 text-xs text-[var(--color-critical)]"
-              >
+              <p role="alert" className="mt-2 text-xs text-[var(--color-critical)]">
                 Không lưu được vị trí thôn.
               </p>
             ) : null}

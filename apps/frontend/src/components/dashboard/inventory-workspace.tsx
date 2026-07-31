@@ -112,18 +112,26 @@ export function InventoryWorkspace({ warehouseId }: { warehouseId: string }) {
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-[var(--surface)] p-4">
         <div>
           <p className="font-semibold">Vận hành kho hằng ngày</p>
-          <p className="text-sm text-[var(--text-muted)]">Tiếp nhận, xuất, chuyển, mượn-trả, kiểm kê và in QR.</p>
+          <p className="text-sm text-[var(--text-muted)]">
+            Tiếp nhận, xuất, chuyển, mượn-trả, kiểm kê và in QR.
+          </p>
         </div>
         {hasPermission(Permission.INVENTORY_IMPORT) ||
         hasPermission(Permission.INVENTORY_BULK_EXPORT) ? (
           <div className="flex gap-2">
             {hasPermission(Permission.INVENTORY_BULK_EXPORT) ? (
-              <button className="rounded-md border px-3 py-2 text-sm font-semibold" onClick={() => setBulk(true)}>
+              <button
+                className="rounded-md border px-3 py-2 text-sm font-semibold"
+                onClick={() => setBulk(true)}
+              >
                 Xuất nhiều lô
               </button>
             ) : null}
             {hasPermission(Permission.INVENTORY_IMPORT) ? (
-              <button className="rounded-md bg-[var(--color-accent)] px-3 py-2 text-sm font-semibold text-[var(--color-accent-fg)]" onClick={() => setReceiving(true)}>
+              <button
+                className="rounded-md bg-[var(--color-accent)] px-3 py-2 text-sm font-semibold text-[var(--color-accent-fg)]"
+                onClick={() => setReceiving(true)}
+              >
                 Tiếp nhận lô mới
               </button>
             ) : null}
@@ -132,19 +140,26 @@ export function InventoryWorkspace({ warehouseId }: { warehouseId: string }) {
       </div>
 
       {message ? (
-        <div className="rounded-md border border-green-300 bg-green-50 p-3 text-sm text-green-900" role="status">
+        <div
+          className="rounded-md border border-green-300 bg-green-50 p-3 text-sm text-green-900"
+          role="status"
+        >
           {message}
         </div>
       ) : null}
       {tree.isError || catalog.isError ? (
-        <div className="rounded-md border border-red-300 p-3 text-sm text-[var(--color-critical)]" role="alert">
-          Không tải được cấu trúc kệ hoặc danh mục. Các thao tác ghi đang tạm khóa để tránh chọn sai dữ liệu.
+        <div
+          className="rounded-md border border-red-300 p-3 text-sm text-[var(--color-critical)]"
+          role="alert"
+        >
+          Không tải được cấu trúc kệ hoặc danh mục. Các thao tác ghi đang tạm khóa để tránh chọn sai
+          dữ liệu.
         </div>
       ) : null}
       {transferDestinations.isError ? (
         <div className="rounded-md border border-amber-300 p-3 text-sm" role="alert">
-          Không tải được danh sách kho/kệ đích. Chức năng điều chuyển tạm khóa; nhập, xuất
-          và kiểm kê vẫn hoạt động bình thường.
+          Không tải được danh sách kho/kệ đích. Chức năng điều chuyển tạm khóa; nhập, xuất và kiểm
+          kê vẫn hoạt động bình thường.
           <button
             className="ml-2 rounded border px-2 py-1"
             onClick={() => void transferDestinations.refetch()}
@@ -156,9 +171,7 @@ export function InventoryWorkspace({ warehouseId }: { warehouseId: string }) {
 
       <SemanticInventoryTools warehouseId={warehouseId} />
       <InventoryTable
-        allowedActions={
-          tree.isError || catalog.isError ? [] : allowedActions
-        }
+        allowedActions={tree.isError || catalog.isError ? [] : allowedActions}
         batches={batches.data}
         isError={batches.isError}
         isLoading={batches.isLoading}

@@ -2,14 +2,8 @@ import { ForbiddenException, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 
 type BatchScopeClient = Pick<Prisma.TransactionClient, "itemBatch">;
-type WarehouseAccessClient = Pick<
-  Prisma.TransactionClient,
-  "user" | "warehouse"
->;
-type BatchAccessClient = Pick<
-  Prisma.TransactionClient,
-  "user" | "itemBatch"
->;
+type WarehouseAccessClient = Pick<Prisma.TransactionClient, "user" | "warehouse">;
+type BatchAccessClient = Pick<Prisma.TransactionClient, "user" | "itemBatch">;
 
 const WAREHOUSE_SCOPE_ERROR = "Bạn chỉ được thao tác trên kho thôn được phân công";
 
@@ -55,11 +49,7 @@ export async function assertActorCanAccessBatch(
   // A few isolated unit-test transaction doubles intentionally expose only
   // ItemBatch. Real Prisma clients always expose User; keep those doubles on the
   // legacy warehouse-only assertion while production enforces organization too.
-  if (
-    !("user" in prisma) ||
-    !prisma.user ||
-    typeof prisma.user.findUnique !== "function"
-  ) {
+  if (!("user" in prisma) || !prisma.user || typeof prisma.user.findUnique !== "function") {
     await assertBatchInScope(prisma, scopeWarehouseId, batchId);
     return;
   }

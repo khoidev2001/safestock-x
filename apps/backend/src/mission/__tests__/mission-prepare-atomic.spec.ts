@@ -82,11 +82,13 @@ function makeService(options?: {
     updateMany: jest.fn().mockResolvedValue({
       count: options?.preparationClaimCount ?? 1,
     }),
-    findUnique: jest.fn().mockResolvedValue(
-      options?.currentPreparation === undefined
-        ? initial.warehousePreparations[0] ?? null
-        : options.currentPreparation,
-    ),
+    findUnique: jest
+      .fn()
+      .mockResolvedValue(
+        options?.currentPreparation === undefined
+          ? (initial.warehousePreparations[0] ?? null)
+          : options.currentPreparation,
+      ),
     count: jest.fn().mockResolvedValue(options?.remainingCount ?? 0),
   };
   const tx = {
@@ -99,9 +101,7 @@ function makeService(options?: {
     user: {
       findUnique: jest.fn().mockResolvedValue({
         warehouseId:
-          options?.userWarehouseId === undefined
-            ? "warehouse-a"
-            : options.userWarehouseId,
+          options?.userWarehouseId === undefined ? "warehouse-a" : options.userWarehouseId,
       }),
     },
   };
@@ -352,9 +352,9 @@ describe("MissionService.prepareByWarehouse", () => {
   it("tài khoản WAREHOUSE chưa gán kho bị chặn thay vì xuất toàn bộ mission", async () => {
     const state = makeService({ userWarehouseId: null });
 
-    await expect(
-      state.service.prepareByWarehouse("mission-1", "user-1"),
-    ).rejects.toThrow("Tài khoản kho chưa được gán kho phụ trách");
+    await expect(state.service.prepareByWarehouse("mission-1", "user-1")).rejects.toThrow(
+      "Tài khoản kho chưa được gán kho phụ trách",
+    );
 
     expect(state.prisma.$transaction).not.toHaveBeenCalled();
     expect(state.inventory.bulkExportInTx).not.toHaveBeenCalled();
@@ -402,10 +402,6 @@ describe("MissionController.prepare", () => {
       "mission-1",
     );
 
-    expect(missions.prepareByWarehouse).toHaveBeenCalledWith(
-      "mission-1",
-      "user-1",
-      "warehouse-a",
-    );
+    expect(missions.prepareByWarehouse).toHaveBeenCalledWith("mission-1", "user-1", "warehouse-a");
   });
 });

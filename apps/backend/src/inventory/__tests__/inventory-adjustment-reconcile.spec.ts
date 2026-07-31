@@ -140,34 +140,26 @@ function makeState(options: { currentQuantity?: number; claimCount?: number } = 
     itemBatch: {
       findUnique: jest
         .fn()
-        .mockImplementation(({ select, include }: {
-          select?: { shelf?: unknown };
-          include?: { shelf?: unknown };
-        }) =>
-          Promise.resolve(
-            select?.shelf
-              ? { shelf: { zone: { warehouseId: "warehouse-1" } } }
-              : {
-                  id: "batch-1",
-                  quantity: currentQuantity,
-                  circulation: "IN_STOCK",
-                  condition: "NEW",
-                  ...(include?.shelf
-                    ? { shelf: { zone: { warehouseId: "warehouse-1" } } }
-                    : {}),
-                },
-          ),
+        .mockImplementation(
+          ({ select, include }: { select?: { shelf?: unknown }; include?: { shelf?: unknown } }) =>
+            Promise.resolve(
+              select?.shelf
+                ? { shelf: { zone: { warehouseId: "warehouse-1" } } }
+                : {
+                    id: "batch-1",
+                    quantity: currentQuantity,
+                    circulation: "IN_STOCK",
+                    condition: "NEW",
+                    ...(include?.shelf ? { shelf: { zone: { warehouseId: "warehouse-1" } } } : {}),
+                  },
+            ),
         ),
       update: jest.fn().mockResolvedValue({ id: "batch-1" }),
-      updateMany: jest
-        .fn()
-        .mockImplementation(({ where }: { where: { quantity: number } }) =>
-          Promise.resolve({
-            count:
-              options.claimCount ??
-              (where.quantity === currentQuantity ? 1 : 0),
-          }),
-        ),
+      updateMany: jest.fn().mockImplementation(({ where }: { where: { quantity: number } }) =>
+        Promise.resolve({
+          count: options.claimCount ?? (where.quantity === currentQuantity ? 1 : 0),
+        }),
+      ),
     },
     loanRecord: { findMany: jest.fn().mockResolvedValue([]) },
     inventoryCount: { create: jest.fn().mockResolvedValue({ id: "count-1" }) },

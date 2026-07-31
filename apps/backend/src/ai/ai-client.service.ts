@@ -27,7 +27,8 @@ export class AiClientService {
   constructor(config: ConfigService) {
     this.baseUrl = config.get("AI_SERVICE_URL") ?? "http://localhost:8000";
     const configured = Number(config.get("AI_SERVICE_TIMEOUT_MS"));
-    this.timeoutMs = Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_TIMEOUT_MS;
+    this.timeoutMs =
+      Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_TIMEOUT_MS;
   }
 
   /** Ghi cache có chặn kích thước: quá ngưỡng thì bỏ khoá cũ nhất để tránh rò rỉ bộ nhớ. */
@@ -127,9 +128,7 @@ export class AiClientService {
   }
 
   /** AI chỉ xếp thứ tự fact đã kiểm chứng; không được sinh câu hoặc số mới. */
-  async selectBriefingFacts(
-    facts: { id: string; text: string }[],
-  ): Promise<{ factIds: string[] }> {
+  async selectBriefingFacts(facts: { id: string; text: string }[]): Promise<{ factIds: string[] }> {
     return this.post("/briefing/select", { facts });
   }
 

@@ -1,6 +1,4 @@
-import {
-  getVerifiedCommuneReferencePoint,
-} from "./verified-warehouse-location";
+import { getVerifiedCommuneReferencePoint } from "./verified-warehouse-location";
 import type { PublicCommuneContact } from "@safestock/shared-types";
 
 export type { PublicCommuneContact } from "@safestock/shared-types";

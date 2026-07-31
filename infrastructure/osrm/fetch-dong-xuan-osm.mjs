@@ -9,9 +9,7 @@ const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const dataDirectory = path.resolve(scriptDirectory, "data");
 const outputPath = path.resolve(dataDirectory, "dong-xuan.osm");
 const temporaryPath = `${outputPath}.download`;
-const endpoint =
-  process.env.OSRM_OVERPASS_URL ??
-  "https://overpass-api.de/api/interpreter";
+const endpoint = process.env.OSRM_OVERPASS_URL ?? "https://overpass-api.de/api/interpreter";
 const bbox = [108.6, 13.1, 109.3, 13.7];
 const [west, south, east, north] = bbox;
 const query = `[out:xml][timeout:300];

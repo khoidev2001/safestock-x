@@ -180,8 +180,7 @@ export class IncidentDto {
 /** Toạ độ phải có đủ cặp và nằm trong miền hợp lệ, hoặc bỏ trống cả hai. */
 class IncidentCoordinatesDto {
   @ValidateIf(
-    (dto: IncidentCoordinatesDto) =>
-      dto.incidentLat !== undefined || dto.incidentLng !== undefined,
+    (dto: IncidentCoordinatesDto) => dto.incidentLat !== undefined || dto.incidentLng !== undefined,
   )
   @IsNumber()
   @Min(-90)
@@ -189,8 +188,7 @@ class IncidentCoordinatesDto {
   incidentLat?: number;
 
   @ValidateIf(
-    (dto: IncidentCoordinatesDto) =>
-      dto.incidentLat !== undefined || dto.incidentLng !== undefined,
+    (dto: IncidentCoordinatesDto) => dto.incidentLat !== undefined || dto.incidentLng !== undefined,
   )
   @IsNumber()
   @Min(-180)

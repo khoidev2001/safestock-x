@@ -1,7 +1,4 @@
-import type {
-  VerifiedLocationKind,
-  VerifiedWarehouseLocation,
-} from "@safestock/shared-types";
+import type { VerifiedLocationKind, VerifiedWarehouseLocation } from "@safestock/shared-types";
 
 export type { VerifiedWarehouseLocation } from "@safestock/shared-types";
 
@@ -86,8 +83,7 @@ export const VERIFIED_COMMUNE_REFERENCE_POINTS: Record<
   }),
 };
 
-export const HOME_COMMUNE_WAREHOUSE_LOCATION =
-  VERIFIED_COMMUNE_REFERENCE_POINTS["Đồng Xuân"];
+export const HOME_COMMUNE_WAREHOUSE_LOCATION = VERIFIED_COMMUNE_REFERENCE_POINTS["Đồng Xuân"];
 
 export const VERIFIED_HAMLET_WAREHOUSE_LOCATIONS: Record<
   string,

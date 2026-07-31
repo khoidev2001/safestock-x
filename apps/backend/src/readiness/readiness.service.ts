@@ -3,7 +3,6 @@ import {
   IncidentState,
   LoanStatus,
   NotificationKind,
-  Prisma,
   UserRole,
   VirtualDeviceType,
   WarehouseKind,
@@ -19,171 +18,225 @@ import {
   toBatchReadinessInput,
   ZoneEnvironment,
 } from "./readiness.gather";
-import { buildRecommendations } from "./recommendations";
 import {
   assessOperationalReadiness,
   OperationalReadinessAssessment,
 } from "./operational-readiness";
+import { buildRecommendations } from "./recommendations";
 import { ReadinessResult, WeightedReadiness } from "./readiness.types";
 
-/** Cảm biến không cập nhật quá ngưỡng này coi như "chết" — hạ độ tin cậy (#25). */
-const SENSOR_FRESH_MS = 30 * 60 * 1000;
-const READINESS_FRESH_MS = 15 * 60 * 1000;
+const SENSOR_FRESH_MS = 30 * 60_000;
 
-export function isReadinessStale(
-  computedAt: Date,
-  now = new Date(),
-): boolean {
-  return now.getTime() - computedAt.getTime() > READINESS_FRESH_MS;
-}
-
-/** Điểm 1 kệ kèm breakdown + danh sách điểm lô con (để persist cấp lô nếu cần). */
 interface ShelfReadiness extends WeightedReadiness {
   shelfId: string;
   zoneId: string;
 }
 
+interface ComputedWarehouseReadiness {
+  warehouseId: string;
+  computedAt: Date;
+  warehouse: ReadinessResult;
+  zones: Map<string, ReadinessResult>;
+  shelves: ShelfReadiness[];
+  assessment: OperationalReadinessAssessment;
+  thresholds: ActionThresholds;
+}
+
+/**
+ * Readiness is a calculation, not another persistent current-state model.
+ * Each result reads inventory, incidents, and the newest sensor history; the
+ * small runtime map is only used to avoid repeating transition notifications.
+ */
 @Injectable()
 export class ReadinessService {
   private readonly log = new Logger(ReadinessService.name);
+  private readonly operationalStatusByWarehouse = new Map<string, string>();
 
   constructor(
-    private prisma: PrismaService,
-    private notifications: NotificationService,
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationService,
   ) {}
 
-  /**
-   * Tính điểm toàn kho ở 4 cấp (lô→kệ→khu→kho) và lưu bản mới nhất.
-   * @param now mốc thời gian server (#31); mặc định thời điểm gọi.
-   */
-  async recalculateWarehouse(warehouseId: string, now: Date = new Date()) {
+  async recalculateWarehouse(warehouseId: string, now = new Date()) {
     let lastError: unknown;
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       try {
-        return await this.recalculateWarehouseOnce(warehouseId, now);
+        const calculated = await this.calculateWarehouse(warehouseId, now);
+        await this.notifyOperationalTransition(calculated);
+        return this.toWarehouseResponse(calculated);
       } catch (error) {
         lastError = error;
-        const message = error instanceof Error ? error.message : String(error);
         this.log.warn(
-          `Recalc readiness lỗi (kho ${warehouseId}, lần ${attempt}/3): ${message}`,
+          `Recalc readiness lỗi (kho ${warehouseId}, lần ${attempt}/3): ${messageOf(error)}`,
         );
       }
     }
     throw lastError;
   }
 
-  private async recalculateWarehouseOnce(
-    warehouseId: string,
-    now: Date,
-  ) {
-    const env = await this.loadZoneEnvironments(warehouseId, now);
-    const shelves = await this.loadShelfContexts(warehouseId, env, now);
-
-    const shelfScores = this.scoreShelves(shelves, now);
-    const zoneScores = this.scoreZones(shelfScores);
-    const warehouseScore = rollupReadiness(shelfScores);
-
-    const thresholds = await this.loadThresholds(warehouseId);
-    const oldScore = await this.prisma.readinessScore.findUnique({
-      where: { targetType_targetId: { targetType: "WAREHOUSE", targetId: warehouseId } },
-      select: { score: true, operationalStatus: true },
-    });
-    const newZone = resolveActionZone(warehouseScore.score, thresholds);
-    const assessment = await this.assessWarehouse(warehouseId, warehouseScore);
-
-    await this.persist(warehouseId, warehouseScore, zoneScores, shelfScores, assessment);
-
-    if (
-      oldScore?.operationalStatus !== assessment.operationalStatus &&
-      assessment.operationalStatus !== "READY"
-    ) {
-      const reason = assessment.blockers[0]?.title ?? assessment.recommendedActions[0];
-      await this.notifications
-        .create({
-          recipientRole: UserRole.WAREHOUSE,
-          kind: NotificationKind.READINESS_DEGRADED,
-          title:
-            assessment.operationalStatus === "NOT_DISPATCHABLE"
-              ? "Kho tạm thời không thể điều phối"
-              : "Kho có việc cần xử lý",
-          body: reason ?? `Điểm tham khảo hiện tại ${warehouseScore.score}/100`,
-          warehouseId,
-        })
-        .catch((error) => {
-          this.log.warn(`Gửi thông báo readiness lỗi (kho ${warehouseId}): ${error.message}`);
-        });
-    }
-
-    return {
-      warehouseId,
-      score: warehouseScore.score,
-      zone: newZone,
-      zones: zoneScores.size,
-      ...assessment,
-    };
-  }
-
-  /**
-   * Hậu xử lý sau mutation không được đổi một giao dịch đã commit thành lỗi.
-   * Thử lại có giới hạn để lỗi DB tạm thời không làm readiness bị cũ mà im lặng.
-   */
-  async recalculateWarehouseBestEffort(
-    warehouseId: string,
-    context: string,
-  ): Promise<boolean> {
+  async recalculateWarehouseBestEffort(warehouseId: string, context: string): Promise<boolean> {
     try {
       await this.recalculateWarehouse(warehouseId);
       return true;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
       this.log.warn(
-        `Không thể làm mới readiness sau retry (${context}, kho ${warehouseId}): ${message}`,
+        `Không thể làm mới readiness (${context}, kho ${warehouseId}): ${messageOf(error)}`,
       );
       return false;
     }
   }
 
-  /** Đọc điểm đã lưu của 1 target bất kỳ (ZONE/SHELF/ITEM_BATCH) — không tính lại. */
-  async getScore(targetType: "ZONE" | "SHELF" | "ITEM_BATCH", targetId: string) {
-    return this.prisma.readinessScore.findUnique({
-      where: { targetType_targetId: { targetType, targetId } },
-      include: { components: true },
-    });
+  async getWarehouseScore(warehouseId: string, now = new Date()) {
+    const calculated = await this.calculateWarehouse(warehouseId, now);
+    return this.toWarehouseResponse(calculated);
   }
 
-  /** Đọc điểm đã lưu của 1 kho kèm vùng hành động + đề xuất (không tính lại). */
-  async getWarehouseScore(warehouseId: string, now = new Date()) {
-    const score = await this.prisma.readinessScore.findUnique({
-      where: {
-        targetType_targetId: { targetType: "WAREHOUSE", targetId: warehouseId },
-      },
-      include: { components: true, recommendations: true },
-    });
-    if (!score) return null;
+  async getScore(targetType: "ZONE" | "SHELF" | "ITEM_BATCH", targetId: string) {
+    const warehouseId = await this.warehouseForTarget(targetType, targetId);
+    if (!warehouseId) return null;
+    const calculated = await this.calculateWarehouse(warehouseId);
+    if (targetType === "ZONE") {
+      const result = calculated.zones.get(targetId);
+      return result
+        ? this.toTargetResponse(warehouseId, targetType, targetId, result, calculated.computedAt)
+        : null;
+    }
+    if (targetType === "SHELF") {
+      const result = calculated.shelves.find((shelf) => shelf.shelfId === targetId);
+      return result
+        ? this.toTargetResponse(warehouseId, targetType, targetId, result, calculated.computedAt)
+        : null;
+    }
+    return null;
+  }
 
-    const thresholds = await this.loadThresholds(warehouseId);
-    const assessment = await this.assessWarehouse(warehouseId, {
-      score: score.score,
-      components: score.components.map((component) => ({
-        key: component.key as ReadinessResult["components"][number]["key"],
-        score: component.value,
-        reasons: component.reasons,
-      })),
-    });
+  async getRecommendations(warehouseId: string) {
+    const calculated = await this.calculateWarehouse(warehouseId);
+    return buildRecommendations(calculated.warehouse.components).map((recommendation) => ({
+      id: `${warehouseId}:${recommendation.component}`,
+      ...recommendation,
+    }));
+  }
+
+  private async calculateWarehouse(
+    warehouseId: string,
+    now = new Date(),
+  ): Promise<ComputedWarehouseReadiness> {
+    const env = await this.loadZoneEnvironments(warehouseId, now);
+    const shelves = await this.loadShelfContexts(warehouseId, env, now);
+    const shelfScores = this.scoreShelves(shelves, now);
+    const zoneScores = this.scoreZones(shelfScores);
+    const warehouse = rollupReadiness(shelfScores);
+    const [thresholds, assessment] = await Promise.all([
+      this.loadThresholds(warehouseId),
+      this.assessWarehouse(warehouseId, warehouse),
+    ]);
     return {
-      ...score,
-      isStale: isReadinessStale(score.computedAt, now),
-      ageMs: Math.max(0, now.getTime() - score.computedAt.getTime()),
-      zone: resolveActionZone(score.score, thresholds),
+      warehouseId,
+      computedAt: now,
+      warehouse,
+      zones: zoneScores,
+      shelves: shelfScores,
+      assessment,
+      thresholds,
+    };
+  }
+
+  private async notifyOperationalTransition(calculated: ComputedWarehouseReadiness): Promise<void> {
+    const next = calculated.assessment.operationalStatus;
+    const previous = this.operationalStatusByWarehouse.get(calculated.warehouseId);
+    this.operationalStatusByWarehouse.set(calculated.warehouseId, next);
+    if (previous === next || next === "READY") return;
+    const reason =
+      calculated.assessment.blockers[0]?.title ?? calculated.assessment.recommendedActions[0];
+    await this.notifications
+      .create({
+        recipientRole: UserRole.WAREHOUSE,
+        kind: NotificationKind.READINESS_DEGRADED,
+        title:
+          next === "NOT_DISPATCHABLE"
+            ? "Kho tạm thời không thể điều phối"
+            : "Kho có việc cần xử lý",
+        body: reason ?? `Điểm tham khảo hiện tại ${calculated.warehouse.score}/100`,
+        warehouseId: calculated.warehouseId,
+      })
+      .catch((error) => this.log.warn(`Gửi thông báo readiness lỗi: ${messageOf(error)}`));
+  }
+
+  private toWarehouseResponse(calculated: ComputedWarehouseReadiness) {
+    const { warehouse, assessment, thresholds, warehouseId, computedAt } = calculated;
+    return {
+      id: `runtime:${warehouseId}`,
+      warehouseId,
+      targetType: "WAREHOUSE" as const,
+      targetId: warehouseId,
+      score: warehouse.score,
+      zone: resolveActionZone(warehouse.score, thresholds),
+      computedAt,
+      components: toComponents(warehouse),
+      recommendations: buildRecommendations(warehouse.components).map((recommendation) => ({
+        id: `${warehouseId}:${recommendation.component}`,
+        ...recommendation,
+      })),
+      isStale: false,
+      ageMs: 0,
       ...assessment,
     };
   }
 
-  /** Kết luận vận hành dùng sự cố chưa xử lý tại thời điểm đọc, tránh trạng thái bị cũ. */
-  private async assessWarehouse(
+  private toTargetResponse(
     warehouseId: string,
-    readiness: ReadinessResult,
-  ): Promise<OperationalReadinessAssessment> {
+    targetType: "ZONE" | "SHELF",
+    targetId: string,
+    result: ReadinessResult,
+    computedAt: Date,
+  ) {
+    return {
+      id: `runtime:${targetType}:${targetId}`,
+      warehouseId,
+      targetType,
+      targetId,
+      score: result.score,
+      computedAt,
+      components: toComponents(result),
+    };
+  }
+
+  private async warehouseForTarget(
+    targetType: "ZONE" | "SHELF" | "ITEM_BATCH",
+    targetId: string,
+  ): Promise<string | null> {
+    if (targetType === "ZONE") {
+      return (
+        (
+          await this.prisma.warehouseZone.findUnique({
+            where: { id: targetId },
+            select: { warehouseId: true },
+          })
+        )?.warehouseId ?? null
+      );
+    }
+    if (targetType === "SHELF") {
+      return (
+        (
+          await this.prisma.shelf.findUnique({
+            where: { id: targetId },
+            select: { zone: { select: { warehouseId: true } } },
+          })
+        )?.zone.warehouseId ?? null
+      );
+    }
+    return (
+      (
+        await this.prisma.itemBatch.findUnique({
+          where: { id: targetId },
+          select: { shelf: { select: { zone: { select: { warehouseId: true } } } } },
+        })
+      )?.shelf?.zone.warehouseId ?? null
+    );
+  }
+
+  private async assessWarehouse(warehouseId: string, readiness: ReadinessResult) {
     const openIncidents = await this.prisma.incident.findMany({
       where: { warehouseId, state: { not: IncidentState.RESOLVED } },
       select: { kind: true, severity: true, title: true },
@@ -195,29 +248,13 @@ export class ReadinessService {
     });
   }
 
-  /** Đề xuất cải thiện của 1 kho (đã lưu lúc recalc). */
-  async getRecommendations(warehouseId: string) {
-    const score = await this.prisma.readinessScore.findUnique({
-      where: {
-        targetType_targetId: { targetType: "WAREHOUSE", targetId: warehouseId },
-      },
-      include: { recommendations: true },
-    });
-    return score?.recommendations ?? [];
-  }
-
-  /** Ngưỡng hành động của kho (cấu hình được); rỗng → mặc định. */
   private async loadThresholds(warehouseId: string): Promise<ActionThresholds> {
-    const row = await this.prisma.readinessThreshold.findUnique({
-      where: { warehouseId },
-    });
-    if (!row) return DEFAULT_THRESHOLDS;
-    return { ready: row.ready, attention: row.attention, degraded: row.degraded };
+    const row = await this.prisma.readinessThreshold.findUnique({ where: { warehouseId } });
+    return row
+      ? { ready: row.ready, attention: row.attention, degraded: row.degraded }
+      : DEFAULT_THRESHOLDS;
   }
 
-  // ---- gom dữ liệu ----
-
-  /** Môi trường hiện tại + độ tươi cảm biến theo từng khu. */
   private async loadZoneEnvironments(
     warehouseId: string,
     now: Date,
@@ -227,34 +264,41 @@ export class ReadinessService {
       select: { kind: true },
     });
     if (warehouse?.kind === WarehouseKind.HAMLET) return new Map();
-
     const devices = await this.prisma.virtualDevice.findMany({
       where: {
         warehouseId,
         type: { in: [VirtualDeviceType.TEMPERATURE, VirtualDeviceType.HUMIDITY] },
       },
+      select: {
+        zoneId: true,
+        type: true,
+        events: {
+          orderBy: [{ observedAt: "desc" }, { createdAt: "desc" }],
+          take: 1,
+          select: { value: true, observedAt: true },
+        },
+      },
     });
-
     const byZone = new Map<string, ZoneEnvironment>();
     for (const device of devices) {
       if (!device.zoneId) continue;
-      const zone =
-        byZone.get(device.zoneId) ??
-        ({ temperature: null, humidity: null, sensorFresh: true } as ZoneEnvironment);
-      const fresh = now.getTime() - device.updatedAt.getTime() < SENSOR_FRESH_MS;
-      if (device.type === VirtualDeviceType.TEMPERATURE) {
-        zone.temperature = device.currentValue;
-      } else {
-        zone.humidity = device.currentValue;
-      }
-      // Khu coi là "tươi" chỉ khi MỌI cảm biến của nó còn cập nhật.
+      const zone = byZone.get(device.zoneId) ?? {
+        temperature: null,
+        humidity: null,
+        sensorFresh: true,
+      };
+      const latest = device.events[0];
+      const fresh = Boolean(
+        latest && now.getTime() - latest.observedAt.getTime() < SENSOR_FRESH_MS,
+      );
       zone.sensorFresh = zone.sensorFresh && fresh;
+      if (device.type === VirtualDeviceType.TEMPERATURE) zone.temperature = latest?.value ?? null;
+      else zone.humidity = latest?.value ?? null;
       byZone.set(device.zoneId, zone);
     }
     return byZone;
   }
 
-  /** Lô + ngữ cảnh (kệ, kiểm kê, mượn, môi trường) theo từng kệ. */
   private async loadShelfContexts(
     warehouseId: string,
     envByZone: Map<string, ZoneEnvironment>,
@@ -263,151 +307,81 @@ export class ReadinessService {
     const shelves = await this.prisma.shelf.findMany({
       where: { zone: { warehouseId } },
       include: {
-        zone: true,
         batches: {
           include: {
             counts: { orderBy: { countedAt: "desc" }, take: 1 },
             loans: {
-              where: {
-                status: { in: [LoanStatus.ON_LOAN, LoanStatus.PARTIALLY_RETURNED] },
-              },
+              where: { status: { in: [LoanStatus.ON_LOAN, LoanStatus.PARTIALLY_RETURNED] } },
             },
           },
         },
       },
     });
-
-    const defaultEnv: ZoneEnvironment = {
-      temperature: null,
-      humidity: null,
-      sensorFresh: true,
-    };
-
     const result = new Map<string, { zoneId: string; batches: BatchWithContext[] }>();
     for (const shelf of shelves) {
-      const env = envByZone.get(shelf.zoneId) ?? defaultEnv;
-      const batches: BatchWithContext[] = shelf.batches.map((batch) => {
-        const lastCount = batch.counts[0] ?? null;
-        const onLoanQty = batch.loans.reduce(
-          (sum, loan) => sum + (loan.quantity - loan.returnedOk - loan.returnedDamaged - loan.lost),
-          0,
-        );
-        return {
-          batch,
-          isLocked: shelf.isLocked,
-          countedQty: lastCount?.countedQty ?? null,
-          daysSinceLastCount: lastCount ? daysBetween(lastCount.countedAt, now) : null,
-          onLoanQty,
-          env,
-        };
+      const env = envByZone.get(shelf.zoneId) ?? {
+        temperature: null,
+        humidity: null,
+        sensorFresh: true,
+      };
+      result.set(shelf.id, {
+        zoneId: shelf.zoneId,
+        batches: shelf.batches.map((batch) => {
+          const latestCount = batch.counts[0] ?? null;
+          return {
+            batch,
+            isLocked: shelf.isLocked,
+            countedQty: latestCount?.countedQty ?? null,
+            daysSinceLastCount: latestCount ? daysBetween(latestCount.countedAt, now) : null,
+            onLoanQty: batch.loans.reduce(
+              (sum, loan) =>
+                sum + loan.quantity - loan.returnedOk - loan.returnedDamaged - loan.lost,
+              0,
+            ),
+            env,
+          };
+        }),
       });
-      result.set(shelf.id, { zoneId: shelf.zoneId, batches });
     }
     return result;
   }
-
-  // ---- tính điểm 4 cấp (thuần, đã có dữ liệu) ----
 
   private scoreShelves(
     shelves: Map<string, { zoneId: string; batches: BatchWithContext[] }>,
     now: Date,
   ): ShelfReadiness[] {
-    const result: ShelfReadiness[] = [];
-    for (const [shelfId, { zoneId, batches }] of shelves) {
-      const batchScores = batches.map((ctx) =>
-        computeBatchReadiness(toBatchReadinessInput(ctx, now)),
+    return [...shelves].map(([shelfId, shelf]) => {
+      const batchScores = shelf.batches.map((batch) =>
+        computeBatchReadiness(toBatchReadinessInput(batch, now)),
       );
-      const rolled = rollupReadiness(batchScores);
-      result.push({
+      const result = rollupReadiness(batchScores);
+      return {
         shelfId,
-        zoneId,
-        score: rolled.score,
-        weight: batchScores.reduce((sum, b) => sum + b.weight, 0),
-        components: rolled.components,
-      });
-    }
-    return result;
+        zoneId: shelf.zoneId,
+        score: result.score,
+        weight: batchScores.reduce((sum, batch) => sum + batch.weight, 0),
+        components: result.components,
+      };
+    });
   }
 
   private scoreZones(shelves: ShelfReadiness[]): Map<string, ReadinessResult> {
     const byZone = new Map<string, ShelfReadiness[]>();
-    for (const shelf of shelves) {
-      const list = byZone.get(shelf.zoneId) ?? [];
-      list.push(shelf);
-      byZone.set(shelf.zoneId, list);
-    }
-    const result = new Map<string, ReadinessResult>();
-    for (const [zoneId, list] of byZone) {
-      result.set(zoneId, rollupReadiness(list));
-    }
-    return result;
+    for (const shelf of shelves)
+      byZone.set(shelf.zoneId, [...(byZone.get(shelf.zoneId) ?? []), shelf]);
+    return new Map([...byZone].map(([zoneId, values]) => [zoneId, rollupReadiness(values)]));
   }
+}
 
-  // ---- lưu (ghi đè bản mới nhất theo target) ----
+function toComponents(result: ReadinessResult) {
+  return result.components.map((component) => ({
+    key: component.key,
+    value: component.score,
+    weight: READINESS_WEIGHTS[component.key],
+    reasons: component.reasons,
+  }));
+}
 
-  private async persist(
-    warehouseId: string,
-    warehouse: ReadinessResult,
-    zones: Map<string, ReadinessResult>,
-    shelves: ShelfReadiness[],
-    assessment: OperationalReadinessAssessment,
-  ) {
-    const writes = [
-      this.upsertScore(warehouseId, "WAREHOUSE", warehouseId, warehouse, assessment),
-      ...[...zones].map(([zoneId, result]) =>
-        this.upsertScore(warehouseId, "ZONE", zoneId, result),
-      ),
-      ...shelves.map((shelf) => this.upsertScore(warehouseId, "SHELF", shelf.shelfId, shelf)),
-    ];
-    await this.prisma.$transaction(writes);
-  }
-
-  private upsertScore(
-    warehouseId: string,
-    targetType: "WAREHOUSE" | "ZONE" | "SHELF",
-    targetId: string,
-    result: ReadinessResult,
-    assessment?: OperationalReadinessAssessment,
-  ) {
-    const componentData = result.components.map((component) => ({
-      key: component.key,
-      value: component.score,
-      weight: READINESS_WEIGHTS[component.key],
-      reasons: component.reasons,
-    }));
-    // Chỉ sinh đề xuất ở cấp kho (cấp cao nhất, tránh trùng lặp cấp kệ/khu).
-    const recommendationData =
-      targetType === "WAREHOUSE"
-        ? buildRecommendations(result.components).map((rec) => ({
-            component: rec.component,
-            message: rec.message,
-          }))
-        : [];
-
-    return this.prisma.readinessScore.upsert({
-      where: { targetType_targetId: { targetType, targetId } },
-      create: {
-        warehouseId,
-        targetType,
-        targetId,
-        score: result.score,
-        operationalStatus: assessment?.operationalStatus ?? "READY",
-        blockers: (assessment?.blockers ?? []) as unknown as Prisma.InputJsonValue,
-        components: { create: componentData },
-        recommendations: { create: recommendationData },
-      },
-      update: {
-        score: result.score,
-        computedAt: new Date(),
-        ...(assessment
-          ? {
-              operationalStatus: assessment.operationalStatus,
-              blockers: assessment.blockers as unknown as Prisma.InputJsonValue,
-            }
-          : {}),
-        components: { deleteMany: {}, create: componentData },
-        recommendations: { deleteMany: {}, create: recommendationData },
-      },
-    });
-  }
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

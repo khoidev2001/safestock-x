@@ -7,10 +7,7 @@ import {
 import { CirculationStatus, LoanStatus, Prisma, TransactionSource } from "@prisma/client";
 import { TransactionType } from "@safestock/shared-types";
 import { randomUUID } from "node:crypto";
-import {
-  lockLoanBatch,
-  lockLoanTableForApproval,
-} from "../loan/loan-table-lock";
+import { lockLoanBatch, lockLoanTableForApproval } from "../loan/loan-table-lock";
 import { sumOutstanding } from "./loan-math";
 import { assertWarehouseInScope } from "./warehouse-scope";
 

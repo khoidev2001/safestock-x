@@ -39,6 +39,7 @@ const prisma = new PrismaClient();
 const COMMUNE_ID = "dong-xuan";
 
 async function resetDatabase() {
+  await prisma.alertEmailOutbox.deleteMany();
   await prisma.incidentAction.deleteMany();
   await prisma.incidentEvidence.deleteMany();
   await prisma.incident.deleteMany();
@@ -52,12 +53,10 @@ async function resetDatabase() {
   await prisma.inventoryCount.deleteMany();
   await prisma.loanRecord.deleteMany();
   await prisma.sensorEvent.deleteMany();
-  await prisma.simulationRun.deleteMany();
-  await prisma.simulationScenario.deleteMany();
+  await prisma.sensorSubmission.deleteMany();
+  // Sau lô số liệu (tham chiếu tới khoá) và trước kho (được khoá tham chiếu tới).
+  await prisma.deviceCredential.deleteMany();
   await prisma.virtualDevice.deleteMany();
-  await prisma.readinessRecommendation.deleteMany();
-  await prisma.readinessComponent.deleteMany();
-  await prisma.readinessScore.deleteMany();
   await prisma.readinessThreshold.deleteMany();
   await prisma.readinessRule.deleteMany();
   await prisma.itemBatch.deleteMany();
@@ -97,14 +96,14 @@ async function main() {
       },
       {
         organizationId: organization.id,
-        email: "staff@safestock.vn",
+        email: "staff@ungphonhanh.life",
         passwordHash: password("staff123"),
         fullName: "Phụ trách kho trung tâm",
         role: "WAREHOUSE",
       },
       {
         organizationId: organization.id,
-        email: "rescue@safestock.vn",
+        email: "rescue@ungphonhanh.life",
         passwordHash: password("rescue123"),
         fullName: "Lực lượng hiện trường Đồng Xuân",
         role: "RESCUE",
@@ -124,11 +123,11 @@ async function main() {
     },
   });
   const warehouseUser = await prisma.user.update({
-    where: { email: "staff@safestock.vn" },
+    where: { email: "staff@ungphonhanh.life" },
     data: { warehouseId: centralWarehouse.id },
   });
   const rescueUser = await prisma.user.findUniqueOrThrow({
-    where: { email: "rescue@safestock.vn" },
+    where: { email: "rescue@ungphonhanh.life" },
   });
 
   const { zones, shelves } = await createCentralStorage(centralWarehouse.id);
@@ -157,15 +156,16 @@ async function main() {
     password("truongthon123"),
   );
 
-  // Trưởng thôn báo cáo tình huống từ mobile (role REPORTER) — scope kho thôn đầu tiên.
+  // Quản lý kho thôn kiêm luôn vai trưởng thôn: cùng một người giữ kho và báo
+  // tình huống của thôn mình, nên chỉ một tài khoản thay vì hai.
   const reportingHamlet = hamletWarehouses[0] ?? centralWarehouse;
   await prisma.user.create({
     data: {
       organizationId: organization.id,
-      email: "truongthon@safestock.vn",
+      email: "truongthon@ungphonhanh.life",
       passwordHash: password("reporter123"),
       fullName: `Trưởng thôn ${reportingHamlet.name.replace("Kho ", "")}`,
-      role: "REPORTER",
+      role: "WAREHOUSE",
       warehouseId: reportingHamlet.id,
     },
   });
@@ -391,7 +391,7 @@ async function createHamletLeaders(
     const user = await prisma.user.create({
       data: {
         organizationId,
-        email: `truongthon${index + 1}@safestock.vn`,
+        email: `truongthon${index + 1}@ungphonhanh.life`,
         passwordHash,
         fullName: `Trưởng ${warehouse.name.replace("Kho ", "")}`,
         role: "WAREHOUSE",

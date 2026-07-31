@@ -70,7 +70,9 @@ function aiExtraction(): SituationExtraction {
 
 function makeService() {
   const missions = {
-    getMission: jest.fn().mockResolvedValue({ id: "mission-1", reportText: "co kha nang bi co lap" }),
+    getMission: jest
+      .fn()
+      .mockResolvedValue({ id: "mission-1", reportText: "co kha nang bi co lap" }),
   };
   const ai = { analyzeSituation: jest.fn().mockResolvedValue(aiExtraction()) };
   const snapshots = {

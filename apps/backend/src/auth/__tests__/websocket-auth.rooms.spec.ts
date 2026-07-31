@@ -5,7 +5,6 @@ import { UserRole } from "@safestock/shared-types";
 import { Server } from "socket.io";
 import { io as connectClient, Socket as ClientSocket } from "socket.io-client";
 import { NotificationGateway } from "../../notification/notification.gateway";
-import { SimulationGateway } from "../../simulation/simulation.gateway";
 import { WebSocketAuthService } from "../websocket-auth.service";
 
 const SECRET = "websocket-test-secret";
@@ -19,8 +18,6 @@ describe("authenticated Socket.IO rooms", () => {
   let httpServer: HttpServer;
   let server: Server;
   let baseUrl: string;
-  let runner: { onEvent?: (warehouseId: string, payload: unknown) => void };
-  let simulationEvents: { onEvent?: (warehouseId: string, payload: unknown) => void };
   let notifications: { push?: (organizationId: string, role: UserRole, payload: unknown) => void };
 
   beforeEach(async () => {
@@ -47,22 +44,16 @@ describe("authenticated Socket.IO rooms", () => {
     );
 
     const auth = new WebSocketAuthService(prisma as never, jwt, config as never);
-    runner = {};
-    simulationEvents = {};
     notifications = {};
-    const simulation = new SimulationGateway(runner as never, simulationEvents as never, auth);
     const notification = new NotificationGateway(notifications as never, auth);
 
     httpServer = createServer();
     server = new Server(httpServer);
     auth.install(server);
     auth.install(server);
-    simulation.server = server;
     notification.server = server;
-    simulation.onModuleInit();
     notification.onModuleInit();
     server.on("connection", (client) => {
-      simulation.handleConnection(client);
       notification.handleConnection(client);
     });
     await new Promise<void>((resolve) => httpServer.listen(0, "127.0.0.1", resolve));
@@ -76,12 +67,18 @@ describe("authenticated Socket.IO rooms", () => {
   });
 
   it("rejects missing, invalid, expired, and deleted-user tokens during handshake", async () => {
-    const invalid = await jwt.signAsync({ sub: "user-a", tokenVersion: 0 }, { secret: "wrong-secret" });
+    const invalid = await jwt.signAsync(
+      { sub: "user-a", tokenVersion: 0 },
+      { secret: "wrong-secret" },
+    );
     const expired = await jwt.signAsync(
       { sub: "user-a", tokenVersion: 0 },
       { secret: SECRET, expiresIn: -1 },
     );
-    const deletedUser = await jwt.signAsync({ sub: "deleted", tokenVersion: 0 }, { secret: SECRET });
+    const deletedUser = await jwt.signAsync(
+      { sub: "deleted", tokenVersion: 0 },
+      { secret: SECRET },
+    );
 
     for (const token of [undefined, invalid, expired, deletedUser]) {
       const client = rejectedClient(baseUrl, token);
@@ -91,7 +88,7 @@ describe("authenticated Socket.IO rooms", () => {
     }
   });
 
-  it("isolates warehouses and ignores legacy room spoofing events", async () => {
+  it("does not expose the retired sensor_event channel to warehouse clients", async () => {
     const tokenA = await jwt.signAsync({ sub: "user-a", tokenVersion: 0 }, { secret: SECRET });
     const tokenB = await jwt.signAsync({ sub: "user-b", tokenVersion: 0 }, { secret: SECRET });
     const [clientA, clientB] = await Promise.all([
@@ -104,23 +101,10 @@ describe("authenticated Socket.IO rooms", () => {
     clientA.on("sensor_event", (payload: { id: string }) => receivedA.push(payload.id));
     clientB.on("sensor_event", (payload: { id: string }) => receivedB.push(payload.id));
 
-    runner.onEvent?.("wh-a", { id: "event-a" });
-    await delay(50);
-    expect(receivedA).toEqual(["event-a"]);
-    expect(receivedB).toEqual([]);
-
-    simulationEvents.onEvent?.("wh-a", { id: "manual-event-a" });
-    await delay(50);
-    expect(receivedA).toEqual(["event-a", "manual-event-a"]);
-    expect(receivedB).toEqual([]);
-
     clientA.emit("join", { warehouseId: "wh-b" });
     await delay(30);
-    runner.onEvent?.("wh-b", { id: "event-b" });
-    await delay(50);
-
-    expect(receivedA).toEqual(["event-a", "manual-event-a"]);
-    expect(receivedB).toEqual(["event-b"]);
+    expect(receivedA).toEqual([]);
+    expect(receivedB).toEqual([]);
     expect(prisma.user.findUnique).toHaveBeenCalledTimes(2);
   });
 
@@ -130,7 +114,10 @@ describe("authenticated Socket.IO rooms", () => {
       { secret: SECRET },
     );
     const adminToken = await jwt.signAsync({ sub: "admin", tokenVersion: 0 }, { secret: SECRET });
-    const adminBToken = await jwt.signAsync({ sub: "admin-b", tokenVersion: 0 }, { secret: SECRET });
+    const adminBToken = await jwt.signAsync(
+      { sub: "admin-b", tokenVersion: 0 },
+      { secret: SECRET },
+    );
     const [warehouseClient, adminClient, adminBClient] = await Promise.all([
       connect(baseUrl, staleAdminToken),
       connect(baseUrl, adminToken),

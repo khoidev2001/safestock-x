@@ -9,11 +9,13 @@ function makeService(options: {
   actorOrganizationId?: string | null;
   warehouseFindFirst: jest.Mock;
 }) {
-  const userFindUnique = jest.fn().mockResolvedValue(
-    options.actorOrganizationId === null
-      ? null
-      : { organizationId: options.actorOrganizationId ?? "org-a" },
-  );
+  const userFindUnique = jest
+    .fn()
+    .mockResolvedValue(
+      options.actorOrganizationId === null
+        ? null
+        : { organizationId: options.actorOrganizationId ?? "org-a" },
+    );
   const prisma = {
     user: { findUnique: userFindUnique },
     warehouse: { findFirst: options.warehouseFindFirst },
@@ -66,9 +68,9 @@ describe("MissionService.resolveReportWarehouseId tenant scope", () => {
     const warehouseFindFirst = jest.fn().mockResolvedValue({ id: "wh-scope" });
     const { service } = makeService({ warehouseFindFirst });
 
-    await expect(
-      service.resolveReportWarehouseId("reporter-1", "wh-scope"),
-    ).resolves.toBe("wh-scope");
+    await expect(service.resolveReportWarehouseId("reporter-1", "wh-scope")).resolves.toBe(
+      "wh-scope",
+    );
   });
 
   it("mặc định về kho CENTRAL cùng tổ chức khi không có scope/chỉ định", async () => {

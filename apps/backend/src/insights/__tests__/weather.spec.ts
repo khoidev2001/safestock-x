@@ -17,9 +17,7 @@ describe("WeatherService cache/fallback", () => {
   });
 
   it("gộp dữ liệu 72 giờ và dùng fresh cache cho lần gọi lặp", async () => {
-    const fetchMock = jest
-      .spyOn(global, "fetch")
-      .mockResolvedValue(response as never);
+    const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue(response as never);
     const service = new WeatherService();
 
     const first = await service.forecastRain(13.36, 109.03);
@@ -38,9 +36,7 @@ describe("WeatherService cache/fallback", () => {
 
   it("mạng lỗi sau thời gian fresh dùng bản gần nhất tối đa 6 giờ", async () => {
     jest.useFakeTimers().setSystemTime(new Date("2026-07-27T00:00:00Z"));
-    const fetchMock = jest
-      .spyOn(global, "fetch")
-      .mockResolvedValueOnce(response as never);
+    const fetchMock = jest.spyOn(global, "fetch").mockResolvedValueOnce(response as never);
     const service = new WeatherService();
     await service.forecastRain(13.36, 109.03);
 

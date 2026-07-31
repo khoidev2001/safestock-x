@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import { TransactionType } from "@prisma/client";
 import { AiClientService } from "../ai/ai-client.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { ReadinessService } from "../readiness/readiness.service";
 import { computeExpiryAlerts } from "./expiry-alert";
 import { computeForecast } from "./forecast";
 import {
@@ -25,6 +26,7 @@ export class InsightsService {
     private prisma: PrismaService,
     private ai: AiClientService,
     private weather: WeatherService,
+    private readinessService: ReadinessService,
   ) {}
 
   /** Tổng hợp insight 1 kho: dự báo cạn kho, cảnh báo hết hạn, đề xuất cân bằng, thời tiết. */
@@ -90,12 +92,7 @@ export class InsightsService {
   async getDailyBriefing(warehouseId: string) {
     const [insights, readiness, incidents, warehouse] = await Promise.all([
       this.getWarehouseInsights(warehouseId),
-      this.prisma.readinessScore.findUnique({
-        where: {
-          targetType_targetId: { targetType: "WAREHOUSE", targetId: warehouseId },
-        },
-        select: { score: true, operationalStatus: true },
-      }),
+      this.readinessService.getWarehouseScore(warehouseId),
       this.prisma.incident.findMany({
         where: { warehouseId, state: { not: "RESOLVED" } },
         select: { severity: true },
@@ -142,7 +139,10 @@ export class InsightsService {
       const facts = buildDailyBriefingFacts(snapshot);
       const selection = await this.ai.selectBriefingFacts(facts);
       const factById = new Map(facts.map((fact) => [fact.id, fact.text]));
-      const generated = selection.factIds.map((id) => factById.get(id)).filter(Boolean).join(" ");
+      const generated = selection.factIds
+        .map((id) => factById.get(id))
+        .filter(Boolean)
+        .join(" ");
       if (
         selection.factIds.length !== facts.length ||
         new Set(selection.factIds).size !== facts.length ||

@@ -6,6 +6,6 @@ describe("resolveEnvFilePaths", () => {
   });
 
   it("uses only the explicit runtime file when configured", () => {
-    expect(resolveEnvFilePaths(" C:\\runtime\\.env.demo ")).toEqual(["C:\\runtime\\.env.demo"]);
+    expect(resolveEnvFilePaths(" C:\\runtime\\.env.local ")).toEqual(["C:\\runtime\\.env.local"]);
   });
 });

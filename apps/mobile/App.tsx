@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AppState,
   FlatList,
+  Image,
   Pressable,
   SafeAreaView,
   StyleSheet,
@@ -29,17 +30,10 @@ import { InventoryScreen } from "./InventoryScreen";
 import { MonthlyReportScreen } from "./MonthlyReportScreen";
 import { requireApiBase } from "./config";
 import { c, styles } from "./styles";
-import { tabsForRole, type MobileTab } from "./dashboard-state";
-import {
-  clearStoredSession,
-  loadStoredSession,
-  saveStoredSession,
-} from "./session-store";
-import {
-  clearOfflineCache,
-  readOfflineCache,
-  writeOfflineCache,
-} from "./offline-cache";
+import { initialTabForRole, tabsForRole, type MobileTab } from "./dashboard-state";
+import { MissionsScreen } from "./MissionsScreen";
+import { clearStoredSession, loadStoredSession, saveStoredSession } from "./session-store";
+import { clearOfflineCache, readOfflineCache, writeOfflineCache } from "./offline-cache";
 import {
   assessDanger,
   disasterOf,
@@ -48,6 +42,8 @@ import {
   parseMissionSummary,
 } from "./disaster";
 import { mobileRoleLabel } from "./role-labels";
+
+const brandLogo = require("./assets/brand/ung-pho-nhanh-logo.png");
 
 export default function App() {
   const [session, setSession] = useState<LoginResult | null>(null);
@@ -136,9 +132,14 @@ export default function App() {
   if (restoringSession) {
     return (
       <SafeAreaView style={styles.screen}>
-        <StatusBar style="light" />
+        <StatusBar style="dark" backgroundColor={c.bg} />
         <View style={styles.center}>
-          <Text style={styles.logo}>Ứng phó nhanh</Text>
+          <Image
+            source={brandLogo}
+            style={styles.restoreLogo}
+            resizeMode="contain"
+            accessibilityLabel="Logo Ứng phó nhanh"
+          />
           <Text style={styles.emptyText}>Đang khôi phục phiên an toàn…</Text>
         </View>
       </SafeAreaView>
@@ -147,15 +148,11 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" backgroundColor={c.bg} />
       {!session ? (
         <LoginScreen onLogin={handleLogin} />
       ) : (
-        <MobileRoleShell
-          token={session.accessToken}
-          user={session.user}
-          onLogout={logout}
-        />
+        <MobileRoleShell token={session.accessToken} user={session.user} onLogout={logout} />
       )}
     </SafeAreaView>
   );
@@ -171,9 +168,8 @@ function MobileRoleShell({
   onLogout: () => void;
 }) {
   const tabs = tabsForRole(user.role);
-  const [tab, setTab] = useState<MobileTab>(
-    user.role === "REPORTER" ? "report" : "home",
-  );
+  const [tab, setTab] = useState<MobileTab>(() => initialTabForRole(user.role));
+  const [missionFromList, setMissionFromList] = useState<string | null>(null);
 
   return (
     <View style={shellStyles.shell}>
@@ -188,7 +184,15 @@ function MobileRoleShell({
         </View>
       ) : null}
       <View style={shellStyles.content}>
-        {tab === "home" ? (
+        {missionFromList ? (
+          <MissionDetailScreen
+            token={token}
+            userId={user.id}
+            role={user.role}
+            missionId={missionFromList}
+            onBack={() => setMissionFromList(null)}
+          />
+        ) : tab === "home" ? (
           <DashboardScreen token={token} user={user} view="home" />
         ) : tab === "readiness" ? (
           <DashboardScreen token={token} user={user} view="readiness" />
@@ -196,6 +200,8 @@ function MobileRoleShell({
           <InventoryScreen token={token} user={user} />
         ) : tab === "monthly-report" ? (
           <MonthlyReportScreen token={token} user={user} />
+        ) : tab === "missions" ? (
+          <MissionsScreen token={token} user={user} onOpenMission={setMissionFromList} />
         ) : tab === "report" ? (
           <ReportScreen token={token} user={user} onLogout={onLogout} />
         ) : (
@@ -206,25 +212,20 @@ function MobileRoleShell({
         {tabs.map((item) => (
           <Pressable
             key={item}
-            onPress={() => setTab(item)}
+            onPress={() => {
+              // Rời tab thì thoát luôn màn chi tiết đang mở, nếu không người dùng
+              // bấm tab khác mà vẫn thấy nhiệm vụ cũ đè lên.
+              setMissionFromList(null);
+              setTab(item);
+            }}
             accessibilityRole="tab"
             accessibilityState={{ selected: tab === item }}
             style={shellStyles.tab}
           >
-            <Text
-              style={[
-                shellStyles.tabIcon,
-                tab === item && shellStyles.tabIconActive,
-              ]}
-            >
+            <Text style={[shellStyles.tabIcon, tab === item && shellStyles.tabIconActive]}>
               {tabIcon(item)}
             </Text>
-            <Text
-              style={[
-                shellStyles.tabLabel,
-                tab === item && shellStyles.tabLabelActive,
-              ]}
-            >
+            <Text style={[shellStyles.tabLabel, tab === item && shellStyles.tabLabelActive]}>
               {tabLabel(item)}
             </Text>
           </Pressable>
@@ -240,6 +241,7 @@ function tabLabel(tab: MobileTab): string {
     readiness: "Sẵn sàng",
     inventory: "Kho",
     "monthly-report": "Kiểm kê",
+    missions: "Lệnh",
     alerts: "Cảnh báo",
     report: "Báo cáo",
   }[tab];
@@ -251,17 +253,14 @@ function tabIcon(tab: MobileTab): string {
     readiness: "02",
     inventory: "03",
     "monthly-report": "04",
-    alerts: "04",
-    report: "01",
+    missions: "01",
+    alerts: "05",
+    report: "02",
   }[tab];
 }
 
 /** Màn đăng nhập chung cho người báo cáo và Lực lượng hiện trường. */
-function LoginScreen({
-  onLogin,
-}: {
-  onLogin: (result: LoginResult) => Promise<void>;
-}) {
+function LoginScreen({ onLogin }: { onLogin: (result: LoginResult) => Promise<void> }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -281,43 +280,48 @@ function LoginScreen({
   }
 
   return (
-    <View style={styles.center}>
-      <Text style={styles.logo}>Ứng phó nhanh</Text>
-      <Text style={[styles.subtitle, { marginBottom: 28 }]}>Ứng phó hiện trường</Text>
-
-      <Text style={styles.label}>Email</Text>
-      <TextInput
-        style={styles.input}
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        keyboardType="email-address"
-        placeholder="email@ungphonhanh.vn"
-        placeholderTextColor={c.muted}
-        aria-label="Email đăng nhập"
+    <View style={styles.loginContainer}>
+      <Image
+        source={brandLogo}
+        style={styles.brandLogo}
+        resizeMode="contain"
+        accessibilityLabel="Logo Ứng phó nhanh"
       />
+      <View style={styles.loginCard}>
+        <Text style={styles.label}>Địa chỉ email</Text>
+        <TextInput
+          style={styles.input}
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          placeholder="email@ungphonhanh.vn"
+          placeholderTextColor={c.muted}
+          aria-label="Email đăng nhập"
+        />
 
-      <Text style={styles.label}>Mật khẩu</Text>
-      <TextInput
-        style={styles.input}
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        placeholder="Mật khẩu"
-        placeholderTextColor={c.muted}
-        aria-label="Mật khẩu"
-      />
+        <Text style={styles.label}>Mật khẩu</Text>
+        <TextInput
+          style={styles.input}
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          placeholder="Mật khẩu"
+          placeholderTextColor={c.muted}
+          aria-label="Mật khẩu"
+        />
 
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-      <Pressable
-        style={[styles.button, busy && { opacity: 0.6 }]}
-        onPress={submit}
-        disabled={busy}
-        accessibilityRole="button"
-      >
-        <Text style={styles.buttonText}>{busy ? "Đang đăng nhập…" : "Đăng nhập"}</Text>
-      </Pressable>
+        <Pressable
+          style={[styles.button, busy && { opacity: 0.6 }]}
+          onPress={submit}
+          disabled={busy}
+          accessibilityRole="button"
+        >
+          <Text style={styles.buttonText}>{busy ? "Đang đăng nhập…" : "Đăng nhập"}</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -346,10 +350,7 @@ function NotificationsScreen({
     setError(null);
     let hasCachedData = false;
     try {
-      const cached = await readOfflineCache<Notification[]>(
-        user.id,
-        "notifications",
-      );
+      const cached = await readOfflineCache<Notification[]>(user.id, "notifications");
       if (cached) {
         hasCachedData = true;
         setItems(cached.data);
@@ -369,7 +370,7 @@ function NotificationsScreen({
     } catch (e) {
       setError(
         hasCachedData
-          ? "Đang dùng dữ liệu đã lưu vì không kết nối được máy chủ LAN."
+          ? "Đang dùng dữ liệu đã lưu vì chưa kết nối được ungphonhanh.life."
           : e instanceof Error
             ? e.message
             : "Lỗi tải dữ liệu",
@@ -389,7 +390,9 @@ function NotificationsScreen({
     try {
       socketBase = requireApiBase();
     } catch (error) {
-      setError(error instanceof Error ? error.message : "APK chưa có địa chỉ máy chủ LAN.");
+      setError(
+        error instanceof Error ? error.message : "APK chưa được cấu hình địa chỉ ungphonhanh.life.",
+      );
       return;
     }
     const socket = io(socketBase, {
@@ -465,9 +468,7 @@ function NotificationsScreen({
         >
           <Text style={{ color: c.amber, fontSize: 12, fontWeight: "700" }}>
             Ngoại tuyến · chỉ đọc
-            {cacheStoredAt
-              ? ` · dữ liệu lưu lúc ${formatCacheTime(cacheStoredAt)}`
-              : ""}
+            {cacheStoredAt ? ` · dữ liệu lưu lúc ${formatCacheTime(cacheStoredAt)}` : ""}
           </Text>
         </View>
       ) : null}
@@ -657,7 +658,7 @@ const shellStyles = StyleSheet.create({
     backgroundColor: c.bg,
   },
   sessionText: { flex: 1, color: c.muted, fontSize: 10, fontWeight: "700" },
-  logout: { color: c.amber, fontSize: 11, fontWeight: "800" },
+  logout: { color: c.primary, fontSize: 11, fontWeight: "800" },
   tabBar: {
     minHeight: 66,
     flexDirection: "row",
@@ -686,10 +687,10 @@ const shellStyles = StyleSheet.create({
     fontWeight: "900",
   },
   tabIconActive: {
-    borderColor: c.amber,
-    backgroundColor: c.amber,
-    color: "#111827",
+    borderColor: c.primary,
+    backgroundColor: c.primary,
+    color: "#FFFFFF",
   },
   tabLabel: { color: c.muted, fontSize: 9, fontWeight: "700" },
-  tabLabelActive: { color: c.amber },
+  tabLabelActive: { color: c.primary },
 });

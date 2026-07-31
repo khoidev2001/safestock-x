@@ -99,9 +99,6 @@ importers:
       '@prisma/client':
         specifier: ^5.20.0
         version: 5.22.0(prisma@5.22.0)
-      '@safestock/scenario-definitions':
-        specifier: workspace:*
-        version: link:../../packages/scenario-definitions
       '@safestock/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
@@ -406,12 +403,6 @@ importers:
       brace-expansion-patched:
         specifier: npm:brace-expansion@5.0.8
         version: brace-expansion@5.0.8
-
-  packages/scenario-definitions:
-    devDependencies:
-      typescript:
-        specifier: ^5.5.4
-        version: 5.9.3
 
   packages/shared-types:
     devDependencies:

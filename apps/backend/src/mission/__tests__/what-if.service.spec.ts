@@ -4,24 +4,105 @@ import { WhatIfService } from "../what-if.service";
 const baselineAnalysis = {
   schemaVersion: "coordination-analysis.v1",
   status: "PRELIMINARY",
-  reception: { locationFactId: null, affectedPeopleFactId: "F1", incidentTypeFactId: "F2", weatherFactId: null, operationalStatus: "PRELIMINARY" },
-  urgency: { level: 3, label: "Muc uu tien 3/5", confidence: 0.6, status: "PRELIMINARY", basisFactIds: ["F1"], ruleVersion: "coordination-rules.v1" },
+  reception: {
+    locationFactId: null,
+    affectedPeopleFactId: "F1",
+    incidentTypeFactId: "F2",
+    weatherFactId: null,
+    operationalStatus: "PRELIMINARY",
+  },
+  urgency: {
+    level: 3,
+    label: "Muc uu tien 3/5",
+    confidence: 0.6,
+    status: "PRELIMINARY",
+    basisFactIds: ["F1"],
+    ruleVersion: "coordination-rules.v1",
+  },
   facts: [
-    { id: "F1", key: "AFFECTED_PEOPLE", provenance: "REPORTED", value: 18, qualifier: "EXACT", source: { sourceType: "USER_REPORT", sourceId: "mission-1", excerpt: "18 nguoi", capturedAt: null } },
-    { id: "F2", key: "INCIDENT_TYPE", provenance: "REPORTED", value: "FLOOD", qualifier: "EXACT", source: { sourceType: "USER_REPORT", sourceId: "mission-1", excerpt: "Lu", capturedAt: null } },
-  ], missingData: [], conflicts: [],
-  requirements: { status: "COMPUTED", items: [{ sku: "water", name: "Nuoc uong", unit: "chai", baseQuantity: 36, reserveQuantity: 0, totalQuantity: 36, basis: "backend", sourceFactIds: ["F1"], ruleVersion: "coordination-rules.v1" }], reason: null, ruleVersion: "coordination-rules.v1" },
-  coordination: { status: "COMPUTED", allocations: [{ warehouseId: "central", warehouseName: "Kho UBND Dong Xuan", sku: "water", quantity: 20, routeId: "route:mission-1:central", distanceKm: 2, etaMinutes: 8, routeStatus: "AVAILABLE" }], fulfillmentPercent: 56, reason: null, externalContacts: [] },
-  forecasts: [], priorityQuestion: null,
+    {
+      id: "F1",
+      key: "AFFECTED_PEOPLE",
+      provenance: "REPORTED",
+      value: 18,
+      qualifier: "EXACT",
+      source: {
+        sourceType: "USER_REPORT",
+        sourceId: "mission-1",
+        excerpt: "18 nguoi",
+        capturedAt: null,
+      },
+    },
+    {
+      id: "F2",
+      key: "INCIDENT_TYPE",
+      provenance: "REPORTED",
+      value: "FLOOD",
+      qualifier: "EXACT",
+      source: { sourceType: "USER_REPORT", sourceId: "mission-1", excerpt: "Lu", capturedAt: null },
+    },
+  ],
+  missingData: [],
+  conflicts: [],
+  requirements: {
+    status: "COMPUTED",
+    items: [
+      {
+        sku: "water",
+        name: "Nuoc uong",
+        unit: "chai",
+        baseQuantity: 36,
+        reserveQuantity: 0,
+        totalQuantity: 36,
+        basis: "backend",
+        sourceFactIds: ["F1"],
+        ruleVersion: "coordination-rules.v1",
+      },
+    ],
+    reason: null,
+    ruleVersion: "coordination-rules.v1",
+  },
+  coordination: {
+    status: "COMPUTED",
+    allocations: [
+      {
+        warehouseId: "central",
+        warehouseName: "Kho UBND Dong Xuan",
+        sku: "water",
+        quantity: 20,
+        routeId: "route:mission-1:central",
+        distanceKm: 2,
+        etaMinutes: 8,
+        routeStatus: "AVAILABLE",
+      },
+    ],
+    fulfillmentPercent: 56,
+    reason: null,
+    externalContacts: [],
+  },
+  forecasts: [],
+  priorityQuestion: null,
   explanation: { summary: "Baseline", invalidatedBy: [] },
-  adminControls: ["RUN_WHAT_IF"], computedAt: "2026-07-28T01:00:00.000Z",
-  versions: { model: "situation-extractor.v1", rules: "coordination-rules.v1", geoRegistry: "2026-07-28", routingGraph: "local-osrm", weatherSnapshot: null },
+  adminControls: ["RUN_WHAT_IF"],
+  computedAt: "2026-07-28T01:00:00.000Z",
+  versions: {
+    model: "situation-extractor.v1",
+    rules: "coordination-rules.v1",
+    geoRegistry: "2026-07-28",
+    routingGraph: "local-osrm",
+    weatherSnapshot: null,
+  },
 } as CoordinationAnalysis;
 
 function makeService() {
   const persistence = {
     getAnalysisSnapshot: jest.fn().mockResolvedValue({
-      id: "baseline-1", missionId: "mission-1", kind: "BASELINE", fingerprint: "sha256:baseline", input: { mission: { affectedPeople: 18, durationHours: 24 } }, result: baselineAnalysis,
+      id: "baseline-1",
+      missionId: "mission-1",
+      kind: "BASELINE",
+      fingerprint: "sha256:baseline",
+      input: { mission: { affectedPeople: 18, durationHours: 24 } },
+      result: baselineAnalysis,
     }),
     saveAnalysisSnapshot: jest.fn().mockResolvedValue({ id: "what-if-1" }),
   };
@@ -33,11 +114,19 @@ describe("WhatIfService", () => {
     const { service, persistence } = makeService();
 
     const result = await service.simulate("mission-1", "admin-1", null, {
-      requestId: "what-if-req-0001", baselineSnapshotId: "baseline-1", assumptionText: "neu co 36 nguoi can ho tro",
+      requestId: "what-if-req-0001",
+      baselineSnapshotId: "baseline-1",
+      assumptionText: "neu co 36 nguoi can ho tro",
     });
 
-    expect(result.simulation.assumptions).toEqual([expect.objectContaining({ kind: "AFFECTED_PEOPLE", affectedPeople: 36 })]);
-    expect(result.simulation.delta.metrics).toEqual(expect.arrayContaining([expect.objectContaining({ key: "requiredQuantity", baseline: 36, simulated: 72 })]));
+    expect(result.simulation.assumptions).toEqual([
+      expect.objectContaining({ kind: "AFFECTED_PEOPLE", affectedPeople: 36 }),
+    ]);
+    expect(result.simulation.delta.metrics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: "requiredQuantity", baseline: 36, simulated: 72 }),
+      ]),
+    );
     expect(persistence.saveAnalysisSnapshot).toHaveBeenCalledWith(
       "mission-1",
       "admin-1",
@@ -58,10 +147,14 @@ describe("WhatIfService", () => {
     const { service, persistence } = makeService();
 
     const result = await service.simulate("mission-1", "admin-1", null, {
-      requestId: "what-if-req-0001", baselineSnapshotId: "baseline-1", assumptionText: "cầu Suối Vàng bị ngập",
+      requestId: "what-if-req-0001",
+      baselineSnapshotId: "baseline-1",
+      assumptionText: "cầu Suối Vàng bị ngập",
     });
 
-    expect(result.simulation.unresolvedAssumptions).toEqual([expect.objectContaining({ resolution: "UNRESOLVED", reason: "UNKNOWN_REFERENCE" })]);
+    expect(result.simulation.unresolvedAssumptions).toEqual([
+      expect.objectContaining({ resolution: "UNRESOLVED", reason: "UNKNOWN_REFERENCE" }),
+    ]);
     expect(persistence.saveAnalysisSnapshot).toHaveBeenCalledTimes(1);
   });
 
@@ -143,11 +236,17 @@ describe("WhatIfService", () => {
     });
 
     const result = await service.simulate("mission-1", "admin-1", null, {
-      requestId: "what-if-rain-72h", baselineSnapshotId: "baseline-1", assumptionText: "nếu mưa lớn kéo dài 72 giờ",
+      requestId: "what-if-rain-72h",
+      baselineSnapshotId: "baseline-1",
+      assumptionText: "nếu mưa lớn kéo dài 72 giờ",
     });
 
     expect(result.simulation.assumptions).toEqual([
-      expect.objectContaining({ kind: "WEATHER_HORIZON", horizonHours: 72, forecastSnapshotId: "forecast-72h-v1" }),
+      expect.objectContaining({
+        kind: "WEATHER_HORIZON",
+        horizonHours: 72,
+        forecastSnapshotId: "forecast-72h-v1",
+      }),
     ]);
     expect(result.simulation.assumptions).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ kind: "DURATION_HOURS" })]),

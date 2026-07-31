@@ -9,9 +9,7 @@ import {
   validateSituationExtraction,
 } from "@safestock/shared-types";
 import { createHash } from "crypto";
-import {
-  VERIFIED_WAREHOUSE_LOCATION_REGISTRY_VERSION,
-} from "../../prisma/verified-warehouse-location";
+import { VERIFIED_WAREHOUSE_LOCATION_REGISTRY_VERSION } from "../../prisma/verified-warehouse-location";
 import { getPublicCommuneContacts } from "../../prisma/verified-neighbor-contact";
 import { LocalRoutingService } from "../geo/local-routing.service";
 import { WeatherAlert, WeatherService } from "../insights/weather";
@@ -55,7 +53,9 @@ interface MissionRecord {
 interface SnapshotPersistence {
   mission: { findUnique(args: unknown): Promise<MissionRecord | null> };
   warehouse: {
-    findMany(args: unknown): Promise<Array<{ id: string; name: string; lat: number | null; lng: number | null }>>;
+    findMany(
+      args: unknown,
+    ): Promise<Array<{ id: string; name: string; lat: number | null; lng: number | null }>>;
   };
 }
 
@@ -107,9 +107,7 @@ export class CoordinationSnapshotService {
       ({ routeGeometry: _routeGeometry, roadRefs: _roadRefs, ...allocation }) => allocation,
     );
     const hasLocalShortage = mission.requirements.some((requirement) => requirement.shortage > 0);
-    const externalContacts = hasLocalShortage
-      ? await this.computeExternalContacts(mission)
-      : [];
+    const externalContacts = hasLocalShortage ? await this.computeExternalContacts(mission) : [];
     const forecasts = this.buildForecasts(weather);
     const status = readiness.missingData.length > 0 ? "NEEDS_CONFIRMATION" : "PRELIMINARY";
     const analysis: CoordinationAnalysis = {
@@ -352,7 +350,9 @@ export class CoordinationSnapshotService {
     );
   }
 
-  private async computeExternalContacts(mission: MissionRecord): Promise<ExternalContactSuggestion[]> {
+  private async computeExternalContacts(
+    mission: MissionRecord,
+  ): Promise<ExternalContactSuggestion[]> {
     const contacts = getPublicCommuneContacts().filter((contact) => contact.scope === "NEIGHBOR");
     return Promise.all(
       contacts.map(async (contact) => {
@@ -423,7 +423,10 @@ export class CoordinationSnapshotService {
         reason: "MISSING_COORDINATES",
       };
     }
-    const route = await this.routing.route({ lat, lng }, { lat: mission.incidentLat, lng: mission.incidentLng });
+    const route = await this.routing.route(
+      { lat, lng },
+      { lat: mission.incidentLat, lng: mission.incidentLng },
+    );
     if (
       route.status !== "ROUTED" ||
       route.distanceKm == null ||
@@ -478,7 +481,11 @@ export class CoordinationSnapshotService {
     const people = numericFactValue(facts, "AFFECTED_PEOPLE");
     const stranded = booleanFactValue(facts, "PEOPLE_STRANDED");
     const isolationRisk = booleanFactValue(facts, "ISOLATION_RISK");
-    const basisFactIds = factIdsForKeys(facts, ["AFFECTED_PEOPLE", "PEOPLE_STRANDED", "ISOLATION_RISK"]);
+    const basisFactIds = factIdsForKeys(facts, [
+      "AFFECTED_PEOPLE",
+      "PEOPLE_STRANDED",
+      "ISOLATION_RISK",
+    ]);
     const level = stranded ? 5 : isolationRisk || (people ?? 0) >= 100 ? 4 : people ? 3 : null;
     return {
       level: level as 1 | 2 | 3 | 4 | 5 | null,
@@ -532,7 +539,9 @@ function booleanFactValue(facts: CoordinationFact[], key: string): boolean {
 }
 
 function factIdsForKeys(facts: CoordinationFact[], keys: string[]): string[] {
-  return facts.filter((fact) => keys.includes(fact.key) && fact.provenance !== "MISSING").map((fact) => fact.id);
+  return facts
+    .filter((fact) => keys.includes(fact.key) && fact.provenance !== "MISSING")
+    .map((fact) => fact.id);
 }
 
 function indexFactIds(facts: CoordinationFact[]) {
@@ -583,5 +592,9 @@ function asString(value: unknown): string | undefined {
 }
 
 function slug(value: string): string {
-  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-");
 }

@@ -370,11 +370,7 @@ describe("InventoryService.transfer atomic", () => {
 describe("InventoryController.transfer", () => {
   it("forward warehouse scope từ JWT", async () => {
     const transfer = jest.fn().mockResolvedValue({ ok: true });
-    const controller = new InventoryController(
-      { transfer } as never,
-      {} as never,
-      {} as never,
-    );
+    const controller = new InventoryController({ transfer } as never, {} as never, {} as never);
 
     await controller.transfer({ user: { userId: "user-1", warehouseId: "warehouse-a" } } as never, {
       batchId: "source",

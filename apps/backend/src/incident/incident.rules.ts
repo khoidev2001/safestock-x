@@ -1,3 +1,5 @@
+import { SIMULATOR_ALARM_POLICY } from "../simulation/simulation-policy";
+
 /**
  * Rule engine phát hiện sự cố — hàm THUẦN (không DB, test được).
  *
@@ -5,7 +7,7 @@
  * NGƯỠNG CỤ THỂ, chấm điểm nghiêm trọng theo trọng số bằng chứng.
  *
  * Nguyên tắc: engine phân biệt NHIỄU BÌNH THƯỜNG vs SỰ CỐ THẬT — không chỉ khớp
- * kịch bản (nhờ ngưỡng + tổ hợp nhiều nguồn), tránh "vòng tròn tự chứng minh".
+ * mẫu dữ liệu đơn lẻ (nhờ ngưỡng + tổ hợp nhiều nguồn), tránh "vòng tròn tự chứng minh".
  */
 
 export interface SensorSignal {
@@ -24,7 +26,8 @@ export type IncidentKind =
   | "POWER_OUTAGE"
   | "MISPLACED_ITEM"
   | "STAT_ANOMALY"
-  | "PREDICTIVE_WARNING";
+  | "PREDICTIVE_WARNING"
+  | "DEVICE_SILENT";
 export type Severity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
 export interface EvidenceItem {
@@ -45,14 +48,85 @@ export interface DetectedIncident {
 }
 
 // Ngưỡng cụ thể — cấu hình được (giữ hằng số cho MVP).
+const temperatureHigh = SIMULATOR_ALARM_POLICY.rules.find(
+  (rule) => rule.id === "temperature-high",
+)!.threshold;
+const humidityHigh = SIMULATOR_ALARM_POLICY.rules.find(
+  (rule) => rule.id === "humidity-high",
+)!.threshold;
+
 export const RULES = {
   loadcellDropKg: 3, // loadcell giảm > 3kg = đáng ngờ
-  humidityHigh: 85, // độ ẩm > 85% = bảo quản xấu
-  temperatureHigh: 35, // nhiệt độ > 35°C
+  humidityHigh, // độ ẩm > 85% = bảo quản xấu
+  temperatureHigh, // nhiệt độ > 35°C
   correlationWindowMs: 5 * 60 * 1000, // ±5 phút để coi là cùng sự kiện
   smokeHigh: 30, // khói > 30ppm = đáng ngờ
   fireTempJumpC: 15, // nhiệt độ tăng > 15°C trong cửa sổ tương quan = cháy thật, không phải nhiễu
+  // Bỏ lỡ 3 chu kỳ báo mới coi là mất tín hiệu: 1 lần trễ là bình thường (mạng
+  // chậm, thiết bị bận), 3 lần liên tiếp thì không còn là nhiễu.
+  silentCyclesBeforeAlert: 3,
+  // Im lặng quá 10 chu kỳ: không còn là trục trặc thoáng qua, coi như thiết bị chết.
+  silentCyclesForHigh: 10,
 };
+
+/** Trạng thái báo cáo của một thiết bị — đầu vào cho quy tắc mất tín hiệu. */
+export interface DeviceSilenceSignal {
+  deviceCode: string;
+  deviceType: string;
+  /** null = chưa từng gửi số liệu nào. */
+  lastSeenAt: Date | null;
+  /** Chu kỳ báo mong đợi (giây). null = không giám sát thiết bị này. */
+  expectedIntervalSeconds: number | null;
+}
+
+/**
+ * Mất tín hiệu thiết bị.
+ *
+ * Cảm biến hỏng, hết pin hoặc đứt mạng thì KHÔNG gửi gì cả. Nếu chỉ phản ứng với
+ * dữ liệu nhận được, im lặng sẽ bị hiểu nhầm thành "mọi thứ bình thường" — đúng
+ * lúc kho đang không được giám sát. Quy tắc này biến sự vắng mặt của dữ liệu
+ * thành một sự cố hiển thị được.
+ *
+ * Hàm thuần: `now` được truyền vào để test không phụ thuộc đồng hồ thật.
+ */
+export function detectSilentDevices(devices: DeviceSilenceSignal[], now: Date): DetectedIncident[] {
+  const incidents: DetectedIncident[] = [];
+  for (const device of devices) {
+    const interval = device.expectedIntervalSeconds;
+    if (!interval || !Number.isFinite(interval) || interval <= 0) continue;
+
+    const intervalMs = interval * 1000;
+    // Chưa từng báo lần nào cũng là mất tín hiệu — thiết bị đã khai báo nhưng
+    // không bao giờ lên tiếng là trường hợp lắp đặt hỏng, không phải "chờ thêm".
+    const silentMs = device.lastSeenAt
+      ? now.getTime() - device.lastSeenAt.getTime()
+      : Number.POSITIVE_INFINITY;
+    const missedCycles = silentMs / intervalMs;
+    if (missedCycles < RULES.silentCyclesBeforeAlert) continue;
+
+    const severity: Severity = missedCycles >= RULES.silentCyclesForHigh ? "HIGH" : "MEDIUM";
+    incidents.push({
+      kind: "DEVICE_SILENT",
+      severity,
+      confidence: severity === "HIGH" ? 0.95 : 0.8,
+      title: `Mất tín hiệu thiết bị ${device.deviceCode}`,
+      evidence: [
+        {
+          deviceCode: device.deviceCode,
+          eventType: "DEVICE_SILENT",
+          // Số phút im lặng; vô cực (chưa từng báo) quy ước là 0 để giữ giá trị hữu hạn.
+          value: Number.isFinite(silentMs) ? Math.round(silentMs / 60_000) : 0,
+          weight: 1,
+          occurredAt: device.lastSeenAt ?? now,
+          note: device.lastSeenAt
+            ? `Không nhận được số liệu trong ${Math.round(silentMs / 60_000)} phút (chu kỳ mong đợi ${interval}s)`
+            : `Thiết bị đã khai báo nhưng chưa từng gửi số liệu (chu kỳ mong đợi ${interval}s)`,
+        },
+      ],
+    });
+  }
+  return incidents;
+}
 
 /**
  * Phát hiện sự cố từ danh sách tín hiệu (đã lọc theo 1 kho, 1 cửa sổ).

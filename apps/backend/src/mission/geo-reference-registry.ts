@@ -104,7 +104,9 @@ export function parseRouteReferenceSnapshots(value: unknown): RouteReferenceSnap
     if (!isRecord(entry) || typeof entry.routeId !== "string" || !entry.routeId.trim()) return [];
     const geometry = parseGeometry(entry.geometry);
     const roadRefs = Array.isArray(entry.roadRefs)
-      ? entry.roadRefs.filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
+      ? entry.roadRefs.filter(
+          (item): item is string => typeof item === "string" && Boolean(item.trim()),
+        )
       : [];
     return [{ routeId: entry.routeId.trim(), geometry, roadRefs }];
   });
@@ -133,14 +135,20 @@ function routeMatchesReference(route: RouteReferenceSnapshot, reference: GeoRefe
     );
   }
   if (!reference.anchor || !route.geometry) return false;
-  return lineDistanceMeters(route.geometry.coordinates, reference.anchor) <= BRIDGE_ROUTE_BUFFER_METERS;
+  return (
+    lineDistanceMeters(route.geometry.coordinates, reference.anchor) <= BRIDGE_ROUTE_BUFFER_METERS
+  );
 }
 
 function parseGeometry(value: unknown): RouteReferenceSnapshot["geometry"] {
-  if (!isRecord(value) || value.type !== "LineString" || !Array.isArray(value.coordinates)) return null;
+  if (!isRecord(value) || value.type !== "LineString" || !Array.isArray(value.coordinates))
+    return null;
   const coordinates = value.coordinates.filter(
     (point): point is [number, number] =>
-      Array.isArray(point) && point.length >= 2 && Number.isFinite(point[0]) && Number.isFinite(point[1]),
+      Array.isArray(point) &&
+      point.length >= 2 &&
+      Number.isFinite(point[0]) &&
+      Number.isFinite(point[1]),
   );
   return coordinates.length >= 2 ? { type: "LineString", coordinates } : null;
 }
@@ -151,7 +159,10 @@ function lineDistanceMeters(
 ): number {
   let minimum = Number.POSITIVE_INFINITY;
   for (let index = 1; index < coordinates.length; index += 1) {
-    minimum = Math.min(minimum, segmentDistanceMeters(coordinates[index - 1], coordinates[index], point));
+    minimum = Math.min(
+      minimum,
+      segmentDistanceMeters(coordinates[index - 1], coordinates[index], point),
+    );
   }
   return minimum;
 }
@@ -171,12 +182,15 @@ function segmentDistanceMeters(
   const abx = bx - ax;
   const aby = by - ay;
   const denominator = abx * abx + aby * aby;
-  const ratio = denominator === 0 ? 0 : Math.max(0, Math.min(1, -(ax * abx + ay * aby) / denominator));
+  const ratio =
+    denominator === 0 ? 0 : Math.max(0, Math.min(1, -(ax * abx + ay * aby) / denominator));
   return Math.hypot(ax + ratio * abx, ay + ratio * aby);
 }
 
 function containsPhrase(text: string, phrase: string): boolean {
-  return ` ${text.replace(/[^a-z0-9]+/g, " ")} `.includes(` ${phrase.replace(/[^a-z0-9]+/g, " ")} `);
+  return ` ${text.replace(/[^a-z0-9]+/g, " ")} `.includes(
+    ` ${phrase.replace(/[^a-z0-9]+/g, " ")} `,
+  );
 }
 
 function fold(value: string): string {

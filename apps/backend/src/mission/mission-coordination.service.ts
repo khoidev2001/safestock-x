@@ -145,7 +145,12 @@ export class MissionCoordinationService {
       });
       return created;
     } catch (error) {
-      const retry = await this.findFieldUpdateAfterUniqueConflict(missionId, actorId, payload.requestId, error);
+      const retry = await this.findFieldUpdateAfterUniqueConflict(
+        missionId,
+        actorId,
+        payload.requestId,
+        error,
+      );
       if (retry) return retry;
       throw error;
     }
@@ -186,7 +191,10 @@ export class MissionCoordinationService {
         if (fact.source.sourceType !== "FIELD_UPDATE" || fact.source.sourceId !== fieldUpdate.id) {
           errors.push("field update intent reported facts must use this field update source");
         }
-        if (fact.source.excerpt == null || !includesFolded(fieldUpdate.confirmedText, fact.source.excerpt)) {
+        if (
+          fact.source.excerpt == null ||
+          !includesFolded(fieldUpdate.confirmedText, fact.source.excerpt)
+        ) {
           errors.push("field update intent fact excerpt is not grounded in confirmedText");
         }
       }
@@ -229,9 +237,7 @@ export class MissionCoordinationService {
     input: SaveAnalysisSnapshotInput,
   ) {
     const validationErrors = validateCoordinationAnalysis(input.result);
-    const assumptionErrors = input.assumptions
-      ? validateWhatIfAssumptions(input.assumptions)
-      : [];
+    const assumptionErrors = input.assumptions ? validateWhatIfAssumptions(input.assumptions) : [];
     const scalarErrors = this.validateSnapshotInput(input);
     const errors = [...validationErrors, ...assumptionErrors, ...scalarErrors];
     if (errors.length) {
@@ -290,11 +296,7 @@ export class MissionCoordinationService {
         },
       });
     } catch (error) {
-      const retry = await this.findSnapshotAfterUniqueConflict(
-        missionId,
-        input.requestId,
-        error,
-      );
+      const retry = await this.findSnapshotAfterUniqueConflict(missionId, input.requestId, error);
       if (retry) {
         if (retry.fingerprint === input.fingerprint.trim()) return retry;
         throw new ConflictException({
@@ -344,7 +346,9 @@ export class MissionCoordinationService {
     scopeWarehouseId: string | null | undefined,
   ) {
     await this.assertMissionAccess(missionId, actorId, scopeWarehouseId);
-    const snapshot = await this.db.missionAnalysisSnapshot.findUnique({ where: { id: snapshotId } });
+    const snapshot = await this.db.missionAnalysisSnapshot.findUnique({
+      where: { id: snapshotId },
+    });
     if (!snapshot || snapshot.missionId !== missionId) {
       throw new NotFoundException("Khong tim thay snapshot phan tich");
     }
@@ -382,7 +386,12 @@ export class MissionCoordinationService {
       select: { id: true, warehouseId: true },
     });
     if (!mission) throw new NotFoundException("Không tìm thấy nhiệm vụ");
-    await assertActorCanAccessWarehouse(this.prisma, actorId, scopeWarehouseId, mission.warehouseId);
+    await assertActorCanAccessWarehouse(
+      this.prisma,
+      actorId,
+      scopeWarehouseId,
+      mission.warehouseId,
+    );
     return mission;
   }
 

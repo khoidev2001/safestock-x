@@ -54,10 +54,7 @@ export class AuditService {
    * Tra soát nhật ký — chỉ ADMIN (quyền audit:view) gọi được qua controller.
    * Lọc tùy chọn theo entity (vd "ItemBatch") và người thực hiện.
    */
-  async list(
-    actorUserId: string,
-    params: { entity?: string; actorId?: string; limit?: number },
-  ) {
+  async list(actorUserId: string, params: { entity?: string; actorId?: string; limit?: number }) {
     const actor = await this.prisma.user.findUnique({
       where: { id: actorUserId },
       select: { organizationId: true },

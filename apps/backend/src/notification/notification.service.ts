@@ -30,27 +30,30 @@ interface PersistedNotification {
 interface NotificationPersistence {
   notification: {
     create(args: { data: Record<string, unknown> }): Promise<PersistedNotification>;
-    findUnique(
-      args: { where: { fieldUpdateId: string } },
-    ): Promise<PersistedNotification | null>;
-    update(
-      args: { where: { id: string }; data: { title?: string; body?: string } },
-    ): Promise<PersistedNotification>;
+    findUnique(args: { where: { fieldUpdateId: string } }): Promise<PersistedNotification | null>;
+    update(args: {
+      where: { id: string };
+      data: { title?: string; body?: string };
+    }): Promise<PersistedNotification>;
     findMany(args: Record<string, unknown>): Promise<unknown[]>;
     updateMany(args: Record<string, unknown>): Promise<{ count: number }>;
   };
   user: {
-    findUnique(
-      args: { where: { id: string }; select: { organizationId: true } },
-    ): Promise<{ organizationId: string } | null>;
+    findUnique(args: {
+      where: { id: string };
+      select: { organizationId: true };
+    }): Promise<{ organizationId: string } | null>;
   };
   warehouse: {
-    findUnique(
-      args: { where: { id: string }; select: { organizationId: true } },
-    ): Promise<{ organizationId: string } | null>;
+    findUnique(args: {
+      where: { id: string };
+      select: { organizationId: true };
+    }): Promise<{ organizationId: string } | null>;
   };
   mission: {
-    findUnique(args: Record<string, unknown>): Promise<{ warehouse: { organizationId: string } } | null>;
+    findUnique(
+      args: Record<string, unknown>,
+    ): Promise<{ warehouse: { organizationId: string } } | null>;
   };
 }
 
@@ -101,7 +104,9 @@ export class NotificationService {
   /** A legacy notification without an organization is deliberately never pushed. */
   pushPersisted(notification: PersistedNotification) {
     if (!notification.organizationId) {
-      this.log.warn("Không đẩy notification không có organizationId; record legacy cần backfill nội bộ.");
+      this.log.warn(
+        "Không đẩy notification không có organizationId; record legacy cần backfill nội bộ.",
+      );
       return;
     }
     try {
@@ -147,7 +152,10 @@ export class NotificationService {
   }
 
   private async actorOrganizationId(actorId: string): Promise<string> {
-    const actor = await this.db.user.findUnique({ where: { id: actorId }, select: { organizationId: true } });
+    const actor = await this.db.user.findUnique({
+      where: { id: actorId },
+      select: { organizationId: true },
+    });
     if (!actor) throw new NotFoundException("Không tìm thấy người dùng");
     return actor.organizationId;
   }
@@ -190,9 +198,6 @@ export class NotificationService {
 
 function isUniqueConflict(error: unknown): boolean {
   return (
-    error != null &&
-    typeof error === "object" &&
-    "code" in error &&
-    String(error.code) === "P2002"
+    error != null && typeof error === "object" && "code" in error && String(error.code) === "P2002"
   );
 }

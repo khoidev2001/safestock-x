@@ -30,7 +30,9 @@ $env:NODE_ENV = "production"
 
 while ($true) {
   Add-Content -LiteralPath $logFile -Value "[$(Get-Date -Format o)] Starting frontend"
-  & $nodePath $entryPoint "start" "-p" "3200" *>> $logFile
+  # Caddy is the only LAN ingress. Keeping Next on loopback prevents a direct
+  # http://server:3200 path from bypassing the one-domain HTTPS boundary.
+  & $nodePath $entryPoint "start" "-p" "3200" "--hostname" "127.0.0.1" *>> $logFile
   $exitCode = $LASTEXITCODE
   Add-Content -LiteralPath $logFile -Value "[$(Get-Date -Format o)] Frontend exited with code $exitCode; restarting in 10 seconds"
   Start-Sleep -Seconds 10

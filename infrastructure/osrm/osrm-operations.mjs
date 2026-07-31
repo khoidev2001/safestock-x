@@ -5,27 +5,14 @@ const SOURCE_NAMES = new Set(["dong-xuan.osm", "dong-xuan.osm.pbf"]);
 
 export function parseBbox(value) {
   const bbox =
-    typeof value === "string"
-      ? value.split(",").map((part) => Number(part.trim()))
-      : value;
+    typeof value === "string" ? value.split(",").map((part) => Number(part.trim())) : value;
 
-  if (
-    !Array.isArray(bbox) ||
-    bbox.length !== 4 ||
-    !bbox.every(Number.isFinite)
-  ) {
+  if (!Array.isArray(bbox) || bbox.length !== 4 || !bbox.every(Number.isFinite)) {
     throw new Error("Bbox phải có dạng west,south,east,north.");
   }
 
   const [west, south, east, north] = bbox;
-  if (
-    west < -180 ||
-    east > 180 ||
-    south < -90 ||
-    north > 90 ||
-    west >= east ||
-    south >= north
-  ) {
+  if (west < -180 || east > 180 || south < -90 || north > 90 || west >= east || south >= north) {
     throw new Error("Bbox không hợp lệ.");
   }
   return bbox;
@@ -39,43 +26,23 @@ export function buildGraphDockerCommands({ dataDirectory, sourceName }) {
   }
 
   const mount = `${path.resolve(dataDirectory)}:/data`;
-  const dockerPrefix = [
-    "run",
-    "--rm",
-    "--volume",
-    mount,
-    OSRM_IMAGE,
-  ];
+  const dockerPrefix = ["run", "--rm", "--volume", mount, OSRM_IMAGE];
 
   return [
     {
       stage: "extract",
       command: "docker",
-      args: [
-        ...dockerPrefix,
-        "osrm-extract",
-        "-p",
-        "/opt/car.lua",
-        `/data/${sourceName}`,
-      ],
+      args: [...dockerPrefix, "osrm-extract", "-p", "/opt/car.lua", `/data/${sourceName}`],
     },
     {
       stage: "partition",
       command: "docker",
-      args: [
-        ...dockerPrefix,
-        "osrm-partition",
-        "/data/dong-xuan.osrm",
-      ],
+      args: [...dockerPrefix, "osrm-partition", "/data/dong-xuan.osrm"],
     },
     {
       stage: "customize",
       command: "docker",
-      args: [
-        ...dockerPrefix,
-        "osrm-customize",
-        "/data/dong-xuan.osrm",
-      ],
+      args: [...dockerPrefix, "osrm-customize", "/data/dong-xuan.osrm"],
     },
   ];
 }
@@ -132,8 +99,7 @@ export async function verifyLiveRoute({
     throw new Error("Thiếu local routing URL hoặc graph version.");
   }
 
-  const coordinates =
-    `${origin.lng},${origin.lat};${destination.lng},${destination.lat}`;
+  const coordinates = `${origin.lng},${origin.lat};${destination.lng},${destination.lat}`;
   const url =
     `${baseUrl.replace(/\/$/, "")}/route/v1/driving/${coordinates}` +
     "?overview=full&geometries=geojson&steps=false";

@@ -20,8 +20,8 @@ chứng, trạng thái là **No-go tạm thời**, không phải Pass.
 - Một tenant Đồng Xuân; kho trung tâm và kho thôn thuộc cùng tenant.
 - Bốn vai trò: REPORTER, ADMIN, WAREHOUSE, **Lực lượng hiện trường**
   (`RESCUE`). Không có phân công đội/cá nhân tự động.
-- Digital Twin chỉ áp dụng kho trung tâm. Simulator desktop là nguồn event
-  JSON mô phỏng; không tuyên bố đã kết nối cảm biến IoT thật.
+- Digital Twin chỉ áp dụng kho trung tâm. Simulator desktop tạo snapshot JSON
+  mô phỏng sau nút **Xác nhận**; không tuyên bố đã kết nối cảm biến IoT thật.
 - Liên xã chỉ là điểm liên hệ đã ghim: số điện thoại, vị trí, tuyến/ETA và
   nhãn `đề xuất liên hệ, chưa xác nhận có hàng`. Không check tồn xã khác,
   không cộng fulfillment, không tự gọi và không tạo giao dịch liên xã.
@@ -42,7 +42,6 @@ pnpm lint
 # Build shared workspace packages TRƯỚC: backend/frontend build resolve chúng qua
 # main: dist/index.js, mà dist bị gitignore → clean checkout phải build lại trước.
 pnpm --filter @safestock/shared-types build
-pnpm --filter @safestock/scenario-definitions build
 pnpm --filter @safestock/backend exec prisma validate
 pnpm --filter @safestock/backend exec jest --runInBand
 pnpm --filter @safestock/backend build
@@ -102,14 +101,14 @@ Không tắt audit hoặc bỏ qua test để lấy trạng thái xanh.
   dùng cookie `HttpOnly; SameSite=Lax` và giữ mạng không công khai.
 - Secret JWT/SMTP/Gemini/Ollama để trong secret manager hoặc `.env` ngoài Git.
   Không quay màn hình hoặc gửi log chứa token/cookie.
-- Simulator vận hành phải có `SIMULATION_MUTATION_ENABLED=false`; simulator demo
-  dùng database/Redis/port/volume tách riêng.
+- Simulator phải giữ `SIMULATION_MUTATION_ENABLED=false` ngoài thời điểm operator
+  chủ động test slider. Nếu bật cờ, dùng database local phù hợp và tắt lại sau test.
 
 ## 5. Kịch bản 5–7 phút, hai lượt liên tiếp
 
 | Thời lượng | Người thao tác | Bằng chứng phải thấy |
 |---:|---|---|
-| 0:00–0:40 | Desktop simulator | Một chỉ số kho trung tâm vượt ngưỡng; web nhận alert/realtime và email test có timestamp thật. |
+| 0:00–0:40 | Desktop simulator | Kéo một chỉ số vượt ngưỡng rồi bấm **Xác nhận**; chuông cục bộ kêu, web poll thấy snapshot/Incident và email test có timestamp phát hiện/nhận/gửi. |
 | 0:40–1:30 | REPORTER trên APK | Gửi tình huống text hoặc voice; nếu dùng voice, nội dung PhoWhisper chỉ điền sẵn và người dùng xác nhận trước khi gửi. |
 | 1:30–2:40 | ADMIN trên web | Mở phân tích AI/provenance, tạo Mission-to-Kit và xem allocation/readiness/thiếu hụt. |
 | 2:40–3:30 | ADMIN trên web | Mở What-if, so baseline/delta; nguồn ngoài xã nếu xuất hiện phải có nhãn chưa xác nhận. |
@@ -133,8 +132,8 @@ Trước khi gọi Go, lưu một biên bản gồm:
   QR, report và mission hoạt động.
 - Reload/tab mới/logout-login web khôi phục/thu hồi session đúng; web không lưu
   refresh token trong localStorage.
-- Desktop slider/scenario tạo event, web/mobile nhận đúng; alert chatbot và SMTP
-  có evidence thời gian nhận.
+- Desktop chỉ tạo snapshot khi bấm **Xác nhận**; ngắt/kết nối lại mạng phải giữ hàng
+  chờ idempotent, web poll nhận đúng một lần, chuông/SMTP có evidence thời gian nhận.
 - Tắt Wi-Fi ở điện thoại: cache/stale hiện rõ, mutation bị chặn; bật lại Wi-Fi:
   dữ liệu realtime phục hồi không tạo double-write.
 

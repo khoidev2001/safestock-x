@@ -4,10 +4,7 @@ export interface CoordinateMarker {
   lng: number | null;
 }
 
-export type CoordinateDraft = Record<
-  string,
-  { lat: number; lng: number }
->;
+export type CoordinateDraft = Record<string, { lat: number; lng: number }>;
 
 export function mergeCoordinateDrafts<T extends CoordinateMarker>(
   list: T[],
@@ -24,9 +21,10 @@ export function mergeCoordinateDrafts<T extends CoordinateMarker>(
   );
 }
 
-export function mergeHamletCoordinateDrafts<
-  T extends CoordinateMarker & { verified: boolean },
->(list: T[], draft: CoordinateDraft): T[] {
+export function mergeHamletCoordinateDrafts<T extends CoordinateMarker & { verified: boolean }>(
+  list: T[],
+  draft: CoordinateDraft,
+): T[] {
   return mergeCoordinateDrafts(list, draft).map((hamlet) =>
     draft[hamlet.id] ? { ...hamlet, verified: false } : hamlet,
   );

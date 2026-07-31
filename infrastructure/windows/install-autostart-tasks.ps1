@@ -32,6 +32,11 @@ $tasks = @(
     Description = "Starts the Ung Pho Nhanh Next.js frontend on port 3200."
   },
   @{
+    Name = "UngPhoNhanh-EdgeProxy"
+    Script = Join-Path $PSScriptRoot "run-edge-proxy.ps1"
+    Description = "Serves the hybrid LAN entry point on https://ungphonhanh.life."
+  },
+  @{
     Name = "UngPhoNhanh-AiService"
     Script = Join-Path $PSScriptRoot "run-ai-service.ps1"
     Description = "Starts the Ung Pho Nhanh FastAPI AI service on port 8000."
@@ -52,4 +57,4 @@ foreach ($task in $tasks) {
     -Trigger $trigger | Out-Null
 }
 
-Write-Output "Registered UngPhoNhanh-Backend, UngPhoNhanh-Frontend, and UngPhoNhanh-AiService."
+Write-Output "Registered UngPhoNhanh-Backend, UngPhoNhanh-Frontend, UngPhoNhanh-EdgeProxy, and UngPhoNhanh-AiService."

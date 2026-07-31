@@ -2,13 +2,7 @@ import { ForecastResult } from "./forecast";
 import { WeatherAlert } from "./weather";
 
 export type ReliefDemandGroup =
-  | "WASH"
-  | "RESCUE"
-  | "FOOD"
-  | "SHELTER"
-  | "HEALTH"
-  | "COMMUNICATION"
-  | "OTHER";
+  "WASH" | "RESCUE" | "FOOD" | "SHELTER" | "HEALTH" | "COMMUNICATION" | "OTHER";
 
 export interface WeatherDemandInput extends ForecastResult {
   categoryName: string;

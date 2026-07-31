@@ -9,10 +9,15 @@ import {
 import { PrismaService } from "../prisma/prisma.service";
 import { NotificationService } from "../notification/notification.service";
 import { AiClientService } from "../ai/ai-client.service";
-import { AlertMailService } from "../mail/alert-mail.service";
+import { AlertEmailOutboxService } from "../mail/alert-email-outbox.service";
 import { assertWarehouseInScope } from "../inventory/warehouse-scope";
 import { buildIncidentContext } from "./incident.context";
-import { detectIncidents, DetectedIncident, SensorSignal } from "./incident.rules";
+import {
+  detectIncidents,
+  detectSilentDevices,
+  DetectedIncident,
+  SensorSignal,
+} from "./incident.rules";
 import {
   detectStatisticalAnomaly,
   detectPredictiveWarning,
@@ -26,6 +31,12 @@ const SEVERITY_LABEL: Record<string, string> = {
   CRITICAL: "Nghiêm trọng",
 };
 
+export interface IncidentScanSource {
+  submissionId: string;
+  observedAt: Date;
+  receivedAt: Date;
+}
+
 @Injectable()
 export class IncidentService {
   private readonly log = new Logger(IncidentService.name);
@@ -34,14 +45,14 @@ export class IncidentService {
     private prisma: PrismaService,
     private notifications: NotificationService,
     private ai: AiClientService,
-    private mail: AlertMailService,
+    private outbox: AlertEmailOutboxService,
   ) {}
 
   /**
    * Quét sự kiện cảm biến gần đây của 1 kho, phát hiện sự cố + lưu.
-   * Gọi sau khi chạy scenario (hoặc định kỳ). Trả về sự cố mới tạo.
+   * Gọi sau event cảm biến (hoặc định kỳ). Trả về sự cố mới tạo.
    */
-  async scanWarehouse(warehouseId: string, sinceMinutes = 60) {
+  async scanWarehouse(warehouseId: string, sinceMinutes = 60, source?: IncidentScanSource) {
     const since = new Date(Date.now() - sinceMinutes * 60 * 1000);
     const events = await this.prisma.sensorEvent.findMany({
       where: { warehouseId, createdAt: { gte: since } },
@@ -54,7 +65,7 @@ export class IncidentService {
       deviceType: e.device.type,
       eventType: e.eventType,
       value: e.value,
-      occurredAt: e.createdAt,
+      occurredAt: e.observedAt,
     }));
 
     const detected = detectIncidents(signals);
@@ -75,11 +86,34 @@ export class IncidentService {
       deviceType: e.device.type,
       eventType: e.eventType,
       value: e.value,
-      occurredAt: e.createdAt,
+      occurredAt: e.observedAt,
     }));
     detected.push(...detectStatisticalAnomaly(history));
     detected.push(...detectPredictiveWarning(history));
+    detected.push(...(await this.detectSilence(warehouseId)));
 
+    return this.persistDetected(warehouseId, detected, source);
+  }
+
+  /**
+   * Chỉ quét mất tín hiệu thiết bị. Đây là thứ duy nhất cần chạy theo đồng hồ,
+   * vì mọi quy tắc khác đều được kích hoạt bởi số liệu đi vào.
+   *
+   * Cố tình KHÔNG gọi `scanWarehouse` từ đồng hồ nền: quét lại toàn bộ cửa sổ 60
+   * phút mỗi lượt sẽ dựng lại những sự cố vừa được người vận hành xử lý, khi sự
+   * kiện gốc còn nằm trong cửa sổ. Báo động lặp lại vô cớ là cách nhanh nhất để
+   * người ta bắt đầu phớt lờ chuông.
+   */
+  async scanSilentDevices(warehouseId: string) {
+    return this.persistDetected(warehouseId, await this.detectSilence(warehouseId));
+  }
+
+  /** Lưu sự cố mới, bắn thông báo realtime và xếp email; bỏ qua bản trùng đang mở. */
+  private async persistDetected(
+    warehouseId: string,
+    detected: DetectedIncident[],
+    source?: IncidentScanSource,
+  ) {
     // Chống spam trùng lặp: sự cố cùng kind+thiết bị đang mở (chưa RESOLVED) thì không tạo mới.
     const openIncidents = await this.prisma.incident.findMany({
       where: { warehouseId, state: { not: IncidentState.RESOLVED } },
@@ -89,6 +123,7 @@ export class IncidentService {
       openIncidents.flatMap((i) => i.evidence.map((e) => `${i.kind}|${e.deviceCode}`)),
     );
 
+    const recipients = await this.resolveEmailRecipients(warehouseId);
     const created = [] as Awaited<ReturnType<typeof this.persist>>[];
     for (const incident of detected) {
       const isDuplicate = incident.evidence.some((e) =>
@@ -96,7 +131,7 @@ export class IncidentService {
       );
       if (isDuplicate) continue;
 
-      const saved = await this.persist(warehouseId, incident);
+      const saved = await this.persist(warehouseId, incident, recipients, source);
       created.push(saved);
       // Cảnh báo rule-based NỔ TỨC THÌ (không chờ AI). Giữ id để enrich đè body sau.
       const notification = await this.notifications.create({
@@ -106,19 +141,47 @@ export class IncidentService {
         body: `Mức độ ${SEVERITY_LABEL[saved.severity] ?? saved.severity} · độ tin cậy ${Math.round(saved.confidence * 100)}%`,
         warehouseId,
       });
-      // AI giải thích + email chạy NỀN (fire-and-forget) — không chặn scan 90s, lỗi chỉ log.
+      // AI enrichment runs in the background. The independently durable email
+      // outbox can deliver immediately or retry without blocking incident creation.
       void this.enrichNewIncident(saved.id, notification.id).catch((error) => {
         this.log.warn(`Enrich sự cố ${saved.id} lỗi: ${(error as Error).message}`);
       });
     }
+    if (created.length > 0) void this.outbox.processDue();
     return { warehouseId, detected: created.length, incidents: created };
   }
 
   /**
-   * Làm giàu 1 sự cố MỚI bằng AI + đẩy đa kênh + email. Chạy nền sau khi cảnh báo
-   * rule-based đã nổ. AI/SMTP lỗi KHÔNG làm mất sự cố:
-   *  - AI ok → lưu explanation, đè body notification (đẩy lại cùng id), email kèm text AI.
-   *  - AI lỗi → KHÔNG lưu explanation (không mạo danh AI), vẫn email bản rule-based.
+   * Thiết bị nào đã im lặng quá lâu so với chu kỳ báo của chính nó.
+   *
+   * Đọc mốc `lastSeenAt` — mốc này được cập nhật ở đúng một chỗ (khi nhận số
+   * liệu), nên cảm biến thật và thiết bị mô phỏng được giám sát hệt như nhau.
+   */
+  private async detectSilence(warehouseId: string): Promise<DetectedIncident[]> {
+    const devices = await this.prisma.virtualDevice.findMany({
+      where: { warehouseId, expectedIntervalSeconds: { not: null } },
+      select: {
+        code: true,
+        type: true,
+        lastSeenAt: true,
+        expectedIntervalSeconds: true,
+      },
+    });
+    return detectSilentDevices(
+      devices.map((device) => ({
+        deviceCode: device.code,
+        deviceType: device.type,
+        lastSeenAt: device.lastSeenAt,
+        expectedIntervalSeconds: device.expectedIntervalSeconds,
+      })),
+      new Date(),
+    );
+  }
+
+  /**
+   * Enrich a new incident asynchronously. Email delivery is intentionally not
+   * coupled to AI: the committed outbox carries the rule-based incident even
+   * when AI is unavailable or finishes after the first delivery attempt.
    */
   async enrichNewIncident(incidentId: string, notificationId: string): Promise<void> {
     const incident = await this.getWithTimeline(incidentId);
@@ -132,21 +195,9 @@ export class IncidentService {
         )}% — ${explanation}`,
       });
     } catch (error) {
-      // Ollama/ai-service tắt → cảnh báo tức thì vẫn còn; email dùng bản rule-based.
+      // AI failure never removes the rule-based incident or its pending outbox job.
       this.log.warn(`AI giải thích sự cố ${incidentId} lỗi: ${(error as Error).message}`);
     }
-    const recipients = await this.resolveEmailRecipients(incident.warehouseId);
-    await this.mail.sendIncidentAlert(
-      {
-        title: incident.title,
-        severity: incident.severity,
-        confidence: incident.confidence,
-        kind: incident.kind,
-        evidence: incident.evidence,
-      },
-      explanation,
-      recipients,
-    );
   }
 
   private async resolveEmailRecipients(warehouseId: string): Promise<string[]> {
@@ -237,10 +288,18 @@ export class IncidentService {
 
   // ---- lưu ----
 
-  private persist(warehouseId: string, incident: DetectedIncident) {
+  private persist(
+    warehouseId: string,
+    incident: DetectedIncident,
+    recipientEmails: string[],
+    source?: IncidentScanSource,
+  ) {
+    const observedAt = source?.observedAt ?? earliestEvidenceAt(incident);
+    const receivedAt = source?.receivedAt ?? new Date();
     return this.prisma.incident.create({
       data: {
         warehouseId,
+        sourceSubmissionId: source?.submissionId,
         kind: incident.kind,
         severity: incident.severity as IncidentSeverity,
         confidence: incident.confidence,
@@ -256,8 +315,24 @@ export class IncidentService {
             note: e.note,
           })),
         },
+        emailOutbox: {
+          create: {
+            warehouseId,
+            recipientEmails,
+            observedAt,
+            receivedAt,
+          },
+        },
       },
       include: { evidence: true },
     });
   }
+}
+
+function earliestEvidenceAt(incident: DetectedIncident): Date {
+  return incident.evidence.reduce(
+    (earliest, evidence) =>
+      evidence.occurredAt.getTime() < earliest.getTime() ? evidence.occurredAt : earliest,
+    incident.evidence[0]?.occurredAt ?? new Date(),
+  );
 }

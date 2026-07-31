@@ -16,11 +16,7 @@ function participantWarehouseIds(
   for (const requirement of requirements) {
     const allocations = (requirement.allocations as Allocation[] | null) ?? [];
     for (const allocation of allocations) {
-      if (
-        allocation.batchId &&
-        Number.isFinite(allocation.qty) &&
-        (allocation.qty ?? 0) > 0
-      ) {
+      if (allocation.batchId && Number.isFinite(allocation.qty) && (allocation.qty ?? 0) > 0) {
         warehouseIds.add(allocation.warehouseId ?? sourceWarehouseId);
       }
     }
@@ -33,11 +29,7 @@ async function main() {
   const missions = await prisma.mission.findMany({
     where: {
       status: {
-        in: [
-          MissionStatus.PENDING_WAREHOUSE,
-          MissionStatus.READY,
-          MissionStatus.COMPLETED,
-        ],
+        in: [MissionStatus.PENDING_WAREHOUSE, MissionStatus.READY, MissionStatus.COMPLETED],
       },
     },
     select: {
@@ -51,16 +43,12 @@ async function main() {
   let created = 0;
   const backfilledAt = new Date();
   for (const mission of missions) {
-    const warehouseIds = participantWarehouseIds(
-      mission.requirements,
-      mission.warehouseId,
-    );
+    const warehouseIds = participantWarehouseIds(mission.requirements, mission.warehouseId);
     const result = await prisma.missionWarehousePreparation.createMany({
       data: warehouseIds.map((warehouseId) => ({
         missionId: mission.id,
         warehouseId,
-        preparedAt:
-          mission.status === MissionStatus.PENDING_WAREHOUSE ? null : backfilledAt,
+        preparedAt: mission.status === MissionStatus.PENDING_WAREHOUSE ? null : backfilledAt,
       })),
       skipDuplicates: true,
     });

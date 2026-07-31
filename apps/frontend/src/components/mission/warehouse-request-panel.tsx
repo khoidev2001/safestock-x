@@ -111,7 +111,9 @@ export function WarehouseRequestPanel({
                         : request.requestedQuantity}{" "}
                       {request.unit}
                     </p>
-                    <p className="mt-1 text-xs font-semibold">{requestStatusLabel(request.status)}</p>
+                    <p className="mt-1 text-xs font-semibold">
+                      {requestStatusLabel(request.status)}
+                    </p>
                   </div>
                 </div>
 
@@ -128,7 +130,10 @@ export function WarehouseRequestPanel({
 
                 {isOwnWarehouse && request.status !== "PREPARED" ? (
                   <div className="mt-3 space-y-2">
-                    <label className="block text-xs font-medium" htmlFor={`warehouse-note-${request.id}`}>
+                    <label
+                      className="block text-xs font-medium"
+                      htmlFor={`warehouse-note-${request.id}`}
+                    >
                       Ghi chú hoặc chênh lệch thực tế
                     </label>
                     <textarea

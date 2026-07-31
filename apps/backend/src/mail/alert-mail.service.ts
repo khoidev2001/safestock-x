@@ -5,7 +5,6 @@ import { ConfigService } from "@nestjs/config";
 import * as nodemailer from "nodemailer";
 import type { Transporter } from "nodemailer";
 
-/** Dữ liệu tối thiểu để soạn email cảnh báo (khớp Incident + evidence đã persist). */
 export interface IncidentAlertInput {
   title: string;
   severity: string;
@@ -14,8 +13,14 @@ export interface IncidentAlertInput {
   evidence: { note: string | null; occurredAt: Date }[];
 }
 
+export interface IncidentAlertTiming {
+  observedAt: Date;
+  receivedAt: Date;
+  sentAt: Date;
+}
+
 const APP_NAME = "Ứng phó nhanh";
-const LOGO_CID = "ung-pho-nhanh-logo"; // nhúng inline (Content-ID) → email tự chứa, xem offline được.
+const LOGO_CID = "ung-pho-nhanh-logo";
 
 const SEVERITY_LABEL: Record<string, string> = {
   LOW: "Thấp",
@@ -24,7 +29,6 @@ const SEVERITY_LABEL: Record<string, string> = {
   CRITICAL: "Nghiêm trọng",
 };
 
-// Màu badge mức độ (đồng bộ tinh thần severityTone của UI).
 const SEVERITY_COLOR: Record<string, string> = {
   LOW: "#2563eb",
   MEDIUM: "#d97706",
@@ -33,167 +37,110 @@ const SEVERITY_COLOR: Record<string, string> = {
 };
 
 /**
- * Gửi email cảnh báo sự cố (BE — kênh #4), có thương hiệu "Ứng phó nhanh" + logo.
- * Guard isConfigured() giống BackupService: thiếu cấu hình SMTP hoặc ALERT_EMAIL_ENABLED!=true
- * → SKIP ÊM (log, không throw). Mọi lỗi gửi bị NUỐT (log warn) — email KHÔNG được làm hỏng
- * luồng sự cố/realtime.
- *
- * Không bịa số: nội dung email chỉ ghép từ dữ liệu sự cố đã tính + bằng chứng thật;
- * đoạn AI (nếu có) do LLM diễn giải cùng ràng buộc không bịa số.
+ * This service performs exactly one SMTP delivery attempt. It deliberately
+ * propagates failures so AlertEmailOutboxService can persist a retry instead
+ * of turning a network outage into an invisible dropped email.
  */
 @Injectable()
 export class AlertMailService {
   private readonly log = new Logger(AlertMailService.name);
   private transporter: Transporter | null = null;
 
-  constructor(private config: ConfigService) {}
+  constructor(private readonly config: ConfigService) {}
 
   async sendIncidentAlert(
     incident: IncidentAlertInput,
     explanation: string | null,
     recipients: string[] = [],
+    timing?: IncidentAlertTiming,
   ): Promise<void> {
     const recipientList = this.resolveRecipients(recipients);
     if (!this.isConfigured(recipientList)) {
-      this.log.warn(
-        "Email cảnh báo chưa bật (ALERT_EMAIL_ENABLED/SMTP_* thiếu) — bỏ qua gửi mail.",
-      );
-      return;
+      throw new Error("Email cảnh báo chưa được cấu hình hoặc không có người nhận");
     }
-    try {
-      const transporter = this.getTransporter();
-      const from = `"${APP_NAME}" <${this.config.get<string>("ALERT_EMAIL_FROM") || this.config.get<string>("SMTP_USER")!}>`;
-      const logoPath = this.resolveLogoPath();
-      await transporter.sendMail({
-        from,
-        bcc: recipientList,
-        subject: `⚠️ [${APP_NAME}] Cảnh báo kho: ${incident.title}`,
-        text: this.buildText(incident, explanation),
-        html: this.buildHtml(incident, explanation, Boolean(logoPath)),
-        attachments: logoPath
-          ? [{ filename: "ung-pho-nhanh-mark-email.png", path: logoPath, cid: LOGO_CID }]
-          : [],
-      });
-      this.log.log(
-        `Đã gửi email cảnh báo "${incident.title}" tới ${recipientList.length} người nhận.`,
-      );
-    } catch (error) {
-      // Nuốt lỗi: SMTP sai/mạng hỏng không được phá luồng sự cố.
-      this.log.warn(`Gửi email cảnh báo lỗi: ${(error as Error).message}`);
-    }
+
+    const logoPath = this.resolveLogoPath();
+    await this.getTransporter().sendMail({
+      from: `"${APP_NAME}" <${this.config.get<string>("ALERT_EMAIL_FROM") || this.config.get<string>("SMTP_USER")!}>`,
+      bcc: recipientList,
+      subject: `⚠️ [${APP_NAME}] Cảnh báo kho: ${incident.title}`,
+      text: this.buildText(incident, explanation, timing),
+      html: this.buildHtml(incident, explanation, Boolean(logoPath), timing),
+      attachments: logoPath
+        ? [{ filename: "ung-pho-nhanh-mark-email.png", path: logoPath, cid: LOGO_CID }]
+        : [],
+    });
+    this.log.log(
+      `Đã gửi email cảnh báo "${incident.title}" tới ${recipientList.length} người nhận.`,
+    );
   }
 
-  /** Bản HTML có thương hiệu (logo + tên app + badge mức độ). Layout table cho tương thích email client. */
   private buildHtml(
     incident: IncidentAlertInput,
     explanation: string | null,
     hasLogo: boolean,
+    timing?: IncidentAlertTiming,
   ): string {
-    const sev = SEVERITY_LABEL[incident.severity] ?? incident.severity;
-    const sevColor = SEVERITY_COLOR[incident.severity] ?? "#6b7280";
-    // Logo email dùng nền trong suốt để nền header luôn liền mạch khi client tự đổi dark mode.
-    const logoImg = hasLogo
-      ? `<img src="cid:${LOGO_CID}" alt="${APP_NAME}" width="52" height="52" style="display:block;width:52px;height:52px;border:0;outline:none;" />`
+    const severity = SEVERITY_LABEL[incident.severity] ?? incident.severity;
+    const color = SEVERITY_COLOR[incident.severity] ?? "#6b7280";
+    const logo = hasLogo
+      ? `<img src="cid:${LOGO_CID}" alt="${APP_NAME}" width="48" height="48" style="display:block;border:0" />`
       : "";
-    const evidenceRows = incident.evidence.length
+    const evidence = incident.evidence.length
       ? incident.evidence
           .map(
-            (e) => `
-            <tr>
-              <td style="padding:6px 12px;font-size:12px;color:#64748b;white-space:nowrap;vertical-align:top;">${this.escape(
-                new Date(e.occurredAt).toLocaleString("vi"),
-              )}</td>
-              <td style="padding:6px 12px;font-size:13px;color:#0f172a;">${this.escape(e.note ?? "")}</td>
-            </tr>`,
+            (item) =>
+              `<tr><td style="padding:6px 12px;color:#64748b;vertical-align:top;white-space:nowrap">${this.escape(formatDate(item.occurredAt))}</td><td style="padding:6px 12px;color:#0f172a">${this.escape(item.note ?? "")}</td></tr>`,
           )
           .join("")
-      : `<tr><td colspan="2" style="padding:6px 12px;font-size:13px;color:#64748b;">Không có bằng chứng chi tiết.</td></tr>`;
-
+      : '<tr><td colspan="2" style="padding:6px 12px;color:#64748b">Không có bằng chứng chi tiết.</td></tr>';
     const explanationBlock = explanation
-      ? `
-        <div style="margin-top:20px;padding:14px 16px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;">
-          <p style="margin:0;font-size:14px;line-height:1.6;color:#312e81;">${this.escape(explanation)}</p>
-        </div>`
+      ? `<div style="margin-top:18px;padding:12px 14px;background:#f5f3ff;border:1px solid #ddd6fe"><strong>Phân tích hỗ trợ</strong><p style="margin:6px 0 0;line-height:1.6">${this.escape(explanation)}</p></div>`
+      : "";
+    const timingBlock = timing
+      ? `<div style="margin-top:18px;padding:12px 14px;background:#fff7ed;border:1px solid #fed7aa"><strong>Mốc thời gian cảnh báo</strong><p style="margin:6px 0 0;line-height:1.65">Phát hiện: ${this.escape(formatDate(timing.observedAt))}<br/>Backend nhận: ${this.escape(formatDate(timing.receivedAt))}<br/>Email gửi: ${this.escape(formatDate(timing.sentAt))}<br/>Độ trễ chuyển phát: ${this.escape(formatDelay(timing.sentAt.getTime() - timing.observedAt.getTime()))}</p></div>`
       : "";
 
     return `<!doctype html>
-<html lang="vi">
-<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:24px 12px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);">
-          <!-- Header thương hiệu -->
-          <tr>
-            <td bgcolor="#0f172a" style="padding:20px 24px;background-color:#0f172a;">
-              <table role="presentation" cellpadding="0" cellspacing="0">
-                <tr>
-                  ${hasLogo ? `<td style="padding-right:12px;vertical-align:middle;">${logoImg}</td>` : ""}
-                  <td style="vertical-align:middle;">
-                    <div style="font-size:18px;font-weight:700;color:#ffffff;">${APP_NAME}</div>
-                    <div style="font-size:12px;color:#94a3b8;">Cảnh báo sự cố kho tự động</div>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          <!-- Dải mức độ -->
-          <tr>
-            <td style="height:4px;background:${sevColor};font-size:0;line-height:0;">&nbsp;</td>
-          </tr>
-          <!-- Nội dung -->
-          <tr>
-            <td style="padding:24px;">
-              <span style="display:inline-block;padding:4px 12px;border-radius:999px;background:${sevColor}1a;color:${sevColor};font-size:12px;font-weight:700;">Mức độ: ${this.escape(
-                sev,
-              )}</span>
-              <h1 style="margin:14px 0 4px;font-size:20px;color:#0f172a;">${this.escape(incident.title)}</h1>
-              <p style="margin:0;font-size:13px;color:#64748b;">Hệ thống phát hiện sự cố mới tại kho.</p>
-              <p style="margin:8px 0 0;font-size:13px;line-height:1.6;color:#334155;">Vui lòng đối chiếu bằng chứng cảm biến và kiểm tra thực tế trước khi xử lý.</p>
-
-              <div style="margin-top:20px;font-size:13px;font-weight:600;color:#334155;">Bằng chứng theo thời gian</div>
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;border:1px solid #e2e8f0;border-radius:10px;border-collapse:separate;overflow:hidden;">
-                ${evidenceRows}
-              </table>
-
-              ${explanationBlock}
-            </td>
-          </tr>
-          <!-- Footer -->
-          <tr>
-            <td style="padding:16px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;">
-              <p style="margin:0;font-size:11px;color:#94a3b8;line-height:1.6;">Email tự động từ hệ thống <strong style="color:#64748b;">${APP_NAME}</strong>.</p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
+<html lang="vi"><body style="margin:0;padding:0;background:#f1f5f9;font-family:Segoe UI,Arial,sans-serif">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:24px 12px"><tr><td align="center">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff">
+<tr><td style="padding:20px 24px;background:#0f172a;color:#fff"><table role="presentation"><tr>${logo ? `<td style="padding-right:12px">${logo}</td>` : ""}<td><strong style="font-size:18px">${APP_NAME}</strong><br/><span style="font-size:12px;color:#94a3b8">Cảnh báo sự cố kho tự động</span></td></tr></table></td></tr>
+<tr><td style="height:4px;background:${color};font-size:0">&nbsp;</td></tr>
+<tr><td style="padding:24px;color:#0f172a"><span style="display:inline-block;padding:4px 10px;background:${color}1a;color:${color};font-size:12px;font-weight:700">Mức độ: ${this.escape(severity)}</span><h1 style="font-size:20px">${this.escape(incident.title)}</h1><p>Hệ thống phát hiện sự cố mới tại kho. Vui lòng đối chiếu bằng chứng cảm biến và kiểm tra thực tế trước khi xử lý.</p><h2 style="font-size:14px;margin-top:20px">Bằng chứng theo thời gian</h2><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;font-size:13px">${evidence}</table>${explanationBlock}${timingBlock}</td></tr>
+<tr><td style="padding:16px 24px;background:#f8fafc;color:#64748b;font-size:11px">Email tự động từ ${APP_NAME}.</td></tr>
+</table></td></tr></table></body></html>`;
   }
 
-  /** Bản text thuần (fallback cho client không đọc HTML). */
-  private buildText(incident: IncidentAlertInput, explanation: string | null): string {
-    const sev = SEVERITY_LABEL[incident.severity] ?? incident.severity;
+  private buildText(
+    incident: IncidentAlertInput,
+    explanation: string | null,
+    timing?: IncidentAlertTiming,
+  ): string {
+    const severity = SEVERITY_LABEL[incident.severity] ?? incident.severity;
     const lines = [
       `${APP_NAME} — phát hiện sự cố mới tại kho.`,
-      ``,
+      "",
       `• Sự cố: ${incident.title}`,
-      `• Mức độ: ${sev}`,
-      `• Khuyến nghị: Đối chiếu bằng chứng cảm biến và kiểm tra thực tế trước khi xử lý.`,
-      ``,
-      `Bằng chứng theo thời gian:`,
-      ...incident.evidence.map(
-        (e) => `  - ${new Date(e.occurredAt).toLocaleString("vi")} — ${e.note ?? ""}`,
-      ),
-      ``,
+      `• Mức độ: ${severity}`,
+      "",
+      "Bằng chứng theo thời gian:",
+      ...incident.evidence.map((item) => `  - ${formatDate(item.occurredAt)} — ${item.note ?? ""}`),
     ];
-    if (explanation) lines.push(explanation);
+    if (explanation) lines.push("", `Phân tích hỗ trợ: ${explanation}`);
+    if (timing) {
+      lines.push(
+        "",
+        "Mốc thời gian cảnh báo:",
+        `  - Phát hiện: ${formatDate(timing.observedAt)}`,
+        `  - Backend nhận: ${formatDate(timing.receivedAt)}`,
+        `  - Email gửi: ${formatDate(timing.sentAt)}`,
+        `  - Độ trễ chuyển phát: ${formatDelay(timing.sentAt.getTime() - timing.observedAt.getTime())}`,
+      );
+    }
     return lines.join("\n");
   }
 
-  /** Chống XSS/hỏng layout khi title/note lọt ký tự HTML (dù nguồn nội bộ, vẫn escape cho chắc). */
   private escape(text: string): string {
     return text
       .replace(/&/g, "&amp;")
@@ -202,28 +149,23 @@ export class AlertMailService {
       .replace(/"/g, "&quot;");
   }
 
-  /**
-   * Tìm logo trên đĩa. __dirname khác nhau dev (src/mail) vs prod (dist/src/mail) → thử nhiều ứng viên;
-   * không thấy → trả null (email vẫn gửi, chỉ thiếu ảnh, không vỡ).
-   */
   private resolveLogoPath(): string | null {
     const candidates = [
-      join(__dirname, "..", "..", "assets", "ung-pho-nhanh-mark-email.png"), // dev: src/mail → apps/backend/assets
-      join(__dirname, "..", "..", "..", "assets", "ung-pho-nhanh-mark-email.png"), // prod: dist/src/mail → apps/backend/assets
-      join(process.cwd(), "assets", "ung-pho-nhanh-mark-email.png"), // fallback: cwd = apps/backend
+      join(__dirname, "..", "..", "assets", "ung-pho-nhanh-mark-email.png"),
+      join(__dirname, "..", "..", "..", "assets", "ung-pho-nhanh-mark-email.png"),
+      join(process.cwd(), "assets", "ung-pho-nhanh-mark-email.png"),
     ];
-    return candidates.find((p) => existsSync(p)) ?? null;
+    return candidates.find((path) => existsSync(path)) ?? null;
   }
 
   private getTransporter(): Transporter {
     if (this.transporter) return this.transporter;
     const port = Number(this.config.get("SMTP_PORT") ?? 465);
-    const secureRaw = this.config.get("SMTP_SECURE");
+    const secure = this.config.get("SMTP_SECURE");
     this.transporter = nodemailer.createTransport({
       host: this.config.get<string>("SMTP_HOST"),
       port,
-      // Gmail: 465 = secure true; 587 = STARTTLS (secure false). Không set → suy theo port.
-      secure: secureRaw == null || secureRaw === "" ? port === 465 : this.parseBool(secureRaw),
+      secure: secure == null || secure === "" ? port === 465 : this.parseBool(secure),
       auth: {
         user: this.config.get<string>("SMTP_USER"),
         pass: this.config.get<string>("SMTP_PASS"),
@@ -233,22 +175,20 @@ export class AlertMailService {
   }
 
   private resolveRecipients(recipients: string[]): string[] {
-    const personalRecipients = recipients
+    const supplied = recipients
       .flatMap((email) => email.split(/[;,]/))
       .map((email) => email.trim().toLowerCase())
       .filter(Boolean);
-    if (personalRecipients.length > 0) return [...new Set(personalRecipients)];
-
+    if (supplied.length > 0) return [...new Set(supplied)];
     return [this.config.get<string>("ALERT_EMAIL_TO") ?? ""]
       .flatMap((email) => email.split(/[;,]/))
       .map((email) => email.trim().toLowerCase())
       .filter(Boolean);
   }
 
-  /** Bật khi ALERT_EMAIL_ENABLED=true VÀ có đủ host/user/pass + người nhận. */
   private isConfigured(recipients: string[]): boolean {
-    if (!this.parseBool(this.config.get("ALERT_EMAIL_ENABLED"))) return false;
     return Boolean(
+      this.parseBool(this.config.get("ALERT_EMAIL_ENABLED")) &&
       this.config.get("SMTP_HOST") &&
       this.config.get("SMTP_USER") &&
       this.config.get("SMTP_PASS") &&
@@ -259,4 +199,14 @@ export class AlertMailService {
   private parseBool(value: unknown): boolean {
     return String(value).toLowerCase() === "true";
   }
+}
+
+function formatDate(value: Date): string {
+  return value.toLocaleString("vi-VN");
+}
+
+function formatDelay(milliseconds: number): string {
+  const seconds = Math.max(0, Math.round(milliseconds / 1_000));
+  const minutes = Math.floor(seconds / 60);
+  return minutes > 0 ? `${minutes} phút ${seconds % 60} giây` : `${seconds} giây`;
 }

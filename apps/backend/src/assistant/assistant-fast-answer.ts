@@ -123,7 +123,8 @@ function answerIncidents(snapshot: AssistantSnapshot): string {
     .map((incident) => `•  ${incident.title} — mức ${severityLabel(incident.severity)}`)
     .join("\n");
   const remaining = total - 5;
-  const suffix = remaining > 0 ? `\n\nNgoài ra còn ${remaining} sự cố khác đang được theo dõi.` : "";
+  const suffix =
+    remaining > 0 ? `\n\nNgoài ra còn ${remaining} sự cố khác đang được theo dõi.` : "";
   return `Dạ, ${snapshot.warehouse.name} đang có ${total} sự cố mở:\n\n${incidentLines}${suffix}`;
 }
 

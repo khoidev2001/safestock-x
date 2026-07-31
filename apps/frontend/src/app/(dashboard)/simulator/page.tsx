@@ -7,13 +7,16 @@ import { WarehouseMap } from "@/components/dashboard/warehouse-map";
 import { getDevices, getTimeline, getWarehouseTree } from "@/lib/dashboard-api";
 
 export default function SimulatorPage() {
-  return <DashboardPage>{(warehouseId) => <SimulatorContent warehouseId={warehouseId} />}</DashboardPage>;
+  return (
+    <DashboardPage>{(warehouseId) => <SimulatorContent warehouseId={warehouseId} />}</DashboardPage>
+  );
 }
 
 function SimulatorContent({ warehouseId }: { warehouseId: string }) {
   const devicesQuery = useQuery({
     queryKey: ["devices", warehouseId],
     queryFn: () => getDevices(warehouseId),
+    refetchInterval: 10_000,
   });
 
   const timelineQuery = useQuery({

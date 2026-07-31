@@ -4,11 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ColorIcon } from "@/components/shared/color-icon";
 import { useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-store";
-import {
-  listReports,
-  uploadReport,
-  type StockReport,
-} from "@/lib/report-api";
+import { listReports, uploadReport, type StockReport } from "@/lib/report-api";
 import { Pagination, usePagination } from "@/components/shared/pagination";
 import { ReportReviewDialog } from "./report-review-dialog";
 
@@ -52,9 +48,9 @@ function UploadCard({ warehouseId }: { warehouseId: string }) {
         <span>Gửi báo cáo kiểm kê tháng</span>
       </div>
       <p className="mt-1 text-sm text-[var(--text-muted)]">
-        Đính kèm bảng kiểm kê theo từng lô. Giữ 7 cột cũ và thêm Batch ID, mã lô, mã kệ ở
-        cột 8–10; báo cáo có một SKU ở nhiều lô sẽ không được duyệt nếu thiếu định danh lô.
-        Số liệu chỉ được cập nhật sau khi xã phê duyệt.
+        Đính kèm bảng kiểm kê theo từng lô. Giữ 7 cột cũ và thêm Batch ID, mã lô, mã kệ ở cột 8–10;
+        báo cáo có một SKU ở nhiều lô sẽ không được duyệt nếu thiếu định danh lô. Số liệu chỉ được
+        cập nhật sau khi xã phê duyệt.
       </p>
 
       <div className="mt-4 flex flex-wrap items-end gap-3">
@@ -113,13 +109,19 @@ function ReportList({ isAdmin }: { isAdmin: boolean }) {
         {isAdmin ? "Báo cáo thôn chờ duyệt" : "Báo cáo đã gửi"}
       </h3>
       {reportsQuery.isLoading ? (
-        <div className="mt-4 h-24 animate-pulse rounded-md bg-[var(--surface-2)]" aria-busy="true" />
+        <div
+          className="mt-4 h-24 animate-pulse rounded-md bg-[var(--surface-2)]"
+          aria-busy="true"
+        />
       ) : reportsQuery.isError ? (
         <div className="mt-4 rounded-md border border-red-300 p-4">
           <p className="text-sm font-semibold text-[var(--color-critical)]">
             Không tải được danh sách báo cáo
           </p>
-          <button className="mt-3 rounded-md border px-3 py-1.5 text-sm" onClick={() => void reportsQuery.refetch()}>
+          <button
+            className="mt-3 rounded-md border px-3 py-1.5 text-sm"
+            onClick={() => void reportsQuery.refetch()}
+          >
             Tải lại
           </button>
         </div>

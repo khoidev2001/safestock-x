@@ -1,5 +1,9 @@
 import { apiFetch } from "./api";
-import type { CoordinationAnalysis, FieldUpdateIntent, WhatIfSimulationResult } from "@safestock/shared-types";
+import type {
+  CoordinationAnalysis,
+  FieldUpdateIntent,
+  WhatIfSimulationResult,
+} from "@safestock/shared-types";
 
 export type MissionStatus =
   | "DRAFT"
@@ -341,28 +345,27 @@ export const prepareMission = (id: string) =>
 export const listWarehouseRequests = () =>
   apiFetch<MissionWarehouseRequest[]>("/api/missions/warehouse-requests/own");
 export const acceptWarehouseRequest = (requestId: string, note?: string) =>
-  apiFetch<MissionWarehouseRequest>(
-    `/api/missions/warehouse-requests/${requestId}/accept`,
-    { method: "POST", body: JSON.stringify({ note }) },
-  );
+  apiFetch<MissionWarehouseRequest>(`/api/missions/warehouse-requests/${requestId}/accept`, {
+    method: "POST",
+    body: JSON.stringify({ note }),
+  });
 export const reportWarehouseRequestDiscrepancy = (requestId: string, note: string) =>
-  apiFetch<MissionWarehouseRequest>(
-    `/api/missions/warehouse-requests/${requestId}/discrepancy`,
-    { method: "POST", body: JSON.stringify({ note }) },
-  );
+  apiFetch<MissionWarehouseRequest>(`/api/missions/warehouse-requests/${requestId}/discrepancy`, {
+    method: "POST",
+    body: JSON.stringify({ note }),
+  });
 export const prepareWarehouseRequest = (requestId: string) =>
-  apiFetch<MissionWarehouseRequest>(
-    `/api/missions/warehouse-requests/${requestId}/prepare`,
-    { method: "POST" },
-  );
+  apiFetch<MissionWarehouseRequest>(`/api/missions/warehouse-requests/${requestId}/prepare`, {
+    method: "POST",
+  });
 export const reviewWarehouseRequest = (
   requestId: string,
   input: { requestedQuantity: number; adminNote?: string },
 ) =>
-  apiFetch<MissionWarehouseRequest>(
-    `/api/missions/warehouse-requests/${requestId}/review`,
-    { method: "POST", body: JSON.stringify(input) },
-  );
+  apiFetch<MissionWarehouseRequest>(`/api/missions/warehouse-requests/${requestId}/review`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 export const cancelMission = (id: string, note?: string) =>
   apiFetch<Mission>(`/api/missions/${id}/cancel`, {
     method: "POST",

@@ -113,6 +113,7 @@ export interface VirtualDevice {
   type: string;
   currentValue: number | null;
   unit: string | null;
+  currentAt: string | null;
   updatedAt: string;
 }
 
@@ -121,7 +122,9 @@ export interface SensorTimelineEvent {
   eventType: string;
   value: number;
   unit: string | null;
+  observedAt: string;
   createdAt: string;
+  submission: { receivedAt: string; idempotencyKey: string } | null;
   device: { code: string; type: string };
 }
 
@@ -150,18 +153,14 @@ export async function getInventoryBatches(warehouseId: string): Promise<Inventor
   const seenCursors = new Set<string>();
   let cursor: string | null = null;
   do {
-    const query: string = cursor
-      ? `?cursor=${encodeURIComponent(cursor)}`
-      : "";
+    const query: string = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
     const page: {
       data: InventoryBatch[];
       nextCursor: string | null;
     } = await apiFetch<{
       data: InventoryBatch[];
       nextCursor: string | null;
-    }>(
-      `/api/inventory/warehouses/${warehouseId}/batches-page${query}`,
-    );
+    }>(`/api/inventory/warehouses/${warehouseId}/batches-page${query}`);
     batches.push(...page.data);
     cursor = page.nextCursor;
     if (cursor) {
@@ -174,9 +173,7 @@ export async function getInventoryBatches(warehouseId: string): Promise<Inventor
   return batches;
 }
 
-export function getTransferDestinations(
-  warehouseId: string,
-): Promise<WarehouseTree[]> {
+export function getTransferDestinations(warehouseId: string): Promise<WarehouseTree[]> {
   return apiFetch<WarehouseTree[]>(
     `/api/inventory/warehouses/${warehouseId}/transfer-destinations`,
   );
@@ -282,8 +279,10 @@ export type ReceiveBatchInput = {
 };
 
 export function createMutationRequestId(): string {
-  return globalThis.crypto?.randomUUID?.() ??
-    `request-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return (
+    globalThis.crypto?.randomUUID?.() ??
+    `request-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  );
 }
 
 export function getInventoryCatalog(): Promise<InventoryCatalogItem[]> {

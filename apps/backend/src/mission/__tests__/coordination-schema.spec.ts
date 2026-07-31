@@ -20,13 +20,13 @@ describe("coordination AI persistence schema", () => {
   });
 
   it("deletes dependent coordination records before missions during an explicit seed reset", () => {
-    expect(seed.indexOf("prisma.missionFieldUpdate.deleteMany()"))
-      .toBeGreaterThan(-1);
-    expect(seed.indexOf("prisma.missionAnalysisSnapshot.deleteMany()"))
-      .toBeGreaterThan(-1);
-    expect(seed.indexOf("prisma.missionFieldUpdate.deleteMany()"))
-      .toBeLessThan(seed.indexOf("prisma.mission.deleteMany()"));
-    expect(seed.indexOf("prisma.missionAnalysisSnapshot.deleteMany()"))
-      .toBeLessThan(seed.indexOf("prisma.mission.deleteMany()"));
+    expect(seed.indexOf("prisma.missionFieldUpdate.deleteMany()")).toBeGreaterThan(-1);
+    expect(seed.indexOf("prisma.missionAnalysisSnapshot.deleteMany()")).toBeGreaterThan(-1);
+    expect(seed.indexOf("prisma.missionFieldUpdate.deleteMany()")).toBeLessThan(
+      seed.indexOf("prisma.mission.deleteMany()"),
+    );
+    expect(seed.indexOf("prisma.missionAnalysisSnapshot.deleteMany()")).toBeLessThan(
+      seed.indexOf("prisma.mission.deleteMany()"),
+    );
   });
 });

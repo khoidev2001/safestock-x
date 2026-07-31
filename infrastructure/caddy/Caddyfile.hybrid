@@ -1,0 +1,23 @@
+# LAN ingress for split-DNS. The office resolver must return the private IP of
+# this Windows server for ungphonhanh.life. Caddy then terminates HTTPS locally
+# and keeps the same public URL working without Internet access.
+#
+# `tls internal` intentionally uses the Caddy local CA. Install that CA into
+# every managed client trust store before enabling the split-DNS record.
+{
+	auto_https disable_redirects
+}
+
+ungphonhanh.life {
+	tls internal
+	encode zstd gzip
+
+	@backend path /api /api/* /socket.io /socket.io/*
+	handle @backend {
+		reverse_proxy 127.0.0.1:3100
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:3200
+	}
+}

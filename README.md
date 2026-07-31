@@ -15,6 +15,7 @@ Nền tảng đánh giá mức sẵn sàng kho và điều phối vật tư cứ
   một file tất-tần-tật từ clone → chạy → test mọi thành phần (backend, web, AI, mobile,
   desktop simulator, email cảnh báo, test tự động).
 - [Hướng dẫn cài đặt và chạy](docs/HUONG-DAN-CAI-DAT-VA-CHAY.md)
+- [Runbook hybrid cùng domain](docs/HYBRID-DOMAIN-RUNBOOK.md)
 - [Hướng dẫn kiểm thử](docs/HUONG-DAN-TEST.md)
 - [Bộ dữ liệu seed](docs/SEED-DATASET.md)
 - [Quy tắc đóng góp](docs/CONTRIBUTING.md)
@@ -31,7 +32,6 @@ Các plan, work-log và báo cáo lịch sử đã được loại khỏi gói s
 | `apps/ai-service` | FastAPI + Gemini/Ollama | RAG, semantic rank, extractive daily briefing và live Ollama smoke đã chạy |
 | `apps/mobile` | React Native + Expo | APK `0.5.0` có voice native/PhoWhisper, SecureStore, offline-read, dashboard, QR, nghiệp vụ kho và báo cáo tháng; còn device/LAN gate |
 | `packages/shared-types` | Contract dùng chung | Build pass |
-| `packages/scenario-definitions` | Kịch bản cảm biến deterministic | Build pass |
 | `infrastructure` | Docker và Windows pilot scripts | Có nền; chưa nghiệm thu production/offline đầy đủ |
 
 ## Chạy development
@@ -60,7 +60,7 @@ pnpm ai:dev
 - Frontend: `http://localhost:3200`
 - AI health: `http://localhost:8000/health`
 - Local routing (OSRM, khi đã dựng graph Đồng Xuân): `http://localhost:5000/route/v1/driving/...`
-- Simulator legacy: `http://localhost:3100/sim.html`
+- Desktop simulator: `pnpm desktop:dev` (host mặc định `localhost:3100`)
 
 ### Dựng OSRM local cho Đồng Xuân
 
@@ -78,24 +78,31 @@ bị thiếu hoặc sai checksum. `osrm:verify-offline` chạy một acceptance 
 Docker `--network none`. Sau khi build, đặt đúng `LOCAL_ROUTING_GRAPH_VERSION` từ
 manifest vào `.env` cục bộ.
 
-## Chạy simulator demo cô lập
+## Gửi snapshot cảm biến đã xác nhận từ desktop
 
-Simulator ghi dữ liệu chỉ được chạy bằng runtime demo riêng để tránh seed/reset hoặc sự kiện cảm biến chạm database vận hành. Không sửa `.env` vận hành cho luồng này; giữ `SIMULATION_MUTATION_ENABLED=false` tại đó. Runbook đầy đủ nằm trong [Hướng dẫn cài đặt và chạy](docs/HUONG-DAN-CAI-DAT-VA-CHAY.md#71-chạy-simulator-demo-cô-lập).
+Desktop simulator không có scenario/run. Để gửi dữ liệu vào backend/database đang
+cấu hình, đặt `SIMULATION_MUTATION_ENABLED=true` trong `.env`, restart backend,
+rồi chạy:
 
 ```powershell
-Copy-Item .env.demo.example .env.demo
-notepad .env.demo
-pnpm demo:validate
-pnpm demo:compose:verify
-pnpm demo:infra:up
-pnpm demo:db:reset -- --confirm-demo-reset
-pnpm --filter @safestock/backend build
-pnpm demo:backend
+pnpm desktop:dev
 ```
 
-Mở `http://localhost:3110/sim.html`; app desktop cũng phải trỏ backend tới `http://localhost:3110`. Khi xong, `pnpm demo:infra:down` dừng stack demo nhưng giữ dữ liệu trong volume.
+Đăng nhập bằng `ungphonhanh.life` khi đi qua Internet; khi chỉ còn LAN, dùng
+hostname/IP backend LAN (hoặc vẫn dùng cùng domain nếu đã cấu hình split-horizon
+DNS). Kéo slider chỉ thay đổi bản nháp cục bộ. Bấm **Xác nhận và gửi** mới tạo một
+`SensorSubmission` idempotent cùng các `SensorEvent` lịch sử của những thông số đã đổi.
 
-Nguồn thực thi là [`.env.demo.example`](.env.demo.example), [`package.json`](package.json), [`infrastructure/docker-compose.yml`](infrastructure/docker-compose.yml) và [`infrastructure/demo/`](infrastructure/demo/). Hỗ trợ cấu hình cô lập đã hoàn tất; chưa tuyên bố nghiệm thu pilot chạy đồng thời stack vận hành và demo trên máy thật.
+Snapshot được lưu vào hàng chờ cục bộ trước khi gửi. Nếu desktop tạm không tới được
+backend, lần xác nhận vẫn được giữ và gửi lại idempotent khi kết nối trở lại. Desktop
+đánh giá policy ngưỡng đã cache và bật chuông tại chỗ ngay khi xác nhận vượt ngưỡng;
+chuông chỉ dừng khi người vận hành bấm **Tắt chuông**. Thao tác tắt được xếp hàng để
+ghi vào lịch sử Incident khi backend nhận được.
+
+Backend lưu riêng giờ operator phát hiện (`observedAt`) và giờ nhận (`receivedAt`).
+Incident tạo email outbox bền vững: SMTP/Internet mất thì email chờ retry; email gửi
+muộn vẫn ghi rõ thời điểm phát hiện, nhận và gửi để không nhầm một cảnh báo cũ là mới.
+Không có lệnh reset riêng: không dùng luồng này trên dữ liệu bạn không muốn thay đổi.
 
 Sau khi pull code mới trên database đã có dữ liệu, đồng bộ Prisma schema trước khi chạy backend:
 
@@ -104,7 +111,12 @@ pnpm be:schema:diff
 pnpm be:schema
 ```
 
-Kiểm tra SQL do `be:schema:diff` in ra trước; dừng lại nếu có lệnh drop/type change ngoài dự kiến. `be:schema` không chạy seed, không generate Prisma Client và không chủ động xóa dữ liệu. Nếu cần generate client, dừng backend trước rồi chạy `pnpm be:generate`. Không dùng `pnpm be:db` cho database đang vận hành vì bước seed sẽ reset dữ liệu demo.
+Kiểm tra SQL do `be:schema:diff` in ra trước; dừng lại nếu có lệnh drop/type
+change. `be:schema` không chạy seed hoặc generate Prisma Client, nhưng vẫn có
+thể áp dụng thay đổi mất dữ liệu nếu bạn xác nhận Prisma. Với database hiện có,
+backup trước và chỉ chạy khi đã duyệt SQL. Nếu cần generate client, dừng backend
+trước rồi chạy `pnpm be:generate`. Không dùng `pnpm be:db` cho database đang
+vận hành vì bước seed sẽ reset dữ liệu.
 
 ## Lệnh chính
 
@@ -112,11 +124,6 @@ Kiểm tra SQL do `be:schema:diff` in ra trước; dừng lại nếu có lệnh
 |---|---|
 | `pnpm infra:up` | Khởi động PostgreSQL và Redis |
 | `pnpm infra:down` | Dừng hạ tầng local |
-| `pnpm demo:validate` | Kiểm tra file `.env.demo` trước khi chạy |
-| `pnpm demo:compose:verify` | Kiểm tra template Compose vận hành/demo cô lập tài nguyên |
-| `pnpm demo:infra:up` / `pnpm demo:infra:down` | Khởi động/dừng hạ tầng demo; lệnh down giữ dữ liệu |
-| `pnpm demo:db:reset -- --confirm-demo-reset` | Reset và seed riêng database demo sau xác nhận rõ ràng |
-| `pnpm demo:backend` | Chạy backend demo đã build bằng `.env.demo` trên cổng 3110 |
 | `pnpm be:generate` | Generate Prisma Client; trên Windows cần dừng backend để tránh khóa DLL |
 | `pnpm be:schema:diff` | In SQL chênh lệch giữa database hiện tại và Prisma schema để duyệt trước |
 | `pnpm be:schema` | Đồng bộ database schema, không generate/seed/reset dữ liệu |
@@ -124,7 +131,7 @@ Kiểm tra SQL do `be:schema:diff` in ra trước; dừng lại nếu có lệnh
 | `pnpm be:dev` | Chạy backend watch mode |
 | `pnpm fe:dev` | Chạy frontend cổng 3200 |
 | `pnpm ai:dev` | Chạy AI service bằng venv Windows |
-| `pnpm demo` | Chạy demo terminal hiện có |
+| `pnpm desktop:dev` | Chạy công cụ slider cảm biến trực tiếp |
 
 ## Lưu ý an toàn
 

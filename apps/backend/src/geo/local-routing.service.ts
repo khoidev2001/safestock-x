@@ -26,9 +26,7 @@ export class LocalRoutingService {
       config.get<string>("LOCAL_ROUTING_GRAPH_VERSION")?.trim() || null;
     this.graphVersion =
       configuredGraphVersion &&
-      !/(unconfigured|placeholder|unknown|replace[-_ ]?me|todo)/i.test(
-        configuredGraphVersion,
-      )
+      !/(unconfigured|placeholder|unknown|replace[-_ ]?me|todo)/i.test(configuredGraphVersion)
         ? configuredGraphVersion
         : null;
   }
@@ -71,9 +69,10 @@ export class LocalRoutingService {
         graphVersion: this.graphVersion,
       };
     } catch (error) {
-      const status = error instanceof DOMException && error.name === "TimeoutError"
-        ? "TIMEOUT"
-        : "ENGINE_UNAVAILABLE";
+      const status =
+        error instanceof DOMException && error.name === "TimeoutError"
+          ? "TIMEOUT"
+          : "ENGINE_UNAVAILABLE";
       this.log.warn(`Local OSRM lỗi: ${(error as Error).message}`);
       return this.failure(status);
     }

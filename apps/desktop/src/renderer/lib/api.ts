@@ -44,11 +44,27 @@ export function refreshAccessToken(): Promise<boolean> {
 
 /** Chuẩn hoá host người dùng nhập ("192.168.1.5", "localhost:3100", "http://x") → URL đầy đủ. */
 export function setBase(raw: string): void {
-  let value = raw.trim().replace(/\/+$/, "");
-  if (!value) value = "localhost:3100";
-  if (!/^https?:\/\//.test(value)) value = `http://${value}`;
-  if (!/:\d+$/.test(value.replace(/^https?:\/\//, ""))) value = `${value}:3100`;
-  auth.base = value;
+  const value = raw.trim().replace(/\/+$/, "");
+  if (!value) {
+    auth.base = "http://localhost:3100";
+    return;
+  }
+
+  if (/^https?:\/\//i.test(value)) {
+    auth.base = new URL(value).toString().replace(/\/+$/, "");
+    return;
+  }
+
+  // Public HTTPS is intentionally exact: never turn ungphonhanh.life into
+  // ungphonhanh.life:3100. A LAN hostname/IP remains the direct backend port.
+  if (value.toLowerCase() === "ungphonhanh.life") {
+    auth.base = "https://ungphonhanh.life";
+    return;
+  }
+
+  const url = new URL(`http://${value}`);
+  if (!url.port) url.port = "3100";
+  auth.base = url.toString().replace(/\/+$/, "");
 }
 
 export function getUser(): AuthUser | null {

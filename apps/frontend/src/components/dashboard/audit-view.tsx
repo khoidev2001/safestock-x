@@ -69,7 +69,10 @@ export function AuditView() {
           <p className="text-sm font-semibold text-[var(--color-critical)]">
             Không tải được nhật ký
           </p>
-          <button className="mt-3 rounded-md border px-3 py-1.5 text-sm" onClick={() => void query.refetch()}>
+          <button
+            className="mt-3 rounded-md border px-3 py-1.5 text-sm"
+            onClick={() => void query.refetch()}
+          >
             Tải lại
           </button>
         </div>
@@ -153,7 +156,9 @@ function AuditMetadata({ metadata }: { metadata: unknown }) {
   return (
     <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-[var(--text-muted)]">
       {before !== null || after !== null ? (
-        <span>Trước/sau: {String(before ?? "—")} → {String(after ?? "—")}</span>
+        <span>
+          Trước/sau: {String(before ?? "—")} → {String(after ?? "—")}
+        </span>
       ) : null}
       {quantity !== null ? <span>Số lượng: {quantity}</span> : null}
       {reason ? <span className="basis-full">Lý do: {reason}</span> : null}

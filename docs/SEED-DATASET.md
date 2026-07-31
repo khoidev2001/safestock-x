@@ -71,9 +71,10 @@ Nhóm vật tư tham chiếu nhu cầu cứu trợ khẩn cấp của [IFRC](htt
 | Login | Password | Quyền/phạm vi |
 |---|---|---|
 | `admin` | `admin123@` | ADMIN toàn xã, mặc định mở kho trung tâm |
-| `staff@safestock.vn` | `staff123` | WAREHOUSE kho trung tâm |
-| `rescue@safestock.vn` | `rescue123` | RESCUE |
-| `truongthon1@safestock.vn` ... `truongthon17@safestock.vn` | `truongthon123` | Mỗi tài khoản chỉ quản một kho thôn theo thứ tự danh sách trên |
+| `staff@ungphonhanh.life` | `staff123` | WAREHOUSE kho trung tâm |
+| `rescue@ungphonhanh.life` | `rescue123` | RESCUE |
+| `truongthon@ungphonhanh.life` | `reporter123` | REPORTER gửi báo cáo tình huống cho kho thôn được gán |
+| `truongthon1@ungphonhanh.life` ... `truongthon17@ungphonhanh.life` | `truongthon123` | Mỗi tài khoản chỉ quản một kho thôn theo thứ tự danh sách trên |
 
 ## Chạy và kiểm tra
 

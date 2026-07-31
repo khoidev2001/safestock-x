@@ -14,9 +14,7 @@ describe("mission workflow state machine", () => {
   it("không kích hoạt các chuyển tiếp phân công legacy", () => {
     expect(canTransition(MissionStatus.DRAFT, MissionStatus.PENDING_RESCUE)).toBe(false);
     expect(canTransition(MissionStatus.DRAFT, MissionStatus.RESCUE_CONFIRMED)).toBe(false);
-    expect(canTransition(MissionStatus.PENDING_RESCUE, MissionStatus.RESCUE_CONFIRMED)).toBe(
-      false,
-    );
+    expect(canTransition(MissionStatus.PENDING_RESCUE, MissionStatus.RESCUE_CONFIRMED)).toBe(false);
     expect(canTransition(MissionStatus.PENDING_WAREHOUSE, MissionStatus.REJECTED)).toBe(false);
   });
 
@@ -38,8 +36,15 @@ describe("mission workflow state machine", () => {
     expect(canTransition(MissionStatus.DEFERRED, MissionStatus.CANCELLED)).toBe(true);
   });
 
-  it("READY là mốc vật tư sẵn sàng, không chờ app xác nhận giao", () => {
-    expect(canTransition(MissionStatus.READY, MissionStatus.COMPLETED)).toBe(false);
+  it("người đi giao đóng nhiệm vụ bằng kết quả thực tế", () => {
+    // Không có bước này thì nhiệm vụ nằm mãi ở READY: vật tư đã trừ khỏi kho mà
+    // không ai biết hàng tới nơi hay chưa.
+    expect(canTransition(MissionStatus.READY, MissionStatus.COMPLETED)).toBe(true);
+  });
+
+  it("vật tư đã xuất kho thì không huỷ hay từ chối ngược được nữa", () => {
+    // Huỷ sau khi kho đã trừ tồn sẽ để lại hàng lơ lửng ngoài sổ sách; muốn đóng
+    // thì phải báo kết quả giao, kể cả là giao thất bại.
     expect(canTransition(MissionStatus.READY, MissionStatus.CANCELLED)).toBe(false);
     expect(canTransition(MissionStatus.READY, MissionStatus.REJECTED)).toBe(false);
   });

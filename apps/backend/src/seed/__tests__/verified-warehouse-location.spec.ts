@@ -60,9 +60,7 @@ describe("verified warehouse location registry", () => {
     expect(locationValidationIndex).toBeGreaterThan(-1);
     expect(datasetValidationIndex).toBeLessThan(resetIndex);
     expect(locationValidationIndex).toBeLessThan(resetIndex);
-    expect(source).toContain(
-      "location: HOME_COMMUNE_WAREHOUSE_LOCATION.address",
-    );
+    expect(source).toContain("location: HOME_COMMUNE_WAREHOUSE_LOCATION.address");
     expect(source).toContain("lat: HOME_COMMUNE_WAREHOUSE_LOCATION.lat");
     expect(source).toContain("lng: HOME_COMMUNE_WAREHOUSE_LOCATION.lng");
   });

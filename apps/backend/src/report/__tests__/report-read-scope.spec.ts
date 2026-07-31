@@ -35,9 +35,7 @@ describe("ReportService read organization scope", () => {
   it("omits reports from other organizations in list results", async () => {
     const state = makeService();
 
-    await expect(
-      state.service.list("actor-1", ReportStatus.PENDING),
-    ).resolves.toEqual([]);
+    await expect(state.service.list("actor-1", ReportStatus.PENDING)).resolves.toEqual([]);
   });
 
   it("hides a report from another organization on direct lookup", async () => {

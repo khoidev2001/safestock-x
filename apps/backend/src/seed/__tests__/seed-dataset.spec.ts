@@ -106,9 +106,7 @@ describe("standard seed dataset", () => {
         lng: 109.0703455,
       },
     ]);
-    const pendingLocations = HAMLET_WAREHOUSES.filter(
-      (warehouse) => !warehouse.locationVerified,
-    );
+    const pendingLocations = HAMLET_WAREHOUSES.filter((warehouse) => !warehouse.locationVerified);
     expect(pendingLocations).toHaveLength(12);
     expect(
       pendingLocations.every(

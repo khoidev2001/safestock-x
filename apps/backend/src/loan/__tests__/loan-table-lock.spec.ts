@@ -72,9 +72,9 @@ describe("LoanService loan-table coordination", () => {
   it("blocks listing loans from another warehouse", async () => {
     const state = makeState();
 
-    await expect(state.service.listOpen("warehouse-foreign", "warehouse-owned")).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
+    await expect(
+      state.service.listOpen("warehouse-foreign", "warehouse-owned"),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });
 

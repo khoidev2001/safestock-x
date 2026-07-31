@@ -45,11 +45,14 @@ jobs:
         run: pnpm --filter @safestock/backend exec prisma generate
 
       - name: Build shared workspace packages
-        # shared-types và scenario-definitions phát hành qua dist/ (gitignored). Consumers
-        # (backend/frontend build) resolve theo main=dist/index.js nên phải build TRƯỚC.
-        run: |
-          pnpm --filter @safestock/shared-types build
-          pnpm --filter @safestock/scenario-definitions build
+        # shared-types phát hành qua dist/ (gitignored). Consumers (backend/frontend
+        # build) resolve theo main=dist/index.js nên phải build TRƯỚC.
+        #
+        # scenario-definitions đã được gỡ khỏi workspace. Bước build nó từng nằm ở
+        # đây và vẫn "xanh" vì pnpm trả exit 0 khi filter không khớp package nào —
+        # nghĩa là CI có thể im lặng bỏ qua một bước build hỏng. Giữ mỗi bước build
+        # trỏ tới package có thật để lần sau lệch tên là CI đỏ ngay.
+        run: pnpm --filter @safestock/shared-types build
 
       - name: Reject production dependency advisories
         run: pnpm audit --prod --audit-level=low

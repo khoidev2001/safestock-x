@@ -282,6 +282,10 @@ describe("Mission workflow (E2E)", () => {
         },
         status: MissionStatus.DRAFT,
         fulfillment: 100,
+        // Duyệt phương án đòi điểm nạn đã ghim toạ độ: không có điểm đến thì không
+        // tính được kho gần nhất.
+        incidentLat: 13.3833,
+        incidentLng: 108.9,
         readinessAssessment: {
           status: "READY",
           fulfillment: 100,
@@ -307,7 +311,16 @@ describe("Mission workflow (E2E)", () => {
             allocated: allocatedQuantity,
             shortage: 0,
             unit: "gói",
-            allocations: [{ batchId: batch.id, qty: allocatedQuantity }] as Prisma.InputJsonValue,
+            // Phần cấp phải ghi rõ thuộc kho nào: yêu cầu xuất hàng được sinh
+            // theo từng cặp (kho, vật tư), nên thiếu kho là không ai nhận việc.
+            allocations: [
+              {
+                batchId: batch.id,
+                qty: allocatedQuantity,
+                warehouseId: owned.warehouseId,
+                warehouseName: "Kho E2E mission workflow",
+              },
+            ] as Prisma.InputJsonValue,
           },
         },
       },
@@ -366,6 +379,10 @@ describe("Mission workflow (E2E)", () => {
         },
         status: MissionStatus.DRAFT,
         fulfillment: 100,
+        // Duyệt phương án đòi điểm nạn đã ghim toạ độ: không có điểm đến thì không
+        // tính được kho gần nhất.
+        incidentLat: 13.3833,
+        incidentLng: 108.9,
         readinessAssessment: {
           status: "READY",
           fulfillment: 100,
@@ -410,15 +427,64 @@ describe("Mission workflow (E2E)", () => {
     };
   }
 
-  async function dispatchAndConfirm(missionId: string): Promise<void> {
-    await http.post(`/api/missions/${missionId}/dispatch`).set(auth("admin")).expect(201);
-    await http.post(`/api/missions/${missionId}/confirm`).set(auth("rescue")).expect(201);
+  /**
+   * Xã phát hành phương án thẳng tới kho: DRAFT → PENDING_WAREHOUSE. Lực lượng
+   * hiện trường không tham gia bước này, họ chỉ đóng nhiệm vụ ở cuối.
+   */
+  async function approveMission(missionId: string): Promise<void> {
+    await http.post(`/api/missions/${missionId}/approve`).set(auth("admin")).expect(201);
+  }
+
+  /**
+   * Yêu cầu vật tư CHƯA xuất của một kho trong nhiệm vụ, theo từng SKU (ADR-004).
+   * Cái đã PREPARED vẫn nằm trong danh sách để tra cứu, nhưng không còn việc.
+   */
+  async function pendingRequestsOf(
+    role: TokenRole,
+    missionId: string,
+  ): Promise<{ id: string; sku: string; status: string }[]> {
+    const response = await http
+      .get("/api/missions/warehouse-requests/own")
+      .set(auth(role))
+      .expect(200);
+    return (
+      response.body as {
+        id: string;
+        sku: string;
+        status: string;
+        mission: { id: string };
+      }[]
+    )
+      .filter((request) => request.mission.id === missionId && request.status !== "PREPARED")
+      .map(({ id, sku, status }) => ({ id, sku, status }));
+  }
+
+  /**
+   * Kho xuất hàng theo TỪNG vật tư: tiếp nhận rồi báo đã chuẩn bị cho mỗi SKU.
+   * Kho cuối cùng hoàn tất phần của mình sẽ đẩy nhiệm vụ sang READY.
+   * Trả về số SKU thực sự còn phải xuất trong lượt này.
+   */
+  async function prepareAllRequests(role: TokenRole, missionId: string): Promise<number> {
+    const requests = await pendingRequestsOf(role, missionId);
+    for (const request of requests) {
+      await http
+        .post(`/api/missions/warehouse-requests/${request.id}/accept`)
+        .set(auth(role))
+        .send({})
+        .expect(201);
+      await http
+        .post(`/api/missions/warehouse-requests/${request.id}/prepare`)
+        .set(auth(role))
+        .send({})
+        .expect(201);
+    }
+    return requests.length;
   }
 
   async function createReadyMission(): Promise<MissionFixture> {
     const owned = await createMissionFixture();
-    await dispatchAndConfirm(owned.missionId);
-    await http.post(`/api/missions/${owned.missionId}/prepare`).set(auth("warehouse")).expect(201);
+    await approveMission(owned.missionId);
+    await prepareAllRequests("warehouse", owned.missionId);
     return owned;
   }
 
@@ -461,8 +527,6 @@ describe("Mission workflow (E2E)", () => {
           },
         });
       }
-      await tx.readinessScore.deleteMany({ where: { warehouseId: owned.warehouseId } });
-      await tx.readinessScore.deleteMany({ where: { warehouseId: owned.warehouseBId } });
       if (ownedMissionIds.length > 0) {
         await tx.mission.deleteMany({ where: { id: { in: ownedMissionIds } } });
       }
@@ -521,22 +585,19 @@ describe("Mission workflow (E2E)", () => {
   }
 
   describe("Happy path liên role (giao đủ)", () => {
-    it("prepare TRỪ tồn kho đúng phần đã cấp", async () => {
+    it("chuẩn bị theo từng vật tư TRỪ tồn kho đúng phần đã cấp", async () => {
       const owned = await createMissionFixture();
       const before = await stockOfBatch(owned.batchId);
 
-      await dispatchAndConfirm(owned.missionId);
-      await http
-        .post(`/api/missions/${owned.missionId}/prepare`)
-        .set(auth("warehouse"))
-        .expect(201);
+      await approveMission(owned.missionId);
+      expect(await prepareAllRequests("warehouse", owned.missionId)).toBeGreaterThan(0);
 
       expect(await stockOfBatch(owned.batchId)).toBe(before - owned.allocatedQuantity);
     });
 
     it("mission đa kho chỉ xuất phần từng kho, retry-safe và READY sau kho cuối", async () => {
       const owned = await createMultiWarehouseMissionFixture();
-      await dispatchAndConfirm(owned.missionId);
+      await approveMission(owned.missionId);
 
       const visibleToWarehouseB = await http
         .get(`/api/missions/${owned.missionId}`)
@@ -544,46 +605,38 @@ describe("Mission workflow (E2E)", () => {
         .expect(200);
       expect(visibleToWarehouseB.body.warehousePreparations).toHaveLength(2);
 
+      // Kho A xong phần của mình: chỉ tồn kho A giảm, nhiệm vụ vẫn chờ kho B.
+      await prepareAllRequests("warehouse", owned.missionId);
       const afterWarehouseA = await http
-        .post(`/api/missions/${owned.missionId}/prepare`)
+        .get(`/api/missions/${owned.missionId}`)
         .set(auth("warehouse"))
-        .expect(201);
+        .expect(200);
       expect(afterWarehouseA.body.status).toBe("PENDING_WAREHOUSE");
-      expect(await stockOfBatch(owned.batchAId)).toBe(
-        initialBatchQuantity - owned.allocationA,
-      );
+      expect(await stockOfBatch(owned.batchAId)).toBe(initialBatchQuantity - owned.allocationA);
       expect(await stockOfBatch(owned.batchBId)).toBe(initialBatchQuantity);
 
-      await http
-        .post(`/api/missions/${owned.missionId}/prepare`)
-        .set(auth("warehouse"))
-        .expect(201);
-      expect(await stockOfBatch(owned.batchAId)).toBe(
-        initialBatchQuantity - owned.allocationA,
-      );
+      // Kho A bấm lại: yêu cầu đã PREPARED nên không còn gì để xuất lần hai.
+      expect(await prepareAllRequests("warehouse", owned.missionId)).toBe(0);
+      expect(await stockOfBatch(owned.batchAId)).toBe(initialBatchQuantity - owned.allocationA);
 
+      await prepareAllRequests("warehouseB", owned.missionId);
       const afterWarehouseB = await http
-        .post(`/api/missions/${owned.missionId}/prepare`)
+        .get(`/api/missions/${owned.missionId}`)
         .set(auth("warehouseB"))
-        .expect(201);
+        .expect(200);
       expect(afterWarehouseB.body.status).toBe("READY");
-      expect(await stockOfBatch(owned.batchBId)).toBe(
-        initialBatchQuantity - owned.allocationB,
-      );
+      expect(await stockOfBatch(owned.batchBId)).toBe(initialBatchQuantity - owned.allocationB);
 
-      await http
-        .post(`/api/missions/${owned.missionId}/prepare`)
-        .set(auth("warehouseB"))
-        .expect(201);
-      expect(await stockOfBatch(owned.batchBId)).toBe(
-        initialBatchQuantity - owned.allocationB,
-      );
+      expect(await prepareAllRequests("warehouseB", owned.missionId)).toBe(0);
+      expect(await stockOfBatch(owned.batchBId)).toBe(initialBatchQuantity - owned.allocationB);
 
+      // Mỗi kho xuất đúng một lần cho phần vật tư của mình. Ghi chú sổ sách gắn
+      // với YÊU CẦU theo từng SKU, không phải với cả nhiệm vụ.
       const exports = await database().inventoryTransaction.count({
         where: {
           batchId: { in: [owned.batchAId, owned.batchBId] },
           type: "EXPORT",
-          note: `Nhiệm vụ ${owned.missionId}`,
+          note: { startsWith: "Yêu cầu vật tư " },
         },
       });
       expect(exports).toBe(2);
@@ -591,39 +644,31 @@ describe("Mission workflow (E2E)", () => {
 
     it("hai kho prepare đồng thời vẫn có đúng một lần chuyển READY", async () => {
       const owned = await createMultiWarehouseMissionFixture();
-      await dispatchAndConfirm(owned.missionId);
+      await approveMission(owned.missionId);
 
-      const [warehouseAResponse, warehouseBResponse] = await Promise.all([
-        http
-          .post(`/api/missions/${owned.missionId}/prepare`)
-          .set(auth("warehouse"))
-          .expect(201),
-        http
-          .post(`/api/missions/${owned.missionId}/prepare`)
-          .set(auth("warehouseB"))
-          .expect(201),
+      // Hai kho xuất hàng cùng lúc: chỉ kho hoàn tất sau cùng được đẩy nhiệm vụ
+      // sang READY, và điều đó phải xảy ra đúng một lần.
+      await Promise.all([
+        prepareAllRequests("warehouse", owned.missionId),
+        prepareAllRequests("warehouseB", owned.missionId),
       ]);
 
       expect(
-        [warehouseAResponse.body.status, warehouseBResponse.body.status].sort(),
-      ).toEqual(["PENDING_WAREHOUSE", "READY"].sort());
-      expect(
-        (await database().mission.findUniqueOrThrow({
-          where: { id: owned.missionId },
-        })).status,
+        (
+          await database().mission.findUniqueOrThrow({
+            where: { id: owned.missionId },
+          })
+        ).status,
       ).toBe(MissionStatus.READY);
-      expect(await stockOfBatch(owned.batchAId)).toBe(
-        initialBatchQuantity - owned.allocationA,
-      );
-      expect(await stockOfBatch(owned.batchBId)).toBe(
-        initialBatchQuantity - owned.allocationB,
-      );
+      expect(await stockOfBatch(owned.batchAId)).toBe(initialBatchQuantity - owned.allocationA);
+      expect(await stockOfBatch(owned.batchBId)).toBe(initialBatchQuantity - owned.allocationB);
+      // Hai kho chạy song song nhưng mỗi kho vẫn chỉ xuất đúng một lần.
       expect(
         await database().inventoryTransaction.count({
           where: {
             batchId: { in: [owned.batchAId, owned.batchBId] },
             type: "EXPORT",
-            note: `Nhiệm vụ ${owned.missionId}`,
+            note: { startsWith: "Yêu cầu vật tư " },
           },
         }),
       ).toBe(2);
@@ -677,33 +722,27 @@ describe("Mission workflow (E2E)", () => {
   });
 
   describe("Guard trạng thái", () => {
-    it("đã có một kho xuất thì ADMIN không huỷ và RESCUE không rút mission", async () => {
+    it("đã có một kho xuất thì ADMIN không huỷ được nữa", async () => {
       const owned = await createMultiWarehouseMissionFixture();
-      await dispatchAndConfirm(owned.missionId);
-      await http
-        .post(`/api/missions/${owned.missionId}/prepare`)
-        .set(auth("warehouse"))
-        .expect(201);
+      await approveMission(owned.missionId);
+      await prepareAllRequests("warehouse", owned.missionId);
 
+      // Vật tư đã rời kho: huỷ ngược sẽ để lại hàng lơ lửng ngoài sổ sách. Muốn
+      // đóng thì phải báo kết quả giao, kể cả khi giao thất bại.
       await http
         .post(`/api/missions/${owned.missionId}/cancel`)
         .set(auth("admin"))
         .send({ note: "Dừng nhiệm vụ" })
         .expect(400);
-      await http
-        .post(`/api/missions/${owned.missionId}/reject`)
-        .set(auth("rescue"))
-        .send({ reason: "Không tiếp cận được" })
-        .expect(400);
 
       expect(
-        (await database().mission.findUniqueOrThrow({
-          where: { id: owned.missionId },
-        })).status,
+        (
+          await database().mission.findUniqueOrThrow({
+            where: { id: owned.missionId },
+          })
+        ).status,
       ).toBe(MissionStatus.PENDING_WAREHOUSE);
-      expect(await stockOfBatch(owned.batchAId)).toBe(
-        initialBatchQuantity - owned.allocationA,
-      );
+      expect(await stockOfBatch(owned.batchAId)).toBe(initialBatchQuantity - owned.allocationA);
       expect(await stockOfBatch(owned.batchBId)).toBe(initialBatchQuantity);
     });
 
@@ -722,19 +761,24 @@ describe("Mission workflow (E2E)", () => {
         .expect(400);
     });
 
-    it("confirm khi đã qua bước (PENDING_WAREHOUSE) → 400", async () => {
+    it("chưa xuất kho xong thì chưa báo được kết quả giao", async () => {
+      // Kho mới nhận lệnh chuẩn bị, hàng chưa ra khỏi kho — không thể đã giao.
       const owned = await createMissionFixture();
-      await dispatchAndConfirm(owned.missionId);
+      await approveMission(owned.missionId);
 
-      await http.post(`/api/missions/${owned.missionId}/confirm`).set(auth("rescue")).expect(400);
+      await http
+        .post(`/api/missions/${owned.missionId}/complete`)
+        .set(auth("rescue"))
+        .send({ outcome: "DELIVERED" })
+        .expect(400);
     });
   });
 
   describe("RBAC", () => {
-    it("RESCUE gọi dispatch (quyền MISSION_CREATE) → 403", async () => {
+    it("hiện trường không tự phát hành phương án thay xã → 403", async () => {
       const owned = await createMissionFixture();
 
-      await http.post(`/api/missions/${owned.missionId}/dispatch`).set(auth("rescue")).expect(403);
+      await http.post(`/api/missions/${owned.missionId}/approve`).set(auth("rescue")).expect(403);
     });
 
     it("WAREHOUSE gọi complete (quyền MISSION_CONFIRM) → 403", async () => {

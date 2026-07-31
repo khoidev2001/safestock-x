@@ -26,9 +26,7 @@ describe("daily briefing safety", () => {
   });
 
   it("từ chối số do LLM tự thêm", () => {
-    expect(
-      narrativeUsesOnlySnapshotNumbers("Cần nhập thêm 500 áo phao.", snapshot),
-    ).toBe(false);
+    expect(narrativeUsesOnlySnapshotNumbers("Cần nhập thêm 500 áo phao.", snapshot)).toBe(false);
   });
 
   it("template và ưu tiên vẫn hoạt động khi LLM tắt", () => {

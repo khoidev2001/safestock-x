@@ -51,12 +51,12 @@ const COMPONENT_LABELS: Record<ReadinessComponentKey, string> = {
 };
 
 const STATUS_META = {
-  READY: { label: "Sẵn sàng điều phối", color: "#22c55e", tint: "#052e1a" },
-  NEEDS_ACTION: { label: "Cần xử lý", color: "#f59e0b", tint: "#3b2105" },
+  READY: { label: "Sẵn sàng điều phối", color: "#15803d", tint: "#EAF7EE" },
+  NEEDS_ACTION: { label: "Cần xử lý", color: "#C55A06", tint: "#FFF1E5" },
   NOT_DISPATCHABLE: {
     label: "Chưa thể điều phối",
-    color: "#ef4444",
-    tint: "#3f0b0b",
+    color: "#DC2626",
+    tint: "#FEECEC",
   },
 } as const;
 
@@ -74,9 +74,7 @@ export function DashboardScreen({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [warehouseOptions, setWarehouseOptions] = useState<WarehouseSummary[]>(
-    [],
-  );
+  const [warehouseOptions, setWarehouseOptions] = useState<WarehouseSummary[]>([]);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(
     user.warehouseId ?? null,
   );
@@ -132,9 +130,7 @@ export function DashboardScreen({
             setLoading(false);
             return;
           }
-          warehouse =
-            warehouseList.find((option) => option.id === preferredWarehouseId) ??
-            null;
+          warehouse = warehouseList.find((option) => option.id === preferredWarehouseId) ?? null;
           if (!warehouse) {
             throw new Error("Kho đã chọn không còn thuộc đơn vị.");
           }
@@ -146,10 +142,7 @@ export function DashboardScreen({
         const cacheScope = `operations-dashboard:${activeWarehouseId}`;
         if (!options?.skipCache && !snapshotRef.current) {
           try {
-            const cached = await readOfflineCache<DashboardSnapshot>(
-              user.id,
-              cacheScope,
-            );
+            const cached = await readOfflineCache<DashboardSnapshot>(user.id, cacheScope);
             if (cached) {
               hasCachedData = true;
               snapshotRef.current = cached.data;
@@ -196,7 +189,7 @@ export function DashboardScreen({
       } catch (loadError) {
         setError(
           hasCachedData
-            ? "Không kết nối được máy chủ LAN. Đang hiển thị bản lưu chỉ đọc."
+            ? "Không kết nối được ungphonhanh.life. Đang hiển thị bản lưu chỉ đọc."
             : loadError instanceof Error
               ? loadError.message
               : "Không tải được dashboard vận hành",
@@ -251,10 +244,7 @@ export function DashboardScreen({
 
     const scheduleRefresh = () => {
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-      refreshTimerRef.current = setTimeout(
-        () => void load({ skipCache: true }),
-        900,
-      );
+      refreshTimerRef.current = setTimeout(() => void load({ skipCache: true }), 900);
     };
     socket.on("notification", scheduleRefresh);
     socket.on("sensor_event", scheduleRefresh);
@@ -280,8 +270,7 @@ export function DashboardScreen({
         <Text style={local.eyebrow}>PHẠM VI DASHBOARD</Text>
         <Text style={local.title}>Chọn kho cần theo dõi</Text>
         <Text style={local.chooserHint}>
-          Readiness, cảnh báo, dự báo và bản tin AI chỉ lấy dữ liệu của kho đã
-          chọn.
+          Readiness, cảnh báo, dự báo và bản tin AI chỉ lấy dữ liệu của kho đã chọn.
         </Text>
         {error ? <Text style={local.inlineError}>{error}</Text> : null}
         <View style={local.chooserList}>
@@ -349,12 +338,7 @@ export function DashboardScreen({
           </Text>
         </View>
         <View style={local.liveBadge}>
-          <View
-            style={[
-              local.liveDot,
-              { backgroundColor: offline ? c.amber : c.green },
-            ]}
-          />
+          <View style={[local.liveDot, { backgroundColor: offline ? c.amber : c.green }]} />
           <Text style={local.liveText}>{offline ? "BẢN LƯU" : "LIVE"}</Text>
         </View>
       </View>
@@ -365,7 +349,7 @@ export function DashboardScreen({
           <Text style={local.offlineText}>
             {cacheStoredAt
               ? `Dữ liệu lưu lúc ${formatDateTime(cacheStoredAt)}`
-              : "Thiết bị chưa có kết nối mạng LAN."}
+              : "Thiết bị chưa kết nối được ungphonhanh.life."}
           </Text>
         </View>
       ) : null}
@@ -384,15 +368,13 @@ export function DashboardScreen({
               onPress={() => selectWarehouse(warehouse.id)}
               style={[
                 local.warehouseChip,
-                warehouse.id === snapshot.warehouse.id &&
-                  local.warehouseChipActive,
+                warehouse.id === snapshot.warehouse.id && local.warehouseChipActive,
               ]}
             >
               <Text
                 style={[
                   local.warehouseChipText,
-                  warehouse.id === snapshot.warehouse.id &&
-                    local.warehouseChipTextActive,
+                  warehouse.id === snapshot.warehouse.id && local.warehouseChipTextActive,
                 ]}
               >
                 {warehouse.name}
@@ -412,10 +394,7 @@ export function DashboardScreen({
 }
 
 function HomeDashboard({ snapshot }: { snapshot: DashboardSnapshot }) {
-  const summary = useMemo(
-    () => buildInventorySummary(snapshot.batches),
-    [snapshot.batches],
-  );
+  const summary = useMemo(() => buildInventorySummary(snapshot.batches), [snapshot.batches]);
   const readiness = snapshot.readiness;
   const status = STATUS_META[readiness.operationalStatus];
 
@@ -423,16 +402,12 @@ function HomeDashboard({ snapshot }: { snapshot: DashboardSnapshot }) {
     <>
       <View style={[local.hero, { borderColor: status.color }]}>
         <View style={local.scoreBlock}>
-          <Text style={[local.score, { color: status.color }]}>
-            {Math.round(readiness.score)}
-          </Text>
+          <Text style={[local.score, { color: status.color }]}>{Math.round(readiness.score)}</Text>
           <Text style={local.scoreUnit}>/100</Text>
         </View>
         <View style={{ flex: 1 }}>
           <Text style={local.heroLabel}>TRẠNG THÁI TOÀN KHO</Text>
-          <Text style={[local.heroStatus, { color: status.color }]}>
-            {status.label}
-          </Text>
+          <Text style={[local.heroStatus, { color: status.color }]}>{status.label}</Text>
           <Text style={local.heroNote}>
             {readiness.blockers.length > 0
               ? `${readiness.blockers.length} điểm chặn cần xử lý`
@@ -469,9 +444,7 @@ function HomeDashboard({ snapshot }: { snapshot: DashboardSnapshot }) {
               <Text style={local.aiBadge}>
                 {snapshot.briefing.source === "AI" ? "AI LOCAL" : "DỰ PHÒNG"}
               </Text>
-              <Text style={local.aiTime}>
-                {formatDateTime(snapshot.briefing.generatedAt)}
-              </Text>
+              <Text style={local.aiTime}>{formatDateTime(snapshot.briefing.generatedAt)}</Text>
             </View>
             <Text style={local.aiNarrative}>{snapshot.briefing.narrative}</Text>
             {snapshot.briefing.priorities.slice(0, 3).map((priority) => (
@@ -511,16 +484,12 @@ function HomeDashboard({ snapshot }: { snapshot: DashboardSnapshot }) {
         snapshot.incidents.slice(0, 4).map((incident) => (
           <View key={incident.id} style={local.alertRow}>
             <View
-              style={[
-                local.severityMark,
-                { backgroundColor: severityColor(incident.severity) },
-              ]}
+              style={[local.severityMark, { backgroundColor: severityColor(incident.severity) }]}
             />
             <View style={{ flex: 1 }}>
               <Text style={local.rowTitle}>{incident.title}</Text>
               <Text style={local.rowMeta}>
-                {incident.kind} · {incident.severity} ·{" "}
-                {formatDateTime(incident.detectedAt)}
+                {incident.kind} · {incident.severity} · {formatDateTime(incident.detectedAt)}
               </Text>
             </View>
           </View>
@@ -530,11 +499,7 @@ function HomeDashboard({ snapshot }: { snapshot: DashboardSnapshot }) {
   );
 }
 
-function ReadinessDashboard({
-  readiness,
-}: {
-  readiness: WarehouseReadiness;
-}) {
+function ReadinessDashboard({ readiness }: { readiness: WarehouseReadiness }) {
   const status = STATUS_META[readiness.operationalStatus];
   const dimensions =
     readiness.dimensions.length > 0
@@ -555,16 +520,10 @@ function ReadinessDashboard({
   return (
     <>
       <View style={[local.readinessSummary, { backgroundColor: status.tint }]}>
-        <Text style={[local.bigScore, { color: status.color }]}>
-          {Math.round(readiness.score)}
-        </Text>
+        <Text style={[local.bigScore, { color: status.color }]}>{Math.round(readiness.score)}</Text>
         <View style={{ flex: 1 }}>
-          <Text style={[local.heroStatus, { color: status.color }]}>
-            {status.label}
-          </Text>
-          <Text style={local.heroNote}>
-            Điểm tham khảo không được vượt qua điểm chặn vận hành.
-          </Text>
+          <Text style={[local.heroStatus, { color: status.color }]}>{status.label}</Text>
+          <Text style={local.heroNote}>Điểm tham khảo không được vượt qua điểm chặn vận hành.</Text>
         </View>
       </View>
 
@@ -591,20 +550,11 @@ function ReadinessDashboard({
         return (
           <View key={dimension.key} style={local.dimension}>
             <View style={local.dimensionHead}>
-              <Text style={local.dimensionName}>
-                {COMPONENT_LABELS[dimension.key]}
-              </Text>
-              <Text style={[local.dimensionScore, { color: meta.color }]}>
-                {Math.round(score)}
-              </Text>
+              <Text style={local.dimensionName}>{COMPONENT_LABELS[dimension.key]}</Text>
+              <Text style={[local.dimensionScore, { color: meta.color }]}>{Math.round(score)}</Text>
             </View>
             <View style={local.track}>
-              <View
-                style={[
-                  local.fill,
-                  { width: `${score}%`, backgroundColor: meta.color },
-                ]}
-              />
+              <View style={[local.fill, { width: `${score}%`, backgroundColor: meta.color }]} />
             </View>
             {dimension.reasons.slice(0, 2).map((reason) => (
               <Text key={reason} style={local.reason}>
@@ -633,11 +583,7 @@ function ReadinessDashboard({
   );
 }
 
-function ReadinessHighlights({
-  readiness,
-}: {
-  readiness: WarehouseReadiness;
-}) {
+function ReadinessHighlights({ readiness }: { readiness: WarehouseReadiness }) {
   const weakest = [...readiness.components]
     .sort((left, right) => left.value - right.value)
     .slice(0, 3);
@@ -646,9 +592,7 @@ function ReadinessHighlights({
       <Text style={local.sectionTitle}>Thành phần cần chú ý</Text>
       {weakest.map((component) => (
         <View key={component.key} style={local.compactDimension}>
-          <Text style={local.compactLabel}>
-            {COMPONENT_LABELS[component.key]}
-          </Text>
+          <Text style={local.compactLabel}>{COMPONENT_LABELS[component.key]}</Text>
           <View style={local.compactTrack}>
             <View
               style={[
@@ -656,11 +600,7 @@ function ReadinessHighlights({
                 {
                   width: `${Math.max(0, Math.min(100, component.value))}%`,
                   backgroundColor:
-                    component.value >= 80
-                      ? c.green
-                      : component.value >= 50
-                        ? c.amber
-                        : c.red,
+                    component.value >= 80 ? c.green : component.value >= 50 ? c.amber : c.red,
                 },
               ]}
             />
@@ -725,15 +665,11 @@ function severityColor(severity: IncidentSummary["severity"]): string {
 }
 
 function highestSeverity(incidents: IncidentSummary[]): string {
-  const order: IncidentSummary["severity"][] = [
-    "CRITICAL",
-    "HIGH",
-    "MEDIUM",
-    "LOW",
-  ];
-  return order.find((severity) =>
-    incidents.some((incident) => incident.severity === severity),
-  ) ?? "không có";
+  const order: IncidentSummary["severity"][] = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
+  return (
+    order.find((severity) => incidents.some((incident) => incident.severity === severity)) ??
+    "không có"
+  );
 }
 
 const local = StyleSheet.create({
@@ -912,7 +848,7 @@ const local = StyleSheet.create({
   rowTitle: { color: c.text, fontSize: 14, fontWeight: "700" },
   rowMeta: { color: c.muted, fontSize: 11, marginTop: 4 },
   aiCard: {
-    backgroundColor: "#172033",
+    backgroundColor: c.surfaceAlt,
     borderWidth: 1,
     borderColor: c.amber,
     borderRadius: 14,

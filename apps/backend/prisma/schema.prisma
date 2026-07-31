@@ -10,11 +10,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// WAREHOUSE kiêm luôn vai trưởng thôn: cùng một người giữ kho và báo tình huống
+// của thôn mình, nên không tách thành hai tài khoản.
 enum UserRole {
   WAREHOUSE
   RESCUE
   ADMIN
-  REPORTER // trưởng thôn — báo cáo tình huống từ hiện trường (mobile)
 }
 
 enum ItemStatus {
@@ -71,39 +72,40 @@ enum LoanStatus {
 }
 
 model Organization {
-  id         String      @id @default(cuid())
-  name       String
-  createdAt  DateTime    @default(now())
-  users      User[]
-  warehouses Warehouse[]
-  hamlets    Hamlet[]
+  id            String         @id @default(cuid())
+  name          String
+  createdAt     DateTime       @default(now())
+  users         User[]
+  warehouses    Warehouse[]
+  hamlets       Hamlet[]
   notifications Notification[]
 }
 
 model User {
-  id                  String                        @id @default(cuid())
-  organizationId      String
-  organization        Organization                  @relation(fields: [organizationId], references: [id])
-  email               String                        @unique
-  passwordHash        String
-  fullName            String
-  phone               String?
-  notificationEmail   String?
-  avatarUrl           String?
-  role                UserRole                      @default(WAREHOUSE)
+  id                      String                        @id @default(cuid())
+  organizationId          String
+  organization            Organization                  @relation(fields: [organizationId], references: [id])
+  email                   String                        @unique
+  passwordHash            String
+  fullName                String
+  phone                   String?
+  notificationEmail       String?
+  avatarUrl               String?
+  role                    UserRole                      @default(WAREHOUSE)
   // Tăng khi đăng nhập, refresh hoặc logout để thu hồi toàn bộ JWT cũ của tài khoản.
-  tokenVersion        Int                           @default(0)
+  tokenVersion            Int                           @default(0)
   // Scope kho: null = phụ trách toàn xã (kho tổng); có giá trị = trưởng thôn CHỈ quản kho này.
-  warehouseId         String?
-  warehouse           Warehouse?                    @relation(fields: [warehouseId], references: [id])
-  createdAt           DateTime                      @default(now())
-  transactions        InventoryTransaction[]
-  reports             MonthlyStockReport[]
-  missionPreparations MissionWarehousePreparation[]
-  missionRequestsAccepted MissionWarehouseRequest[] @relation("MissionWarehouseRequestAcceptedBy")
-  missionRequestsPrepared MissionWarehouseRequest[] @relation("MissionWarehouseRequestPreparedBy")
-  analysisSnapshots   MissionAnalysisSnapshot[] @relation("MissionAnalysisActor")
-  fieldUpdates        MissionFieldUpdate[]      @relation("MissionFieldUpdateActor")
+  warehouseId             String?
+  warehouse               Warehouse?                    @relation(fields: [warehouseId], references: [id])
+  createdAt               DateTime                      @default(now())
+  transactions            InventoryTransaction[]
+  reports                 MonthlyStockReport[]
+  missionPreparations     MissionWarehousePreparation[]
+  missionRequestsAccepted MissionWarehouseRequest[]     @relation("MissionWarehouseRequestAcceptedBy")
+  missionRequestsPrepared MissionWarehouseRequest[]     @relation("MissionWarehouseRequestPreparedBy")
+  analysisSnapshots       MissionAnalysisSnapshot[]     @relation("MissionAnalysisActor")
+  fieldUpdates            MissionFieldUpdate[]          @relation("MissionFieldUpdateActor")
+  sensorSubmissions       SensorSubmission[]
 }
 
 enum WarehouseKind {
@@ -129,6 +131,9 @@ model Warehouse {
   missions            Mission[]                     @relation("MissionSourceWarehouse")
   missionPreparations MissionWarehousePreparation[]
   missionRequests     MissionWarehouseRequest[]
+  sensorSubmissions   SensorSubmission[]
+  deviceCredentials   DeviceCredential[]
+  alertEmailOutboxes  AlertEmailOutbox[]
 }
 
 // Thôn/điểm ứng phó do ADMIN cấu hình trước. Marker này độc lập với marker kho.
@@ -287,25 +292,25 @@ model InventoryCount {
 }
 
 model InventoryTransaction {
-  id        String            @id @default(cuid())
-  batchId   String
-  batch     ItemBatch         @relation(fields: [batchId], references: [id])
-  userId    String
-  user      User              @relation(fields: [userId], references: [id])
-  type      TransactionType
-  source    TransactionSource @default(SCAN) // nguồn — feed dataReliability
-  quantity  Int
+  id              String            @id @default(cuid())
+  batchId         String
+  batch           ItemBatch         @relation(fields: [batchId], references: [id])
+  userId          String
+  user            User              @relation(fields: [userId], references: [id])
+  type            TransactionType
+  source          TransactionSource @default(SCAN) // nguồn — feed dataReliability
+  quantity        Int
   // Additive ledger semantics: legacy `quantity` remains the business event
   // amount; these fields make stock reconstruction unambiguous.
-  beforeQuantity Int?
-  afterQuantity  Int?
-  quantityDelta  Int?
-  note      String?
+  beforeQuantity  Int?
+  afterQuantity   Int?
+  quantityDelta   Int?
+  note            String?
   // Warehouse snapshots preserve ledger ownership after a batch moves.
   warehouseId     String?
   fromWarehouseId String?
   toWarehouseId   String?
-  createdAt DateTime          @default(now())
+  createdAt       DateTime          @default(now())
 
   @@index([warehouseId, createdAt])
   @@index([fromWarehouseId, createdAt])
@@ -314,16 +319,16 @@ model InventoryTransaction {
 
 // Audit log — mọi thao tác quan trọng ghi lại bất biến (PRD NFR-03)
 model AuditLog {
-  id        String   @id @default(cuid())
-  actorId   String?
+  id             String   @id @default(cuid())
+  actorId        String?
   organizationId String?
   warehouseId    String?
   correlationId  String?
-  action    String
-  entity    String
-  entityId  String?
-  metadata  Json?
-  createdAt DateTime @default(now())
+  action         String
+  entity         String
+  entityId       String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
 
   @@index([organizationId, createdAt])
   @@index([warehouseId, createdAt])
@@ -344,115 +349,101 @@ enum VirtualDeviceType {
   GATEWAY
 }
 
-enum SimRunStatus {
-  IDLE
-  PLAYING
-  PAUSED
-  DONE
+// Nguồn sinh ra số liệu. KHÔNG rẽ nhánh xử lý theo trường này: nó chỉ phục vụ
+// hiển thị và truy vết. Cảm biến thật và thiết bị mô phỏng đi chung một đường ống.
+enum TelemetrySource {
+  OPERATOR // người vận hành xác nhận giá trị trên desktop
+  HARDWARE // gateway/cảm biến tự gửi
+}
+
+// Khoá của một gateway phần cứng. Thiết bị không có tài khoản người dùng; nó
+// xác thực bằng khoá riêng, bị thu hồi độc lập, và chỉ gửi được cho đúng kho.
+model DeviceCredential {
+  id          String             @id @default(cuid())
+  warehouseId String
+  warehouse   Warehouse          @relation(fields: [warehouseId], references: [id])
+  code        String // vd "gateway_kho_trung_tam"
+  name        String
+  tokenPrefix String             @unique // phần công khai, dùng để tra cứu
+  tokenHash   String // bcrypt của phần bí mật — không lưu token gốc
+  createdAt   DateTime           @default(now())
+  lastSeenAt  DateTime?
+  revokedAt   DateTime?
+  submissions SensorSubmission[]
+
+  @@unique([warehouseId, code])
 }
 
 model VirtualDevice {
-  id           String            @id @default(cuid())
-  warehouseId  String
-  zoneId       String?
-  shelfId      String?
-  shelf        Shelf?            @relation(fields: [shelfId], references: [id])
-  type         VirtualDeviceType
-  code         String // vd "scale_shelf_A1"
-  unit         String // kg, °C, %, bool...
-  // Trạng thái current — Readiness đọc cái này, không query MAX(timestamp)
-  currentValue Float?
-  online       Boolean           @default(true)
-  updatedAt    DateTime          @updatedAt
-  events       SensorEvent[]
+  id                      String            @id @default(cuid())
+  warehouseId             String
+  zoneId                  String?
+  shelfId                 String?
+  shelf                   Shelf?            @relation(fields: [shelfId], references: [id])
+  type                    VirtualDeviceType
+  code                    String // vd "scale_shelf_A1"
+  unit                    String // kg, °C, %, bool...
+  online                  Boolean           @default(true)
+  // Mốc số liệu gần nhất thực sự nhận được. Im lặng quá lâu là một sự cố, không
+  // phải trạng thái bình thường — xem quy tắc DEVICE_SILENT.
+  lastSeenAt              DateTime?
+  // Chu kỳ báo mong đợi (giây). null = không giám sát im lặng cho thiết bị này.
+  expectedIntervalSeconds Int?
+  updatedAt               DateTime          @updatedAt
+  events                  SensorEvent[]
 
   @@unique([warehouseId, code])
   @@index([warehouseId, type])
 }
 
+// Một lô số liệu đã được xác nhận: người vận hành bấm gửi, hoặc gateway phần cứng
+// đẩy lên. Đây là boundary chống gửi trùng và giữ mốc thời gian thật của phép đo,
+// không phải bảng giữ trạng thái IoT hiện hành.
+model SensorSubmission {
+  id                  String            @id @default(cuid())
+  idempotencyKey      String            @unique
+  payloadHash         String
+  warehouseId         String
+  warehouse           Warehouse         @relation(fields: [warehouseId], references: [id])
+  source              TelemetrySource   @default(OPERATOR)
+  // Đúng một trong hai được đặt: người xác nhận, hoặc thiết bị đã xác thực.
+  submittedByUserId   String?
+  submittedBy         User?             @relation(fields: [submittedByUserId], references: [id])
+  submittedByDeviceId String?
+  submittedByDevice   DeviceCredential? @relation(fields: [submittedByDeviceId], references: [id])
+  observedAt          DateTime
+  receivedAt          DateTime          @default(now())
+  policyVersion       String
+  events              SensorEvent[]
+  incidents           Incident[]
+
+  @@index([warehouseId, observedAt])
+  @@index([submittedByUserId, receivedAt])
+  @@index([submittedByDeviceId, receivedAt])
+}
+
 model SensorEvent {
-  id          String        @id @default(cuid())
-  deviceId    String
-  device      VirtualDevice @relation(fields: [deviceId], references: [id])
-  warehouseId String
-  zoneId      String?
-  eventType   String // WEIGHT_CHANGED, DOOR_OPEN, VISION_DETECTION...
-  value       Float
-  unit        String
-  quality     Float         @default(1.0) // 0..1
-  scenarioId  String?
-  runId       String?
-  createdAt   DateTime      @default(now())
+  id           String            @id @default(cuid())
+  submissionId String?
+  submission   SensorSubmission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
+  deviceId     String
+  device       VirtualDevice     @relation(fields: [deviceId], references: [id])
+  warehouseId  String
+  zoneId       String?
+  eventType    String // WEIGHT_CHANGED, DOOR_OPEN, VISION_DETECTION...
+  value        Float
+  unit         String
+  quality      Float             @default(1.0) // 0..1
+  // Mốc operator xác nhận; createdAt là thời điểm backend ghi nhận event.
+  observedAt   DateTime          @default(now())
+  createdAt    DateTime          @default(now())
 
+  @@unique([submissionId, deviceId])
   @@index([warehouseId, createdAt])
-  @@index([runId])
-}
-
-model SimulationScenario {
-  id          String          @id @default(cuid())
-  key         String          @unique // "flood_01", "suspected_loss"...
-  name        String
-  description String?
-  // Định nghĩa event list (offsetMs, deviceCode, value...) — nguồn sự thật ở packages/scenario-definitions
-  definition  Json
-  runs        SimulationRun[]
-}
-
-model SimulationRun {
-  id          String             @id @default(cuid())
-  scenarioId  String
-  scenario    SimulationScenario @relation(fields: [scenarioId], references: [id])
-  warehouseId String
-  seed        Int                @default(42)
-  speed       Int                @default(1) // 1 | 10
-  status      SimRunStatus       @default(IDLE)
-  cursorMs    Int                @default(0) // con trỏ timeline-scrubber
-  startedAt   DateTime?
-  createdAt   DateTime           @default(now())
-
-  @@index([warehouseId, status])
+  @@index([warehouseId, observedAt])
 }
 
 // ===== Phase C: Readiness Score =====
-
-// Cấp độ đối tượng được chấm điểm (4 cấp: PRD 3.2)
-enum ReadinessTargetType {
-  ITEM_BATCH
-  SHELF
-  ZONE
-  WAREHOUSE
-}
-
-// Điểm sẵn sàng đã tính (cache) cho 1 đối tượng ở 1 thời điểm.
-// Recalc (C1) ghi đè bản mới nhất theo (targetType, targetId).
-model ReadinessScore {
-  id                String                    @id @default(cuid())
-  warehouseId       String
-  targetType        ReadinessTargetType
-  targetId          String
-  score             Int // 0-100 tổng
-  operationalStatus String                    @default("READY")
-  blockers          Json                      @default("[]")
-  computedAt        DateTime                  @default(now())
-  components        ReadinessComponent[]
-  recommendations   ReadinessRecommendation[]
-
-  @@unique([targetType, targetId])
-  @@index([warehouseId, targetType])
-}
-
-// Breakdown: điểm từng thành phần (6 thành phần) + lý do trừ điểm.
-model ReadinessComponent {
-  id      String         @id @default(cuid())
-  scoreId String
-  score   ReadinessScore @relation(fields: [scoreId], references: [id], onDelete: Cascade)
-  key     String // quantityAvailability | itemCondition | expiry | accessibility | environment | dataReliability
-  value   Int // 0-100 thành phần
-  weight  Float // trọng số áp dụng lúc tính
-  reasons String[] // lý do bị trừ điểm
-
-  @@index([scoreId])
-}
 
 // Cấu hình trọng số + ngưỡng công thức, chỉnh được theo từng kho (configurable).
 // Rỗng → dùng READINESS_CONFIG mặc định (có disclaimer "tham khảo nghiên cứu").
@@ -472,18 +463,6 @@ model ReadinessThreshold {
   attention   Int      @default(70) // >= attention: 🟡
   degraded    Int      @default(50) // >= degraded: 🟠; dưới: 🔴
   updatedAt   DateTime @updatedAt
-}
-
-// Đề xuất cải thiện sinh từ nguyên nhân trừ điểm (C2).
-model ReadinessRecommendation {
-  id        String         @id @default(cuid())
-  scoreId   String
-  score     ReadinessScore @relation(fields: [scoreId], references: [id], onDelete: Cascade)
-  component String // thành phần liên quan
-  message   String // vd "Kiểm tra 3 bộ sơ cứu sắp hết hạn ở kệ B1"
-  createdAt DateTime       @default(now())
-
-  @@index([scoreId])
 }
 
 // ===== Phase D: Mission-to-Kit =====
@@ -659,31 +638,31 @@ model MissionWarehousePreparation {
 // Từng SKU mà một kho tham gia phải tiếp nhận và chuẩn bị cho nhiệm vụ.
 // preparationClaimToken là CAS lock: ADMIN không thể sửa khi kho đang xuất.
 model MissionWarehouseRequest {
-  id                     String                        @id @default(cuid())
-  missionId              String
-  mission                Mission                       @relation(fields: [missionId], references: [id], onDelete: Cascade)
-  warehouseId            String
-  warehouse              Warehouse                     @relation(fields: [warehouseId], references: [id])
-  sku                    String
-  itemName               String
-  unit                   String
-  requestedQuantity      Int
-  preparedQuantity       Int                           @default(0)
-  allocations            Json
-  preparedAllocations    Json?
-  status                 MissionWarehouseRequestStatus @default(PENDING)
-  warehouseNote          String?
-  adminNote              String?
-  acceptedByUserId       String?
-  acceptedBy             User?                         @relation("MissionWarehouseRequestAcceptedBy", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
-  preparedByUserId       String?
-  preparedBy             User?                         @relation("MissionWarehouseRequestPreparedBy", fields: [preparedByUserId], references: [id], onDelete: SetNull)
-  preparationClaimToken  String?
-  preparationClaimedAt   DateTime?
-  acceptedAt             DateTime?
-  preparedAt             DateTime?
-  createdAt              DateTime                      @default(now())
-  updatedAt              DateTime                      @updatedAt
+  id                    String                        @id @default(cuid())
+  missionId             String
+  mission               Mission                       @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  warehouseId           String
+  warehouse             Warehouse                     @relation(fields: [warehouseId], references: [id])
+  sku                   String
+  itemName              String
+  unit                  String
+  requestedQuantity     Int
+  preparedQuantity      Int                           @default(0)
+  allocations           Json
+  preparedAllocations   Json?
+  status                MissionWarehouseRequestStatus @default(PENDING)
+  warehouseNote         String?
+  adminNote             String?
+  acceptedByUserId      String?
+  acceptedBy            User?                         @relation("MissionWarehouseRequestAcceptedBy", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
+  preparedByUserId      String?
+  preparedBy            User?                         @relation("MissionWarehouseRequestPreparedBy", fields: [preparedByUserId], references: [id], onDelete: SetNull)
+  preparationClaimToken String?
+  preparationClaimedAt  DateTime?
+  acceptedAt            DateTime?
+  preparedAt            DateTime?
+  createdAt             DateTime                      @default(now())
+  updatedAt             DateTime                      @updatedAt
 
   @@unique([missionId, warehouseId, sku])
   @@index([warehouseId, status, createdAt])
@@ -709,22 +688,25 @@ enum IncidentState {
 
 // Sự cố do rule engine phát hiện từ hợp nhất sự kiện cảm biến.
 model Incident {
-  id          String             @id @default(cuid())
-  warehouseId String
-  zoneId      String?
-  kind        String // SUSPECTED_LOSS | SENSOR_FAULT | BAD_STORAGE | MISPLACED...
-  severity    IncidentSeverity
-  confidence  Float // 0..1 độ tin cậy kết luận
-  title       String
-  explanation String? // LLM diễn đạt (tiếng Việt) — không tự kết luận số
-  state       IncidentState      @default(OPEN)
-  runId       String? // scenario run sinh ra (nếu từ simulator)
-  detectedAt  DateTime           @default(now())
-  resolvedAt  DateTime?
-  evidence    IncidentEvidence[]
-  actions     IncidentAction[]
+  id                 String             @id @default(cuid())
+  warehouseId        String
+  sourceSubmissionId String?
+  sourceSubmission   SensorSubmission?  @relation(fields: [sourceSubmissionId], references: [id], onDelete: SetNull)
+  zoneId             String?
+  kind               String // SUSPECTED_LOSS | SENSOR_FAULT | BAD_STORAGE | MISPLACED...
+  severity           IncidentSeverity
+  confidence         Float // 0..1 độ tin cậy kết luận
+  title              String
+  explanation        String? // LLM diễn đạt (tiếng Việt) — không tự kết luận số
+  state              IncidentState      @default(OPEN)
+  detectedAt         DateTime           @default(now())
+  resolvedAt         DateTime?
+  evidence           IncidentEvidence[]
+  actions            IncidentAction[]
+  emailOutbox        AlertEmailOutbox?
 
   @@index([warehouseId, state])
+  @@index([sourceSubmissionId])
 }
 
 // Bằng chứng: từng sự kiện cảm biến góp phần vào kết luận (timeline).
@@ -744,15 +726,47 @@ model IncidentEvidence {
 
 // Hành động xử lý sự cố (acknowledge/assign/resolve).
 model IncidentAction {
-  id         String   @id @default(cuid())
-  incidentId String
-  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
-  action     String
-  actorId    String?
-  note       String?
-  createdAt  DateTime @default(now())
+  id             String   @id @default(cuid())
+  incidentId     String
+  incident       Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  action         String
+  idempotencyKey String?
+  actorId        String?
+  note           String?
+  createdAt      DateTime @default(now())
 
+  @@unique([incidentId, idempotencyKey])
   @@index([incidentId])
+}
+
+enum AlertEmailStatus {
+  PENDING
+  SENDING
+  SENT
+}
+
+// Outbox bền vững: trạng thái chuyển phát email, không quyết định trạng thái sự cố.
+// Email gửi muộn luôn lấy observedAt/receivedAt ở đây để phân biệt với sentAt.
+model AlertEmailOutbox {
+  id              String           @id @default(cuid())
+  incidentId      String           @unique
+  incident        Incident         @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  warehouseId     String
+  warehouse       Warehouse        @relation(fields: [warehouseId], references: [id])
+  recipientEmails String[]         @default([])
+  observedAt      DateTime
+  receivedAt      DateTime
+  status          AlertEmailStatus @default(PENDING)
+  attempts        Int              @default(0)
+  lastAttemptAt   DateTime?
+  nextAttemptAt   DateTime         @default(now())
+  lastError       String?
+  sentAt          DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([warehouseId, createdAt])
 }
 
 // Đếm số call API ngoài (Google Maps) theo tháng — chặn quota, không bị trừ tiền.
@@ -786,22 +800,22 @@ enum NotificationKind {
 }
 
 model Notification {
-  id            String           @id @default(cuid())
+  id             String           @id @default(cuid())
   // Nullable only while legacy records are backfilled. Runtime reads never
   // expose a null-scoped record, so old data cannot leak across organizations.
   organizationId String?
   organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  recipientRole UserRole // gửi theo role (WAREHOUSE/RESCUE/ADMIN)
-  missionId     String?
-  warehouseId   String?
-  kind          NotificationKind
-  title         String
-  body          String
-  read          Boolean          @default(false)
+  recipientRole  UserRole // gửi theo role (WAREHOUSE/RESCUE/ADMIN)
+  missionId      String?
+  warehouseId    String?
+  kind           NotificationKind
+  title          String
+  body           String
+  read           Boolean          @default(false)
   // Deep-link target for ADMIN evidence review. It is a scalar by design so
   // notification retention never owns or deletes the immutable evidence.
-  fieldUpdateId String?          @unique
-  createdAt     DateTime         @default(now())
+  fieldUpdateId  String?          @unique
+  createdAt      DateTime         @default(now())
 
   @@index([organizationId, recipientRole, read])
 }

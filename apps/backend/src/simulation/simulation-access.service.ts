@@ -86,4 +86,24 @@ export class SimulationAccessService {
     }
     return actor;
   }
+
+  /**
+   * Quyền tắt chuông báo động.
+   *
+   * KHÔNG dùng chung với `assertMutationAccess` một cách có chủ đích. Chuông có
+   * thể do cảm biến thật kích hoạt, nên nó phải tắt được kể cả khi luồng mô
+   * phỏng đang bị tắt bằng cờ, và bởi người trực kho chứ không riêng quản trị
+   * viên. Chuông không tắt được là chuông sẽ bị rút điện — hỏng nguy hiểm hơn.
+   */
+  async assertAlarmAccess(userId: string, warehouseId: string): Promise<SimulationActor> {
+    const actor = await this.assertWarehouseAccess(
+      userId,
+      warehouseId,
+      Permission.INCIDENT_ALARM_ACK,
+    );
+    if (actor.warehouseKind !== WarehouseKind.CENTRAL) {
+      throw new ForbiddenException("Chuông báo động chỉ áp dụng cho kho trung tâm");
+    }
+    return actor;
+  }
 }

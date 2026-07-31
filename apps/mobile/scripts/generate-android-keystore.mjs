@@ -5,16 +5,9 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const mobileRoot = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "..",
-);
+const mobileRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const androidRoot = path.resolve(mobileRoot, "android");
-const keystorePath = path.resolve(
-  androidRoot,
-  "app",
-  "safestock-release.keystore",
-);
+const keystorePath = path.resolve(androidRoot, "app", "safestock-release.keystore");
 const propertiesPath = path.resolve(androidRoot, "keystore.properties");
 
 if (existsSync(keystorePath) && existsSync(propertiesPath)) {
@@ -22,13 +15,10 @@ if (existsSync(keystorePath) && existsSync(propertiesPath)) {
   process.exit(0);
 }
 if (existsSync(keystorePath) || existsSync(propertiesPath)) {
-  throw new Error(
-    "Keystore/properties đang thiếu một nửa. Kiểm tra thủ công trước khi tạo lại.",
-  );
+  throw new Error("Keystore/properties đang thiếu một nửa. Kiểm tra thủ công trước khi tạo lại.");
 }
 
-const javaHome =
-  process.env.JAVA_HOME ?? "C:\\Program Files\\Java\\jdk-17";
+const javaHome = process.env.JAVA_HOME ?? "C:\\Program Files\\Java\\jdk-17";
 const keytool = path.resolve(
   javaHome,
   "bin",

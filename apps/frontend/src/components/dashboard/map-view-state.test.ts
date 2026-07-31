@@ -34,10 +34,7 @@ test("merges draft coordinates without mutating server data", () => {
 
 test("only clears a draft that matches the saved coordinate", () => {
   const draft = { "warehouse-1": { lat: 13.3, lng: 109.1 } };
-  assert.deepEqual(
-    clearMatchingSavedDraft(draft, "warehouse-1", { lat: 13.3, lng: 109.1 }),
-    {},
-  );
+  assert.deepEqual(clearMatchingSavedDraft(draft, "warehouse-1", { lat: 13.3, lng: 109.1 }), {});
   assert.deepEqual(
     clearMatchingSavedDraft(draft, "warehouse-1", { lat: 13.31, lng: 109.1 }),
     draft,
