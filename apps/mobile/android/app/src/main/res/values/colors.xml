@@ -2,4 +2,7 @@
   <color name="splashscreen_background">#ffffff</color>
   <color name="colorPrimary">#023c69</color>
   <color name="colorPrimaryDark">#ffffff</color>
+  <!-- Nền biểu tượng ứng dụng. Để trắng đặc chứ không trong suốt: launcher của
+       một số hãng tự tô nền tối, dấu hiệu xanh/cam sẽ chìm mất trên đó. -->
+  <color name="iconBackground">#ffffff</color>
 </resources>

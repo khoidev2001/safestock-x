@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive icon cho Android 8+. Nền trắng đặc thay vì để trong suốt: launcher
+  của một số hãng tự tô nền tối, dấu hiệu xanh/cam sẽ chìm mất.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/iconBackground"/>
+    <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+</adaptive-icon>
