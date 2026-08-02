@@ -13,6 +13,12 @@ from fastapi import FastAPI, HTTPException
 from pydantic import ValidationError
 
 from knowledge import SearchHit, get_knowledge_retriever
+from parse_grounding import (
+    PROMPT_INJECTION_MARKERS as _PROMPT_INJECTION_MARKERS,
+    first_reported_number_match as _first_reported_number_match,
+    fold_report_text as _fold_report_text,
+    ground_parsed_incident,
+)
 from providers.factory import build_provider
 from semantic import SemanticCandidate, get_semantic_ranker
 from schemas import (
@@ -223,7 +229,12 @@ def health() -> dict:
 
 @app.post("/parse")
 def parse(req: ParseRequest) -> ParsedIncident:
-    """Mô tả (text) → JSON tình huống có cấu trúc. Validate + retry nếu sai schema."""
+    """Mô tả (text) → JSON tình huống có cấu trúc. Validate + retry nếu sai schema.
+
+    Số đếm được đối chiếu lại với chính câu mô tả trước khi trả về: web đưa kết quả
+    này thẳng vào bước tính vật tư, nên một con số không có trong câu là một phương
+    án sai. Xem parse_grounding.
+    """
     last_error = ""
     for _ in range(_MAX_RETRY):
         raw = provider.generate_json(
@@ -232,23 +243,17 @@ def parse(req: ParseRequest) -> ParsedIncident:
             ParsedIncident.model_json_schema(),
         )
         try:
-            return ParsedIncident.model_validate_json(_strip_fence(raw))
+            parsed = ParsedIncident.model_validate_json(_strip_fence(raw))
         except (ValidationError, json.JSONDecodeError) as exc:
             last_error = str(exc)
+            continue
+        return ParsedIncident.model_validate(
+            ground_parsed_incident(parsed.model_dump(), req.description)
+        )
     raise HTTPException(status_code=422, detail=f"AI trả về sai schema: {last_error}")
 
 
 _MODEL_NAME_LEAK = re.compile(r"qwen|llama|gemini|gpt-?[34o]|claude|mistral|ollama", re.IGNORECASE)
-_PROMPT_INJECTION_MARKERS = re.compile(
-    r"\b(bo qua|ignore|system prompt|prompt|quy tac|huong dan|instruction|auto\s*(?:dispatch|approve))\b"
-)
-
-
-def _fold_report_text(value: str) -> str:
-    """Case/space-insensitive source-span checks without trusting an LLM claim."""
-    decomposed = unicodedata.normalize("NFD", value.casefold())
-    without_marks = "".join(char for char in decomposed if not unicodedata.combining(char)).replace("đ", "d")
-    return re.sub(r"\s+", " ", without_marks).strip()
 
 
 def _validate_situation_extraction(
@@ -293,32 +298,6 @@ def _validate_reported_numeric_fact(fact: SituationExtractedFact) -> None:
     excerpt = _fold_report_text(fact.source.excerpt if fact.source else "")
     if re.search(pattern.format(value=re.escape(str(fact.value))), excerpt) is None:
         raise ValueError(f"{fact.key} value is not grounded in its source excerpt")
-
-
-def _first_reported_number_match(pattern: str, folded_report: str) -> re.Match[str] | None:
-    """Ignore number-like text embedded in an instruction-injection clause."""
-    for match in re.finditer(pattern, folded_report):
-        clause_start = max(
-            folded_report.rfind(".", 0, match.start()),
-            folded_report.rfind("!", 0, match.start()),
-            folded_report.rfind("?", 0, match.start()),
-            folded_report.rfind("\n", 0, match.start()),
-        ) + 1
-        clause_end_candidates = [
-            index
-            for index in (
-                folded_report.find(".", match.end()),
-                folded_report.find("!", match.end()),
-                folded_report.find("?", match.end()),
-                folded_report.find("\n", match.end()),
-            )
-            if index >= 0
-        ]
-        clause_end = min(clause_end_candidates) if clause_end_candidates else len(folded_report)
-        if _PROMPT_INJECTION_MARKERS.search(folded_report[clause_start:clause_end]):
-            continue
-        return match
-    return None
 
 
 def _deterministic_situation_extraction(request: SituationAnalysisRequest) -> SituationExtraction:
