@@ -140,8 +140,12 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
   const dirtyHamletIds = Object.keys(hamletDraft);
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[1fr_320px]">
-      <div className="space-y-3">
+    // Panel chức năng chia theo tỉ lệ chứ không cố định 320px: thu thanh điều hướng
+    // là chỗ trống chảy sang đây, chứ không dồn hết cho bản đồ.
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,2.2fr)_minmax(320px,1fr)]">
+      {/* Dính dưới header khi cuộn — danh sách 17 kho và 17 thôn bên phải dài hơn
+          một màn hình, không có cái này thì ghim toạ độ phải cuộn lên xuống liên tục. */}
+      <div className="space-y-3 xl:sticky xl:top-20 xl:self-start">
         <MapCanvas
           warehouses={warehouses}
           hamlets={hamlets}
