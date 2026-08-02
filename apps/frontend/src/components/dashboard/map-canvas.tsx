@@ -29,6 +29,26 @@ import { markerIconHtml } from "./map-markers";
 // Zoom sâu nhất cho phép — đủ để thấy từng mái nhà và ngõ nhỏ.
 const MAX_DETAIL_ZOOM = 19;
 
+// Giới hạn khung nhìn theo đúng gói tile offline trong public/tiles, để mọi mức
+// zoom và mọi hướng kéo đều còn ảnh nền — không bao giờ lộ nền xám trống.
+//
+// Thu nhỏ nhất là z9: tỉnh Đắk Lắk mới rộng 1.97°, khung bản đồ ~1030px chứa 2.83°
+// ở z9 nhưng chỉ 1.41° ở z10 — nên z9 là mức đầu tiên thấy trọn tỉnh.
+const OFFLINE_PACK_MIN_ZOOM = 9;
+
+// Gói tile có hai tầng nên vùng cho phép kéo cũng phải đổi theo zoom: nhìn xa thì
+// được cả tỉnh, nhìn gần thì bó vào cụm 5 xã — đó là chỗ duy nhất có ảnh chi tiết.
+// Toạ độ lấy từ chính tên file tile, tầng nào cũng dùng mép hẹp nhất của tầng đó.
+const PROVINCE_BOUNDS: [[number, number], [number, number]] = [
+  [11.52, 106.88],
+  [14.43, 110.04],
+];
+const CLUSTER_BOUNDS: [[number, number], [number, number]] = [
+  [13.23, 108.94],
+  [13.62, 109.26],
+];
+const CLUSTER_MIN_ZOOM = 12;
+
 // Nguồn tile Esri: ảnh vệ tinh + 2 lớp nhãn trong suốt (đường & địa danh).
 const ESRI_IMAGERY =
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
@@ -51,7 +71,7 @@ const BASE_LAYERS = [
     name: "Bản đồ nhà & đường (giống Google)",
     url: CARTO_VOYAGER_NOLABELS,
     attribution: `${OSM_ATTR} · ${CARTO_ATTR}`,
-    maxZoom: MAX_DETAIL_ZOOM,
+    maxNativeZoom: 19,
     offline: false,
   },
   {
@@ -62,7 +82,7 @@ const BASE_LAYERS = [
     url: ESRI_IMAGERY,
     overlayUrls: [ESRI_TRANSPORT],
     attribution: "&copy; Esri, Maxar, Earthstar Geographics · đường &copy; Esri",
-    maxZoom: MAX_DETAIL_ZOOM,
+    maxNativeZoom: 19,
     offline: false,
   },
   {
@@ -72,7 +92,11 @@ const BASE_LAYERS = [
     name: "Offline (5 xã, không cần mạng)",
     url: "/tiles/{z}/{x}/{y}.png",
     attribution: `${OSM_ATTR} · &copy; <a href="https://www.maptiler.com/">MapTiler</a> · offline cụm Đồng Xuân`,
-    maxZoom: 15,
+    // Chỉ tải sẵn tới zoom 15. Đây là mức SÂU NHẤT CÓ ẢNH THẬT, không phải mức
+    // ngừng hiển thị: zoom sâu hơn thì phóng to ô 15 lên. Trước đây đặt vào maxZoom
+    // khiến Leaflet ẩn hẳn lớp nền khi zoom quá 15 — đúng lúc người dùng phóng to
+    // để ghim toạ độ thì bản đồ trắng trơn.
+    maxNativeZoom: 15,
     // Tile tải từ endpoint raster 256px, cùng lưới XYZ chuẩn với Leaflet/OSM.
     offline: true,
   },
@@ -81,7 +105,7 @@ const BASE_LAYERS = [
     name: "Đường phố (OSM, cần mạng)",
     url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
     attribution: OSM_ATTR,
-    maxZoom: MAX_DETAIL_ZOOM,
+    maxNativeZoom: 19,
     offline: false,
   },
   {
@@ -89,7 +113,7 @@ const BASE_LAYERS = [
     name: "Địa hình (Topo)",
     url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
     attribution: `${OSM_ATTR} · <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)`,
-    maxZoom: 17,
+    maxNativeZoom: 17,
     offline: false,
   },
   {
@@ -97,7 +121,7 @@ const BASE_LAYERS = [
     name: "Vệ tinh (không nhãn)",
     url: ESRI_IMAGERY,
     attribution: "&copy; Esri, Maxar, Earthstar Geographics",
-    maxZoom: MAX_DETAIL_ZOOM,
+    maxNativeZoom: 19,
     offline: false,
   },
 ];
@@ -106,8 +130,11 @@ const BASE_LAYERS = [
 const BLANK_TILE =
   "data:image/gif;base64,R0lGODlhAQABAIAAAOfn5wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==";
 
-// Tâm Đắk Lắk (fallback khi chưa kho nào có toạ độ).
-const DEFAULT_CENTER: [number, number] = [12.67, 108.05];
+// Fallback khi chưa kho nào có toạ độ: UBND xã Đồng Xuân — nơi đặt kho trung tâm.
+// Trước đây lấy tâm Đắk Lắk (12.67, 108.05), cách vùng có tile ~60km về tây nam,
+// nên trong khoảnh khắc trước khi FitBounds chạy — hoặc mãi mãi, nếu chưa kho nào
+// có toạ độ — bản đồ mở ra đúng chỗ không có ảnh nền.
+const DEFAULT_CENTER: [number, number] = [13.3782428, 109.104259];
 
 function pinIcon(color: string, size = 30): L.DivIcon {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="${color}" stroke="white" stroke-width="1.5"><path d="M12 21s-7-6.5-7-11.5A7 7 0 0 1 19 9.5C19 14.5 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5" fill="white"/></svg>`;
@@ -199,10 +226,15 @@ export function MapCanvas({
       <MapContainer
         center={DEFAULT_CENTER}
         zoom={12}
+        minZoom={OFFLINE_PACK_MIN_ZOOM}
         maxZoom={MAX_DETAIL_ZOOM}
+        maxBounds={PROVINCE_BOUNDS}
+        // Chạm mép là dội lại hẳn, không cho kéo ra ngoài rồi mới bật về.
+        maxBoundsViscosity={1}
         scrollWheelZoom
         style={{ height: "100%", width: "100%" }}
       >
+        <BoundsForZoom />
         <LayersControl position="topright">
           {BASE_LAYERS.map((layer) => (
             <LayersControl.BaseLayer
@@ -214,10 +246,11 @@ export function MapCanvas({
                 <TileLayer
                   url={layer.url}
                   attribution={layer.attribution}
-                  maxZoom={layer.maxZoom}
-                  // Ảnh vệ tinh Esri chỉ có ảnh tới zoom 19; zoom sâu hơn thì
-                  // phóng to lại ô 19 thay vì hiện ô trắng.
-                  maxNativeZoom={layer.offline ? undefined : 19}
+                  // Mọi lớp đều hiển thị tới mức zoom sâu nhất của bản đồ. Nguồn nào
+                  // hết ảnh trước (offline 15, topo 17, vệ tinh 19) thì phóng to ô
+                  // cuối cùng — mờ dần chứ không bao giờ trắng bản đồ.
+                  maxZoom={MAX_DETAIL_ZOOM}
+                  maxNativeZoom={layer.maxNativeZoom}
                   tileSize={256}
                   zoomOffset={0}
                   errorTileUrl={layer.offline ? BLANK_TILE : undefined}
@@ -226,7 +259,7 @@ export function MapCanvas({
                   <TileLayer
                     key={overlayUrl}
                     url={overlayUrl}
-                    maxZoom={layer.maxZoom}
+                    maxZoom={MAX_DETAIL_ZOOM}
                     maxNativeZoom={19}
                     tileSize={256}
                     zoomOffset={0}
@@ -434,6 +467,28 @@ function escapeHtml(text: string): string {
     };
     return entities[character] ?? character;
   });
+}
+
+/**
+ * Đổi vùng cho phép kéo theo mức zoom, vì gói tile offline có hai tầng: cả tỉnh ở
+ * mức nhìn xa, riêng cụm 5 xã ở mức nhìn gần. Không đổi theo thì hoặc là không
+ * thu nhỏ ra khỏi cụm được, hoặc là phóng to rồi kéo lạc sang vùng không có ảnh.
+ */
+function BoundsForZoom() {
+  const map = useMap();
+  useEffect(() => {
+    const apply = () => {
+      map.setMaxBounds(
+        L.latLngBounds(map.getZoom() >= CLUSTER_MIN_ZOOM ? CLUSTER_BOUNDS : PROVINCE_BOUNDS),
+      );
+    };
+    apply();
+    map.on("zoomend", apply);
+    return () => {
+      map.off("zoomend", apply);
+    };
+  }, [map]);
+  return null;
 }
 
 function FitBounds({ points }: { points: { lat: number; lng: number }[] }) {
