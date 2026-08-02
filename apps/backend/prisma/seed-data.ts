@@ -301,6 +301,9 @@ function createHamletWarehouse(key: string, hamletName: string, index: number) {
   return {
     key,
     name: `Kho thôn ${hamletName}`,
+    // Tên thôn trần, tách khỏi tên kho: điểm ứng phó (Hamlet) là "Phú Sơn", còn kho
+    // đặt tại đó mới là "Kho thôn Phú Sơn". Người báo tình huống nói tên thôn.
+    hamletName,
     location: verifiedLocation?.name ?? `Nhà văn hóa thôn ${hamletName}`,
     locationVerified: verifiedLocation != null,
     lat: verifiedLocation?.lat ?? null,

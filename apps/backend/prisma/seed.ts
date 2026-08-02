@@ -30,6 +30,7 @@ import {
 import { getVerifiedNeighborContact } from "./verified-neighbor-contact";
 import {
   HOME_COMMUNE_WAREHOUSE_LOCATION,
+  VERIFIED_WAREHOUSE_LOCATION_REGISTRY_VERSION,
   getVerifiedCommuneReferencePoint,
   validateVerifiedWarehouseLocations,
 } from "./verified-warehouse-location";
@@ -137,17 +138,33 @@ async function main() {
     organization.id,
     itemBySku,
   );
+  // Điểm ứng phó của thôn. Tọa độ Nhà văn hóa là dữ kiện cố định đã tra Google Maps
+  // và chốt trong verified-warehouse-location.ts, nên seed thẳng vào đây thay vì bắt
+  // mỗi máy mới ghim tay — không ghim thì không thôn nào lập được phương án.
+  // Đúng 5 thôn MAP_VERIFIED có tọa độ; 12 thôn còn lại vẫn để trống chờ ADMIN ghim,
+  // vì danh mục ghi rõ kết quả tra cứu của chúng sai vùng hoặc sai tên.
   await prisma.hamlet.createMany({
     data: HAMLET_WAREHOUSES.map((warehouse) => ({
       organizationId: organization.id,
       communeId: COMMUNE_ID,
-      name: warehouse.name,
-      normalizedName: normalizeHamletName(warehouse.name),
-      aliases: [normalizeHamletName(warehouse.name)],
-      // Admin must pin and verify response points before dispatch; no fake seed coordinates.
-      lat: null,
-      lng: null,
-      verified: false,
+      name: warehouse.hamletName,
+      normalizedName: normalizeHamletName(warehouse.hamletName),
+      // Người báo tình huống gõ "Phú Sơn" hoặc "thôn Phú Sơn"; giữ thêm tên kho để
+      // dữ liệu cũ trỏ theo tên đó vẫn khớp.
+      aliases: [
+        ...new Set(
+          [warehouse.hamletName, `thôn ${warehouse.hamletName}`, warehouse.name].map(
+            normalizeHamletName,
+          ),
+        ),
+      ],
+      lat: warehouse.lat,
+      lng: warehouse.lng,
+      verified: warehouse.locationVerified,
+      // Nguồn xác minh là registry Google Maps chốt ngày đó, không phải một người bấm nút.
+      verifiedAt: warehouse.locationVerified
+        ? new Date(VERIFIED_WAREHOUSE_LOCATION_REGISTRY_VERSION)
+        : null,
     })),
   });
   const hamletLeaderIds = await createHamletLeaders(
