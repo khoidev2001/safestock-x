@@ -25,6 +25,7 @@ import {
   type GenerateInput,
   type Mission,
 } from "@/lib/mission-api";
+import { listAllWarehouses } from "@/lib/warehouse-api";
 import { blobToWavBase64 } from "@/lib/audio-wav";
 import { ActionPlanView } from "./action-plan-view";
 import { MissionInbox } from "./mission-inbox";
@@ -39,15 +40,6 @@ const IncidentMap = dynamic(() => import("./incident-map").then((m) => m.Inciden
   ssr: false,
   loading: () => <div className="h-[320px] animate-pulse rounded-md border bg-[var(--surface)]" />,
 });
-
-// Leaflet đụng window nên phải nạp phía client, giống IncidentMap.
-const IncidentPointPicker = dynamic(
-  () => import("./incident-point-picker").then((m) => m.IncidentPointPicker),
-  {
-    ssr: false,
-    loading: () => <div className="h-64 animate-pulse rounded-md border bg-[var(--surface)]" />,
-  },
-);
 
 /** Tình huống mẫu — bấm nhanh, phòng khi cán bộ chưa quen nhập tay. */
 const SAMPLES: { label: string; input: GenerateInput["incident"] }[] = [
@@ -154,6 +146,15 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
     queryFn: () => listMissions(),
     enabled: Boolean(role),
     refetchInterval: 5000,
+  });
+
+  // Kho trong xã, để bản đồ có gì mà hiện ngay cả khi chưa lập phương án. Danh sách
+  // kho gần như không đổi nên không cần refetch định kỳ như hộp nhiệm vụ.
+  const warehouseListQuery = useQuery({
+    queryKey: ["all-warehouses", "mission-map"],
+    queryFn: listAllWarehouses,
+    enabled: role === "ADMIN",
+    staleTime: 5 * 60 * 1000,
   });
 
   useEffect(() => {
@@ -308,27 +309,17 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
 
   return (
     <div className="space-y-4">
-      <MissionInbox
-        missions={missionListQuery.data ?? []}
-        selectedMissionId={missionId}
-        role={role}
-        warehouseId={assignedWarehouseId}
-        isLoading={missionListQuery.isPending}
-        error={missionListQuery.error}
-        onRetry={() => missionListQuery.refetch()}
-        onSelect={selectMission}
-      />
+      {isAdmin && (
+        <section className="app-panel p-5">
+          <h2 className="font-semibold">Tình huống khẩn cấp</h2>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            Nhập quy mô ảnh hưởng và chỉ chỗ xảy ra sự việc để hệ thống tính nhu cầu vật tư.
+          </p>
 
-      <div className="grid gap-4 xl:grid-cols-[380px_1fr]">
-        {/* Cột trái: nhập tình huống (chỉ ADMIN lập) */}
-        <div className="space-y-4">
-          {isAdmin && (
-            <section className="app-panel p-5">
-              <h2 className="font-semibold">Tình huống khẩn cấp</h2>
-              <p className="mt-1 text-sm text-[var(--text-muted)]">
-                Nhập quy mô ảnh hưởng để hệ thống tính nhu cầu vật tư ban đầu.
-              </p>
-
+          {/* Hai cột: nhập bên trái, bản đồ bên phải. Chọn điểm và điền số liệu là
+              một việc liền mạch — tách hai khối bắt người dùng cuộn qua lại. */}
+          <div className="mt-4 grid gap-5 lg:grid-cols-2">
+            <div className="min-w-0">
               <DescribeIncidentBlock
                 value={description}
                 onChange={setDescription}
@@ -375,26 +366,15 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
                   />
                 </Field>
 
-                {/* Tên thôn thắng khi có cả hai: backend chỉ dùng toạ độ rời khi ô
-                    địa điểm để trống, nên nói rõ để không ai tưởng ghim bị bỏ qua. */}
-                <Field
-                  label={
-                    form.location?.trim()
-                      ? "Ghim trên bản đồ (đang dùng tên thôn ở trên)"
-                      : "Ghim vị trí sự cố trên bản đồ"
-                  }
-                >
-                  <IncidentPointPicker
-                    value={incidentPoint}
-                    onChange={setIncidentPoint}
-                    disabled={Boolean(form.location?.trim())}
-                  />
-                  {form.location?.trim() ? (
-                    <p className="mt-1 text-xs text-[var(--text-muted)]">
-                      Xoá ô địa điểm phía trên để ghim tự do một điểm không thuộc thôn nào.
-                    </p>
-                  ) : null}
-                </Field>
+                {/* Không để tên thôn trống thì bấm bản đồ cũng vô ích: backend chỉ
+                  dùng toạ độ rời khi ô địa điểm để trống. Nói rõ ngay tại đây. */}
+                <p className="text-xs text-[var(--text-muted)]">
+                  {form.location?.trim()
+                    ? "Đang dùng tên thôn ở trên. Xoá ô này để ghim tự do một điểm không thuộc thôn nào."
+                    : incidentPoint
+                      ? "Đang dùng điểm đã ghim trên bản đồ Vị trí bên dưới."
+                      : "Bỏ trống ô trên rồi bấm lên bản đồ Vị trí bên dưới để ghim đúng chỗ đang xảy ra sự việc."}
+                </p>
                 <div className="grid grid-cols-2 gap-3">
                   <NumberField
                     label="Số người"
@@ -438,125 +418,132 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
               </button>
               {!canCalculatePlan && (
                 <p className="mt-2 text-xs text-[var(--color-critical)]">
-                  Cần nhập tên thôn đã được ADMIN xác minh trước khi tính nhu cầu vật tư.
+                  Cần nhập tên thôn đã được ADMIN xác minh, hoặc ghim một điểm trên bản đồ Vị trí
+                  bên dưới, trước khi tính nhu cầu vật tư.
                 </p>
               )}
               {planError && (
                 <p className="mt-2 text-xs text-[var(--color-critical)]">{planError}</p>
               )}
-            </section>
-          )}
+            </div>
 
-          {isAdmin && (
-            <section className="app-panel p-5">
+            <div className="min-w-0">
               <h3 className="text-sm font-semibold">Vị trí sự cố và các kho</h3>
               <p className="mt-1 text-sm text-[var(--text-muted)]">
                 {mission
                   ? missionHasIncidentPoint
                     ? "Vị trí đã được ghi nhận trong phương án."
                     : "Nhiệm vụ chưa có điểm ứng phó. Hãy nhập thôn đã xác minh và tính lại phương án."
-                  : "Nhập tên thôn đã được ADMIN xác minh để hệ thống xác định điểm ứng phó."}
+                  : "Nhập tên thôn đã xác minh ở khối trên, hoặc bấm thẳng lên bản đồ để ghim đúng chỗ đang xảy ra sự việc — hữu ích khi nơi đó không thuộc thôn nào trong danh mục."}
               </p>
               <div className="mt-3">
+                {/* Bản đồ này làm cả hai việc: chưa có phương án thì chọn điểm, có
+                  rồi thì xem tuyến. Bày hai bản đồ chỉ tổ rối. */}
                 <IncidentMap
                   warehouses={mission?.actionPlan?.warehouses ?? []}
+                  baseWarehouses={warehouseListQuery.data ?? []}
                   incidentPoint={effectiveIncidentPoint}
+                  onPickIncident={mission ? undefined : setIncidentPoint}
                 />
               </div>
-            </section>
-          )}
+            </div>
+          </div>
+        </section>
+      )}
 
-          {/* Bảng phân bổ nhanh khi đã có mission */}
-          {mission && (
-            <section className="app-panel p-5">
-              <h3 className="text-sm font-semibold">Tóm tắt nhu cầu</h3>
-              <p className="mt-1 text-sm text-[var(--text-muted)]">
-                {INCIDENT_TYPES.find((item) => item.value === mission.incidentType)?.label ??
-                  mission.incidentType}{" "}
-                · {mission.affectedPeople} người · có thể đáp ứng{" "}
-                <b
-                  style={{
-                    color:
-                      mission.fulfillment >= 70 ? "var(--color-ready)" : "var(--color-critical)",
-                  }}
-                >
-                  {mission.fulfillment}%
-                </b>
-              </p>
-            </section>
-          )}
-        </div>
+      <MissionInbox
+        missions={missionListQuery.data ?? []}
+        selectedMissionId={missionId}
+        role={role}
+        warehouseId={assignedWarehouseId}
+        isLoading={missionListQuery.isPending}
+        error={missionListQuery.error}
+        onRetry={() => missionListQuery.refetch()}
+        onSelect={selectMission}
+      />
 
-        {/* Cột phải: workflow + Action Plan */}
-        <div className="space-y-4">
-          {missionId && missionQuery.isPending ? (
-            <MissionDetailLoading />
-          ) : missionQuery.isError ? (
-            <MissionDetailError
-              message={
-                missionQuery.error instanceof ApiError
-                  ? missionQuery.error.message
-                  : "Không mở được nhiệm vụ này. Nhiệm vụ có thể đã bị xóa hoặc bạn không có quyền truy cập."
-              }
-              onRetry={() => missionQuery.refetch()}
+      {/* Bảng phân bổ nhanh khi đã có mission */}
+      {mission && (
+        <section className="app-panel p-5">
+          <h3 className="text-sm font-semibold">Tóm tắt nhu cầu</h3>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            {INCIDENT_TYPES.find((item) => item.value === mission.incidentType)?.label ??
+              mission.incidentType}{" "}
+            · {mission.affectedPeople} người · có thể đáp ứng{" "}
+            <b
+              style={{
+                color: mission.fulfillment >= 70 ? "var(--color-ready)" : "var(--color-critical)",
+              }}
+            >
+              {mission.fulfillment}%
+            </b>
+          </p>
+        </section>
+      )}
+      {missionId && missionQuery.isPending ? (
+        <MissionDetailLoading />
+      ) : missionQuery.isError ? (
+        <MissionDetailError
+          message={
+            missionQuery.error instanceof ApiError
+              ? missionQuery.error.message
+              : "Không mở được nhiệm vụ này. Nhiệm vụ có thể đã bị xóa hoặc bạn không có quyền truy cập."
+          }
+          onRetry={() => missionQuery.refetch()}
+        />
+      ) : !mission ? (
+        <EmptyState isAdmin={isAdmin} />
+      ) : (
+        <>
+          {isReportDraft && (
+            <ReportDraftBanner
+              reportText={mission.reportText ?? ""}
+              isAdmin={isAdmin}
+              onAnalyze={() => analyze.mutate()}
+              analyzing={analyze.isPending}
             />
-          ) : !mission ? (
-            <EmptyState isAdmin={isAdmin} />
-          ) : (
-            <>
-              {isReportDraft && (
-                <ReportDraftBanner
-                  reportText={mission.reportText ?? ""}
-                  isAdmin={isAdmin}
-                  onAnalyze={() => analyze.mutate()}
-                  analyzing={analyze.isPending}
-                />
-              )}
-              {mission.readinessAssessment && (
-                <MissionReadinessPanel assessment={mission.readinessAssessment} />
-              )}
-              <WarehouseRequestPanel
-                missionId={mission.id}
-                requests={mission.warehouseRequests ?? []}
+          )}
+          {mission.readinessAssessment && (
+            <MissionReadinessPanel assessment={mission.readinessAssessment} />
+          )}
+          <WarehouseRequestPanel
+            missionId={mission.id}
+            requests={mission.warehouseRequests ?? []}
+            role={role}
+            assignedWarehouseId={assignedWarehouseId}
+          />
+          {isAdmin && <CoordinationAnalysisPanel missionId={mission.id} />}
+          {isAdmin && <FieldUpdateTimeline missionId={mission.id} focusUpdateId={fieldUpdateId} />}
+          <section className="app-panel p-5">
+            <WorkflowStepper status={mission.status} />
+            <div className="mt-5 border-t pt-4">
+              <RoleActions
+                mission={mission}
                 role={role}
                 assignedWarehouseId={assignedWarehouseId}
+                isReportDraft={isReportDraft}
+                hasIncidentPoint={missionHasIncidentPoint}
+                onGenerateActionPlan={() => genActionPlan.mutate()}
+                onPublish={() => step.mutate(approveMission)}
+                onPrepare={() => step.mutate(prepareMission)}
+                onCancel={(note) => step.mutate((id) => cancelMission(id, note))}
+                busy={genActionPlan.isPending || step.isPending}
               />
-              {isAdmin && <CoordinationAnalysisPanel missionId={mission.id} />}
-              {isAdmin && (
-                <FieldUpdateTimeline missionId={mission.id} focusUpdateId={fieldUpdateId} />
-              )}
-              <section className="app-panel p-5">
-                <WorkflowStepper status={mission.status} />
-                <div className="mt-5 border-t pt-4">
-                  <RoleActions
-                    mission={mission}
-                    role={role}
-                    assignedWarehouseId={assignedWarehouseId}
-                    isReportDraft={isReportDraft}
-                    hasIncidentPoint={missionHasIncidentPoint}
-                    onGenerateActionPlan={() => genActionPlan.mutate()}
-                    onPublish={() => step.mutate(approveMission)}
-                    onPrepare={() => step.mutate(prepareMission)}
-                    onCancel={(note) => step.mutate((id) => cancelMission(id, note))}
-                    busy={genActionPlan.isPending || step.isPending}
-                  />
-                </div>
-                {workflowError && (
-                  <p className="mt-3 text-sm text-[var(--color-critical)]">{workflowError}</p>
-                )}
-              </section>
+            </div>
+            {workflowError && (
+              <p className="mt-3 text-sm text-[var(--color-critical)]">{workflowError}</p>
+            )}
+          </section>
 
-              {mission.actionPlan ? (
-                <ActionPlanView plan={mission.actionPlan} incidentPoint={effectiveIncidentPoint} />
-              ) : (
-                <div className="rounded-md border border-dashed bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-muted)]">
-                  Chọn <b>Lập kế hoạch cứu hộ</b> để tạo các bước thực hiện chi tiết.
-                </div>
-              )}
-            </>
+          {mission.actionPlan ? (
+            <ActionPlanView plan={mission.actionPlan} incidentPoint={effectiveIncidentPoint} />
+          ) : (
+            <div className="rounded-md border border-dashed bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-muted)]">
+              Chọn <b>Lập kế hoạch cứu hộ</b> để tạo các bước thực hiện chi tiết.
+            </div>
           )}
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }
@@ -945,34 +932,17 @@ function DescribeIncidentBlock({
           Mô tả tình huống bằng lời — AI phân tích &amp; lập phương án ngay
         </span>
       </div>
-      <div className="relative mt-2">
+      {/* Ô mô tả rộng rãi: người kể tình huống thật thường viết vài câu, ô ba dòng
+          bắt họ cuộn ngay trong lúc đang gấp. Không chừa lề phải nữa vì nút mic đã
+          xuống hàng nút bên dưới. */}
+      <div className="mt-2">
         <textarea
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          rows={3}
+          rows={8}
           placeholder='Vd: "Lũ quét xã Đồng Xuân, khoảng 200 người mắc kẹt, nhiều trẻ em, 3 ngày chưa có nước sạch"'
-          className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 pr-10 text-sm"
+          className="w-full resize-y rounded-md border bg-[var(--surface)] px-3 py-2 text-sm leading-relaxed"
         />
-        {supported && (
-          <button
-            type="button"
-            onClick={toggle}
-            disabled={transcribing}
-            title={recording ? "Dừng và nhận dạng" : "Nói để nhập (tiếng Việt, offline)"}
-            aria-label={recording ? "Dừng ghi âm" : "Nhập bằng giọng nói"}
-            className="absolute right-2 top-2 rounded-full border p-1.5 transition active:translate-y-px disabled:opacity-60"
-            style={
-              recording
-                ? {
-                    borderColor: "var(--color-critical)",
-                    background: "color-mix(in oklch, var(--color-critical) 12%, transparent)",
-                  }
-                : undefined
-            }
-          >
-            <ColorIcon name="microphone" size={16} tone={recording ? "red" : "blue"} />
-          </button>
-        )}
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <button
@@ -984,14 +954,31 @@ function DescribeIncidentBlock({
           <ColorIcon name="magic" size={15} tone="amber" />
           {analyzing ? "Đang phân tích & lập phương án…" : "Phân tích bằng AI"}
         </button>
-        {recording && (
-          <span className="text-xs text-[var(--color-critical)]">
-            ● Đang ghi âm… bấm mic để dừng
-          </span>
+        {/* Nút nói nằm cạnh nút phân tích: hai cách nhập cùng một việc, để chung
+            hàng thì thấy ngay là chọn một trong hai. Trước đây nó lửng lơ trong góc
+            ô nhập, dễ tưởng là biểu tượng trang trí. */}
+        {supported && (
+          <button
+            type="button"
+            onClick={toggle}
+            disabled={transcribing}
+            title={recording ? "Dừng và nhận dạng" : "Nói để nhập (tiếng Việt, offline)"}
+            aria-label={recording ? "Dừng ghi âm" : "Nhập bằng giọng nói"}
+            className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-semibold transition active:translate-y-px disabled:opacity-60"
+            style={
+              recording
+                ? {
+                    borderColor: "var(--color-critical)",
+                    background: "color-mix(in oklch, var(--color-critical) 12%, transparent)",
+                  }
+                : undefined
+            }
+          >
+            <ColorIcon name="microphone" size={15} tone={recording ? "red" : "blue"} />
+            {recording ? "Dừng ghi âm" : transcribing ? "Đang nhận dạng…" : "Nói để nhập"}
+          </button>
         )}
-        {transcribing && (
-          <span className="text-xs text-[var(--text-muted)]">Đang nhận dạng giọng nói…</span>
-        )}
+        {/* Trạng thái ghi âm/nhận dạng đã nằm trên chính nhãn nút, không lặp lại. */}
       </div>
       {voiceError && <p className="mt-1.5 text-xs text-[var(--color-attention)]">{voiceError}</p>}
       {error && <p className="mt-1.5 text-xs text-[var(--color-critical)]">{error}</p>}
