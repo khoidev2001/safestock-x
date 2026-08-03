@@ -11,9 +11,10 @@
  * Toạ độ này dùng cho CẢ kho lẫn điểm ứng phó của thôn, vì kho thôn đặt ngay tại
  * Nhà văn hoá — cũng là chỗ tập kết khi thôn có sự cố. Một điểm, một trách nhiệm.
  *
- * Thêm thôn mới: ghim trên web rồi chạy
- *   pnpm --filter @safestock/backend exec ts-node prisma/export-hamlet-pins.ts
- * và chép kết quả vào đây, nếu không toạ độ sẽ mất khi seed lại.
+ * Thêm thôn mới: ghim trên /map rồi chạy
+ *   pnpm --filter @safestock/backend exec ts-node prisma/sync-hamlet-pins.ts
+ * Lệnh đó chép toạ độ sang bảng kho và in sẵn khối để chép vào đây. Không chép
+ * thì toạ độ mất khi seed lại và máy khác clone về vẫn thiếu.
  */
 
 export interface AdminPinnedWarehouseLocation {
