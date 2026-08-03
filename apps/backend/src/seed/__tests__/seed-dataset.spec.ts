@@ -51,7 +51,7 @@ describe("standard seed dataset", () => {
     );
   });
 
-  it("có đủ 17 thôn: 5 Nhà văn hóa Maps xác minh, 6 điểm ADMIN ghim, 6 điểm còn chờ", () => {
+  it("có đủ 17 thôn: 5 Nhà văn hóa Maps xác minh, 10 điểm ADMIN ghim, 2 điểm còn chờ", () => {
     expect(HAMLET_WAREHOUSES.map((warehouse) => warehouse.name)).toEqual([
       "Kho thôn Long Châu",
       "Kho thôn Long Thăng",
@@ -119,10 +119,14 @@ describe("standard seed dataset", () => {
     expect(adminPinned.map((warehouse) => warehouse.key).sort()).toEqual([
       "long-chau",
       "long-ha",
+      "long-hoa",
       "long-my",
       "long-thach",
       "long-thang",
+      "tan-an",
+      "tan-hoa",
       "tan-phuoc",
+      "tan-vinh",
     ]);
     expect(
       adminPinned.every(
@@ -134,7 +138,7 @@ describe("standard seed dataset", () => {
     ).toBe(true);
 
     const pendingLocations = HAMLET_WAREHOUSES.filter((warehouse) => !warehouse.locationVerified);
-    expect(pendingLocations).toHaveLength(6);
+    expect(pendingLocations).toHaveLength(2);
     expect(
       pendingLocations.every(
         ({ location, lat, lng }) =>

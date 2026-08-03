@@ -26,10 +26,14 @@ export interface AdminPinnedWarehouseLocation {
 export const ADMIN_PINNED_HAMLET_WAREHOUSES: Record<string, AdminPinnedWarehouseLocation> = {
   "long-chau": { lat: 13.38066012986432, lng: 109.1068446615843, pinnedAt: "2026-08-02" },
   "long-ha": { lat: 13.3618884340976, lng: 109.0980374945975, pinnedAt: "2026-08-02" },
+  "long-hoa": { lat: 13.39613231842647, lng: 109.1142774126387, pinnedAt: "2026-08-03" },
   "long-my": { lat: 13.39928007318946, lng: 109.1051272312625, pinnedAt: "2026-08-02" },
   "long-thang": { lat: 13.37585878988407, lng: 109.1014598996733, pinnedAt: "2026-08-02" },
   "long-thach": { lat: 13.41573623142623, lng: 109.0978672457646, pinnedAt: "2026-08-02" },
+  "tan-an": { lat: 13.35488207514473, lng: 109.1459161772277, pinnedAt: "2026-08-03" },
+  "tan-hoa": { lat: 13.33517299086576, lng: 109.1666808598435, pinnedAt: "2026-08-03" },
   "tan-phuoc": { lat: 13.36118279685856, lng: 109.1645246232576, pinnedAt: "2026-08-02" },
+  "tan-vinh": { lat: 13.34396294005869, lng: 109.1485494502818, pinnedAt: "2026-08-03" },
 };
 
 export function getAdminPinnedHamletWarehouse(
