@@ -4,8 +4,6 @@ import L from "leaflet";
 import { useEffect, useMemo, useState } from "react";
 import {
   GeoJSON,
-  LayerGroup,
-  LayersControl,
   MapContainer,
   Marker,
   Popup,
@@ -24,116 +22,18 @@ import {
   type ScreenLabelCandidate,
 } from "./map-labels";
 import { markerIconHtml } from "./map-markers";
-
-// Zoom sâu nhất cho phép — đủ để thấy từng mái nhà và ngõ nhỏ.
-export const MAX_DETAIL_ZOOM = 19;
-
-// Giới hạn khung nhìn theo đúng gói tile offline trong public/tiles, để mọi mức
-// zoom và mọi hướng kéo đều còn ảnh nền — không bao giờ lộ nền xám trống.
-//
-// Thu nhỏ nhất là z9: tỉnh Đắk Lắk mới rộng 1.97°, khung bản đồ ~1030px chứa 2.83°
-// ở z9 nhưng chỉ 1.41° ở z10 — nên z9 là mức đầu tiên thấy trọn tỉnh.
-export const OFFLINE_PACK_MIN_ZOOM = 9;
-
-// Gói tile có hai tầng nên vùng cho phép kéo cũng phải đổi theo zoom: nhìn xa thì
-// được cả tỉnh, nhìn gần thì bó vào cụm 5 xã — đó là chỗ duy nhất có ảnh chi tiết.
-// Toạ độ lấy từ chính tên file tile, tầng nào cũng dùng mép hẹp nhất của tầng đó.
-export const PROVINCE_BOUNDS: [[number, number], [number, number]] = [
-  [11.52, 106.88],
-  [14.43, 110.04],
-];
-export const CLUSTER_BOUNDS: [[number, number], [number, number]] = [
-  [13.23, 108.94],
-  [13.62, 109.26],
-];
-export const CLUSTER_MIN_ZOOM = 12;
-
-// Nguồn tile Esri: ảnh vệ tinh + 2 lớp nhãn trong suốt (đường & địa danh).
-const ESRI_IMAGERY =
-  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-const ESRI_TRANSPORT =
-  "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}";
-const CARTO_ATTR = '&copy; <a href="https://carto.com/attributions">CARTO</a>';
-// Nền kiểu Google Maps vẽ Ô NHÀ (building footprint) + đường, KHÔNG chữ nào —
-// nhờ vậy không còn nhãn "huyện" nào lọt vào; tên địa danh do ta tự vẽ (đã lọc).
-const CARTO_VOYAGER_NOLABELS =
-  "https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png";
-
-// Các lớp nền bản đồ — mặc định Vệ tinh + nhãn đường (thấy nhà & đường rõ nhất).
-const OSM_ATTR =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>';
-const BASE_LAYERS = [
-  {
-    id: "streets",
-    // Nền vector kiểu Google Maps: vẽ ô nhà (building footprint) + đường, KHÔNG
-    // có chữ nào nên không lọt nhãn "huyện"; tên địa danh do ta tự vẽ (đã lọc).
-    name: "Bản đồ nhà & đường (giống Google)",
-    url: CARTO_VOYAGER_NOLABELS,
-    attribution: `${OSM_ATTR} · ${CARTO_ATTR}`,
-    maxNativeZoom: 19,
-    offline: false,
-  },
-  {
-    id: "hybrid",
-    // Ảnh vệ tinh thật (thấy mái nhà, cây cối) + chỉ chồng lớp ĐƯỜNG (không chồng
-    // lớp tên địa danh của Esri để tránh nhãn "huyện"); tên do ta tự vẽ.
-    name: "Vệ tinh + đường",
-    url: ESRI_IMAGERY,
-    overlayUrls: [ESRI_TRANSPORT],
-    attribution: "&copy; Esri, Maxar, Earthstar Geographics · đường &copy; Esri",
-    maxNativeZoom: 19,
-    offline: false,
-  },
-  {
-    id: "offline",
-    // Offline: tile đã tải sẵn 5 xã cụm Đồng Xuân (zoom 10-15) ở public/tiles.
-    // Mất mạng vẫn hiện. Ngoài vùng/zoom đã tải → tile trắng (errorTileUrl xử lý).
-    name: "Offline (5 xã, không cần mạng)",
-    url: "/tiles/{z}/{x}/{y}.png",
-    attribution: `${OSM_ATTR} · &copy; <a href="https://www.maptiler.com/">MapTiler</a> · offline cụm Đồng Xuân`,
-    // Chỉ tải sẵn tới zoom 15. Đây là mức SÂU NHẤT CÓ ẢNH THẬT, không phải mức
-    // ngừng hiển thị: zoom sâu hơn thì phóng to ô 15 lên. Trước đây đặt vào maxZoom
-    // khiến Leaflet ẩn hẳn lớp nền khi zoom quá 15 — đúng lúc người dùng phóng to
-    // để ghim toạ độ thì bản đồ trắng trơn.
-    maxNativeZoom: 15,
-    // Tile tải từ endpoint raster 256px, cùng lưới XYZ chuẩn với Leaflet/OSM.
-    offline: true,
-  },
-  {
-    id: "osm",
-    name: "Đường phố (OSM, cần mạng)",
-    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    attribution: OSM_ATTR,
-    maxNativeZoom: 19,
-    offline: false,
-  },
-  {
-    id: "topo",
-    name: "Địa hình (Topo)",
-    url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
-    attribution: `${OSM_ATTR} · <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)`,
-    maxNativeZoom: 17,
-    offline: false,
-  },
-  {
-    id: "satellite",
-    name: "Vệ tinh (không nhãn)",
-    url: ESRI_IMAGERY,
-    attribution: "&copy; Esri, Maxar, Earthstar Geographics",
-    maxNativeZoom: 19,
-    offline: false,
-  },
-];
-
-// Tile xám 1x1 (base64) cho ô ngoài vùng offline — thay vì ô vỡ.
-export const BLANK_TILE =
-  "data:image/gif;base64,R0lGODlhAQABAIAAAOfn5wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==";
-
-// Fallback khi chưa kho nào có toạ độ: UBND xã Đồng Xuân — nơi đặt kho trung tâm.
-// Trước đây lấy tâm Đắk Lắk (12.67, 108.05), cách vùng có tile ~60km về tây nam,
-// nên trong khoảnh khắc trước khi FitBounds chạy — hoặc mãi mãi, nếu chưa kho nào
-// có toạ độ — bản đồ mở ra đúng chỗ không có ảnh nền.
-export const DEFAULT_CENTER: [number, number] = [13.3782428, 109.104259];
+import {
+  BLANK_TILE,
+  CLUSTER_BOUNDS,
+  CLUSTER_MIN_ZOOM,
+  DEFAULT_CENTER,
+  MAX_DETAIL_ZOOM,
+  OFFLINE_MAX_NATIVE_ZOOM,
+  OFFLINE_PACK_MIN_ZOOM,
+  OFFLINE_TILE_ATTRIBUTION,
+  OFFLINE_TILE_URL,
+  PROVINCE_BOUNDS,
+} from "./map-tiles";
 
 function pinIcon(color: string, size = 30): L.DivIcon {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="${color}" stroke="white" stroke-width="1.5"><path d="M12 21s-7-6.5-7-11.5A7 7 0 0 1 19 9.5C19 14.5 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5" fill="white"/></svg>`;
@@ -175,9 +75,6 @@ export function MapCanvas({
 }: MapCanvasProps) {
   const [geo, setGeo] = useState<GeoData | null>(null);
   const [places, setPlaces] = useState<PlacesData | null>(null);
-  // Local-first is the competition default. Public Internet availability must
-  // not silently switch the promised offline workflow back to a CDN layer.
-  const [preferredBaseLayer] = useState<"offline" | "streets">("offline");
   const centralIcon = useMemo(() => pinIcon("var(--color-accent, #2f9e6e)"), []);
   const warehouseHamletIcon = useMemo(() => pinIcon("var(--text-muted, #8a8f98)", 26), []);
   const verifiedHamletIcon = useMemo(() => pinIcon("#7a2e12", 24), []);
@@ -234,50 +131,23 @@ export function MapCanvas({
         style={{ height: "100%", width: "100%" }}
       >
         <BoundsForZoom />
-        <LayersControl position="topright">
-          {BASE_LAYERS.map((layer) => (
-            <LayersControl.BaseLayer
-              key={layer.id}
-              name={layer.name}
-              checked={layer.id === preferredBaseLayer}
-            >
-              <LayerGroup>
-                <TileLayer
-                  url={layer.url}
-                  attribution={layer.attribution}
-                  // Mọi lớp đều hiển thị tới mức zoom sâu nhất của bản đồ. Nguồn nào
-                  // hết ảnh trước (offline 15, topo 17, vệ tinh 19) thì phóng to ô
-                  // cuối cùng — mờ dần chứ không bao giờ trắng bản đồ.
-                  maxZoom={MAX_DETAIL_ZOOM}
-                  maxNativeZoom={layer.maxNativeZoom}
-                  tileSize={256}
-                  zoomOffset={0}
-                  errorTileUrl={layer.offline ? BLANK_TILE : undefined}
-                />
-                {layer.overlayUrls?.map((overlayUrl) => (
-                  <TileLayer
-                    key={overlayUrl}
-                    url={overlayUrl}
-                    maxZoom={MAX_DETAIL_ZOOM}
-                    maxNativeZoom={19}
-                    tileSize={256}
-                    zoomOffset={0}
-                  />
-                ))}
-              </LayerGroup>
-            </LayersControl.BaseLayer>
-          ))}
-          {/* Địa danh tự vẽ: ghim + tên tô màu (đã bỏ mọi nhãn "huyện"). */}
-          <LayersControl.Overlay checked name="Địa danh (ghim + tên tô màu)">
-            <LayerGroup>
-              <SemanticMapLabels places={places} warehouses={warehouses} />
-            </LayerGroup>
-          </LayersControl.Overlay>
-          {/* Ranh giới + tên xã/phường — bật sẵn, tắt được khi cần. */}
-          <LayersControl.Overlay checked name="Ranh giới xã/phường">
-            <LayerGroup>{geo ? <CommuneBoundaries geo={geo} /> : null}</LayerGroup>
-          </LayersControl.Overlay>
-        </LayersControl>
+        {/* Một nền duy nhất: gói tile offline không nhãn.
+            Bỏ năm lớp trực tuyến cũ (OSM, Topo, vệ tinh Esri, CARTO) vì chúng kéo
+            ảnh từ Internet — trái với cam kết chạy được khi mất mạng — và phần lớn
+            còn nung sẵn tên địa danh vào ảnh, đúng thứ vừa mất công bỏ đi. */}
+        <TileLayer
+          url={OFFLINE_TILE_URL}
+          attribution={OFFLINE_TILE_ATTRIBUTION}
+          // Hiển thị tới zoom sâu nhất; hết ảnh thật ở 15 thì phóng to ô cuối cùng,
+          // mờ dần chứ không bao giờ trắng bản đồ.
+          maxZoom={MAX_DETAIL_ZOOM}
+          maxNativeZoom={OFFLINE_MAX_NATIVE_ZOOM}
+          tileSize={256}
+          zoomOffset={0}
+          errorTileUrl={BLANK_TILE}
+        />
+        <SemanticMapLabels places={places} warehouses={warehouses} />
+        {geo ? <CommuneBoundaries geo={geo} /> : null}
         <FitBounds points={boundsPoints} />
         {devMode && pickingTarget ? <ClickPicker onPick={onPickOnMap} /> : null}
         {/* Kho nào cũng có dấu ghim: chữ không neo vào đâu thì không biết kho đứng

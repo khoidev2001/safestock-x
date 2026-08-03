@@ -1,5 +1,11 @@
-// Tải tile MapTiler offline. Có API key, hợp lệ. Kiểm nội dung tile (loại ảnh
-// lỗi/trống). Chạy: node scripts/download-tiles.mjs
+// Tải tile nền offline. Kiểm nội dung tile (loại ảnh lỗi/trống).
+// Chạy: node scripts/download-tiles.mjs
+//
+// Nguồn là CARTO voyager_nolabels — bản đồ KHÔNG CÓ CHỮ. Trước đây dùng style
+// "openstreetmap" của MapTiler, nhưng tên địa danh được nung thẳng vào ảnh tile
+// nên không tắt được bằng code: bản đồ điều phối bị "La Hai", "Long Châu",
+// "Phước Lộc"... phủ kín, trong khi thứ cần thấy chỉ là kho và điểm sự cố.
+// Đã thử backdrop/dataviz/basic-v2 của MapTiler, kiểu nào cũng còn nhãn.
 //
 // Hai tầng, khớp đúng giới hạn khung nhìn trong map-canvas.tsx:
 //   z9-11  toàn tỉnh Đắk Lắk mới — z9 là mức thu nhỏ nhất, vừa đủ thấy trọn tỉnh
@@ -10,26 +16,12 @@
 import fs from "fs";
 import path from "path";
 
-function readEnvValue(file, key) {
-  if (!fs.existsSync(file)) return undefined;
-  const line = fs
-    .readFileSync(file, "utf8")
-    .split(/\r?\n/)
-    .find((value) => value.trim().startsWith(`${key}=`));
-  return line
-    ?.slice(line.indexOf("=") + 1)
-    .trim()
-    .replace(/^['"]|['"]$/g, "");
-}
-
-const KEY =
-  process.env.NEXT_PUBLIC_MAPTILER_KEY ?? readEnvValue(".env.local", "NEXT_PUBLIC_MAPTILER_KEY");
-if (!KEY) {
-  console.error("Thiếu NEXT_PUBLIC_MAPTILER_KEY (đặt trong môi trường hoặc .env.local)");
-  process.exit(1);
-}
-
-const STYLE = "openstreetmap"; // raster 256px chuẩn (khớp lưới OSM)
+// Raster 256px, cùng lưới XYZ chuẩn với Leaflet/OSM. Không cần API key.
+const STYLE = "voyager_nolabels";
+const SUBDOMAINS = ["a", "b", "c", "d"];
+const tileUrl = (z, x, y) =>
+  `https://${SUBDOMAINS[(x + y) % SUBDOMAINS.length]}.basemaps.cartocdn.com` +
+  `/rastertiles/${STYLE}/${z}/${x}/${y}.png`;
 // [lngTây, latNam, lngĐông, latBắc]
 // Ranh giới tỉnh thật là lng 107.4842..109.4590, lat 12.1605..13.6953 (đo từ
 // public/geo/daklak-communes.geojson). Nới thêm cho đủ khung nhìn ở z9, vì khung
@@ -91,7 +83,7 @@ for (const { z, x, y } of jobs) {
     continue;
   }
   fs.mkdirSync(dir, { recursive: true });
-  const url = `https://api.maptiler.com/maps/${STYLE}/256/${z}/${x}/${y}.png?key=${KEY}`;
+  const url = tileUrl(z, x, y);
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
