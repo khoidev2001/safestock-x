@@ -103,6 +103,7 @@ export function buildLabelCandidates({
   }
 
   for (const place of places) {
+    if (!isShownPlaceGroup(place.properties.group)) continue;
     const [lng, lat] = place.geometry.coordinates;
     const markerKind = placeMarkerKind(place.properties.group);
     const label = formatPlaceLabel(place);
@@ -173,11 +174,16 @@ export function computeCommuneLabels(geo: GeoData): CommuneLabel[] {
   return labels;
 }
 
+/**
+ * Kho trung tâm giữ tên đầy đủ vì chỉ có một, và nó là gốc của mọi chuyến hàng.
+ * Kho thôn rút về đúng tên thôn: 17 nhãn "Kho thôn ..." lặp lại chỉ tổ chiếm chỗ,
+ * người xem cần biết đó là thôn nào chứ không cần nhắc lại đó là cái kho.
+ */
 export function formatWarehouseLabel(warehouse: AdminWarehouse): string {
-  if (/^Kho\s/u.test(warehouse.name)) return warehouse.name;
-  return warehouse.kind === "CENTRAL"
-    ? `Kho tổng xã ${warehouse.name}`
-    : `Kho thôn ${warehouse.name}`;
+  if (warehouse.kind === "CENTRAL") {
+    return /^Kho\s/u.test(warehouse.name) ? warehouse.name : `Kho tổng xã ${warehouse.name}`;
+  }
+  return warehouse.name.replace(/^Kho\s+thôn\s+/iu, "");
 }
 
 export function formatPlaceLabel(feature: PlaceFeature): string {
@@ -189,6 +195,23 @@ export function formatPlaceLabel(feature: PlaceFeature): string {
       ? `${prefix} ${properties.name}`
       : properties.name;
   return properties.communeName ? `${name} · ${properties.communeName}` : name;
+}
+
+/**
+ * Nhóm địa danh được vẽ lên bản đồ điều phối — hiện KHÔNG nhóm nào.
+ *
+ * Bản đồ điều phối chỉ để trả lời một câu: hàng đang ở đâu và chở đi đâu. Trạm y
+ * tế, trường học, trụ sở, chợ, cơ sở tôn giáo và cả tên thôn/xóm đều bị bỏ vì
+ * chúng phủ kín màn hình bằng thứ không dùng để ra quyết định. Nền tile vẫn có
+ * sẵn tên địa danh cho ai cần định hướng.
+ *
+ * Dữ liệu còn nguyên trong daklak-places.geojson; muốn bật lại nhóm nào chỉ cần
+ * thêm vào đây.
+ */
+const SHOWN_PLACE_GROUPS = new Set<string>();
+
+export function isShownPlaceGroup(group: string): boolean {
+  return SHOWN_PLACE_GROUPS.has(group);
 }
 
 export function placeMarkerKind(group: string): MapMarkerKind {

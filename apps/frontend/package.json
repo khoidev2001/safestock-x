@@ -9,6 +9,7 @@
     "start": "next start -p 3200",
     "test:mission-inbox": "tsc --target ES2021 --module commonjs --moduleResolution node --esModuleInterop --skipLibCheck --outDir .next/mission-inbox-test src/lib/mission-inbox-state.ts src/lib/__tests__/mission-inbox-state.test.ts && node --test .next/mission-inbox-test/__tests__/mission-inbox-state.test.js",
     "test:map-marker-state": "tsc --target ES2021 --module commonjs --moduleResolution node --esModuleInterop --skipLibCheck --outDir .next/map-marker-state-test src/lib/map-marker-state.ts src/lib/__tests__/map-marker-state.test.ts && node --test .next/map-marker-state-test/__tests__/map-marker-state.test.js",
+    "test:map-labels": "tsc --target ES2021 --module commonjs --moduleResolution node --esModuleInterop --skipLibCheck --jsx react-jsx --outDir .next/map-labels-test src/components/dashboard/map-labels.ts src/components/dashboard/map-labels.test.ts && node --test .next/map-labels-test/components/dashboard/map-labels.test.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "gis:download-boundaries": "node scripts/download-osm-communes.mjs",

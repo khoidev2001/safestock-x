@@ -6,6 +6,7 @@ import {
   compareCandidates,
   formatPlaceLabel,
   formatWarehouseLabel,
+  isShownPlaceGroup,
   selectVisibleLabels,
   type LabelCandidate,
   type PlaceFeature,
@@ -38,6 +39,18 @@ test("warehouse and place labels keep administrative meaning", () => {
   assert.equal(
     formatPlaceLabel(place({ communeName: "Xã Xuân Phước" })),
     "Thôn Phước Lộc · Xã Xuân Phước",
+  );
+});
+
+test("kho thôn rút nhãn về đúng tên thôn, kho trung tâm giữ tên đầy đủ", () => {
+  assert.equal(
+    formatWarehouseLabel(warehouse({ kind: "HAMLET", name: "Kho thôn Phú Sơn" })),
+    "Phú Sơn",
+  );
+  assert.equal(formatWarehouseLabel(warehouse({ kind: "HAMLET", name: "Kỳ Đu" })), "Kỳ Đu");
+  assert.equal(
+    formatWarehouseLabel(warehouse({ kind: "CENTRAL", name: "Kho cứu trợ trung tâm Đồng Xuân" })),
+    "Kho cứu trợ trung tâm Đồng Xuân",
   );
 });
 
@@ -77,15 +90,46 @@ test("higher-priority labels win shared screen-space collisions", () => {
   );
 });
 
-test("candidate construction keeps warehouse, commune and POI categories", () => {
+test("candidate construction keeps warehouse and commune categories", () => {
   const candidates = buildLabelCandidates({
     communes: [{ id: "commune-1", name: "Xã Đồng Xuân", lat: 13.3, lng: 109.1 }],
-    places: [place({ group: "health", kind: "clinic", name: "Trạm Y tế Đồng Xuân" })],
+    places: [place({ group: "place", kind: "hamlet", name: "Thôn Phú Sơn" })],
     warehouses: [warehouse({ kind: "CENTRAL" })],
   });
   assert.deepEqual(
     new Set(candidates.map((candidate) => candidate.category)),
-    new Set(["warehouse", "commune", "place"]),
+    new Set(["warehouse", "commune"]),
+    "địa danh không còn được dựng thành nhãn",
+  );
+});
+
+test("bản đồ điều phối chỉ vẽ kho, bỏ hết nhãn địa danh", () => {
+  const hidden = ["place", "health", "school", "civic", "commerce", "worship", "poi"];
+  for (const group of hidden) {
+    assert.equal(isShownPlaceGroup(group), false, `${group} không được hiện`);
+  }
+
+  const candidates = buildLabelCandidates({
+    communes: [{ id: "commune-1", name: "Xã Đồng Xuân", lat: 13.3, lng: 109.1 }],
+    warehouses: [warehouse({ kind: "HAMLET", name: "Kho thôn Phú Sơn" })],
+    places: [
+      place({ group: "place", kind: "hamlet", name: "Thôn Phú Sơn" }),
+      place({ group: "health", kind: "clinic", name: "Trạm Y tế Đồng Xuân" }),
+      place({ group: "school", kind: "school", name: "Trường Tiểu học La Hai" }),
+      place({ group: "civic", kind: "office", name: "UBND Xã Đồng Xuân" }),
+      place({ group: "commerce", kind: "shop", name: "Chợ La Hai" }),
+      place({ group: "worship", kind: "church", name: "Nhà thờ La Hai" }),
+    ],
+  });
+  assert.deepEqual(
+    candidates.filter((candidate) => candidate.category === "place"),
+    [],
+    "không còn nhãn địa danh nào",
+  );
+  assert.deepEqual(
+    candidates.map((candidate) => candidate.label),
+    ["Phú Sơn", "Xã Đồng Xuân"],
+    "chỉ còn nhãn kho; nhãn xã do map-canvas quyết định có truyền vào hay không",
   );
 });
 

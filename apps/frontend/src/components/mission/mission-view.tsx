@@ -40,6 +40,15 @@ const IncidentMap = dynamic(() => import("./incident-map").then((m) => m.Inciden
   loading: () => <div className="h-[320px] animate-pulse rounded-md border bg-[var(--surface)]" />,
 });
 
+// Leaflet đụng window nên phải nạp phía client, giống IncidentMap.
+const IncidentPointPicker = dynamic(
+  () => import("./incident-point-picker").then((m) => m.IncidentPointPicker),
+  {
+    ssr: false,
+    loading: () => <div className="h-64 animate-pulse rounded-md border bg-[var(--surface)]" />,
+  },
+);
+
 /** Tình huống mẫu — bấm nhanh, phòng khi cán bộ chưa quen nhập tay. */
 const SAMPLES: { label: string; input: GenerateInput["incident"] }[] = [
   {
@@ -120,7 +129,9 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
     elderly: 0,
     medicalSupportCases: 0,
   });
-  const [incidentPoint] = useState<LatLng | null>(null);
+  // Điểm sự cố ghim tay trên bản đồ. Dùng khi chỗ xảy ra việc không trùng thôn nào
+  // trong danh mục — ngập giữa hai thôn, sạt lở trên đường liên xã.
+  const [incidentPoint, setIncidentPoint] = useState<LatLng | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
   const [description, setDescription] = useState("");
@@ -362,6 +373,27 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
                     placeholder="Tên thôn đã được ADMIN xác minh"
                     className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
                   />
+                </Field>
+
+                {/* Tên thôn thắng khi có cả hai: backend chỉ dùng toạ độ rời khi ô
+                    địa điểm để trống, nên nói rõ để không ai tưởng ghim bị bỏ qua. */}
+                <Field
+                  label={
+                    form.location?.trim()
+                      ? "Ghim trên bản đồ (đang dùng tên thôn ở trên)"
+                      : "Ghim vị trí sự cố trên bản đồ"
+                  }
+                >
+                  <IncidentPointPicker
+                    value={incidentPoint}
+                    onChange={setIncidentPoint}
+                    disabled={Boolean(form.location?.trim())}
+                  />
+                  {form.location?.trim() ? (
+                    <p className="mt-1 text-xs text-[var(--text-muted)]">
+                      Xoá ô địa điểm phía trên để ghim tự do một điểm không thuộc thôn nào.
+                    </p>
+                  ) : null}
                 </Field>
                 <div className="grid grid-cols-2 gap-3">
                   <NumberField

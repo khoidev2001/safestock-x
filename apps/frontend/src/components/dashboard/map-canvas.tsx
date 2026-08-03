@@ -18,7 +18,6 @@ import type { AdminWarehouse } from "@/lib/warehouse-api";
 import type { AdminHamlet } from "@/lib/hamlet-api";
 import {
   buildLabelCandidates,
-  computeCommuneLabels,
   selectVisibleLabels,
   type GeoData,
   type PlaceFeature,
@@ -27,27 +26,27 @@ import {
 import { markerIconHtml } from "./map-markers";
 
 // Zoom sâu nhất cho phép — đủ để thấy từng mái nhà và ngõ nhỏ.
-const MAX_DETAIL_ZOOM = 19;
+export const MAX_DETAIL_ZOOM = 19;
 
 // Giới hạn khung nhìn theo đúng gói tile offline trong public/tiles, để mọi mức
 // zoom và mọi hướng kéo đều còn ảnh nền — không bao giờ lộ nền xám trống.
 //
 // Thu nhỏ nhất là z9: tỉnh Đắk Lắk mới rộng 1.97°, khung bản đồ ~1030px chứa 2.83°
 // ở z9 nhưng chỉ 1.41° ở z10 — nên z9 là mức đầu tiên thấy trọn tỉnh.
-const OFFLINE_PACK_MIN_ZOOM = 9;
+export const OFFLINE_PACK_MIN_ZOOM = 9;
 
 // Gói tile có hai tầng nên vùng cho phép kéo cũng phải đổi theo zoom: nhìn xa thì
 // được cả tỉnh, nhìn gần thì bó vào cụm 5 xã — đó là chỗ duy nhất có ảnh chi tiết.
 // Toạ độ lấy từ chính tên file tile, tầng nào cũng dùng mép hẹp nhất của tầng đó.
-const PROVINCE_BOUNDS: [[number, number], [number, number]] = [
+export const PROVINCE_BOUNDS: [[number, number], [number, number]] = [
   [11.52, 106.88],
   [14.43, 110.04],
 ];
-const CLUSTER_BOUNDS: [[number, number], [number, number]] = [
+export const CLUSTER_BOUNDS: [[number, number], [number, number]] = [
   [13.23, 108.94],
   [13.62, 109.26],
 ];
-const CLUSTER_MIN_ZOOM = 12;
+export const CLUSTER_MIN_ZOOM = 12;
 
 // Nguồn tile Esri: ảnh vệ tinh + 2 lớp nhãn trong suốt (đường & địa danh).
 const ESRI_IMAGERY =
@@ -127,14 +126,14 @@ const BASE_LAYERS = [
 ];
 
 // Tile xám 1x1 (base64) cho ô ngoài vùng offline — thay vì ô vỡ.
-const BLANK_TILE =
+export const BLANK_TILE =
   "data:image/gif;base64,R0lGODlhAQABAIAAAOfn5wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==";
 
 // Fallback khi chưa kho nào có toạ độ: UBND xã Đồng Xuân — nơi đặt kho trung tâm.
 // Trước đây lấy tâm Đắk Lắk (12.67, 108.05), cách vùng có tile ~60km về tây nam,
 // nên trong khoảnh khắc trước khi FitBounds chạy — hoặc mãi mãi, nếu chưa kho nào
 // có toạ độ — bản đồ mở ra đúng chỗ không có ảnh nền.
-const DEFAULT_CENTER: [number, number] = [13.3782428, 109.104259];
+export const DEFAULT_CENTER: [number, number] = [13.3782428, 109.104259];
 
 function pinIcon(color: string, size = 30): L.DivIcon {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="${color}" stroke="white" stroke-width="1.5"><path d="M12 21s-7-6.5-7-11.5A7 7 0 0 1 19 9.5C19 14.5 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5" fill="white"/></svg>`;
@@ -271,7 +270,7 @@ export function MapCanvas({
           {/* Địa danh tự vẽ: ghim + tên tô màu (đã bỏ mọi nhãn "huyện"). */}
           <LayersControl.Overlay checked name="Địa danh (ghim + tên tô màu)">
             <LayerGroup>
-              <SemanticMapLabels geo={geo} places={places} warehouses={warehouses} />
+              <SemanticMapLabels places={places} warehouses={warehouses} />
             </LayerGroup>
           </LayersControl.Overlay>
           {/* Ranh giới + tên xã/phường — bật sẵn, tắt được khi cần. */}
@@ -281,6 +280,8 @@ export function MapCanvas({
         </LayersControl>
         <FitBounds points={boundsPoints} />
         {devMode && pickingTarget ? <ClickPicker onPick={onPickOnMap} /> : null}
+        {/* Kho nào cũng có dấu ghim: chữ không neo vào đâu thì không biết kho đứng
+            chính xác chỗ nào. Cái được bỏ là icon nhỏ đi kèm NHÃN, xem semanticLabelIcon. */}
         {located.map((w) => (
           <Marker
             key={w.id}
@@ -315,7 +316,9 @@ export function MapCanvas({
             </Popup>
           </Marker>
         ))}
-        {locatedHamlets.map((hamlet) => (
+        {/* Điểm ứng phó của thôn trùng đúng vị trí kho thôn nên hiện cả hai là hai
+            dấu chồng lên nhau. Chỉ hiện khi ADMIN đang ghim toạ độ. */}
+        {(devMode ? locatedHamlets : []).map((hamlet) => (
           <Marker
             key={`hamlet-${hamlet.id}`}
             position={[hamlet.lat as number, hamlet.lng as number]}
@@ -377,11 +380,9 @@ function CommuneBoundaries({ geo }: { geo: GeoData }) {
 // Ghim địa danh tự vẽ: chấm màu + tên tô màu, chỉ hiện khi zoom đủ gần để không
 // rối. Giới hạn số ghim hiển thị theo khung nhìn để giữ mượt khi có hàng nghìn mục.
 function SemanticMapLabels({
-  geo,
   places,
   warehouses,
 }: {
-  geo: GeoData | null;
   places: PlacesData | null;
   warehouses: AdminWarehouse[];
 }) {
@@ -409,11 +410,13 @@ function SemanticMapLabels({
   const candidates = useMemo(
     () =>
       buildLabelCandidates({
-        communes: geo ? computeCommuneLabels(geo) : [],
+        // Tên xã và địa danh đều bỏ: bản đồ điều phối chỉ hiện kho. Ranh giới xã
+        // vẫn vẽ nên vẫn biết đang nhìn vùng nào, khỏi cần nhãn đè lên.
+        communes: [],
         places: places?.features ?? [],
         warehouses,
       }),
-    [geo, places, warehouses],
+    [places, warehouses],
   );
   const visible = useMemo(
     () =>
@@ -448,8 +451,11 @@ function SemanticMapLabels({
 function semanticLabelIcon(candidate: ScreenLabelCandidate): L.DivIcon {
   const safe = escapeHtml(candidate.label);
   const kind = candidate.markerKind ?? "poi";
+  // Kho thôn chỉ còn chữ. 17 icon giống hệt nhau rải khắp bản đồ không nói thêm
+  // được gì, trong khi che mất đường và địa hình quanh kho.
+  const glyph = kind === "hamlet-warehouse" ? "" : markerIconHtml(kind);
   return L.divIcon({
-    html: `<span class="semantic-map-label semantic-map-label-${candidate.anchor}">${markerIconHtml(kind)}<span class="semantic-map-label-text">${safe}</span></span>`,
+    html: `<span class="semantic-map-label semantic-map-label-${candidate.anchor}">${glyph}<span class="semantic-map-label-text">${safe}</span></span>`,
     className: "semantic-map-label-wrap",
     iconSize: [0, 0],
     iconAnchor: [0, 0],

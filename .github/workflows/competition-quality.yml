@@ -88,6 +88,7 @@ jobs:
         run: |
           pnpm --filter @safestock/frontend test:mission-inbox
           pnpm --filter @safestock/frontend test:map-marker-state
+          pnpm --filter @safestock/frontend test:map-labels
           pnpm --filter @safestock/frontend build
 
       - name: Mobile state and dependency contracts
