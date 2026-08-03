@@ -20,6 +20,9 @@ if (-not (Test-Path -LiteralPath $entryPoint)) {
 }
 
 Set-Location -LiteralPath $aiServiceRoot
+# Service chạy dưới SYSTEM với stdout mã cp1252; một dòng log tiếng Việt có dấu là
+# UnicodeEncodeError và sập cả tiến trình. Khoá UTF-8 cho chắc.
+$env:PYTHONIOENCODING = "utf-8"
 
 while ($true) {
   Add-Content -LiteralPath $logFile -Value "[$(Get-Date -Format o)] Starting AI service"

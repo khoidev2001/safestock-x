@@ -9,6 +9,7 @@ import re
 import httpx
 
 from .embedding import EmbeddingProvider, EmbeddingTask
+from .runtime import KEEP_ALIVE
 
 _TIMEOUT = 60.0
 _INPUT_TRANSFORM = "nomic-search-prefix-v1"
@@ -73,7 +74,7 @@ class OllamaEmbeddingProvider(EmbeddingProvider):
                     "model": self.model,
                     "input": normalized,
                     "truncate": False,
-                    "keep_alive": "30m",
+                    "keep_alive": KEEP_ALIVE,
                 },
             )
             if response.status_code in _LEGACY_STATUS:
@@ -93,7 +94,7 @@ class OllamaEmbeddingProvider(EmbeddingProvider):
         for text in texts:
             response = client.post(
                 f"{self._base_url}/api/embeddings",
-                json={"model": self.model, "prompt": text, "keep_alive": "30m"},
+                json={"model": self.model, "prompt": text, "keep_alive": KEEP_ALIVE},
             )
             response.raise_for_status()
             vectors.append(response.json().get("embedding"))

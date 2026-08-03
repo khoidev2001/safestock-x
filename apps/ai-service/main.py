@@ -7,10 +7,13 @@ import json
 import os
 import re
 import unicodedata
+from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from pydantic import ValidationError
+
+import keep_warm
 
 from knowledge import SearchHit, get_knowledge_retriever
 from parse_grounding import (
@@ -51,7 +54,15 @@ from schemas import (
 # Đọc .env ở repo root (AI_PROVIDER, GEMINI_API_KEY...).
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
 
-app = FastAPI(title="Ứng phó nhanh — AI Service", version="0.1.0")
+@asynccontextmanager
+async def _lifespan(_: FastAPI):
+    # Nạp model ngay khi service lên, đừng để người hỏi câu đầu tiên phải trả giá
+    # 15 giây chờ nạp — sau khi bật lại máy thì đó luôn là câu đầu của buổi diễn.
+    keep_warm.start()
+    yield
+
+
+app = FastAPI(title="Ứng phó nhanh — AI Service", version="0.1.0", lifespan=_lifespan)
 provider = build_provider()
 
 _MAX_RETRY = 2
@@ -225,6 +236,29 @@ cách dịch một thuật ngữ, hãy diễn giải bằng tiếng Việt thay 
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "provider": provider.name}
+
+
+# Điều khiển giữ ấm model. Dùng cho công cụ ngoài (tools/ai-model.bat) để người vận
+# hành bật/tắt bằng một cú bấm thay vì phải nhớ lệnh Ollama.
+@app.get("/keep-warm")
+def keep_warm_status() -> dict:
+    return keep_warm.status()
+
+
+@app.post("/keep-warm/start")
+def keep_warm_start() -> dict:
+    """Nạp model ngay và bật lại vòng canh giữ ấm."""
+    keep_warm.resume()
+    reloaded = keep_warm.warm_once()
+    return {**keep_warm.status(), "reloaded": reloaded}
+
+
+@app.post("/keep-warm/stop")
+def keep_warm_stop() -> dict:
+    """Trả VRAM ngay. Tắt vòng canh trước, nếu không 120 giây sau nó nạp lại."""
+    keep_warm.pause()
+    unloaded = keep_warm.unload_all()
+    return {**keep_warm.status(), "unloaded": unloaded}
 
 
 @app.post("/parse")

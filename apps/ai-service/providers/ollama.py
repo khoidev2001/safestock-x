@@ -4,6 +4,7 @@ from typing import Any
 import httpx
 
 from .base import LLMProvider
+from .runtime import KEEP_ALIVE
 
 _TIMEOUT = 90.0  # model local chậm hơn cloud, CPU-only cần dư giờ
 
@@ -38,7 +39,7 @@ class OllamaProvider(LLMProvider):
             "prompt": user_prompt,
             "stream": False,
             "think": False,
-            "keep_alive": "30m",
+            "keep_alive": KEEP_ALIVE,
             "options": {
                 "temperature": 0.1,
                 "num_predict": 2048 if json_format else 512,

@@ -10,6 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from providers.ollama_embedding import OllamaEmbeddingProvider  # noqa: E402
+from providers.runtime import KEEP_ALIVE  # noqa: E402
 
 
 def _provider(handler) -> OllamaEmbeddingProvider:
@@ -29,7 +30,8 @@ def test_batch_embed_uses_current_api_and_task_prefix():
             "model": "nomic-embed-text",
             "input": ["search_query: nước mỗi người", "search_query: sơ tán lũ"],
             "truncate": False,
-            "keep_alive": "30m",
+            # Model phải nằm thường trú trong VRAM, xem providers/runtime.py.
+            "keep_alive": KEEP_ALIVE,
         }
         return httpx.Response(200, json={"embeddings": [[1, 0], [0, 1]]})
 
