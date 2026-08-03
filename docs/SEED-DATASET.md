@@ -73,8 +73,7 @@ Nhóm vật tư tham chiếu nhu cầu cứu trợ khẩn cấp của [IFRC](htt
 | `admin` | `admin123@` | ADMIN toàn xã, mặc định mở kho trung tâm |
 | `staff@ungphonhanh.life` | `staff123` | WAREHOUSE kho trung tâm |
 | `rescue@ungphonhanh.life` | `rescue123` | RESCUE |
-| `truongthon@ungphonhanh.life` | `reporter123` | REPORTER gửi báo cáo tình huống cho kho thôn được gán |
-| `truongthon1@ungphonhanh.life` ... `truongthon17@ungphonhanh.life` | `truongthon123` | Mỗi tài khoản chỉ quản một kho thôn theo thứ tự danh sách trên |
+| `{tênthôn}@ungphonhanh.life` | `truongthon123` | 17 tài khoản WAREHOUSE, mỗi tài khoản đúng một kho thôn. Tên đăng nhập là tên thôn bỏ dấu viết liền: `phuson@`, `triemduc@`, `kydu@`… |
 
 ## Chạy và kiểm tra
 

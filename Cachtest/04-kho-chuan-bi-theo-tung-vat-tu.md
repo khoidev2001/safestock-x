@@ -35,7 +35,7 @@ Ví dụ thật đã chạy:
 
 ```
 Kho trung tâm  (staff@)         → 1 mã   → chuẩn bị xong → vẫn Chờ kho chuẩn bị
-Kho thôn Long Châu (truongthon1@) → 4 mã  → chuẩn bị xong → Sẵn sàng
+Kho thôn Long Châu (longchau@)   → 4 mã  → chuẩn bị xong → Sẵn sàng
 ```
 
 Nếu bỏ sót kho thứ hai, nhiệm vụ **không bao giờ** tới Sẵn sàng.

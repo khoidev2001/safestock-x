@@ -9,8 +9,11 @@ lấy trực tiếp từ database sau khi seed, và **mọi mật khẩu đã đ
 
 Hệ thống chỉ có **ba vai**: quản trị xã, phụ trách kho, lực lượng hiện trường. Vai
 "trưởng thôn" riêng đã bị bỏ — người giữ kho thôn kiêm luôn việc báo tình huống của
-thôn mình. Các tài khoản tên `truongthon*` vẫn giữ tên cũ nhưng mang vai **phụ trách
-kho**.
+thôn mình.
+
+Tên đăng nhập của kho thôn đặt theo đúng tên thôn người đó giữ, bỏ dấu và viết liền:
+`Kho thôn Phú Sơn` → `phuson@ungphonhanh.life`. Trước đây đánh số `truongthon1..17`
+theo thứ tự seed nên muốn biết ai giữ kho nào phải tra bảng.
 
 ---
 
@@ -34,37 +37,38 @@ Lưu ý tên đăng nhập của quản trị là **`admin`**, không phải đ�
 
 ---
 
-## Mười tám tài khoản phụ trách kho thôn
+## Mười bảy tài khoản phụ trách kho thôn
 
-Tất cả đều vai **phụ trách kho**, mỗi tài khoản gắn một kho thôn.
+Tất cả đều vai **phụ trách kho**, mật khẩu chung `truongthon123`, mỗi tài khoản gắn
+đúng một kho thôn. Tên đăng nhập chính là tên thôn bỏ dấu viết liền, nên nhìn là biết
+ai giữ kho nào — không phải tra bảng.
 
-| Tài khoản | Mật khẩu | Kho phụ trách |
-|---|---|---|
-| `truongthon@ungphonhanh.life` | `reporter123` | Kho thôn Long Châu |
-| `truongthon1@ungphonhanh.life` | `truongthon123` | Kho thôn Long Châu |
-| `truongthon2@ungphonhanh.life` | `truongthon123` | Kho thôn Long Thăng |
-| `truongthon3@ungphonhanh.life` | `truongthon123` | Kho thôn Long Hà |
-| `truongthon4@ungphonhanh.life` | `truongthon123` | Kho thôn Long Bình |
-| `truongthon5@ungphonhanh.life` | `truongthon123` | Kho thôn Long Mỹ |
-| `truongthon6@ungphonhanh.life` | `truongthon123` | Kho thôn Long Thạch |
-| `truongthon7@ungphonhanh.life` | `truongthon123` | Kho thôn Long Hòa |
-| `truongthon8@ungphonhanh.life` | `truongthon123` | Kho thôn Kỳ Đu |
-| `truongthon9@ungphonhanh.life` | `truongthon123` | Kho thôn Phước Huệ |
-| `truongthon10@ungphonhanh.life` | `truongthon123` | Kho thôn Tân Bình |
-| `truongthon11@ungphonhanh.life` | `truongthon123` | Kho thôn Tân An |
-| `truongthon12@ungphonhanh.life` | `truongthon123` | Kho thôn Tân Hòa |
-| `truongthon13@ungphonhanh.life` | `truongthon123` | Kho thôn Tân Phước |
-| `truongthon14@ungphonhanh.life` | `truongthon123` | Kho thôn Tân Phú |
-| `truongthon15@ungphonhanh.life` | `truongthon123` | Kho thôn Tân Vinh |
-| `truongthon16@ungphonhanh.life` | `truongthon123` | Kho thôn Phú Sơn |
-| `truongthon17@ungphonhanh.life` | `truongthon123` | Kho thôn Triêm Đức |
+| Tài khoản | Kho phụ trách |
+|---|---|
+| `kydu@ungphonhanh.life` | Kho thôn Kỳ Đu |
+| `longbinh@ungphonhanh.life` | Kho thôn Long Bình |
+| `longchau@ungphonhanh.life` | Kho thôn Long Châu |
+| `longha@ungphonhanh.life` | Kho thôn Long Hà |
+| `longhoa@ungphonhanh.life` | Kho thôn Long Hòa |
+| `longmy@ungphonhanh.life` | Kho thôn Long Mỹ |
+| `longthach@ungphonhanh.life` | Kho thôn Long Thạch |
+| `longthang@ungphonhanh.life` | Kho thôn Long Thăng |
+| `phuochue@ungphonhanh.life` | Kho thôn Phước Huệ |
+| `phuson@ungphonhanh.life` | Kho thôn Phú Sơn |
+| `tanan@ungphonhanh.life` | Kho thôn Tân An |
+| `tanbinh@ungphonhanh.life` | Kho thôn Tân Bình |
+| `tanhoa@ungphonhanh.life` | Kho thôn Tân Hòa |
+| `tanphu@ungphonhanh.life` | Kho thôn Tân Phú |
+| `tanphuoc@ungphonhanh.life` | Kho thôn Tân Phước |
+| `tanvinh@ungphonhanh.life` | Kho thôn Tân Vinh |
+| `triemduc@ungphonhanh.life` | Kho thôn Triêm Đức |
 
-Hai tài khoản đầu **cùng trỏ về Kho thôn Long Châu** và mật khẩu khác nhau
-(`reporter123` với `truongthon123`). Đây là dấu vết còn lại từ thời có vai trưởng
-thôn riêng; cả hai đều dùng được, không phải lỗi.
+Tổng cộng **20 tài khoản**: 1 quản trị + 1 hiện trường + 18 phụ trách kho (1 kho
+trung tâm + 17 kho thôn).
 
-Tổng cộng **21 tài khoản**: 1 quản trị + 1 hiện trường + 19 phụ trách kho (1 kho
-trung tâm + 18 kho thôn).
+Bản trước có thêm `truongthon@ungphonhanh.life` trỏ trùng Kho thôn Long Châu — dấu
+vết từ thời có vai trưởng thôn riêng, đã bỏ vì 18 tài khoản cho 17 kho thì không ai
+biết ai giữ kho nào.
 
 ---
 
@@ -77,7 +81,7 @@ thái Sẵn sàng** — lúc đó không diễn được bước giao hàng.
 
 Kiểm chứng thực tế với một báo cáo ngập tại thôn Phú Hòa: 5 loại vật tư được chia
 thành **1 ở kho trung tâm** và **4 ở Kho thôn Long Châu**. Phải đăng nhập thêm
-`truongthon1@ungphonhanh.life` mới hoàn tất được.
+`longchau@ungphonhanh.life` mới hoàn tất được.
 
 **Đăng xuất trên điện thoại xoá sạch bản lưu ngoại tuyến.** Nếu định trình diễn chế
 độ mất mạng, đừng đăng xuất trước đó.

@@ -122,9 +122,8 @@ Mở giao diện: [http://localhost:3200](http://localhost:3200).
 | `admin` | `admin123@` | Toàn xã, bản đồ, người dùng, lập Mission |
 | `staff@ungphonhanh.life` | `staff123` | Vận hành kho trung tâm |
 | `rescue@ungphonhanh.life` | `rescue123` | Vai trò đội cứu hộ |
-| `truongthon@ungphonhanh.life` | `reporter123` | Phụ trách kho thôn, kiêm báo cáo tình huống |
-| `truongthon1@ungphonhanh.life` | `truongthon123` | Kho thôn Long Châu |
-| `truongthon2@ungphonhanh.life` ... `truongthon17@ungphonhanh.life` | `truongthon123` | Các kho thôn còn lại theo thứ tự seed |
+| `longchau@ungphonhanh.life` | `truongthon123` | Kho thôn Long Châu, kiêm báo cáo tình huống của thôn mình |
+| `phuson@` `triemduc@` `kydu@` `phuochue@` `tanbinh@` … | `truongthon123` | 17 kho thôn, tên đăng nhập là tên thôn bỏ dấu viết liền |
 
 ## 5. Smoke test 10 phút
 
@@ -151,7 +150,7 @@ Nếu một trong S01-S05 thất bại, chưa nên tiếp tục demo Mission.
 
 1. Đăng nhập `admin`: phải thấy menu **Người dùng** và **Bản đồ kho** có chế độ ghim.
 2. Đăng xuất, đăng nhập `staff@ungphonhanh.life`: không được thấy chức năng quản trị người dùng.
-3. Đăng nhập `truongthon1@ungphonhanh.life`: dữ liệu phải thuộc **Kho thôn Long Châu**, không được sửa kho thôn khác.
+3. Đăng nhập `longchau@ungphonhanh.life`: dữ liệu phải thuộc **Kho thôn Long Châu**, không được sửa kho thôn khác.
 4. Đăng nhập `rescue@ungphonhanh.life`: không được có quyền quản trị hoặc xuất kho tùy ý.
 
 Đạt khi quyền và phạm vi kho thay đổi đúng theo vai trò, không chỉ ẩn nút mà API cũng trả `403` cho thao tác trái quyền.
@@ -312,7 +311,7 @@ Kiểm tra nhanh bằng dữ liệu seed:
 
 Kiểm tra upload:
 
-1. Đăng nhập một tài khoản phụ trách kho thôn (ví dụ `truongthon@ungphonhanh.life`).
+1. Đăng nhập một tài khoản phụ trách kho thôn (ví dụ `longchau@ungphonhanh.life`).
 2. Chuẩn bị file `.xlsx` gồm bảy cột: SKU, Tên vật tư, Số lượng, Đơn vị, Hạn dùng, Tình trạng, Ghi chú.
    Khi một mã nằm ở nhiều lô, dòng phải ghi rõ lô đã kiểm đếm — hệ thống từ chối số tổng.
 3. Chọn kỳ báo cáo và gửi file.

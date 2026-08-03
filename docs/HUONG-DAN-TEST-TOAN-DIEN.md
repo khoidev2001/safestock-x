@@ -153,9 +153,8 @@ Mở giao diện: **http://localhost:3200**
 | `admin` | `admin123@` | ADMIN — toàn xã, bản đồ, người dùng, lập Mission |
 | `staff@ungphonhanh.life` | `staff123` | Vận hành kho trung tâm |
 | `rescue@ungphonhanh.life` | `rescue123` | Đội cứu hộ |
-| `truongthon@ungphonhanh.life` | `reporter123` | Phụ trách kho thôn, kiêm báo cáo tình huống |
-| `truongthon1@ungphonhanh.life` | `truongthon123` | Phụ trách kho thôn Long Châu |
-| `truongthon2..17@ungphonhanh.life` | `truongthon123` | Các kho thôn còn lại (theo thứ tự seed) |
+| `longchau@ungphonhanh.life` | `truongthon123` | Kho thôn Long Châu, kiêm báo cáo tình huống của thôn mình |
+| `phuson@` `triemduc@` `kydu@` `phuochue@` `tanbinh@` … | `truongthon123` | 17 kho thôn, tên đăng nhập là tên thôn bỏ dấu viết liền |
 
 > Đây là mật khẩu **development**. Trước khi public phải đổi hết (mục §12
 > trong [HUONG-DAN-CAI-DAT-VA-CHAY.md](HUONG-DAN-CAI-DAT-VA-CHAY.md)).

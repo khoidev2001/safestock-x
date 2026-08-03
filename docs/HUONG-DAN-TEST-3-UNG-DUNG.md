@@ -43,7 +43,7 @@ Kiểm tra backend sống: `GET http://localhost:3100/api/health` phải trả
 | `admin` | `admin123@` | Quản trị xã |
 | `staff@ungphonhanh.life` | `staff123` | Phụ trách kho trung tâm |
 | `rescue@ungphonhanh.life` | `rescue123` | Lực lượng hiện trường |
-| `truongthon@ungphonhanh.life` | `reporter123` | Phụ trách kho thôn |
+| `{tênthôn}@ungphonhanh.life` | `truongthon123` | Phụ trách kho thôn — ví dụ `phuson@`, `longchau@`, `triemduc@` |
 
 Hệ thống chỉ còn **ba vai**. Vai "trưởng thôn" riêng đã bị bỏ: người giữ kho thôn
 kiêm luôn việc báo tình huống của thôn mình, nên tách hai tài khoản chỉ thêm việc
