@@ -1,3 +1,4 @@
+import { getAdminPinnedHamletWarehouse } from "./admin-pinned-hamlet-points";
 import { getVerifiedHamletWarehouseLocation } from "./verified-warehouse-location";
 
 export type ReliefGroup = "WASH" | "FOOD" | "RESCUE" | "SHELTER" | "HEALTH" | "COMMUNICATION";
@@ -298,6 +299,8 @@ export function validateSeedDataset(): string[] {
 function createHamletWarehouse(key: string, hamletName: string, index: number) {
   const tier = index % 5;
   const verifiedLocation = getVerifiedHamletWarehouseLocation(key);
+  // Maps không tra ra thì lấy điểm ADMIN đã ghim tay và xác nhận với địa phương.
+  const adminPinned = verifiedLocation ? null : getAdminPinnedHamletWarehouse(key);
   return {
     key,
     name: `Kho thôn ${hamletName}`,
@@ -305,9 +308,9 @@ function createHamletWarehouse(key: string, hamletName: string, index: number) {
     // đặt tại đó mới là "Kho thôn Phú Sơn". Người báo tình huống nói tên thôn.
     hamletName,
     location: verifiedLocation?.name ?? `Nhà văn hóa thôn ${hamletName}`,
-    locationVerified: verifiedLocation != null,
-    lat: verifiedLocation?.lat ?? null,
-    lng: verifiedLocation?.lng ?? null,
+    locationVerified: verifiedLocation != null || adminPinned != null,
+    lat: verifiedLocation?.lat ?? adminPinned?.lat ?? null,
+    lng: verifiedLocation?.lng ?? adminPinned?.lng ?? null,
     stock: [
       { sku: "WATER-01", quantity: 180 + tier * 30, expiryOffsetDays: 210 + tier * 15 },
       { sku: "LIFE-ADULT", quantity: 18 + tier * 4, expiryOffsetDays: null },

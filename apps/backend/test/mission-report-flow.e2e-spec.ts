@@ -96,9 +96,10 @@ describe("Mission report flow (E2E)", () => {
     await cleanupFixtures();
 
     adminToken = await login("admin", "admin123@");
-    reporterToken = await login("truongthon@ungphonhanh.life", "reporter123");
+    // Người giữ kho thôn kiêm luôn việc báo tình huống của thôn mình.
+    reporterToken = await login("longchau@ungphonhanh.life", "truongthon123");
     const reporter = await prisma.user.findUniqueOrThrow({
-      where: { email: "truongthon@ungphonhanh.life" },
+      where: { email: "longchau@ungphonhanh.life" },
     });
     reporterUserId = reporter.id;
     reporterWarehouseId = reporter.warehouseId!;

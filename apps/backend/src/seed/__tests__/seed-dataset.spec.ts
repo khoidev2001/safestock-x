@@ -6,6 +6,8 @@ import {
   STANDARD_ITEMS,
   validateSeedDataset,
 } from "../../../prisma/seed-data";
+import { ADMIN_PINNED_HAMLET_WAREHOUSES } from "../../../prisma/admin-pinned-hamlet-points";
+import { getVerifiedHamletWarehouseLocation } from "../../../prisma/verified-warehouse-location";
 import { MISSION_NORMS } from "../../mission/mission.config";
 
 describe("standard seed dataset", () => {
@@ -49,7 +51,7 @@ describe("standard seed dataset", () => {
     );
   });
 
-  it("có đủ 17 thôn, chỉ seed 5 Nhà văn hóa đã xác minh và giữ 12 điểm chờ ghim", () => {
+  it("có đủ 17 thôn: 5 Nhà văn hóa Maps xác minh, 6 điểm ADMIN ghim, 6 điểm còn chờ", () => {
     expect(HAMLET_WAREHOUSES.map((warehouse) => warehouse.name)).toEqual([
       "Kho thôn Long Châu",
       "Kho thôn Long Thăng",
@@ -70,10 +72,13 @@ describe("standard seed dataset", () => {
       "Kho thôn Triêm Đức",
     ]);
     expect(new Set(HAMLET_WAREHOUSES.map((warehouse) => warehouse.key)).size).toBe(17);
+    // Hai nguồn toạ độ, giữ tách nhau: tra được trên Google Maps thì tên địa điểm
+    // lấy từ registry; ADMIN ghim tay thì giữ tên mặc định "Nhà văn hóa thôn X".
+    // Trộn hai nguồn là mất dấu ai chịu trách nhiệm cho toạ độ nào.
     expect(
-      HAMLET_WAREHOUSES.filter((warehouse) => warehouse.locationVerified).map(
-        ({ key, location, lat, lng }) => ({ key, location, lat, lng }),
-      ),
+      HAMLET_WAREHOUSES.filter((warehouse) =>
+        getVerifiedHamletWarehouseLocation(warehouse.key),
+      ).map(({ key, location, lat, lng }) => ({ key, location, lat, lng })),
     ).toEqual([
       {
         key: "ky-du",
@@ -106,8 +111,30 @@ describe("standard seed dataset", () => {
         lng: 109.0703455,
       },
     ]);
+
+    const adminPinned = HAMLET_WAREHOUSES.filter(
+      (warehouse) =>
+        warehouse.locationVerified && !getVerifiedHamletWarehouseLocation(warehouse.key),
+    );
+    expect(adminPinned.map((warehouse) => warehouse.key).sort()).toEqual([
+      "long-chau",
+      "long-ha",
+      "long-my",
+      "long-thach",
+      "long-thang",
+      "tan-phuoc",
+    ]);
+    expect(
+      adminPinned.every(
+        ({ key, location, lat, lng }) =>
+          location.startsWith("Nhà văn hóa thôn ") &&
+          lat === ADMIN_PINNED_HAMLET_WAREHOUSES[key].lat &&
+          lng === ADMIN_PINNED_HAMLET_WAREHOUSES[key].lng,
+      ),
+    ).toBe(true);
+
     const pendingLocations = HAMLET_WAREHOUSES.filter((warehouse) => !warehouse.locationVerified);
-    expect(pendingLocations).toHaveLength(12);
+    expect(pendingLocations).toHaveLength(6);
     expect(
       pendingLocations.every(
         ({ location, lat, lng }) =>

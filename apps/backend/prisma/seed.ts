@@ -27,6 +27,7 @@ import {
   seedOperationalRecords,
   seedTransactionHistory,
 } from "./seed-support";
+import { resolveHamletPoint } from "./admin-pinned-hamlet-points";
 import { getVerifiedNeighborContact } from "./verified-neighbor-contact";
 import {
   HOME_COMMUNE_WAREHOUSE_LOCATION,
@@ -138,54 +139,47 @@ async function main() {
     organization.id,
     itemBySku,
   );
-  // Điểm ứng phó của thôn. Tọa độ Nhà văn hóa là dữ kiện cố định đã tra Google Maps
-  // và chốt trong verified-warehouse-location.ts, nên seed thẳng vào đây thay vì bắt
-  // mỗi máy mới ghim tay — không ghim thì không thôn nào lập được phương án.
-  // Đúng 5 thôn MAP_VERIFIED có tọa độ; 12 thôn còn lại vẫn để trống chờ ADMIN ghim,
-  // vì danh mục ghi rõ kết quả tra cứu của chúng sai vùng hoặc sai tên.
+  // Điểm ứng phó của thôn, gộp hai nguồn toạ độ (xem admin-pinned-hamlet-points.ts):
+  // Nhà văn hoá tra được trên Google Maps, và điểm ADMIN ghim tay cho những thôn Maps
+  // trả sai vùng hoặc sai tên. Seed thẳng vào đây thay vì bắt mỗi máy mới ghim lại —
+  // không có toạ độ thì thôn đó không lập được phương án.
   await prisma.hamlet.createMany({
-    data: HAMLET_WAREHOUSES.map((warehouse) => ({
-      organizationId: organization.id,
-      communeId: COMMUNE_ID,
-      name: warehouse.hamletName,
-      normalizedName: normalizeHamletName(warehouse.hamletName),
-      // Người báo tình huống gõ "Phú Sơn" hoặc "thôn Phú Sơn"; giữ thêm tên kho để
-      // dữ liệu cũ trỏ theo tên đó vẫn khớp.
-      aliases: [
-        ...new Set(
-          [warehouse.hamletName, `thôn ${warehouse.hamletName}`, warehouse.name].map(
-            normalizeHamletName,
+    data: HAMLET_WAREHOUSES.map((warehouse) => {
+      const point = resolveHamletPoint(warehouse.key, {
+        lat: warehouse.lat,
+        lng: warehouse.lng,
+        verifiedAt: VERIFIED_WAREHOUSE_LOCATION_REGISTRY_VERSION,
+      });
+      return {
+        organizationId: organization.id,
+        communeId: COMMUNE_ID,
+        name: warehouse.hamletName,
+        normalizedName: normalizeHamletName(warehouse.hamletName),
+        // Người báo tình huống gõ "Phú Sơn" hoặc "thôn Phú Sơn"; giữ thêm tên kho để
+        // dữ liệu cũ trỏ theo tên đó vẫn khớp.
+        aliases: [
+          ...new Set(
+            [warehouse.hamletName, `thôn ${warehouse.hamletName}`, warehouse.name].map(
+              normalizeHamletName,
+            ),
           ),
-        ),
-      ],
-      lat: warehouse.lat,
-      lng: warehouse.lng,
-      verified: warehouse.locationVerified,
-      // Nguồn xác minh là registry Google Maps chốt ngày đó, không phải một người bấm nút.
-      verifiedAt: warehouse.locationVerified
-        ? new Date(VERIFIED_WAREHOUSE_LOCATION_REGISTRY_VERSION)
-        : null,
-    })),
+        ],
+        lat: point.lat,
+        lng: point.lng,
+        verified: point.verified,
+        verifiedAt: point.verifiedAt,
+      };
+    }),
   });
+  // Quản lý kho thôn kiêm luôn vai trưởng thôn: cùng một người giữ kho và báo
+  // tình huống của thôn mình, nên mỗi thôn đúng một tài khoản. Tài khoản
+  // truongthon@ cũ trỏ trùng kho Long Châu là dấu vết từ thời có vai trưởng thôn
+  // riêng — đã bỏ, vì 18 tài khoản cho 17 kho thì không ai biết ai giữ kho nào.
   const hamletLeaderIds = await createHamletLeaders(
     organization.id,
     hamletWarehouses,
     password("truongthon123"),
   );
-
-  // Quản lý kho thôn kiêm luôn vai trưởng thôn: cùng một người giữ kho và báo
-  // tình huống của thôn mình, nên chỉ một tài khoản thay vì hai.
-  const reportingHamlet = hamletWarehouses[0] ?? centralWarehouse;
-  await prisma.user.create({
-    data: {
-      organizationId: organization.id,
-      email: "truongthon@ungphonhanh.life",
-      passwordHash: password("reporter123"),
-      fullName: `Trưởng thôn ${reportingHamlet.name.replace("Kho ", "")}`,
-      role: "WAREHOUSE",
-      warehouseId: reportingHamlet.id,
-    },
-  });
 
   const deviceByCode = await seedDevices(prisma, {
     centralWarehouse,
@@ -397,18 +391,27 @@ async function createHamletWarehouses(organizationId: string, itemBySku: Map<str
   return { warehouses, batchRefs };
 }
 
+/**
+ * Tên đăng nhập theo đúng thôn người đó giữ: "Kho thôn Phú Sơn" → phuson@.
+ * Trước đây đánh số truongthon1..17 theo thứ tự seed, nên muốn biết ai giữ kho
+ * nào phải tra bảng — lúc diễn mà cần thêm một tài khoản kho là mất thời gian.
+ */
+function hamletAccountEmail(warehouseName: string): string {
+  const hamletName = warehouseName.replace(/^Kho thôn\s+/iu, "");
+  return `${normalizeHamletName(hamletName).replace(/\s+/g, "")}@ungphonhanh.life`;
+}
+
 async function createHamletLeaders(
   organizationId: string,
   warehouses: Warehouse[],
   passwordHash: string,
 ) {
   const leaderIds = new Map<string, string>();
-  for (let index = 0; index < warehouses.length; index++) {
-    const warehouse = warehouses[index];
+  for (const warehouse of warehouses) {
     const user = await prisma.user.create({
       data: {
         organizationId,
-        email: `truongthon${index + 1}@ungphonhanh.life`,
+        email: hamletAccountEmail(warehouse.name),
         passwordHash,
         fullName: `Trưởng ${warehouse.name.replace("Kho ", "")}`,
         role: "WAREHOUSE",
