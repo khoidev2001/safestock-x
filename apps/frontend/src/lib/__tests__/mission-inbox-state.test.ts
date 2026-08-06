@@ -116,5 +116,5 @@ test("deep-link giữ evidence hiện trường cần ADMIN xem lại sau refres
 });
 
 test("không có id thì về lại danh sách, không dựng đường dẫn rỗng", () => {
-  assert.equal(missionDeepLink("   "), "/mission");
+  assert.equal(missionDeepLink("   "), "/missions");
 });

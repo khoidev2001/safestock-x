@@ -41,7 +41,17 @@ export const navItems: NavItem[] = [
     group: "Điều hành",
     requiredPermission: Permission.MISSION_VIEW,
     title: "Điều phối cứu hộ",
-    subtitle: "Ghi nhận tình huống, xác định nhu cầu và phối hợp cấp phát vật tư.",
+    subtitle: "Ghi nhận tình huống và chỉ chỗ xảy ra sự việc để hệ thống tính nhu cầu.",
+  },
+  {
+    path: "/missions",
+    label: "Nhiệm vụ",
+    icon: "packageCheck",
+    tone: "blue",
+    group: "Điều hành",
+    requiredPermission: Permission.MISSION_VIEW,
+    title: "Nhiệm vụ",
+    subtitle: "Theo dõi các nhiệm vụ đang chạy và mở trang chi tiết của từng nhiệm vụ.",
   },
   {
     path: "/insights",

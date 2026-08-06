@@ -8,6 +8,9 @@ import { ColorIcon, type ColorIconName, type ColorIconTone } from "@/components/
 import { useAuth } from "@/lib/auth-store";
 import { closeWebSession } from "@/lib/api";
 import { navGroups, navItems, type NavItem } from "@/lib/dashboard-nav";
+import { unreadByNavPath } from "@/lib/notification-routing";
+import { useQuery } from "@tanstack/react-query";
+import { getNotifications } from "@/lib/mission-api";
 import { missionDeepLink } from "@/lib/mission-inbox-state";
 import { NotificationBell } from "@/components/mission/notification-bell";
 import { UserProfileButton } from "@/components/profile/user-profile-button";
@@ -27,6 +30,16 @@ export function DashboardShell({ children, warehouseName }: DashboardShellProps)
   const visibleNav = navItems.filter(
     (item) => user?.role && roleHasPermission(user.role, item.requiredPermission),
   );
+
+  // Số việc chưa đọc gắn thẳng lên tab. Chuông ở góc chỉ cho biết "có gì đó";
+  // con số trên tab cho biết Ở ĐÂU, tức là bấm vào đâu thì thấy.
+  const notifQuery = useQuery({
+    queryKey: ["notifications"],
+    queryFn: () => getNotifications(),
+    enabled: Boolean(user?.role),
+    refetchInterval: 15_000,
+  });
+  const soChuaDoc = unreadByNavPath(notifQuery.data ?? []);
 
   // Bắt đầu ở trạng thái mở để HTML server và client khớp nhau, rồi mới đọc lựa chọn
   // đã lưu. Nhớ qua các lần tải lại: người đang ghim toạ độ hàng loạt không phải thu
@@ -112,6 +125,7 @@ export function DashboardShell({ children, warehouseName }: DashboardShellProps)
                         isActive={isActive(item.path)}
                         item={item}
                         rail={navCollapsed}
+                        badge={soChuaDoc[item.path] ?? 0}
                       />
                     ))}
                   </div>
@@ -151,7 +165,13 @@ export function DashboardShell({ children, warehouseName }: DashboardShellProps)
               className="mx-auto mt-3 flex max-w-[1440px] gap-1 overflow-x-auto pb-1 lg:hidden"
             >
               {visibleNav.map((item) => (
-                <NavLink key={item.path} compact isActive={isActive(item.path)} item={item} />
+                <NavLink
+                  key={item.path}
+                  compact
+                  isActive={isActive(item.path)}
+                  item={item}
+                  badge={soChuaDoc[item.path] ?? 0}
+                />
               ))}
             </nav>
           </header>
@@ -170,19 +190,21 @@ function NavLink({
   rail = false,
   isActive,
   item,
+  badge = 0,
 }: {
   compact?: boolean;
   /** Rail: menu đã thu, chỉ còn icon — nhãn giữ cho trình đọc màn hình và tooltip. */
   rail?: boolean;
   isActive: boolean;
   item: { path: string; label: string; icon: ColorIconName; tone: ColorIconTone };
+  badge?: number;
 }) {
   return (
     <Link
       aria-current={isActive ? "page" : undefined}
       className={`flex items-center rounded-md text-sm transition active:translate-y-px ${
         rail
-          ? "w-full justify-center px-0 py-2.5"
+          ? "relative w-full justify-center px-0 py-2.5"
           : compact
             ? "w-auto shrink-0 justify-center gap-2 px-3 py-2.5 text-xs"
             : "w-full gap-3 px-3 py-2.5 text-left"
@@ -202,6 +224,19 @@ function NavLink({
       <span className={rail ? "sr-only" : `truncate ${isActive ? "font-semibold" : "font-medium"}`}>
         {item.label}
       </span>
+      {badge > 0 ? (
+        <span
+          // Đọc thành lời cho trình đọc màn hình: một con số trần cạnh nhãn tab
+          // không nói được nó đếm cái gì.
+          aria-label={`${badge} việc chưa xem`}
+          className={`ml-auto inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 text-[11px] font-bold text-white ${
+            rail ? "absolute right-1 top-1" : ""
+          }`}
+          style={{ background: "var(--color-critical)" }}
+        >
+          {badge > 99 ? "99+" : badge}
+        </span>
+      ) : null}
     </Link>
   );
 }

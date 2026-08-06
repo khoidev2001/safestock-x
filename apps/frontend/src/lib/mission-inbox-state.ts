@@ -115,7 +115,10 @@ export function filterMissionInbox(
 
 export function missionDeepLink(missionId: string, fieldUpdateId?: string | null) {
   const normalizedId = missionId.trim();
-  if (!normalizedId) return "/mission";
+  // Không có id thì về DANH SÁCH nhiệm vụ, không phải form khai vụ mới: người
+  // bấm một thông báo hỏng chỉ muốn xem còn nhiệm vụ nào, chứ không muốn bị
+  // đặt vào giữa một biểu mẫu trống.
+  if (!normalizedId) return "/missions";
   const normalizedFieldUpdateId = fieldUpdateId?.trim();
   const target = normalizedFieldUpdateId
     ? `?fieldUpdate=${encodeURIComponent(normalizedFieldUpdateId)}`

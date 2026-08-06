@@ -94,6 +94,8 @@ jobs:
           pnpm --filter @safestock/frontend test:workflow-progress
           pnpm --filter @safestock/frontend test:audio-wav
           pnpm --filter @safestock/frontend test:session-marker
+          pnpm --filter @safestock/frontend test:warehouse-progress
+          pnpm --filter @safestock/frontend test:notification-routing
           pnpm --filter @safestock/frontend build
 
       - name: Mobile state and dependency contracts

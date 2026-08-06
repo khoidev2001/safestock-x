@@ -98,16 +98,31 @@ type IncidentForm = GenerateInput["incident"] & {
 export interface MissionViewProps {
   warehouseId: string;
   /**
-   * Có id thì đây là TRANG CHI TIẾT của đúng nhiệm vụ đó; không có thì đây là tab
-   * điều phối: form khai tình huống mới cộng hộp nhiệm vụ.
+   * Có id thì đây là TRANG CHI TIẾT của đúng nhiệm vụ đó.
    *
-   * Một component phục vụ cả hai vì phần lớn state dùng chung (form, điểm ghim,
-   * các mutation). Tách đôi thì phải nhân bản chỗ đó, mà chúng vốn là một luồng.
+   * Một component phục vụ cả ba màn hình vì phần lớn state dùng chung (form,
+   * điểm ghim, các mutation). Tách ra thì phải nhân bản chỗ đó, mà chúng vốn là
+   * một luồng.
    */
   missionId?: string;
+  /**
+   * Màn hình nào đang dùng component này.
+   *
+   * - `khai-bao`: chỉ form khai tình huống mới và bản đồ ghim điểm nạn.
+   * - `danh-sach`: chỉ hộp nhiệm vụ.
+   *
+   * Trước đây hai việc này chung một trang nên nó dài lê thê, mà khai một vụ mới
+   * và theo dõi các vụ đang chạy là hai đầu việc khác nhau, thường của hai người
+   * khác nhau, vào ở hai thời điểm khác nhau.
+   */
+  variant?: "khai-bao" | "danh-sach";
 }
 
-export function MissionView({ warehouseId, missionId: missionIdProp }: MissionViewProps) {
+export function MissionView({
+  warehouseId,
+  missionId: missionIdProp,
+  variant = "khai-bao",
+}: MissionViewProps) {
   const role = useAuth((s) => s.user?.role);
   const assignedWarehouseId = useAuth((s) => s.user?.warehouseId);
   const queryClient = useQueryClient();
@@ -371,7 +386,7 @@ export function MissionView({ warehouseId, missionId: missionIdProp }: MissionVi
    * không còn đường nào lập tham mưu. Khối tham mưu phải tự có nút của nó cho
    * đúng trường hợp đó.
    */
-  const composerVisible = isAdmin && (!isDetailPage || isMissionEditable);
+  const composerVisible = isAdmin && variant === "khai-bao" && (!isDetailPage || isMissionEditable);
 
   /**
    * Điểm nạn của các nhiệm vụ ĐÃ DUYỆT và chưa đóng, để hiện lên bản đồ.
@@ -473,11 +488,11 @@ export function MissionView({ warehouseId, missionId: missionIdProp }: MissionVi
           trang trước, bấm lùi sẽ văng ra khỏi ứng dụng. */}
       {isDetailPage && (
         <Link
-          href="/mission"
+          href="/missions"
           className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--text-muted)] transition hover:text-[var(--text)]"
         >
           <ColorIcon name="left" size={16} tone="blue" />
-          Về điều phối cứu hộ
+          Về danh sách nhiệm vụ
         </Link>
       )}
 
@@ -639,7 +654,7 @@ export function MissionView({ warehouseId, missionId: missionIdProp }: MissionVi
         </section>
       )}
 
-      {!isDetailPage && (
+      {!isDetailPage && variant === "danh-sach" && (
         <MissionInbox
           missions={missionListQuery.data ?? []}
           selectedMissionId={missionId}
