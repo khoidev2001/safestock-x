@@ -3,12 +3,15 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
+  type OnApplicationBootstrap,
 } from "@nestjs/common";
 import {
   InterCommuneLoanDirection,
   InterCommuneLoanStatus,
   NotificationKind,
+  Prisma,
   TransactionSource,
   UserRole,
 } from "@prisma/client";
@@ -17,6 +20,7 @@ import { InventoryService } from "../inventory/inventory.service";
 import { NotificationService } from "../notification/notification.service";
 import { findPeer, parseCommunePeers } from "./commune-peer-registry";
 import { stockMarksFromLoans } from "./loan-stock-marks";
+import { parsePendingStockMove, type PendingStockMove } from "./pending-stock-move";
 import {
   actorOf,
   findTransition,
@@ -28,6 +32,11 @@ import {
   type InterCommuneDirection,
   type InterCommuneStatus,
 } from "./inter-commune-loan.workflow";
+
+/** Lấy câu lỗi đọc được, kể cả khi thứ ném ra không phải Error. */
+function moTaLoi(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 interface MoveStockInput {
   userId: string;
@@ -51,12 +60,76 @@ interface MoveStockInput {
  * trừ ở đây là mất hết những thứ đó, và mất im lặng.
  */
 @Injectable()
-export class InterCommuneLoanService {
+export class InterCommuneLoanService implements OnApplicationBootstrap {
+  private readonly log = new Logger(InterCommuneLoanService.name);
+
   constructor(
     private prisma: PrismaService,
     private inventory: InventoryService,
     private notifications: NotificationService,
   ) {}
+
+  /**
+   * Làm nốt những lần chuyển kho đã hứa mà chưa chắc đã xong.
+   *
+   * Chạy lúc khởi động vì đó chính là lúc sau một lần sập. An toàn nhờ khoá chống
+   * trùng `requestId`: nếu lần trước hàng đã đi thật, lượt này kho nhận ra và
+   * không chuyển thêm; nếu chưa đi thì bây giờ đi.
+   *
+   * KHÔNG chặn máy chủ khởi động. Một khoản mượn hỏng không đáng để cả hệ thống
+   * không lên được — lúc bão thì màn hình sống quan trọng hơn một dòng sổ.
+   */
+  async onApplicationBootstrap(): Promise<void> {
+    await this.lamNotViecDo().catch((error) =>
+      this.log.error(`Không quét được việc chuyển kho còn dở: ${moTaLoi(error)}`),
+    );
+  }
+
+  private async lamNotViecDo(): Promise<void> {
+    const conNo = await this.prisma.interCommuneLoan.findMany({
+      // `not: Prisma.DbNull` chứ không phải `NOT: { … : DbNull }`: bộ lọc cột JSON
+      // của Prisma phân biệt "ô trống trong bảng" với "giá trị JSON null", và chỉ
+      // dạng viết này hỏi đúng câu "ô này có gì không".
+      where: { pendingStockMove: { not: Prisma.DbNull } },
+      select: { id: true, pendingStockMove: true },
+    });
+    if (conNo.length === 0) return;
+
+    this.log.warn(`${conNo.length} lần chuyển kho còn dở từ lần chạy trước — đang làm nốt`);
+    for (const row of conNo) {
+      const viec = parsePendingStockMove(row.pendingStockMove);
+      if (!viec) {
+        // Dữ liệu méo thì KHÔNG đoán. Xoá cờ để khỏi kêu mãi mỗi lần khởi động,
+        // nhưng ghi lại rõ để người trực còn đối chiếu tay được.
+        this.log.error(
+          `Khoản mượn ${row.id} có việc chuyển kho không đọc được — phải đối chiếu tay: ${JSON.stringify(row.pendingStockMove)}`,
+        );
+        await this.prisma.interCommuneLoan
+          .update({ where: { id: row.id }, data: { pendingStockMove: Prisma.DbNull } })
+          .catch(() => undefined);
+        continue;
+      }
+      try {
+        await this.moveStock(viec.effect, {
+          userId: viec.userId,
+          batchId: viec.batchId,
+          quantity: viec.quantity,
+          scopeWarehouseId: viec.scopeWarehouseId ?? undefined,
+          note: viec.note,
+          requestId: viec.requestId,
+        });
+        await this.prisma.interCommuneLoan.update({
+          where: { id: row.id },
+          data: { pendingStockMove: Prisma.DbNull },
+        });
+        this.log.log(`Đã làm nốt chuyển kho cho khoản mượn ${row.id}`);
+      } catch (error) {
+        // Giữ nguyên cờ: lần khởi động sau thử lại. Hết hàng hay sai lô là chuyện
+        // người phải xử, xoá cờ ở đây là giấu mất việc còn nợ.
+        this.log.error(`Chưa làm nốt được khoản mượn ${row.id}: ${moTaLoi(error)}`);
+      }
+    }
+  }
 
   /** Danh sách khoản mượn của xã đang đăng nhập, cả hai chiều. */
   async list(userId: string) {
@@ -460,6 +533,23 @@ export class InterCommuneLoanService {
     // lượt thứ hai không khớp trạng thái đã đọc nên `count` bằng 0 và bị từ chối,
     // thay vì lặng lẽ đè lên lượt thứ nhất.
     const now = new Date();
+    // Ghi lời hứa chuyển kho vào CÙNG lượt ghi chốt sổ. Đây là chỗ đóng khe hẹp
+    // giữa sổ và kho: hai việc nằm ở hai transaction khác nhau, nên sập nguồn
+    // giữa chừng thì sổ đã đổi mà hàng còn nguyên. Có lời hứa nằm lại thì lần
+    // khởi động sau biết còn nợ việc gì mà làm nốt.
+    const loiHua =
+      effect === "NONE"
+        ? null
+        : ({
+            effect,
+            userId: input.userId,
+            batchId: input.batchId as string,
+            quantity: movingQuantity,
+            scopeWarehouseId: input.scopeWarehouseId ?? null,
+            note: `Mượn liên xã với ${loan.peerCommuneName} — ${transition.label}`,
+            requestId: `loan-${loan.id}-${input.to}-${returnedQuantity}`,
+          } satisfies PendingStockMove);
+
     const claimed = await this.prisma.interCommuneLoan.updateMany({
       where: {
         id: loan.id,
@@ -473,6 +563,7 @@ export class InterCommuneLoanService {
         decidedAt: from === "REQUESTED" ? now : loan.decidedAt,
         receivedAt: input.to === "ACTIVE" ? now : loan.receivedAt,
         returnedAt: status === "RETURNED" ? now : loan.returnedAt,
+        pendingStockMove: loiHua ? (loiHua as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
       },
     });
     if (claimed.count !== 1) {
@@ -481,15 +572,22 @@ export class InterCommuneLoanService {
       );
     }
 
-    if (effect !== "NONE") {
+    if (loiHua) {
       try {
         await this.moveStock(effect, {
-          userId: input.userId,
-          batchId: input.batchId as string,
-          quantity: movingQuantity,
-          scopeWarehouseId: input.scopeWarehouseId,
-          note: `Mượn liên xã với ${loan.peerCommuneName} — ${transition.label}`,
-          requestId: `loan-${loan.id}-${input.to}-${returnedQuantity}`,
+          userId: loiHua.userId,
+          batchId: loiHua.batchId,
+          quantity: loiHua.quantity,
+          scopeWarehouseId: loiHua.scopeWarehouseId ?? undefined,
+          note: loiHua.note,
+          requestId: loiHua.requestId,
+        });
+        // Hàng đã đi thật thì xoá lời hứa. Để lại là lần khởi động sau chạy lại
+        // một việc đã xong — không sai nhờ khoá chống trùng, nhưng làm người đọc
+        // nhật ký tưởng có sự cố.
+        await this.prisma.interCommuneLoan.update({
+          where: { id: loan.id },
+          data: { pendingStockMove: Prisma.DbNull },
         });
       } catch (error) {
         // Kho không chuyển được (hết hàng, sai quyền, sai lô) thì trả sổ về đúng
@@ -502,6 +600,9 @@ export class InterCommuneLoanService {
             decidedAt: loan.decidedAt,
             receivedAt: loan.receivedAt,
             returnedAt: loan.returnedAt,
+            // Lùi sổ về thì lời hứa cũng phải rút: giữ lại là lần khởi động sau
+            // chuyển hàng cho một trạng thái đã bị huỷ.
+            pendingStockMove: Prisma.DbNull,
           },
         });
         throw error;

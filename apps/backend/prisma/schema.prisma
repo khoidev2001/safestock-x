@@ -905,6 +905,16 @@ model InterCommuneLoan {
 
   /// true khi bản ghi do người nhập tay vì lúc đó không gửi được qua mạng.
   recordedManually Boolean @default(false)
+  // Việc chuyển kho ĐÃ HỨA nhưng chưa chắc đã xong.
+  //
+  // Sổ và kho nằm ở hai transaction khác nhau (inventory.export/import tự mở
+  // transaction riêng), nên có một khe hẹp giữa lúc chốt sổ và lúc hàng thật sự
+  // rời kho. Sập nguồn đúng khe đó thì sổ ghi đã chuyển mà hàng còn nguyên, và
+  // không ai biết cho tới kỳ đối chiếu.
+  //
+  // Ghi lại đủ tham số để CHẠY LẠI. An toàn vì requestId bên trong là khoá chống
+  // trùng của kho: chuyển rồi thì lần chạy lại không chuyển thêm lần nữa.
+  pendingStockMove Json?
 
   note         String?
   rejectReason String?
