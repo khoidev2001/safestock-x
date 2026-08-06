@@ -15,6 +15,10 @@ import { IncidentInput } from "../mission/mission.compute";
 const MAX_CACHE_ENTRIES = 200;
 // Chặn treo request khi ai-service chậm/mạng hội trường kém: quá hạn thì huỷ và fallback.
 const DEFAULT_TIMEOUT_MS = 15_000;
+// Với dòng chữ đang chảy thì đây là hạn IM LẶNG giữa hai mẩu chữ, không phải hạn
+// tổng. Để rộng vì mô hình chạy trên card dùng chung với nhận dạng giọng nói, lúc
+// card đầy thì mẩu chữ ra thưa hẳn.
+const STREAM_IDLE_TIMEOUT_MS = 60_000;
 
 @Injectable()
 export class AiClientService {
@@ -61,6 +65,59 @@ export class AiClientService {
   async assistantAsk(question: string, snapshot: string): Promise<string> {
     const result = await this.post<{ answer: string }>("/assistant", { question, snapshot });
     return result.answer;
+  }
+
+  /**
+   * Hỏi-đáp kho theo DÒNG CHỮ: trả từng mẩu chữ ngay khi mô hình sinh ra.
+   *
+   * Hạn giờ ở đây là hạn CHỜ IM LẶNG, không phải hạn tổng. Dùng hạn tổng thì câu
+   * trả lời dài bị cắt ngang giữa chừng dù mô hình vẫn đang chạy tốt — người trực
+   * nhận nửa câu còn tệ hơn nhận chậm. Cứ có mẩu chữ mới là đồng hồ đặt lại; chỉ
+   * khi mô hình im quá lâu mới coi là chết.
+   *
+   * Sự kiện đi qua nguyên vẹn, backend KHÔNG diễn giải: lớp chống bịa số nằm ở
+   * ai-service và nó gửi `replace` khi cần thay cả câu.
+   */
+  async *assistantStream(question: string, snapshot: string): AsyncGenerator<string> {
+    const huy = new AbortController();
+    let dongHo: NodeJS.Timeout | undefined;
+    const datLaiDongHo = () => {
+      if (dongHo) clearTimeout(dongHo);
+      dongHo = setTimeout(() => huy.abort(), STREAM_IDLE_TIMEOUT_MS);
+    };
+
+    datLaiDongHo();
+    try {
+      const res = await fetch(`${this.baseUrl}/assistant/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, snapshot }),
+        signal: huy.signal,
+      });
+      if (!res.ok || !res.body) {
+        throw new HttpException(
+          `ai-service /assistant/stream lỗi ${res.status}`,
+          res.status || 503,
+        );
+      }
+
+      const boGiaiMa = new TextDecoder();
+      let conLai = "";
+      for await (const khoi of res.body as unknown as AsyncIterable<Uint8Array>) {
+        datLaiDongHo();
+        conLai += boGiaiMa.decode(khoi, { stream: true });
+        // SSE ngăn cách bằng dòng trống. Mẩu cuối chưa trọn thì GIỮ LẠI chờ khối
+        // sau — cắt giữa một sự kiện là đưa ra JSON hỏng.
+        const cacPhan = conLai.split("\n\n");
+        conLai = cacPhan.pop() ?? "";
+        for (const phan of cacPhan) {
+          const dong = phan.trim();
+          if (dong.startsWith("data:")) yield dong.slice(5).trim();
+        }
+      }
+    } finally {
+      if (dongHo) clearTimeout(dongHo);
+    }
   }
 
   /** Nhận dạng giọng nói (WAV base64) → text tiếng Việt bằng PhoWhisper local. Không cache (audio khác nhau mỗi lần). */

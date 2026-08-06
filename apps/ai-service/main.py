@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import ValidationError
 
 import keep_warm
@@ -251,6 +251,23 @@ Knowledge rỗng. CHỈ trả JSON {"answer":"...","outOfScope":false}.
 - outOfScope=false với câu hỏi dữ liệu kho hoặc tình huống khẩn cấp. Mọi số trong answer phải xuất hiện
   trong question hoặc snapshot; không tự suy luận thiếu/đủ và không tự đề xuất số lượng xuất.
 - Với kiến thức chuyên môn không có trong knowledge, nói chưa có trong tài liệu tham khảo."""
+
+# Bản VĂN XUÔI của lời nhắc trên, dùng cho đường trả lời theo dòng chữ.
+#
+# Cùng ràng buộc về số liệu và phạm vi, chỉ khác đầu ra: JSON không stream ra màn
+# hình được — người dùng sẽ thấy dấu ngoặc và tên trường chạy ra thay vì chữ.
+# Giữ hai lời nhắc cạnh nhau để sửa ràng buộc thì sửa cả hai, đừng để chúng trôi
+# khỏi nhau rồi hai đường trả lời khác nhau về mức an toàn.
+_PLAIN_DRAFT_SYSTEM_TEXT = _ASSISTANT_SYSTEM + """
+
+Knowledge rỗng. Trả lời bằng VĂN XUÔI tiếng Việt, KHÔNG dùng JSON, không markdown.
+- Câu hỏi ngoài cứu hộ/hậu cần/kho/thiên tai: chỉ trả đúng một câu từ chối, KHÔNG
+  nhắc lại snapshot, số tồn, readiness, thời tiết hoặc sự cố.
+- Câu hỏi dữ liệu kho hoặc tình huống khẩn cấp: MỌI số trong câu trả lời phải xuất
+  hiện trong question hoặc snapshot; không tự suy luận thiếu/đủ và không tự đề xuất
+  số lượng xuất.
+- Kiến thức chuyên môn không có trong knowledge thì nói chưa có trong tài liệu tham khảo.
+- Trả lời ngắn, đi thẳng vào việc."""
 
 _ACTION_PLAN_SYSTEM = _IDENTITY_GUARD + """
 
@@ -653,9 +670,29 @@ _EN_TO_VI = [
 _EN_TO_VI_COMPILED = [(re.compile(pat, re.IGNORECASE), repl) for pat, repl in _EN_TO_VI]
 
 
+# Mã vật tư viết hoa có gạch nối: WATER-01, LIFE-ADULT, FIRSTAID-01.
+#
+# Phải che trước khi vá tiếng Anh, vì `\bwater\b` khớp luôn phần đầu của WATER-01
+# (gạch nối cũng là ranh giới từ) và biến mã thành "nước-01". Mã vật tư sai một ký
+# tự là tra không ra hàng — người trực đọc câu trả lời rồi đi tìm một mã không tồn
+# tại. Cùng bẫy đó còn chờ sẵn ở HIGH, CRITICAL, FLOOD nếu mã sau này có các chữ ấy.
+_MA_VAT_TU = re.compile(r"\b[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+\b")
+
+
 def _patch_english(text: str) -> str:
+    giu: list[str] = []
+
+    def _che(khop: re.Match) -> str:
+        giu.append(khop.group(0))
+        # Ký tự thay thế không được có chữ cái tiếng Anh nào, nếu không chính nó
+        # lại dính một luật vá khác.
+        return f"\x00{len(giu) - 1}\x00"
+
+    text = _MA_VAT_TU.sub(_che, text)
     for pattern, repl in _EN_TO_VI_COMPILED:
         text = pattern.sub(repl, text)
+    if giu:
+        text = re.sub(r"\x00(\d+)\x00", lambda m: giu[int(m.group(1))], text)
     # UI chat dùng plain text; model nhỏ đôi khi vẫn bọc **đậm**/`code` dù prompt cấm.
     text = re.sub(r"[*_`]+", "", text)
     # GIỮ xuống dòng: gộp space/tab trong từng dòng trước, KHÔNG nuốt \n (chat render whitespace-pre-wrap).
@@ -698,6 +735,74 @@ def assistant(req: AssistantRequest) -> AssistantAnswer:
             payload["knowledgeStatus"] = retrieval.reason
         answer = _answer_without_rag(payload)
     return AssistantAnswer(answer=answer)
+
+
+@app.post("/assistant/stream")
+def assistant_stream(req: AssistantRequest):
+    """Trợ lý trả lời theo DÒNG CHỮ, chữ chạy ra ngay thay vì chờ trọn câu.
+
+    Vì sao phải đổi cách sinh: đường `/assistant` bắt mô hình trả về JSON rồi mới
+    bóc lấy câu trả lời và kiểm số. Stream từng mẩu của JSON đó ra màn hình thì
+    người dùng thấy dấu ngoặc và tên trường, không phải chữ. Nên ở đây sinh thẳng
+    văn xuôi.
+
+    LỚP CHỐNG BỊA SỐ KHÔNG BỊ BỎ, chỉ chuyển về cuối dòng: nhả hết chữ rồi mới đối
+    chiếu mọi con số với câu hỏi và ảnh chụp kho. Không đạt thì phát tiếp một sự
+    kiện `replace` để màn hình thay bằng câu an toàn.
+
+    Đánh đổi phải nói rõ: trong lúc chữ đang chạy, đoạn văn CHƯA được kiểm. Người
+    xem có thể thoáng thấy một con số rồi nó bị thay. Đổi lại là không còn khoảng
+    tám giây màn hình đứng im — mà đứng im thì người dùng bấm lại hoặc bỏ đi.
+    """
+    retrieval = get_knowledge_retriever().search(req.question, top_k=3)
+    payload = _assistant_payload(req, retrieval.hits)
+    if not retrieval.available:
+        payload["knowledgeStatus"] = retrieval.reason
+
+    def dong_su_kien():
+        cac_manh: list[str] = []
+        try:
+            for manh in provider.stream_text(
+                _PLAIN_DRAFT_SYSTEM_TEXT, json.dumps(payload, ensure_ascii=False)
+            ):
+                cac_manh.append(manh)
+                yield f"data: {json.dumps({'delta': manh}, ensure_ascii=False)}\n\n"
+        except Exception as exc:  # noqa: BLE001 — đứt giữa chừng vẫn phải đóng dòng tử tế
+            yield f"data: {json.dumps({'error': type(exc).__name__}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+
+        cau = "".join(cac_manh).strip()
+        an_toan = _kiem_cau_tra_loi(cau, payload)
+        if an_toan != cau:
+            yield f"data: {json.dumps({'replace': an_toan}, ensure_ascii=False)}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        dong_su_kien(),
+        media_type="text/event-stream",
+        # Tắt đệm ở mọi lớp trung gian: một proxy gom dòng lại rồi nhả một lần là
+        # mất sạch ý nghĩa của việc stream.
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+def _kiem_cau_tra_loi(cau: str, payload: dict) -> str:
+    """Trả về chính câu đó nếu đạt, hoặc câu an toàn nếu không.
+
+    Dùng đúng bộ kiểm của đường không-stream, nên hai đường không thể trôi khỏi
+    nhau về mặt an toàn số liệu.
+    """
+    if not cau:
+        return "Chưa thể tạo câu trả lời an toàn từ dữ liệu hiện có. Vui lòng thử lại."
+    if _looks_out_of_scope(cau):
+        return "Tôi chỉ hỗ trợ các câu hỏi liên quan đến ứng phó cứu hộ, hậu cần và dữ liệu kho."
+    try:
+        chuan = _normalize_plain_answer(cau, payload)
+        _validate_plain_numbers(chuan, payload)
+        return _redact_identity(chuan.strip())
+    except (ValueError, ValidationError):
+        return "Chưa thể tạo câu trả lời an toàn từ dữ liệu hiện có. Vui lòng thử lại."
 
 
 @app.post("/knowledge/search")

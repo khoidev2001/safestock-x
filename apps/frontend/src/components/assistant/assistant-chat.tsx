@@ -4,7 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { ColorIcon } from "@/components/shared/color-icon";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { askAssistant } from "@/lib/assistant-api";
+import { streamAssistant } from "@/lib/assistant-api";
 import { ApiError } from "@/lib/api";
 import { useIncidentAlerts } from "@/lib/incident-alert-store";
 
@@ -54,20 +54,78 @@ export function AssistantChat({
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const renderedAlertIds = useRef<Set<string>>(new Set());
+  const boHuyRef = useRef<AbortController | null>(null);
   const alerts = useIncidentAlerts((s) => s.alerts);
 
+  /**
+   * Ghi đè bong bóng trả lời đang dở.
+   *
+   * Chữ chảy về từng mẩu nên không thể thêm bong bóng mới mỗi lần; phải sửa đúng
+   * bong bóng cuối. Kiểm `role` trước khi sửa vì cảnh báo sự cố có thể chen vào
+   * giữa lúc đang chảy — sửa nhầm là xoá mất cảnh báo.
+   */
+  function capNhatBongBongCuoi(text: string, dispatchFrom?: string) {
+    setTurns((currentTurns) => {
+      const cuoi = currentTurns.length - 1;
+      if (
+        cuoi < 0 ||
+        currentTurns[cuoi].role !== "assistant" ||
+        currentTurns[cuoi].kind === "alert"
+      ) {
+        return [...currentTurns, { role: "assistant", text, dispatchFrom }];
+      }
+      const capNhat = [...currentTurns];
+      capNhat[cuoi] = { ...capNhat[cuoi], text, dispatchFrom };
+      return capNhat;
+    });
+    scrollToLatest();
+  }
+
   const ask = useMutation({
-    mutationFn: (question: string) => askAssistant(warehouseId, question),
-    onSuccess: (response, question) =>
-      appendAssistantTurn(response.answer, response.emergency ? question : undefined),
+    mutationFn: async (question: string) => {
+      boHuyRef.current?.abort();
+      const boHuy = new AbortController();
+      boHuyRef.current = boHuy;
+
+      // KHÔNG đặt sẵn bong bóng rỗng: `capNhatBongBongCuoi` tự thêm khi mẩu chữ
+      // đầu tiên về. Bong bóng rỗng đứng cạnh dòng "đang phân tích" là một ô trắng
+      // trơ ra không rõ nghĩa, mà lúc AI chết thì nó nằm lại vĩnh viễn.
+      let cau = "";
+      let khanCap = false;
+      let loi: string | null = null;
+
+      for await (const manh of streamAssistant(warehouseId, question, boHuy.signal)) {
+        if (manh.emergency) khanCap = true;
+        if (manh.error) {
+          loi = manh.error;
+          continue;
+        }
+        // `replace` THAY trọn câu chứ không nối thêm: lớp chống bịa số ở ai-service
+        // chỉ chốt được sau khi đọc hết, nên nó gửi lại nguyên câu đã kiểm.
+        if (manh.replace !== undefined) cau = manh.replace;
+        else if (manh.delta) cau += manh.delta;
+        else continue;
+        capNhatBongBongCuoi(cau, khanCap ? question : undefined);
+      }
+
+      const cauCuoi = cau.trim() || loi || "Trợ lý AI tạm thời không phản hồi. Thử lại sau.";
+      capNhatBongBongCuoi(cauCuoi, khanCap ? question : undefined);
+      if (compact && isLongResponse(cauCuoi)) onLongResponse?.();
+    },
     onError: (error) => {
-      appendAssistantTurn(getAssistantErrorMessage(error));
+      // Người dùng tự bỏ ngang thì không phải lỗi, đừng dán câu báo lỗi vào mặt họ.
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      capNhatBongBongCuoi(getAssistantErrorMessage(error));
     },
   });
 
   useEffect(() => {
     if (isActive) inputRef.current?.focus();
   }, [isActive]);
+
+  // Rời màn hình giữa lúc đang chảy thì cắt luôn: mô hình chạy trên card dùng
+  // chung, sinh chữ cho một khung đã đóng là lấy mất chỗ của lượt hỏi kế tiếp.
+  useEffect(() => () => boHuyRef.current?.abort(), []);
 
   // Trộn cảnh báo AI (sự cố mới đã giải thích) thành bong bóng chủ động; dedupe theo id.
   useEffect(() => {
@@ -92,12 +150,6 @@ export function AssistantChat({
         behavior: "smooth",
       });
     });
-  }
-
-  function appendAssistantTurn(text: string, dispatchFrom?: string) {
-    setTurns((currentTurns) => [...currentTurns, { role: "assistant", text, dispatchFrom }]);
-    if (compact && isLongResponse(text)) onLongResponse?.();
-    scrollToLatest();
   }
 
   /** Mở luồng điều phối với lời kể đã điền sẵn — không bắt gõ lại. */

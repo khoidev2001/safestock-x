@@ -35,6 +35,36 @@ export async function apiFetch<T = unknown>(path: string, options: RequestInit =
   return handle<T>(await rawFetch(path, options));
 }
 
+/**
+ * Như `apiFetch` nhưng TRẢ NGUYÊN Response để bên gọi tự đọc theo dòng.
+ *
+ * `apiFetch` gọi `response.text()` — nó đợi trọn thân trả lời rồi mới trả về, tức
+ * là nuốt mất đúng cái tính chảy dần mà đường này cần. Vẫn giữ nguyên luật gia hạn
+ * phiên khi gặp 401, vì hết phiên giữa lúc đang hỏi là chuyện thường.
+ */
+export async function apiStream(path: string, options: RequestInit = {}): Promise<Response> {
+  let response = await rawFetch(path, options);
+  if (response.status === 401) {
+    const refreshed = await tryRefresh();
+    if (!refreshed) {
+      useAuth.getState().clear();
+      throw new ApiError(401, "Phiên đăng nhập hết hạn");
+    }
+    response = await rawFetch(path, options);
+  }
+  if (!response.ok || !response.body) {
+    const text = await response.text().catch(() => "");
+    let message = `Lỗi ${response.status}`;
+    try {
+      message = JSON.parse(text)?.message ?? message;
+    } catch {
+      // Thân trả lời không phải JSON thì giữ nguyên câu theo mã lỗi.
+    }
+    throw new ApiError(response.status, message);
+  }
+  return response;
+}
+
 function rawFetch(path: string, options: RequestInit) {
   const { token } = useAuth.getState();
   return fetch(`${BASE}${path}`, {

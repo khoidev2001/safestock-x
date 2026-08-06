@@ -54,6 +54,60 @@ export class AssistantService {
   }
 
   /**
+   * Hỏi-đáp theo DÒNG CHỮ, cùng luật với `ask` chứ không phải một đường riêng.
+   *
+   * Ba nhánh trả lời tức thời (khẩn cấp, câu hỏi trả nhanh, đường lui khi AI chết)
+   * vẫn giữ nguyên; chúng chỉ phát ra một mẩu duy nhất rồi đóng. Nếu tách hẳn hai
+   * đường thì cùng một câu hỏi sẽ nhận hai câu trả lời khác nhau tuỳ giao diện gọi
+   * đường nào — đó là lúc người trực hết tin vào trợ lý.
+   */
+  async *askStream(warehouseId: string, question: string): AsyncGenerator<string> {
+    const emergency = detectEmergencySignal(question);
+
+    let snapshot: AssistantSnapshot;
+    try {
+      snapshot = await this.buildSnapshot(
+        warehouseId,
+        emergency ? true : isWeatherQuestion(question),
+      );
+    } catch (error) {
+      // Kho không tồn tại là lỗi của người gọi, phải nói thẳng. Còn lại thì sự cố
+      // vẫn có đường lui.
+      if (error instanceof NotFoundException) throw error;
+      const fallback = emergency ? resolveEmergencyAnswer(question) : null;
+      if (!fallback)
+        throw new ServiceUnavailableException("Trợ lý AI tạm thời không phản hồi. Thử lại sau.");
+      yield JSON.stringify({ emergency });
+      yield JSON.stringify({ delta: fallback });
+      return;
+    }
+
+    if (emergency) yield JSON.stringify({ emergency });
+    else {
+      const fastAnswer = resolveAssistantFastAnswer(question, snapshot);
+      if (fastAnswer) {
+        yield JSON.stringify({ delta: fastAnswer });
+        return;
+      }
+    }
+
+    let coChu = false;
+    try {
+      for await (const suKien of this.ai.assistantStream(question, JSON.stringify(snapshot))) {
+        if (suKien === "[DONE]") break;
+        if (suKien.includes('"delta"')) coChu = true;
+        yield suKien;
+      }
+    } catch {
+      // Đứt giữa chừng: đã có chữ trên màn hình thì đừng xoá đi, người đọc mất
+      // luôn phần đã đọc. Chưa có chữ nào mới được phép thay bằng đường lui.
+      const fallback = emergency ? resolveEmergencyAnswer(question) : null;
+      if (!coChu && fallback) yield JSON.stringify({ delta: fallback });
+      else yield JSON.stringify({ error: "Trợ lý AI tạm thời không phản hồi. Thử lại sau." });
+    }
+  }
+
+  /**
    * Trả lời một sự việc cần cứu hộ: để AI đọc tình huống trên nền tồn kho thật.
    *
    * Trước đây nhánh này chặn ngay bằng câu dựng sẵn, nên trợ lý trả lời giống hệt

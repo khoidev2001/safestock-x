@@ -1,4 +1,5 @@
 """Adapter Ollama — local, 0đ, offline (production). Không cần key."""
+import json
 from typing import Any
 
 import httpx
@@ -51,3 +52,39 @@ class OllamaProvider(LLMProvider):
             response = client.post(f"{self._base_url}/api/generate", json=payload)
             response.raise_for_status()
             return response.json()["response"]
+
+    def stream_text(self, system_prompt: str, user_prompt: str):
+        """Sinh văn bản theo DÒNG, nhả từng mẩu chữ ngay khi mô hình trả ra.
+
+        Ollama trả về mỗi mẩu một dòng JSON khi bật `stream`. Đọc từng dòng thay vì
+        chờ trọn câu trả lời là khác biệt giữa "màn hình đứng im tám giây" và "chữ
+        bắt đầu chạy sau nửa giây" — cùng một tổng thời gian, nhưng người dùng biết
+        máy đang làm việc thay vì tưởng nó treo.
+
+        Dòng hỏng thì BỎ QUA chứ không làm đứt cả luồng: mất một mẩu chữ còn hơn
+        mất cả câu trả lời đang chạy dở.
+        """
+        payload = {
+            "model": self._model,
+            "system": system_prompt,
+            "prompt": user_prompt,
+            "stream": True,
+            "think": False,
+            "keep_alive": KEEP_ALIVE,
+            "options": {"temperature": 0.1, "num_predict": 512},
+        }
+        with httpx.Client(timeout=_TIMEOUT) as client:
+            with client.stream("POST", f"{self._base_url}/api/generate", json=payload) as response:
+                response.raise_for_status()
+                for line in response.iter_lines():
+                    if not line:
+                        continue
+                    try:
+                        mau = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    manh = mau.get("response")
+                    if manh:
+                        yield manh
+                    if mau.get("done"):
+                        return
