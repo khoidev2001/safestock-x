@@ -8,10 +8,13 @@ import {
 import {
   InterCommuneLoanDirection,
   InterCommuneLoanStatus,
+  NotificationKind,
   TransactionSource,
+  UserRole,
 } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { InventoryService } from "../inventory/inventory.service";
+import { NotificationService } from "../notification/notification.service";
 import { findPeer, parseCommunePeers } from "./commune-peer-registry";
 import {
   actorOf,
@@ -51,6 +54,7 @@ export class InterCommuneLoanService {
   constructor(
     private prisma: PrismaService,
     private inventory: InventoryService,
+    private notifications: NotificationService,
   ) {}
 
   /** Danh sách khoản mượn của xã đang đăng nhập, cả hai chiều. */
@@ -153,6 +157,10 @@ export class InterCommuneLoanService {
           // Khoá chống nhận trùng lấy theo id bản ghi bên gửi: gửi lại bao nhiêu
           // lần cũng chỉ ra một khoản mượn bên nhận.
           inboundKey: `loan:${loan.id}`,
+          // Nói rõ gửi cho xã nào. Thiếu chỗ này thì máy chủ nhận phải đoán, và
+          // khi một máy chủ phục vụ nhiều xã thì nó đoán nhầm sang xã khác —
+          // yêu cầu mượn hiện lên màn hình của người không liên quan.
+          toCommuneName: loan.peerCommuneName,
           itemSku: loan.itemSku,
           itemName: loan.itemName,
           unit: loan.unit,
@@ -208,17 +216,21 @@ export class InterCommuneLoanService {
     //
     // Nhận ra bằng chính dữ liệu, không cần khai thêm địa chỉ của mình: id bản
     // ghi bên gửi mà đã có sẵn trong cơ sở dữ liệu này thì người gửi chính là ta.
-    const laChinhMinh = await this.prisma.interCommuneLoan.findUnique({
+    const banGhiGoc = await this.prisma.interCommuneLoan.findUnique({
       where: { id: input.peerLoanId },
-      select: { id: true },
+      select: { organizationId: true },
     });
-    if (laChinhMinh) {
+    // So theo ĐƠN VỊ chứ không chỉ theo sự tồn tại: hai xã hoàn toàn có thể dùng
+    // chung một cơ sở dữ liệu (một máy chủ phục vụ cả hai), và khi đó bản ghi bên
+    // gửi nằm ngay đây là chuyện bình thường. Chỉ khi nó thuộc CÙNG đơn vị sắp
+    // nhận thì mới đúng là tự gửi cho chính mình.
+    if (banGhiGoc && banGhiGoc.organizationId === input.organizationId) {
       throw new BadRequestException(
         "Địa chỉ xã lân cận đang trỏ về chính máy chủ này. Sửa lại COMMUNE_PEER_* trong .env.",
       );
     }
 
-    return this.prisma.interCommuneLoan.create({
+    const loan = await this.prisma.interCommuneLoan.create({
       data: {
         organizationId: input.organizationId,
         direction: InterCommuneLoanDirection.OUTGOING,
@@ -234,6 +246,20 @@ export class InterCommuneLoanService {
         note: input.note?.trim() || null,
       },
     });
+
+    // Thông báo LÀ sợi dây duy nhất giữa hai xã: hai cơ sở dữ liệu tách rời,
+    // không ai đọc được của ai. Ghi bản ghi mà không báo thì yêu cầu nằm im
+    // trong tab Mượn trả cho tới khi tình cờ có người mở ra xem — mà lúc cần
+    // mượn gấp thì không ai đi mở từng tab.
+    await this.notifications.create({
+      organizationId: input.organizationId,
+      recipientRole: UserRole.ADMIN,
+      kind: NotificationKind.INTER_WAREHOUSE_REQUEST,
+      title: `${input.peerCommuneName} xin mượn ${input.quantity} ${input.unit} ${input.itemName}`,
+      body: input.note?.trim() || "Mở tab Mượn trả để đồng ý hoặc từ chối.",
+      warehouseId: input.warehouseId,
+    });
+    return loan;
   }
 
   /**
@@ -252,15 +278,30 @@ export class InterCommuneLoanService {
       unit: string;
       quantity: number;
       note?: string;
+      toCommuneName?: string;
     },
   ) {
     // Sắp theo ngày tạo để chọn ổn định: `findFirst` không kèm thứ tự thì mỗi
     // lần gọi có thể ra một kho khác khi cơ sở dữ liệu có nhiều đơn vị.
-    const warehouse = await this.prisma.warehouse.findFirst({
-      where: { kind: "CENTRAL" },
-      orderBy: { createdAt: "asc" },
-      select: { id: true, organizationId: true },
-    });
+    // Ưu tiên đúng xã mà bên gửi chỉ định. Chỉ khi họ không nói, hoặc nói một tên
+    // không có ở đây, mới lùi về kho trung tâm đầu tiên — đúng cho trường hợp
+    // thường gặp nhất là một máy chủ phục vụ đúng một xã.
+    const theoTen = dto.toCommuneName?.trim()
+      ? await this.prisma.warehouse.findFirst({
+          where: {
+            kind: "CENTRAL",
+            organization: { name: { contains: dto.toCommuneName.trim(), mode: "insensitive" } },
+          },
+          select: { id: true, organizationId: true },
+        })
+      : null;
+    const warehouse =
+      theoTen ??
+      (await this.prisma.warehouse.findFirst({
+        where: { kind: "CENTRAL" },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, organizationId: true },
+      }));
     if (!warehouse) throw new NotFoundException("Xã này chưa cấu hình kho trung tâm");
 
     return this.receiveRequestFromPeer({
@@ -437,7 +478,118 @@ export class InterCommuneLoanService {
       }
     }
 
-    return this.prisma.interCommuneLoan.findUnique({ where: { id: loan.id } });
+    const daCapNhat = await this.prisma.interCommuneLoan.findUnique({ where: { id: loan.id } });
+    if (daCapNhat) void this.pushStatusToPeer(daCapNhat).catch(() => undefined);
+    return daCapNhat;
+  }
+
+  /**
+   * Báo trạng thái mới sang xã kia.
+   *
+   * Thiếu chiều này thì tính năng đứng hình ngay ở bước hai: xã cho mượn bấm
+   * "đồng ý", nhưng bản ghi bên xã đi mượn vẫn nằm ở "chờ bên kia quyết" và
+   * KHÔNG có nút nào đi tiếp. Mỗi bên tự biết việc mình làm mà bên kia không hay.
+   *
+   * Bên nhận chỉ chép lại trạng thái, KHÔNG đụng kho: kho của họ chỉ đổi bởi
+   * chính thao tác của họ. Đây đúng là điều luật trạng thái đã nói — bên không
+   * thực hiện bước thì hiệu ứng kho là NONE.
+   */
+  private async pushStatusToPeer(loan: {
+    peerLoanId: string | null;
+    peerCommuneName: string;
+    status: string;
+    returnedQuantity: number;
+  }): Promise<void> {
+    if (!loan.peerLoanId) return;
+    const peer = findPeer(parseCommunePeers(process.env), loan.peerCommuneName);
+    if (!peer) return;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10_000);
+    try {
+      await fetch(`${peer.baseUrl}/api/loans/inter-commune/peer-status`, {
+        method: "POST",
+        signal: controller.signal,
+        headers: { "Content-Type": "application/json", "X-Commune-Key": peer.sharedKey },
+        body: JSON.stringify({
+          loanId: loan.peerLoanId,
+          status: loan.status,
+          returnedQuantity: loan.returnedQuantity,
+        }),
+      });
+    } catch {
+      // Không báo được thì thôi: sổ phía mình vẫn đúng, hai bên đối chiếu bằng
+      // điện thoại như vẫn làm. Không được để lỗi báo tin làm hỏng thao tác kho.
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
+   * Nhận thông báo trạng thái từ xã kia.
+   *
+   * Chỉ chép trạng thái, không chuyển kho, và chỉ chấp nhận bước hợp lệ theo luật
+   * — bên kia gửi sai thì bản ghi phía mình vẫn không nhảy lung tung.
+   */
+  async syncStatusFromPeer(input: {
+    loanId: string;
+    status: InterCommuneStatus;
+    returnedQuantity: number;
+  }) {
+    const loan = await this.prisma.interCommuneLoan.findUnique({ where: { id: input.loanId } });
+    if (!loan) throw new NotFoundException("Không tìm thấy khoản mượn");
+    if (loan.status === input.status && loan.returnedQuantity === input.returnedQuantity) {
+      return loan; // Báo lại lần nữa thì không đổi gì.
+    }
+    if (!findTransition(loan.status as InterCommuneStatus, input.status)) {
+      throw new BadRequestException(
+        `Không thể chuyển khoản mượn từ ${loan.status} sang ${input.status}`,
+      );
+    }
+    await this.notifyPeerDecision(loan, input.status);
+    const now = new Date();
+    return this.prisma.interCommuneLoan.update({
+      where: { id: loan.id },
+      data: {
+        status: input.status as InterCommuneLoanStatus,
+        returnedQuantity: input.returnedQuantity,
+        decidedAt: loan.decidedAt ?? now,
+        receivedAt: input.status === "ACTIVE" ? now : loan.receivedAt,
+        returnedAt: input.status === "RETURNED" ? now : loan.returnedAt,
+      },
+    });
+  }
+
+  /** Báo cho người của xã mình biết bên kia vừa quyết gì. */
+  private async notifyPeerDecision(
+    loan: {
+      organizationId: string;
+      warehouseId: string | null;
+      peerCommuneName: string;
+      itemName: string;
+      quantity: number;
+      unit: string;
+    },
+    status: InterCommuneStatus,
+  ) {
+    const cau: Partial<Record<InterCommuneStatus, string>> = {
+      APPROVED: `${loan.peerCommuneName} ĐỒNG Ý cho mượn ${loan.quantity} ${loan.unit} ${loan.itemName}`,
+      REJECTED: `${loan.peerCommuneName} từ chối cho mượn ${loan.itemName}`,
+      ACTIVE: `${loan.peerCommuneName} đã nhận ${loan.quantity} ${loan.unit} ${loan.itemName}`,
+      PARTIALLY_RETURNED: `${loan.peerCommuneName} đã trả một phần ${loan.itemName}`,
+      RETURNED: `${loan.peerCommuneName} đã trả xong ${loan.itemName}`,
+      CANCELLED: `${loan.peerCommuneName} đã huỷ khoản mượn ${loan.itemName}`,
+    };
+    const title = cau[status];
+    if (!title) return;
+    await this.notifications.create({
+      organizationId: loan.organizationId,
+      recipientRole: UserRole.ADMIN,
+      kind: NotificationKind.INTER_WAREHOUSE_REQUEST,
+      title,
+      body: "Mở tab Mượn trả để xem chi tiết.",
+      warehouseId: loan.warehouseId ?? undefined,
+    });
   }
 
   private async moveStock(effect: "DEDUCT" | "ADD" | "NONE", input: MoveStockInput) {

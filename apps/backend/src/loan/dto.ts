@@ -150,4 +150,39 @@ export class InboundInterCommuneLoanDto {
   @IsString()
   @MaxLength(500)
   note?: string;
+
+  /** Xã nào ở phía nhận. Máy chủ phục vụ nhiều xã thì thiếu cái này là đoán nhầm. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  toCommuneName?: string;
+}
+
+/** Xã kia báo trạng thái mới của một khoản mượn. */
+export class PeerStatusDto {
+  @IsString()
+  @MaxLength(80)
+  loanId!: string;
+
+  @IsIn([
+    "REQUESTED",
+    "APPROVED",
+    "REJECTED",
+    "CANCELLED",
+    "ACTIVE",
+    "PARTIALLY_RETURNED",
+    "RETURNED",
+  ])
+  status!:
+    | "REQUESTED"
+    | "APPROVED"
+    | "REJECTED"
+    | "CANCELLED"
+    | "ACTIVE"
+    | "PARTIALLY_RETURNED"
+    | "RETURNED";
+
+  @IsInt()
+  @Min(0)
+  returnedQuantity!: number;
 }

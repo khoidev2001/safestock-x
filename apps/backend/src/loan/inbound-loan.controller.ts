@@ -1,6 +1,6 @@
 import { Body, Controller, Post, Request, UseGuards, ValidationPipe } from "@nestjs/common";
 import { CommunePeerGuard, type PeerRequest } from "./commune-peer.guard";
-import { InboundInterCommuneLoanDto } from "./dto";
+import { InboundInterCommuneLoanDto, PeerStatusDto } from "./dto";
 import { InterCommuneLoanService } from "./inter-commune-loan.service";
 
 /**
@@ -22,5 +22,14 @@ export class InboundLoanController {
     dto: InboundInterCommuneLoanDto,
   ) {
     return this.interCommune.receiveFromPeerServer(req.peer!.communeName, dto);
+  }
+
+  /** Xã kia báo trạng thái mới của khoản mượn. */
+  @Post("peer-status")
+  syncStatus(
+    @Body(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
+    dto: PeerStatusDto,
+  ) {
+    return this.interCommune.syncStatusFromPeer(dto);
   }
 }
