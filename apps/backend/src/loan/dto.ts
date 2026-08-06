@@ -156,6 +156,22 @@ export class InboundInterCommuneLoanDto {
   @IsString()
   @MaxLength(120)
   toCommuneName?: string;
+
+  /**
+   * Xã GỬI tự xưng tên.
+   *
+   * Bên nhận vẫn suy được tên xã gửi từ khoá máy trong sổ đăng ký, nhưng đó là
+   * chỗ dựa mong manh: nó chỉ đúng chừng nào mỗi khoá đại diện đúng một xã. Ai
+   * biết tên xã gửi rõ nhất? Chính xã gửi. Hỏi thẳng nó thì không phải suy.
+   *
+   * Chỉ là NHÃN HIỂN THỊ, không phải danh tính. Quyền gửi đã chốt ở khoá máy từ
+   * trước khi đọc tới đây; ai không có khoá thì không vào được, còn ai có khoá
+   * thì vốn đã gửi được rồi, khai tên gì cũng không mở thêm cửa nào.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  fromCommuneName?: string;
 }
 
 /** Xã kia báo trạng thái mới của một khoản mượn. */

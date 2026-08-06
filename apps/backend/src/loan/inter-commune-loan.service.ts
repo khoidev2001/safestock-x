@@ -217,6 +217,7 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
    */
   private async sendToPeer(loan: {
     id: string;
+    organizationId: string;
     peerCommuneName: string;
     itemSku: string;
     itemName: string;
@@ -250,6 +251,10 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
           // khi một máy chủ phục vụ nhiều xã thì nó đoán nhầm sang xã khác —
           // yêu cầu mượn hiện lên màn hình của người không liên quan.
           toCommuneName: loan.peerCommuneName,
+          // Tự xưng tên thay vì để bên kia suy từ khoá máy. Bên gửi là bên biết
+          // rõ tên mình nhất; suy ngược từ khoá chỉ đúng chừng nào mỗi khoá đại
+          // diện đúng một xã, mà đó là điều kiện không ai bảo đảm được mãi.
+          fromCommuneName: await this.tenXaCuaMinh(loan.organizationId),
           itemSku: loan.itemSku,
           itemName: loan.itemName,
           unit: loan.unit,
@@ -382,8 +387,16 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
       quantity: number;
       note?: string;
       toCommuneName?: string;
+      fromCommuneName?: string;
     },
   ) {
+    // Tên xã gửi: ưu tiên tên họ tự khai, lùi về tên suy từ khoá máy khi họ không
+    // nói (bản cũ, hoặc máy chủ chưa cập nhật).
+    //
+    // Đây chỉ là NHÃN, không phải danh tính: quyền gửi đã chốt ở khoá máy trước
+    // khi vào tới đây. Ai không có khoá thì không vào được; ai có khoá thì vốn đã
+    // gửi được rồi, khai tên gì cũng không mở thêm cửa nào.
+    const tenXaGui = dto.fromCommuneName?.trim() || peerCommuneName;
     // Sắp theo ngày tạo để chọn ổn định: `findFirst` không kèm thứ tự thì mỗi
     // lần gọi có thể ra một kho khác khi cơ sở dữ liệu có nhiều đơn vị.
     // Ưu tiên đúng xã mà bên gửi chỉ định. Chỉ khi họ không nói, hoặc nói một tên
@@ -407,11 +420,14 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
       }));
     if (!warehouse) throw new NotFoundException("Xã này chưa cấu hình kho trung tâm");
 
+    // Bóc `fromCommuneName` ra: nó là thông tin đường truyền, không phải cột của
+    // bản ghi. Để nó lọt vào là nhét một trường lạ xuống tầng lưu trữ.
+    const { fromCommuneName: _boQua, ...duLieu } = dto;
     return this.receiveRequestFromPeer({
       organizationId: warehouse.organizationId,
       warehouseId: warehouse.id,
-      peerCommuneName,
-      ...dto,
+      ...duLieu,
+      peerCommuneName: tenXaGui,
     });
   }
 
@@ -776,6 +792,25 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
    * `organizationId`, và thêm trường vào token nghĩa là mọi phiên đang đăng nhập
    * phải đăng nhập lại — cái giá không đáng cho một truy vấn.
    */
+  /**
+   * Tên xã của chính mình, rút gọn khỏi tên đơn vị đầy đủ.
+   *
+   * Đơn vị lưu là "Hội Chữ thập đỏ xã Đồng Xuân" nhưng bên kia chỉ cần "Đồng
+   * Xuân" — họ đối chiếu tên này với tên xã đã gõ lúc gửi yêu cầu, mà lúc đó
+   * người dùng gõ tên xã chứ không gõ tên hội.
+   */
+  private async tenXaCuaMinh(organizationId: string): Promise<string | undefined> {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { name: true },
+    });
+    if (!org) return undefined;
+    // Cắt tại "xã"/"phường"/"thị trấn" nếu có; không có thì trả nguyên tên thay
+    // vì đoán bừa — tên nguyên vẹn vẫn đọc được, tên cắt sai thì không.
+    const khop = /(?:^|\s)(?:xã|phường|thị trấn)\s+(.+)$/iu.exec(org.name.trim());
+    return (khop?.[1] ?? org.name).trim() || undefined;
+  }
+
   private async orgOf(userId: string): Promise<string> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
