@@ -66,7 +66,7 @@ giờ bị nó làm câm.
 | Tổng quan | ✅ | ✅ | — |
 | Điều phối cứu hộ | ✅ | ✅ | ✅ |
 | Theo dõi, dự báo | ✅ | ✅ | — |
-| Tra cứu kho | ✅ | ✅ | — |
+| Trợ lý nổi (nút góc phải dưới) | ✅ | ✅ | — |
 | Vật tư | ✅ | ✅ | — |
 | Kiểm kê | ✅ | ✅ | — |
 | Mượn, trả | ✅ | ✅ | — |

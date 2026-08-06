@@ -24,16 +24,31 @@ theo thứ tự seed nên muốn biết ai giữ kho nào phải tra bảng.
 | `admin` | `admin123@` | Quản trị xã | Toàn xã |
 | `staff@ungphonhanh.life` | `staff123` | Phụ trách kho | Kho cứu trợ trung tâm Đồng Xuân |
 | `rescue@ungphonhanh.life` | `rescue123` | Lực lượng hiện trường | Toàn xã |
+| `iot@ungphonhanh.life` | `iot123456` | App IoT (giả lập cảm biến) | Kho trung tâm |
 
 Lưu ý tên đăng nhập của quản trị là **`admin`**, không phải địa chỉ email.
 
+App IoT phải dùng **tài khoản riêng `iot@`**, không dùng chung `admin`. Mỗi lượt
+đăng nhập đều xoay khoá phiên của tài khoản đó, nên hai máy dùng chung một tài
+khoản sẽ đá nhau: web đăng nhập là app IoT rớt phiên, số liệu đã chỉnh nằm lại
+hàng chờ và không bao giờ gửi đi.
+
 ### Dùng ở đâu
 
-| Ứng dụng | Tài khoản dùng được |
-|---|---|
-| Web | cả ba, mỗi vai thấy một tập chức năng khác nhau |
-| Điện thoại | `staff@` (giao diện kho) · `rescue@` (giao diện hiện trường) · `admin` (chỉ quét QR) |
-| Desktop | **chỉ `admin`** — chỉ vai này có quyền bơm số liệu mô phỏng |
+Bảng này theo đúng kiến trúc trong PRD §945: **IoT chỉ có ở kho trung tâm**; kho
+thôn không có thiết bị, vận hành bằng điện thoại.
+
+| Nơi làm việc | Thiết bị | Tài khoản |
+|---|---|---|
+| Quản trị xã | Máy tính (web) | `admin` |
+| **Kho trung tâm** | **Máy tính riêng**: web + app IoT | `staff@` cho web · `iot@` cho app IoT |
+| **Kho thôn** (17 kho) | **Điện thoại** | `<tênthôn>@` — trưởng thôn tự quản kho của mình |
+| Lực lượng hiện trường | Điện thoại | `rescue@` |
+
+Vì sao kho trung tâm cần **hai** tài khoản trên cùng một máy: mỗi lượt đăng nhập
+xoay khoá phiên của tài khoản đó, nên web và app IoT dùng chung một tài khoản sẽ
+đá nhau. App IoT là một THIẾT BỊ, cho nó danh tính riêng vừa tránh va chạm vừa
+giúp nhật ký phân biệt số liệu do thiết bị bơm với thao tác do người làm.
 
 ---
 

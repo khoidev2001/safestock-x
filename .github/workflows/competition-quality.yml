@@ -82,23 +82,30 @@ jobs:
         run: pnpm --filter @safestock/backend build
 
       - name: Shared coordination contract
-        run: pnpm --filter @safestock/shared-types test:coordination
+        run: |
+          pnpm --filter @safestock/shared-types test:coordination
+          pnpm --filter @safestock/shared-types test:briefing
 
       - name: Frontend state contracts and production build
         run: |
           pnpm --filter @safestock/frontend test:mission-inbox
           pnpm --filter @safestock/frontend test:map-marker-state
           pnpm --filter @safestock/frontend test:map-labels
+          pnpm --filter @safestock/frontend test:workflow-progress
+          pnpm --filter @safestock/frontend test:audio-wav
+          pnpm --filter @safestock/frontend test:session-marker
           pnpm --filter @safestock/frontend build
 
       - name: Mobile state and dependency contracts
         run: |
           pnpm --filter @safestock/mobile test:state
           pnpm --filter @safestock/mobile test:resolution
+          pnpm --filter @safestock/desktop test:login-error
 
       - name: Desktop typecheck and bundle
         run: |
           pnpm --filter @safestock/desktop typecheck
+          pnpm --filter @safestock/desktop test:queue
           pnpm --filter @safestock/desktop build
 
       - name: Offline routing artifact contracts
