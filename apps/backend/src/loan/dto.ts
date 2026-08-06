@@ -119,3 +119,35 @@ export class AdvanceInterCommuneLoanDto {
   @MaxLength(500)
   reason?: string;
 }
+
+/** Yêu cầu mượn do máy chủ xã lân cận đẩy sang. */
+export class InboundInterCommuneLoanDto {
+  @IsString()
+  @MaxLength(80)
+  peerLoanId!: string;
+
+  @IsString()
+  @MaxLength(160)
+  inboundKey!: string;
+
+  @IsString()
+  @MaxLength(60)
+  itemSku!: string;
+
+  @IsString()
+  @MaxLength(160)
+  itemName!: string;
+
+  @IsString()
+  @MaxLength(40)
+  unit!: string;
+
+  @IsInt()
+  @Min(1)
+  quantity!: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
+}

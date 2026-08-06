@@ -1,13 +1,14 @@
 import { Module } from "@nestjs/common";
 import { InventoryModule } from "../inventory/inventory.module";
 import { ReadinessModule } from "../readiness/readiness.module";
+import { InboundLoanController } from "./inbound-loan.controller";
 import { LoanController } from "./loan.controller";
 import { LoanService } from "./loan.service";
 import { InterCommuneLoanService } from "./inter-commune-loan.service";
 
 @Module({
   imports: [ReadinessModule, InventoryModule],
-  controllers: [LoanController],
+  controllers: [LoanController, InboundLoanController],
   providers: [LoanService, InterCommuneLoanService],
   exports: [LoanService, InterCommuneLoanService],
 })

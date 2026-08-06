@@ -12,6 +12,7 @@ import {
 } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { InventoryService } from "../inventory/inventory.service";
+import { findPeer, parseCommunePeers } from "./commune-peer-registry";
 import {
   actorOf,
   findTransition,
@@ -91,7 +92,7 @@ export class InterCommuneLoanService {
     note?: string;
   }) {
     this.assertQuantity(input.quantity);
-    return this.prisma.interCommuneLoan.create({
+    const loan = await this.prisma.interCommuneLoan.create({
       data: {
         organizationId: await this.orgOf(input.userId),
         direction: InterCommuneLoanDirection.INCOMING,
@@ -106,6 +107,71 @@ export class InterCommuneLoanService {
         createdByUserId: input.userId,
       },
     });
+
+    // Gửi sang xã kia SAU KHI đã ghi sổ phía mình, và không để lỗi gửi làm hỏng
+    // việc ghi sổ. Mất mạng là chuyện thường lúc thiên tai; yêu cầu vẫn nằm đó,
+    // người dùng gọi điện rồi ghi tay như hai xã vẫn làm với nhau từ trước.
+    void this.sendToPeer(loan).catch(() => undefined);
+    return loan;
+  }
+
+  /**
+   * Đẩy yêu cầu sang máy chủ xã kia.
+   *
+   * Ghi lại `peerLoanId` khi gửi được: đó chính là dấu hiệu duy nhất cho người
+   * dùng biết bên kia ĐÃ nhận. Không có nó thì màn hình không phân biệt được
+   * "đang chờ họ trả lời" với "họ chưa hề biết có yêu cầu này".
+   */
+  private async sendToPeer(loan: {
+    id: string;
+    peerCommuneName: string;
+    itemSku: string;
+    itemName: string;
+    unit: string;
+    quantity: number;
+    note: string | null;
+  }): Promise<void> {
+    const peer = findPeer(parseCommunePeers(process.env), loan.peerCommuneName);
+    if (!peer) return;
+
+    // Hạn chờ ngắn: đây là việc phụ chạy nền, không được giữ tài nguyên khi
+    // đường truyền giữa hai xã đang chập chờn.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const response = await fetch(`${peer.baseUrl}/api/loans/inter-commune/inbound`, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          // Chỉ gửi khoá. Tên xã đi trong THÂN yêu cầu vì header không mang được
+          // chữ có dấu, mà tên xã nào ở đây cũng có dấu.
+          "X-Commune-Key": peer.sharedKey,
+        },
+        body: JSON.stringify({
+          peerLoanId: loan.id,
+          // Khoá chống nhận trùng lấy theo id bản ghi bên gửi: gửi lại bao nhiêu
+          // lần cũng chỉ ra một khoản mượn bên nhận.
+          inboundKey: `loan:${loan.id}`,
+          itemSku: loan.itemSku,
+          itemName: loan.itemName,
+          unit: loan.unit,
+          quantity: loan.quantity,
+          note: loan.note ?? undefined,
+        }),
+      });
+      if (!response.ok) return;
+      const created = (await response.json()) as { id?: string };
+      if (!created?.id) return;
+      await this.prisma.interCommuneLoan.update({
+        where: { id: loan.id },
+        data: { peerLoanId: created.id },
+      });
+    } catch {
+      // Không gửi được thì thôi; bản ghi phía mình vẫn còn nguyên.
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   /**
@@ -149,6 +215,38 @@ export class InterCommuneLoanService {
         warehouseId: input.warehouseId,
         note: input.note?.trim() || null,
       },
+    });
+  }
+
+  /**
+   * Nhận yêu cầu do máy chủ xã lân cận đẩy sang.
+   *
+   * Xã nhận có thể có nhiều đơn vị trong cơ sở dữ liệu; ở đây chọn đơn vị có kho
+   * trung tâm, vì mượn liên xã là việc của kho tổng chứ không phải kho thôn.
+   */
+  async receiveFromPeerServer(
+    peerCommuneName: string,
+    dto: {
+      peerLoanId: string;
+      inboundKey: string;
+      itemSku: string;
+      itemName: string;
+      unit: string;
+      quantity: number;
+      note?: string;
+    },
+  ) {
+    const warehouse = await this.prisma.warehouse.findFirst({
+      where: { kind: "CENTRAL" },
+      select: { id: true, organizationId: true },
+    });
+    if (!warehouse) throw new NotFoundException("Xã này chưa cấu hình kho trung tâm");
+
+    return this.receiveRequestFromPeer({
+      organizationId: warehouse.organizationId,
+      warehouseId: warehouse.id,
+      peerCommuneName,
+      ...dto,
     });
   }
 
