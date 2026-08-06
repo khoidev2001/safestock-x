@@ -21,6 +21,7 @@ import {
 import { InventoryAdjustmentService } from "./inventory-adjustment.service";
 import { InventoryService } from "./inventory.service";
 import { InventorySemanticService } from "./inventory-semantic.service";
+import { BatchQrService } from "./batch-qr.service";
 
 @UseGuards(JwtAuthGuard, PermissionGuard)
 @RequirePermission(Permission.INVENTORY_READ)
@@ -30,7 +31,14 @@ export class InventoryController {
     private inv: InventoryService,
     private adjustment: InventoryAdjustmentService,
     private semantic: InventorySemanticService,
+    private batchQr: BatchQrService,
   ) {}
+
+  /** Ảnh mã QR của một lô, để điện thoại hiện lên mà không cần thư viện native. */
+  @Get("batches/:id/qr")
+  batchQrImage(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.batchQr.dataUrl(id, req.user.warehouseId);
+  }
 
   @Get("warehouses/:id/tree")
   tree(@Request() req: AuthenticatedRequest, @Param("id") id: string) {

@@ -10,7 +10,8 @@
     "test:coordination": "pnpm build && node --test tests/coordination.test.cjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "test:briefing": "pnpm build && node --test tests/briefing.test.cjs"
+    "test:briefing": "pnpm build && node --test tests/briefing.test.cjs",
+    "test:inventory-qr": "pnpm build && node --test tests/inventory-qr.test.cjs"
   },
   "devDependencies": {
     "typescript": "^5.5.4"

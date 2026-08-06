@@ -921,3 +921,26 @@ async function postAuthorized<T = unknown>(token: string, path: string, body: un
   if (!response.ok) throw await apiFailure(response, "Thao tác không thành công");
   return response.json();
 }
+
+export interface BatchQrLabel {
+  dataUrl: string;
+  payload: string;
+  itemName: string;
+  batchCode: string;
+}
+
+/**
+ * Ảnh mã QR của một lô, sinh ở máy chủ.
+ *
+ * Không sinh ngay trên điện thoại vì mọi thư viện vẽ QR cho React Native đều cần
+ * `react-native-svg` — một phụ thuộc NATIVE, thêm vào là phải dựng lại APK rồi
+ * cài lại cho từng máy. Kho thôn đang dùng bản đã cài sẵn, nên để máy chủ sinh
+ * là cả mạng lưới có ngay mà không ai phải cài gì.
+ */
+export async function fetchBatchQr(token: string, batchId: string): Promise<BatchQrLabel> {
+  const res = await request(apiUrl(`/api/inventory/batches/${encodeURIComponent(batchId)}/qr`), {
+    headers: authHeader(token),
+  });
+  if (!res.ok) throw await apiFailure(res, "Không tạo được mã QR cho lô này");
+  return (await res.json()) as BatchQrLabel;
+}

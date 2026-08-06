@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType }
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   Modal,
   Pressable,
   RefreshControl,
@@ -28,6 +29,7 @@ import {
   fetchInventoryCatalog,
   fetchOpenLoans,
   fetchTransferDestinations,
+  fetchBatchQr,
   fetchWarehouseBatches,
   fetchWarehouseTree,
   fetchWarehouses,
@@ -39,6 +41,7 @@ import {
   setBatchCondition,
   transferBatch,
   type AuthUser,
+  type BatchQrLabel,
   type InventoryBatch,
   type InventoryCatalogItem,
   type LoanRecord,
@@ -91,6 +94,24 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
   const [selectedAction, setSelectedAction] = useState<InventoryAction | null>(null);
   const [selectedLoan, setSelectedLoan] = useState<LoanRecord | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
+  // Nhãn QR đang xem. Tải theo yêu cầu chứ không tải sẵn cho cả kho: một kho
+  // vài trăm lô, tải hết là vài trăm ảnh không ai xem tới.
+  const [nhanQr, setNhanQr] = useState<BatchQrLabel | null>(null);
+  const [dangTaiQr, setDangTaiQr] = useState(false);
+
+  const moMaQr = useCallback(
+    async (batch: InventoryBatch) => {
+      setDangTaiQr(true);
+      try {
+        setNhanQr(await fetchBatchQr(token, batch.id));
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Không tạo được mã QR cho lô này");
+      } finally {
+        setDangTaiQr(false);
+      }
+    },
+    [token],
+  );
   const [bulkOpen, setBulkOpen] = useState(false);
   const [receivingOpen, setReceivingOpen] = useState(false);
   const [semanticSkus, setSemanticSkus] = useState<string[] | null>(null);
@@ -470,6 +491,7 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
                 role={user.role}
                 readOnly={offline}
                 onAction={(action) => openAction(item, action)}
+                onShowQr={() => void moMaQr(item)}
               />
             )}
           />
@@ -504,6 +526,36 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
           )}
         />
       )}
+
+      <Modal visible={Boolean(nhanQr) || dangTaiQr} transparent animationType="fade">
+        <View style={local.qrLop}>
+          <View style={local.qrHop}>
+            {dangTaiQr || !nhanQr ? (
+              <ActivityIndicator color={c.primary} size="large" />
+            ) : (
+              <>
+                <Text style={local.qrTen}>{nhanQr.itemName}</Text>
+                <Text style={local.qrLo}>Lô {nhanQr.batchCode}</Text>
+                {/* Nền trắng cố định: mã QR đọc bằng độ tương phản, đặt lên nền
+                    tối là máy quét đọc chậm hoặc không đọc được. */}
+                <View style={local.qrNen}>
+                  <Image
+                    source={{ uri: nhanQr.dataUrl }}
+                    style={local.qrAnh}
+                    resizeMode="contain"
+                  />
+                </View>
+                <Text style={local.qrGhiChu}>
+                  Đưa màn hình này cho máy khác quét, hoặc chụp lại để in nhãn dán lên lô.
+                </Text>
+              </>
+            )}
+            <Pressable onPress={() => setNhanQr(null)} style={local.qrDong}>
+              <Text style={local.qrDongChu}>Đóng</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
 
       <QrScanner
         open={scannerOpen}
@@ -565,11 +617,13 @@ function BatchCard({
   role,
   readOnly,
   onAction,
+  onShowQr,
 }: {
   batch: InventoryBatch;
   role: string;
   readOnly: boolean;
   onAction: (action: InventoryAction) => void;
+  onShowQr: () => void;
 }) {
   const actions = BATCH_ACTIONS.filter((action) => canPerformInventoryAction(role, action.key));
   const conditionColor =
@@ -611,6 +665,10 @@ function BatchCard({
               <Text style={local.actionText}>{action.label}</Text>
             </Pressable>
           ))}
+          {/* Xem được cả khi chỉ đọc: in nhãn không đụng vào tồn kho. */}
+          <Pressable key="qr" onPress={onShowQr} style={local.actionChip}>
+            <Text style={local.actionText}>Mã QR</Text>
+          </Pressable>
         </ScrollView>
       ) : null}
     </View>
@@ -1432,6 +1490,37 @@ function conditionLabel(condition: string): string {
 }
 
 const local = StyleSheet.create({
+  qrLop: {
+    flex: 1,
+    backgroundColor: "rgba(15,23,42,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  qrHop: {
+    width: "100%",
+    maxWidth: 340,
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 16,
+    backgroundColor: c.surface,
+    padding: 20,
+  },
+  qrTen: { color: c.text, fontSize: 16, fontWeight: "800", textAlign: "center" },
+  qrLo: { color: c.muted, fontSize: 12 },
+  qrNen: { backgroundColor: "#ffffff", borderRadius: 12, padding: 12, marginTop: 4 },
+  qrAnh: { width: 220, height: 220 },
+  qrGhiChu: { color: c.muted, fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 6 },
+  qrDong: {
+    marginTop: 10,
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: c.border,
+  },
+  qrDongChu: { color: c.text, fontSize: 14, fontWeight: "700" },
   screen: { flex: 1, backgroundColor: c.bg },
   chooserScreen: {
     flex: 1,

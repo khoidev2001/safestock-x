@@ -12,7 +12,7 @@ describe("mobile/web warehouse read scope", () => {
       listTransactions: jest.fn().mockResolvedValue([]),
       transferDestinations: jest.fn().mockResolvedValue([]),
     };
-    const controller = new InventoryController(inv as never, {} as never, {} as never);
+    const controller = new InventoryController(inv as never, {} as never, {} as never, {} as never);
     const request = {
       user: { userId: "user-1", warehouseId: "warehouse-a" },
     } as never;

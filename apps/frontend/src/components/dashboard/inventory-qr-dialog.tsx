@@ -3,6 +3,7 @@
 import Image from "next/image";
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
+import { inventoryQrPayload } from "@safestock/shared-types";
 import type { InventoryBatch } from "@/lib/dashboard-api";
 
 export function InventoryQrDialog({
@@ -14,9 +15,10 @@ export function InventoryQrDialog({
 }) {
   const [dataUrl, setDataUrl] = useState("");
   const [error, setError] = useState("");
-  const payload = batch
-    ? `safestock://inventory?sku=${encodeURIComponent(batch.item.sku)}&batch=${encodeURIComponent(batch.batchCode)}`
-    : "";
+  // Dùng hàm chung với backend và máy quét trong app: thêm một nơi tự ghép chuỗi
+  // là thêm một cơ hội lệch định dạng, mà lệch thì mã in ra vẫn đẹp và chỉ hỏng
+  // lúc đứng trong kho quét.
+  const payload = batch ? inventoryQrPayload(batch.item.sku, batch.batchCode) : "";
 
   useEffect(() => {
     if (!payload) return;
@@ -64,10 +66,13 @@ export function InventoryQrDialog({
             <p className="text-xs font-semibold text-[var(--color-accent)]">NHÃN VẬT TƯ</p>
             <h2 className="mt-1 text-xl font-semibold">{batch.item.name}</h2>
           </div>
-          <button aria-label="Đóng"
+          <button
+            aria-label="Đóng"
             // Vùng bấm 44px: nút cũ chỉ cao 30px, trên màn hình cảm ứng và
             // laptop nhỏ phải nhắm mới trúng.
-            className="flex h-11 w-11 items-center justify-center rounded-md border text-xl leading-none transition hover:bg-[var(--surface-2)]" onClick={onClose}>
+            className="flex h-11 w-11 items-center justify-center rounded-md border text-xl leading-none transition hover:bg-[var(--surface-2)]"
+            onClick={onClose}
+          >
             ×
           </button>
         </header>
