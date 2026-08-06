@@ -479,3 +479,58 @@ export const reconcileBatch = (body: {
   note?: string;
   requestId?: string;
 }) => apiFetch("/api/inventory/reconcile", { method: "POST", body: JSON.stringify(body) });
+
+// ---- Mượn vật tư giữa hai xã ----
+
+export interface InterCommuneLoan {
+  id: string;
+  direction: "OUTGOING" | "INCOMING";
+  status:
+    | "REQUESTED"
+    | "REJECTED"
+    | "APPROVED"
+    | "ACTIVE"
+    | "PARTIALLY_RETURNED"
+    | "RETURNED"
+    | "CANCELLED";
+  peerCommuneName: string;
+  itemSku: string;
+  itemName: string;
+  unit: string;
+  quantity: number;
+  returnedQuantity: number;
+  recordedManually: boolean;
+  note: string | null;
+  rejectReason: string | null;
+  requestedAt: string;
+}
+
+export function getInterCommuneLoans(): Promise<InterCommuneLoan[]> {
+  return apiFetch<InterCommuneLoan[]>("/api/loans/inter-commune");
+}
+
+export const requestInterCommuneLoan = (body: {
+  peerCommuneName: string;
+  itemSku: string;
+  itemName: string;
+  unit: string;
+  quantity: number;
+  note?: string;
+}) => apiFetch("/api/loans/inter-commune/request", { method: "POST", body: JSON.stringify(body) });
+
+export const recordManualInterCommuneLoan = (body: {
+  direction: "OUTGOING" | "INCOMING";
+  peerCommuneName: string;
+  batchId: string;
+  quantity: number;
+  note?: string;
+}) => apiFetch("/api/loans/inter-commune/manual", { method: "POST", body: JSON.stringify(body) });
+
+export const advanceInterCommuneLoan = (
+  id: string,
+  body: { to: string; batchId?: string; quantity?: number; reason?: string },
+) =>
+  apiFetch(`/api/loans/inter-commune/${id}/advance`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
