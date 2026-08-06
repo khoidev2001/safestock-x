@@ -39,7 +39,10 @@ export class LoanController {
   ) {
     return this.interCommune.requestFromPeer({
       userId: req.user.userId,
-      warehouseId: req.user.warehouseId ?? "",
+      // null chứ KHÔNG phải chuỗi rỗng: ADMIN xã không gắn với kho nào, mà chuỗi
+      // rỗng thì vi phạm khoá ngoại và đổ lỗi 500 ngay ở người dùng hay gửi yêu
+      // cầu nhất.
+      warehouseId: req.user.warehouseId ?? null,
       ...dto,
     });
   }

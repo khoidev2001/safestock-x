@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -54,10 +55,24 @@ export class InterCommuneLoanService {
   /** Danh sách khoản mượn của xã đang đăng nhập, cả hai chiều. */
   async list(userId: string) {
     const organizationId = await this.orgOf(userId);
-    return this.prisma.interCommuneLoan.findMany({
+    const rows = await this.prisma.interCommuneLoan.findMany({
       where: { organizationId },
-      orderBy: [{ status: "asc" }, { requestedAt: "desc" }],
+      orderBy: { requestedAt: "desc" },
     });
+    // Sắp bằng tay chứ không `orderBy: status`: Postgres xếp enum theo THỨ TỰ
+    // KHAI BÁO, mà trong đó REJECTED đứng ngay sau REQUESTED — tức là các khoản
+    // đã đóng nổi lên trên những khoản đang cần làm. Danh sách việc mà xếp kiểu
+    // đó thì phải cuộn qua đống đã xong mới thấy việc của mình.
+    const uuTien: Record<string, number> = {
+      REQUESTED: 0,
+      APPROVED: 1,
+      ACTIVE: 2,
+      PARTIALLY_RETURNED: 3,
+      RETURNED: 4,
+      REJECTED: 5,
+      CANCELLED: 6,
+    };
+    return rows.sort((a, b) => (uuTien[a.status] ?? 9) - (uuTien[b.status] ?? 9));
   }
 
   /**
@@ -67,7 +82,7 @@ export class InterCommuneLoanService {
    */
   async requestFromPeer(input: {
     userId: string;
-    warehouseId: string;
+    warehouseId: string | null;
     peerCommuneName: string;
     itemSku: string;
     itemName: string;
@@ -241,23 +256,26 @@ export class InterCommuneLoanService {
     const effect = loan.recordedManually
       ? manualStockEffect(direction, status)
       : stockEffect(direction, transition);
-    if (effect !== "NONE") {
-      if (!input.batchId) {
-        throw new BadRequestException("Bước này có thay đổi tồn kho nên phải chọn lô vật tư");
-      }
-      await this.moveStock(effect, {
-        userId: input.userId,
-        batchId: input.batchId,
-        quantity: movingQuantity,
-        scopeWarehouseId: input.scopeWarehouseId,
-        note: `Mượn liên xã với ${loan.peerCommuneName} — ${transition.label}`,
-        requestId: `loan-${loan.id}-${input.to}-${returnedQuantity}`,
-      });
+    if (effect !== "NONE" && !input.batchId) {
+      throw new BadRequestException("Bước này có thay đổi tồn kho nên phải chọn lô vật tư");
     }
 
+    // GIÀNH quyền chuyển trạng thái trước khi đụng kho.
+    //
+    // Đọc rồi ghi mà không khoá thì hai lượt trả chạy cùng lúc đều đọc được cùng
+    // một `returnedQuantity` cũ: cả hai cùng chuyển kho, nhưng chỉ một lượt ghi
+    // được vào sổ. Kho trừ 12 mà sổ ghi 7 — lệch mà không ai thấy ngay.
+    //
+    // Điều kiện `status` và `returnedQuantity` trong mệnh đề where chính là chốt:
+    // lượt thứ hai không khớp trạng thái đã đọc nên `count` bằng 0 và bị từ chối,
+    // thay vì lặng lẽ đè lên lượt thứ nhất.
     const now = new Date();
-    return this.prisma.interCommuneLoan.update({
-      where: { id: loan.id },
+    const claimed = await this.prisma.interCommuneLoan.updateMany({
+      where: {
+        id: loan.id,
+        status: loan.status,
+        returnedQuantity: loan.returnedQuantity,
+      },
       data: {
         status: status as InterCommuneLoanStatus,
         returnedQuantity,
@@ -267,6 +285,40 @@ export class InterCommuneLoanService {
         returnedAt: status === "RETURNED" ? now : loan.returnedAt,
       },
     });
+    if (claimed.count !== 1) {
+      throw new ConflictException(
+        "Khoản mượn vừa được cập nhật ở nơi khác. Tải lại rồi thao tác tiếp.",
+      );
+    }
+
+    if (effect !== "NONE") {
+      try {
+        await this.moveStock(effect, {
+          userId: input.userId,
+          batchId: input.batchId as string,
+          quantity: movingQuantity,
+          scopeWarehouseId: input.scopeWarehouseId,
+          note: `Mượn liên xã với ${loan.peerCommuneName} — ${transition.label}`,
+          requestId: `loan-${loan.id}-${input.to}-${returnedQuantity}`,
+        });
+      } catch (error) {
+        // Kho không chuyển được (hết hàng, sai quyền, sai lô) thì trả sổ về đúng
+        // chỗ cũ. Để nguyên là sổ ghi đã trả trong khi hàng chưa hề động đậy.
+        await this.prisma.interCommuneLoan.update({
+          where: { id: loan.id },
+          data: {
+            status: loan.status,
+            returnedQuantity: loan.returnedQuantity,
+            decidedAt: loan.decidedAt,
+            receivedAt: loan.receivedAt,
+            returnedAt: loan.returnedAt,
+          },
+        });
+        throw error;
+      }
+    }
+
+    return this.prisma.interCommuneLoan.findUnique({ where: { id: loan.id } });
   }
 
   private async moveStock(effect: "DEDUCT" | "ADD" | "NONE", input: MoveStockInput) {
