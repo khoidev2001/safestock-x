@@ -497,9 +497,20 @@ function MonthlyReportCard({ warehouseId }: { warehouseId: string }) {
       )}
       {report.data && (
         <>
-          <p className="mt-3 whitespace-pre-line text-sm leading-relaxed">
-            {report.data.narrative}
-          </p>
+          {/* Mỗi ý một gạch đầu dòng, giống bản tin đầu ngày. Nhận xét tháng gộp
+              nhiều mảng vào một đoạn liền: đọc phải tự dò xem câu nào nói chuyện
+              gì, mà đây là thứ người ta liếc qua chứ không ngồi đọc kỹ. Cắt bằng
+              đúng hàm dùng chung nên không cắt nhầm ở dấu chấm thập phân. */}
+          <ul className="mt-3 space-y-1.5">
+            {splitBriefingSentences(report.data.narrative).map((cau) => (
+              <li className="flex gap-2 text-sm leading-relaxed" key={cau}>
+                <span aria-hidden="true" className="text-[var(--text-muted)]">
+                  •
+                </span>
+                <span>{cau}</span>
+              </li>
+            ))}
+          </ul>
           {report.data.trends.length > 0 && (
             <ul className="mt-4 divide-y border-t pt-2">
               {report.data.trends.slice(0, 6).map((t) => (

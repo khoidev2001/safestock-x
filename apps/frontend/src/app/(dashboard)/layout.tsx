@@ -12,6 +12,7 @@ import { getOpenIncidents } from "@/lib/dashboard-api";
 import { useAuth } from "@/lib/auth-store";
 import { useWarehouse } from "@/lib/use-warehouse";
 import { NotificationToasts, type ToastItem } from "@/components/shared/notification-toasts";
+import { ColorIcon } from "@/components/shared/color-icon";
 import { useMissionFocus } from "@/lib/mission-focus-store";
 import { missionDeepLink } from "@/lib/mission-inbox-state";
 import { getNavItem, navItems } from "@/lib/dashboard-nav";
@@ -110,12 +111,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useIncidentAlertsBridge(incidentsQuery.data);
 
-  if (!hasHydrated || !token) return null;
+  // Đang khôi phục phiên: PHẢI hiện gì đó. Trước đây trả `null`, tức là màn hình
+  // trắng trơn suốt lượt gọi khôi phục — người dùng không biết app đang chạy hay
+  // đã hỏng, và phản xạ đầu tiên là tải lại trang, làm mọi thứ bắt đầu lại.
+  if (!hasHydrated) return <DangKhoiPhucPhien />;
+  // Không có phiên thì đang bị đẩy sang trang đăng nhập; đừng loé lên khung
+  // dashboard rỗng trong lúc chuyển.
+  if (!token) return null;
   return (
     <DashboardShell warehouseName={warehouseQuery.data?.name}>
       {children}
       {warehouseId ? <FloatingAssistant warehouseId={warehouseId} /> : null}
       <NotificationToasts items={toasts} onOpen={moNhiemVu} onDismiss={boToast} />
     </DashboardShell>
+  );
+}
+
+function DangKhoiPhucPhien() {
+  return (
+    <div
+      className="flex min-h-[100dvh] flex-col items-center justify-center gap-3"
+      role="status"
+      aria-live="polite"
+    >
+      <ColorIcon className="animate-spin" name="loading" size={28} tone="blue" />
+      <p className="text-sm text-[var(--text-muted)]">Đang mở phiên làm việc…</p>
+    </div>
   );
 }

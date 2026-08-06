@@ -260,20 +260,30 @@ function tabLabel(tab: MobileTab): string {
     inventory: "Kho",
     "monthly-report": "Kiểm kê",
     missions: "Lệnh",
-    alerts: "Cảnh báo",
+    alerts: "Thông báo",
     report: "Báo cáo",
   }[tab];
 }
 
+/**
+ * Biểu tượng trên thanh tab.
+ *
+ * Trước đây là số thứ tự "01".."05", và chúng vừa VÔ NGHĨA vừa TRÙNG NHAU: tab
+ * Tổng quan và tab Lệnh cùng mang số 01, Sẵn sàng và Báo cáo cùng mang 02. Người
+ * dùng không đọc số để chọn tab, họ đọc nhãn — nên con số chỉ chiếm chỗ, và khi
+ * trùng thì còn khiến hai tab trông như một.
+ *
+ * Đổi sang biểu tượng gợi đúng việc của từng tab, mỗi tab một cái khác nhau.
+ */
 function tabIcon(tab: MobileTab): string {
   return {
-    home: "01",
-    readiness: "02",
-    inventory: "03",
-    "monthly-report": "04",
-    missions: "01",
-    alerts: "05",
-    report: "02",
+    home: "◉",
+    readiness: "✓",
+    inventory: "▦",
+    "monthly-report": "☑",
+    missions: "➤",
+    alerts: "!",
+    report: "✎",
   }[tab];
 }
 
