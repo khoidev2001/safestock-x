@@ -125,11 +125,24 @@ export class IncidentService {
 
     const recipients = await this.resolveEmailRecipients(warehouseId);
     const created = [] as Awaited<ReturnType<typeof this.persist>>[];
+    let suppressed = 0;
     for (const incident of detected) {
       const isDuplicate = incident.evidence.some((e) =>
         openKeys.has(`${incident.kind}|${e.deviceCode}`),
       );
-      if (isDuplicate) continue;
+      if (isDuplicate) {
+        // Không tạo sự cố mới thì cũng KHÔNG có thư nào được gửi. Trước đây bước
+        // này im lặng hoàn toàn, nên người vận hành kéo lại thanh trượt, không
+        // nhận được gì, và kết luận nhầm là email hoặc cảnh báo đã hỏng — trong
+        // khi hệ thống đang làm đúng việc chống báo động trùng. Đếm và ghi log để
+        // "không có gì xảy ra" có lý do nhìn thấy được.
+        suppressed += 1;
+        this.log.log(
+          `Bỏ qua ${incident.kind} ở kho ${warehouseId}: sự cố cùng loại trên cùng thiết bị đang mở. ` +
+            `Đóng sự cố cũ rồi mới kích lại được.`,
+        );
+        continue;
+      }
 
       const saved = await this.persist(warehouseId, incident, recipients, source);
       created.push(saved);
@@ -148,7 +161,7 @@ export class IncidentService {
       });
     }
     if (created.length > 0) void this.outbox.processDue();
-    return { warehouseId, detected: created.length, incidents: created };
+    return { warehouseId, detected: created.length, suppressed, incidents: created };
   }
 
   /**

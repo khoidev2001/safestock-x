@@ -51,7 +51,7 @@ describe("standard seed dataset", () => {
     );
   });
 
-  it("có đủ 17 thôn: 5 Nhà văn hóa Maps xác minh, 10 điểm ADMIN ghim, 2 điểm còn chờ", () => {
+  it("có đủ 17 thôn: 5 Nhà văn hóa Maps xác minh, 12 điểm ADMIN ghim, không còn thôn nào chờ", () => {
     expect(HAMLET_WAREHOUSES.map((warehouse) => warehouse.name)).toEqual([
       "Kho thôn Long Châu",
       "Kho thôn Long Thăng",
@@ -117,6 +117,7 @@ describe("standard seed dataset", () => {
         warehouse.locationVerified && !getVerifiedHamletWarehouseLocation(warehouse.key),
     );
     expect(adminPinned.map((warehouse) => warehouse.key).sort()).toEqual([
+      "long-binh",
       "long-chau",
       "long-ha",
       "long-hoa",
@@ -125,6 +126,7 @@ describe("standard seed dataset", () => {
       "long-thang",
       "tan-an",
       "tan-hoa",
+      "tan-phu",
       "tan-phuoc",
       "tan-vinh",
     ]);
@@ -137,14 +139,9 @@ describe("standard seed dataset", () => {
       ),
     ).toBe(true);
 
-    const pendingLocations = HAMLET_WAREHOUSES.filter((warehouse) => !warehouse.locationVerified);
-    expect(pendingLocations).toHaveLength(2);
-    expect(
-      pendingLocations.every(
-        ({ location, lat, lng }) =>
-          location.startsWith("Nhà văn hóa thôn ") && lat == null && lng == null,
-      ),
-    ).toBe(true);
+    // Cả 17 thôn đã có toạ độ. Nếu sau này thêm thôn mới thì nó rơi vào nhóm này
+    // và test đỏ ngay, buộc phải ghim trước khi tưởng là điều phối được.
+    expect(HAMLET_WAREHOUSES.filter((warehouse) => !warehouse.locationVerified)).toEqual([]);
     expect(HAMLET_WAREHOUSES.every(({ stock }) => stock.length >= 6)).toBe(true);
   });
 

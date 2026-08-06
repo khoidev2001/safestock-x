@@ -9,7 +9,8 @@
     "dev": "tsc -p tsconfig.json --watch",
     "test:coordination": "pnpm build && node --test tests/coordination.test.cjs",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "test:briefing": "pnpm build && node --test tests/briefing.test.cjs"
   },
   "devDependencies": {
     "typescript": "^5.5.4"

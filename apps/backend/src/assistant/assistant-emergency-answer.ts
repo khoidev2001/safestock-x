@@ -21,6 +21,26 @@ const HAZARD_TERMS = [
   "hoa hoan",
 ];
 
+/**
+ * Tình huống khẩn cấp nhận ra được từ câu chat, kèm số liệu đã bóc tách.
+ *
+ * Có nó thì giao diện mới đề xuất được lối đi tiếp: trợ lý nghe xong một sự việc
+ * có người mắc kẹt mà chỉ trả lời rồi thôi là bỏ dở đúng lúc cần hành động.
+ */
+export interface EmergencySignal {
+  location: string | null;
+  affectedPeople: number | null;
+}
+
+export function detectEmergencySignal(question: string): EmergencySignal | null {
+  const normalizedQuestion = normalizeVietnamese(question);
+  if (!isEmergencyScenario(normalizedQuestion)) return null;
+  return {
+    location: extractLocation(question),
+    affectedPeople: extractCount(normalizedQuestion, ["nguoi", "dan"]),
+  };
+}
+
 export function resolveEmergencyAnswer(question: string): string | null {
   const normalizedQuestion = normalizeVietnamese(question);
   if (!isEmergencyScenario(normalizedQuestion)) return null;

@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Request, UseGuards } from "@nestjs/common";
-import { IsNumber } from "class-validator";
+import { IsNumber, ValidateIf } from "class-validator";
 import { Permission } from "@safestock/shared-types";
 import { AuthenticatedRequest } from "../auth/authenticated-request";
 import { JwtAuthGuard } from "../auth/guards";
@@ -8,11 +8,15 @@ import { RequirePermission } from "../rbac/permissions.decorator";
 import { AdminWarehouseService } from "./admin-warehouse.service";
 
 class LocationDto {
+  // null = xoá ghim, đưa kho về trạng thái chưa có vị trí. Phải gửi cả hai cùng
+  // null; một nửa toạ độ thì không định vị được gì.
+  @ValidateIf((dto: LocationDto) => dto.lat !== null)
   @IsNumber()
-  lat!: number;
+  lat!: number | null;
 
+  @ValidateIf((dto: LocationDto) => dto.lng !== null)
   @IsNumber()
-  lng!: number;
+  lng!: number | null;
 }
 
 @UseGuards(JwtAuthGuard, PermissionGuard)

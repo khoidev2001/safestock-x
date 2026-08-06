@@ -26,12 +26,20 @@ export class AdminWarehouseService {
   }
 
   /** Cập nhật toạ độ 1 kho (dev mode pin). Validate range hợp lệ. */
-  async updateLocation(actorId: string, id: string, lat: number, lng: number) {
-    if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
-      throw new BadRequestException("Vĩ độ (lat) phải trong khoảng -90..90");
+  async updateLocation(actorId: string, id: string, lat: number | null, lng: number | null) {
+    // Cả hai cùng null = xoá ghim. Một nửa toạ độ thì không định vị được gì, và để
+    // lọt vào database sẽ thành điểm nằm trên kinh tuyến gốc giữa Đại Tây Dương.
+    const clearing = lat == null && lng == null;
+    if (!clearing && (lat == null || lng == null)) {
+      throw new BadRequestException("Toạ độ kho phải có đủ vĩ độ và kinh độ");
     }
-    if (!Number.isFinite(lng) || lng < -180 || lng > 180) {
-      throw new BadRequestException("Kinh độ (lng) phải trong khoảng -180..180");
+    if (!clearing) {
+      if (!Number.isFinite(lat) || lat! < -90 || lat! > 90) {
+        throw new BadRequestException("Vĩ độ (lat) phải trong khoảng -90..90");
+      }
+      if (!Number.isFinite(lng) || lng! < -180 || lng! > 180) {
+        throw new BadRequestException("Kinh độ (lng) phải trong khoảng -180..180");
+      }
     }
     const organizationId = await this.actorOrganizationId(actorId);
     const wh = await this.prisma.warehouse.findFirst({

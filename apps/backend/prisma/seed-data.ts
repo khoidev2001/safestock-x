@@ -37,11 +37,13 @@ export const STANDARD_ITEMS: SeedItemDefinition[] = [
   {
     group: "WASH",
     category: "Nước uống",
-    unit: "lít",
+    // Đếm theo CHAI chứ không theo lít: kho xuất và trưởng thôn bốc từng chai,
+    // không ai đong 15 lít ra khỏi kệ. Quy đổi nằm ở LIT_MOI_CHAI_NUOC.
+    unit: "chai",
     name: "Nước uống đóng chai",
     sku: "WATER-01",
     consumable: true,
-    unitWeightKg: 1,
+    unitWeightKg: 1.5,
   },
   {
     group: "WASH",

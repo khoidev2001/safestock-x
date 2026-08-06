@@ -160,7 +160,18 @@ export class AiClientService {
         );
         // Provider details can contain prompt text, transcripts, phone numbers
         // or tokens. They are deliberately neither logged nor returned.
-        throw new HttpException("AI service không xử lý được yêu cầu", response.status);
+        //
+        // Ngoại lệ 503: Ollama sinh văn bản mỗi lần một yêu cầu trên một GPU, nên
+        // bấm đúng lúc có việc nền đang chạy là phải xếp hàng và có thể quá hạn.
+        // Câu chung chung "không xử lý được yêu cầu" đẩy người dùng đi kiểm tra
+        // dịch vụ, trong khi việc cần làm chỉ là chờ vài giây rồi bấm lại. Trạng
+        // thái bận không phải thông tin nhạy cảm.
+        throw new HttpException(
+          response.status === 503
+            ? "Mô hình AI đang bận xử lý yêu cầu khác. Chờ vài giây rồi bấm lại."
+            : "AI service không xử lý được yêu cầu",
+          response.status,
+        );
       }
       const result = (await response.json()) as T;
       this.log.log(

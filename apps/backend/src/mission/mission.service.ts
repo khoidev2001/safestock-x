@@ -41,6 +41,7 @@ import {
 } from "./mission.compute";
 import { assessMissionReadiness, MissionReadinessAssessment } from "./mission-readiness";
 import { normalizeHamletName } from "../admin/hamlet-normalization";
+import { findHamletInReport } from "./hamlet-in-report";
 import { buildWarehouseRequestCreates } from "./mission-warehouse-request";
 
 /** Gợi ý mượn kho lân cận cho 1 SKU thiếu. */
@@ -74,13 +75,23 @@ export class MissionService {
     userId?: string,
     incidentPoint?: LatLng,
     scopeWarehouseId?: string | null,
+    /**
+     * Lời kể gốc của cán bộ, giữ nguyên văn.
+     *
+     * Không giữ thì nhiệm vụ lập từ form chỉ còn các con số đã bóc tách: bản tham
+     * mưu về sau không còn câu nào để trích dẫn nguồn, mà mọi dữ kiện trong đó
+     * đều bắt buộc phải chỉ ra được câu chữ đã sinh ra nó.
+     */
+    reportText?: string,
   ) {
     await this.assertWarehouseAccess(warehouseId, userId, scopeWarehouseId);
-    const resolved = await this.resolveIncidentLocation(
-      warehouseId,
-      incident.location,
-      incidentPoint,
-    );
+    // Lớp bóc tách bắt địa điểm bằng cụm đứng sau chữ "thôn", nên câu nói tự
+    // nhiên như "lũ lụt ở tân bình, cô lập 120 người" thì nó không thấy gì. Trước
+    // khi chịu thua, dò thẳng danh mục thôn đã xác minh ngay trong lời kể — đối
+    // chiếu với tên có thật thì không có chỗ cho đoán sai.
+    const location =
+      incident.location?.trim() || (await this.hamletFromReport(warehouseId, reportText));
+    const resolved = await this.resolveIncidentLocation(warehouseId, location, incidentPoint);
     const plan = await this.computePlan(warehouseId, incident, resolved.point);
     return this.prisma.mission.create({
       data: {
@@ -91,6 +102,7 @@ export class MissionService {
         durationHours: incident.durationHours,
         priority: "MEDIUM",
         parsedInput: incident as unknown as Prisma.InputJsonValue,
+        reportText: reportText?.trim() || null,
         status: MissionStatus.DRAFT,
         fulfillment: plan.fulfillment,
         readinessAssessment: plan.readinessSnapshot,
@@ -412,6 +424,30 @@ export class MissionService {
         throw new NotFoundException("Khong tim thay nhiem vu");
     }
     return mission;
+  }
+
+  /**
+   * Tên thôn nhắc trong lời kể, đối chiếu với danh mục đã xác minh của chính xã đó.
+   *
+   * Chỉ dùng khi lớp bóc tách không tìm ra địa điểm. Trả null khi lời kể không
+   * nhắc thôn nào, hoặc nhắc từ hai thôn trở lên — lúc đó để ADMIN chỉ định, vì
+   * đoán bừa là gửi hàng cứu trợ tới nhầm chỗ.
+   */
+  private async hamletFromReport(
+    warehouseId: string,
+    reportText?: string,
+  ): Promise<string | undefined> {
+    const report = reportText?.trim();
+    if (!report) return undefined;
+    const warehouse = await this.prisma.warehouse.findUnique({
+      where: { id: warehouseId },
+      select: { organizationId: true, communeId: true },
+    });
+    if (!warehouse) return undefined;
+    const hamlets = await (this.prisma as unknown as MissionHamletPrisma).hamlet.findMany({
+      where: { organizationId: warehouse.organizationId, communeId: warehouse.communeId },
+    });
+    return findHamletInReport(report, hamlets)?.name;
   }
 
   /**
@@ -1618,6 +1654,9 @@ interface MissionHamletPrisma {
       {
         id: string;
         name: string;
+        // Bí danh đã chuẩn hoá ("long chau", "thon long chau"): cần khi dò tên
+        // thôn ngay trong lời kể, vì người ta viết mỗi lần một kiểu.
+        aliases: string[];
         lat: number | null;
         lng: number | null;
         verified: boolean;

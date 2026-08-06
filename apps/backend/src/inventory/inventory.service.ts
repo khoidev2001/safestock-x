@@ -39,6 +39,23 @@ export type ReceiveBatchInput = {
   note?: string;
 };
 
+/**
+ * Trạng thái lô còn xuất được.
+ *
+ * `EXPIRING_SOON` nghĩa là SẮP hết hạn, chưa hết hạn — và đó chính là lô phải đi
+ * trước theo nguyên tắc hạn gần xuất trước. Chặn nó lại thì hàng nằm chờ tới lúc
+ * hỏng thật rồi bị bỏ, còn phương án điều phối thì kẹt vĩnh viễn: bộ lọc lúc lập
+ * phương án (assessBatchEligibility) coi lô này khả dụng nên vẫn phân bổ, tới lúc
+ * kho bấm xuất mới bị từ chối, mà không có đường nào đi tiếp.
+ *
+ * Hết hạn thật, hư hỏng, chờ kiểm tra, kệ khoá đều đã có chốt riêng ngay bên dưới
+ * nên bỏ trạng thái này ra khỏi danh sách cấm không hề nới lỏng an toàn kho.
+ */
+const EXPORTABLE_STATUSES: ReadonlySet<ItemStatus> = new Set([
+  ItemStatus.AVAILABLE,
+  ItemStatus.EXPIRING_SOON,
+]);
+
 @Injectable()
 export class InventoryService {
   private readonly log = new Logger(InventoryService.name);
@@ -819,7 +836,7 @@ export class InventoryService {
       include: { shelf: { select: { isLocked: true } } },
     });
     if (!before) throw new NotFoundException("Không tìm thấy lô vật tư");
-    if (before.status && before.status !== ItemStatus.AVAILABLE) {
+    if (before.status && !EXPORTABLE_STATUSES.has(before.status)) {
       throw new BadRequestException("Lô vật tư không ở trạng thái có thể xuất");
     }
     if (

@@ -179,6 +179,26 @@ export enum IncidentType {
   OTHER = "OTHER",
 }
 
+/**
+ * Tên tiếng Việt của từng loại tình huống.
+ *
+ * Đặt ở gói dùng chung vì cả backend lẫn web đều phải hiện chữ này cho cán bộ xã
+ * đọc. Mỗi bên giữ một bảng riêng thì sớm muộn cũng lệch nhau, mà mã hằng như
+ * `FLOOD` lọt ra màn hình là chuyện đã xảy ra rồi.
+ */
+export const INCIDENT_TYPE_LABELS: Readonly<Record<IncidentType, string>> = {
+  [IncidentType.FLOOD]: "Lũ lụt",
+  [IncidentType.STORM]: "Bão",
+  [IncidentType.LANDSLIDE]: "Sạt lở",
+  [IncidentType.FIRE]: "Cháy",
+  [IncidentType.ISOLATION]: "Cô lập",
+  [IncidentType.OTHER]: "Khác",
+};
+
+export function incidentTypeLabel(type: IncidentType | string): string {
+  return INCIDENT_TYPE_LABELS[type as IncidentType] ?? type;
+}
+
 /** Mức ưu tiên */
 export enum Priority {
   LOW = "LOW",
@@ -226,4 +246,5 @@ export interface SensorEvent {
   scenarioId?: string;
 }
 
+export * from "./briefing";
 export * from "./coordination";

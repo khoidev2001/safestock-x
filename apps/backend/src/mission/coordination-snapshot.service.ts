@@ -14,6 +14,7 @@ import { getPublicCommuneContacts } from "../../prisma/verified-neighbor-contact
 import { LocalRoutingService } from "../geo/local-routing.service";
 import { WeatherAlert, WeatherService } from "../insights/weather";
 import { PrismaService } from "../prisma/prisma.service";
+import { buildCoordinationForecasts } from "./coordination-forecasts";
 import { GEO_REFERENCE_REGISTRY_VERSION } from "./geo-reference-registry";
 
 const COORDINATION_RULE_VERSION = "coordination-rules.v1";
@@ -108,7 +109,7 @@ export class CoordinationSnapshotService {
     );
     const hasLocalShortage = mission.requirements.some((requirement) => requirement.shortage > 0);
     const externalContacts = hasLocalShortage ? await this.computeExternalContacts(mission) : [];
-    const forecasts = this.buildForecasts(weather);
+    const forecasts = buildCoordinationForecasts(weather);
     const status = readiness.missingData.length > 0 ? "NEEDS_CONFIRMATION" : "PRELIMINARY";
     const analysis: CoordinationAnalysis = {
       schemaVersion: "coordination-analysis.v1",
@@ -133,7 +134,7 @@ export class CoordinationSnapshotService {
         reason:
           readiness.requirements.status === "COMPUTED"
             ? null
-            : "Can xac minh so nguoi va loai tinh huong truoc khi dung so lieu kho.",
+            : "Cần xác minh số người và loại tình huống trước khi dùng số liệu kho.",
         externalContacts,
       },
       forecasts,
@@ -279,15 +280,15 @@ export class CoordinationSnapshotService {
     if (!hasAffectedPeople && !missingData.some((item) => item.key === "AFFECTED_PEOPLE")) {
       missingData.push({
         key: "AFFECTED_PEOPLE",
-        question: "Can xac minh so nguoi bi anh huong?",
-        impact: "Chua the tinh nhu cau vat tu khi chua co so nguoi.",
+        question: "Cần xác minh số người bị ảnh hưởng?",
+        impact: "Chưa thể tính nhu cầu vật tư khi chưa có số người.",
       });
     }
     if (!hasIncidentType && !missingData.some((item) => item.key === "INCIDENT_TYPE")) {
       missingData.push({
         key: "INCIDENT_TYPE",
-        question: "Tinh huong chinh la gi?",
-        impact: "Can xac minh loai tinh huong truoc khi ap dung dinh muc.",
+        question: "Tình huống chính là gì?",
+        impact: "Cần xác minh loại tình huống trước khi áp dụng định mức.",
       });
     }
     const canUsePlan = hasAffectedPeople && hasIncidentType && mission.requirements.length > 0;
@@ -303,12 +304,12 @@ export class CoordinationSnapshotService {
               baseQuantity: requirement.required,
               reserveQuantity: 0,
               totalQuantity: requirement.required,
-              basis: "Backend mission requirement snapshot",
+              basis: "Định mức vật tư của hệ thống",
               sourceFactIds: factIdsForKeys(facts, ["AFFECTED_PEOPLE", "INCIDENT_TYPE"]),
               ruleVersion: COORDINATION_RULE_VERSION,
             }))
           : [],
-        reason: canUsePlan ? null : "Thieu fact co nguon de dung dinh muc kho.",
+        reason: canUsePlan ? null : "Thiếu dữ kiện có nguồn để áp định mức kho.",
         ruleVersion: canUsePlan ? COORDINATION_RULE_VERSION : null,
       },
     };
@@ -449,34 +450,6 @@ export class CoordinationSnapshotService {
     };
   }
 
-  private buildForecasts(weather: WeatherAlert | null): CoordinationAnalysis["forecasts"] {
-    const pending = [6, 12, 24].map((horizonHours) => ({
-      horizonHours: horizonHours as 6 | 12 | 24,
-      status: "PENDING_DATA" as const,
-      risk: null,
-      source: null,
-      explanation: "Only the verified 72-hour weather snapshot is currently available.",
-    }));
-    return [
-      ...pending,
-      weather
-        ? {
-            horizonHours: 72 as const,
-            status: "COMPUTED" as const,
-            risk: null,
-            source: `${weather.source}:${weather.fetchedAt}`,
-            explanation: `72h rain ${weather.totalRainMm}mm; alert=${weather.alert}.`,
-          }
-        : {
-            horizonHours: 72 as const,
-            status: "UNAVAILABLE" as const,
-            risk: null,
-            source: null,
-            explanation: "Weather source unavailable; no rainfall value was assumed.",
-          },
-    ];
-  }
-
   private computeUrgency(facts: CoordinationFact[], status: CoordinationAnalysis["status"]) {
     const people = numericFactValue(facts, "AFFECTED_PEOPLE");
     const stranded = booleanFactValue(facts, "PEOPLE_STRANDED");
@@ -489,7 +462,7 @@ export class CoordinationSnapshotService {
     const level = stranded ? 5 : isolationRisk || (people ?? 0) >= 100 ? 4 : people ? 3 : null;
     return {
       level: level as 1 | 2 | 3 | 4 | 5 | null,
-      label: level == null ? "Chua du du kien" : `Muc uu tien ${level}/5`,
+      label: level == null ? "Chưa đủ dữ kiện" : `Mức ưu tiên ${level}/5`,
       confidence: level == null ? null : stranded ? 0.9 : isolationRisk ? 0.7 : 0.6,
       status,
       basisFactIds,
@@ -502,11 +475,11 @@ export class CoordinationSnapshotService {
     missingData: SituationExtraction["missingData"],
     hasLocalShortage: boolean,
   ) {
-    if (missingData.length) return "Can xac minh du lieu uu tien truoc khi dung phuong an kho.";
+    if (missingData.length) return "Cần xác minh dữ kiện ưu tiên trước khi dùng phương án kho.";
     if (hasLocalShortage) {
-      return `Phuong an noi xa cua ${mission.warehouse.name} con thieu; chi de xuat diem lien he ngoai xa.`;
+      return `Phương án nội xã của ${mission.warehouse.name} còn thiếu; chỉ đề xuất điểm liên hệ ngoài xã.`;
     }
-    return `Phuong an noi xa cua ${mission.warehouse.name} da du du lieu de ADMIN xem xet.`;
+    return `Phương án nội xã của ${mission.warehouse.name} đã đủ dữ liệu để quản trị xem xét.`;
   }
 }
 

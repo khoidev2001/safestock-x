@@ -3,8 +3,8 @@ import { computeRebalanceSuggestions, WarehouseStock } from "../rebalance";
 describe("computeRebalanceSuggestions", () => {
   it("đề xuất chuyển từ kho thừa sang kho thiếu nhất cùng SKU", () => {
     const stocks: WarehouseStock[] = [
-      { warehouseId: "w1", warehouseName: "Kho 1", sku: "A", quantity: 100 },
-      { warehouseId: "w2", warehouseName: "Kho 2", sku: "A", quantity: 0 },
+      { warehouseId: "w1", warehouseName: "Kho 1", sku: "A", itemName: "Vật tư A", quantity: 100 },
+      { warehouseId: "w2", warehouseName: "Kho 2", sku: "A", itemName: "Vật tư A", quantity: 0 },
     ];
     const result = computeRebalanceSuggestions(stocks);
     expect(result).toHaveLength(1);
@@ -15,15 +15,15 @@ describe("computeRebalanceSuggestions", () => {
 
   it("không đề xuất khi chỉ 1 kho có SKU", () => {
     const stocks: WarehouseStock[] = [
-      { warehouseId: "w1", warehouseName: "Kho 1", sku: "A", quantity: 100 },
+      { warehouseId: "w1", warehouseName: "Kho 1", sku: "A", itemName: "Vật tư A", quantity: 100 },
     ];
     expect(computeRebalanceSuggestions(stocks)).toEqual([]);
   });
 
   it("không đề xuất khi tồn đã cân bằng (lệch dưới ngưỡng)", () => {
     const stocks: WarehouseStock[] = [
-      { warehouseId: "w1", warehouseName: "Kho 1", sku: "A", quantity: 55 },
-      { warehouseId: "w2", warehouseName: "Kho 2", sku: "A", quantity: 45 },
+      { warehouseId: "w1", warehouseName: "Kho 1", sku: "A", itemName: "Vật tư A", quantity: 55 },
+      { warehouseId: "w2", warehouseName: "Kho 2", sku: "A", itemName: "Vật tư A", quantity: 45 },
     ];
     expect(computeRebalanceSuggestions(stocks)).toEqual([]);
   });
@@ -32,9 +32,9 @@ describe("computeRebalanceSuggestions", () => {
     // avg = (120+0+0)/3 = 40. Kho 1 thừa (>=80). movable = (120-40)/2 = 40.
     // 2 kho thiếu, mỗi kho need = 40 → nhận đến khi hết movable.
     const stocks: WarehouseStock[] = [
-      { warehouseId: "w1", warehouseName: "Kho 1", sku: "A", quantity: 120 },
-      { warehouseId: "w2", warehouseName: "Kho 2", sku: "A", quantity: 0 },
-      { warehouseId: "w3", warehouseName: "Kho 3", sku: "A", quantity: 0 },
+      { warehouseId: "w1", warehouseName: "Kho 1", sku: "A", itemName: "Vật tư A", quantity: 120 },
+      { warehouseId: "w2", warehouseName: "Kho 2", sku: "A", itemName: "Vật tư A", quantity: 0 },
+      { warehouseId: "w3", warehouseName: "Kho 3", sku: "A", itemName: "Vật tư A", quantity: 0 },
     ];
     const result = computeRebalanceSuggestions(stocks);
     const totalMoved = result.reduce((s, r) => s + r.suggestedQty, 0);
@@ -46,8 +46,8 @@ describe("computeRebalanceSuggestions", () => {
 
   it("bỏ qua SKU có trung bình 0 (tất cả kho đều hết)", () => {
     const stocks: WarehouseStock[] = [
-      { warehouseId: "w1", warehouseName: "Kho 1", sku: "A", quantity: 0 },
-      { warehouseId: "w2", warehouseName: "Kho 2", sku: "A", quantity: 0 },
+      { warehouseId: "w1", warehouseName: "Kho 1", sku: "A", itemName: "Vật tư A", quantity: 0 },
+      { warehouseId: "w2", warehouseName: "Kho 2", sku: "A", itemName: "Vật tư A", quantity: 0 },
     ];
     expect(computeRebalanceSuggestions(stocks)).toEqual([]);
   });

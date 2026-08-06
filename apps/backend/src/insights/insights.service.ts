@@ -117,6 +117,11 @@ export class InsightsService {
             totalRainMm: insights.weatherAlert.totalRainMm,
             periodHours: 72,
             alert: insights.weatherAlert.alert,
+            horizons: insights.weatherAlert.horizons.map((item) => ({
+              hours: item.hours,
+              rainMm: item.rainMm,
+              maxWindKph: item.maxWindKph,
+            })),
           }
         : null,
       inventory: {
@@ -272,6 +277,7 @@ export class InsightsService {
         warehouseId: wid,
         warehouseName: nameById.get(wid) ?? wid,
         sku: b.item.sku,
+        itemName: b.item.name,
         quantity: 0,
       };
       entry.quantity += Math.max(0, b.quantity - onLoan);

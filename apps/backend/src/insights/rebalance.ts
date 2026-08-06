@@ -6,11 +6,14 @@ export interface WarehouseStock {
   warehouseId: string;
   warehouseName: string;
   sku: string;
+  /** Tên tiếng Việt của vật tư — giao diện hiện tên này, mã SKU chỉ để đối chiếu. */
+  itemName: string;
   quantity: number;
 }
 
 export interface RebalanceSuggestion {
   sku: string;
+  itemName: string;
   fromWarehouseId: string;
   fromWarehouseName: string;
   toWarehouseId: string;
@@ -60,6 +63,7 @@ export function computeRebalanceSuggestions(stocks: WarehouseStock[]): Rebalance
         if (qty <= 0) continue;
         suggestions.push({
           sku,
+          itemName: from.itemName,
           fromWarehouseId: from.warehouseId,
           fromWarehouseName: from.warehouseName,
           toWarehouseId: to.warehouseId,

@@ -30,16 +30,33 @@ describe("computeRequirements", () => {
     expect(reqs.find((r) => r.sku === "LIFE-CHILD")?.required).toBe(20);
   });
 
-  it("should compute water per person per day (48h = 2 days, 15L)", () => {
+  it("nước tính theo CHAI, không phải lít (48h = 2 ngày)", () => {
+    // Chuẩn Sphere là 15 lít/người/ngày, nhưng kho xuất theo chai 1.5 lít:
+    // 15 / 1.5 = 10 chai/người/ngày → 10 * 100 người * 2 ngày = 2000 chai.
+    // Ghi định mức theo lít là đẩy phép chia sang người đang vội bốc hàng.
     const reqs = computeRequirements(flood({ affectedPeople: 100, durationHours: 48 }));
-    // 15 * 100 * 2 = 3000
-    expect(reqs.find((r) => r.sku === "WATER-01")?.required).toBe(3000);
+    expect(reqs.find((r) => r.sku === "WATER-01")?.required).toBe(2000);
+    expect(reqs.find((r) => r.sku === "WATER-01")?.unit).toBe("chai");
   });
 
   it("should round duration up to full days", () => {
     const reqs = computeRequirements(flood({ affectedPeople: 10, durationHours: 25 }));
-    // 25h → 2 ngày → 15*10*2 = 300
-    expect(reqs.find((r) => r.sku === "WATER-01")?.required).toBe(300);
+    // 25h → 2 ngày → 10 chai * 10 người * 2 ngày = 200 chai
+    expect(reqs.find((r) => r.sku === "WATER-01")?.required).toBe(200);
+  });
+
+  it("phần lẻ khi quy đổi chai vẫn được làm tròn LÊN, không thiếu nước", () => {
+    // Cháy dùng 5 lít/người/ngày → 3.333 chai. Một người, một ngày phải ra 4 chai
+    // chứ không phải 3: làm tròn xuống là cấp thiếu nước cho người thật.
+    const reqs = computeRequirements({
+      incidentType: IncidentType.FIRE,
+      affectedPeople: 1,
+      durationHours: 24,
+      children: 0,
+      elderly: 0,
+      medicalSupportCases: 0,
+    });
+    expect(reqs.find((r) => r.sku === "WATER-01")?.required).toBe(4);
   });
 
   it("should round requirements up (ceil) for safety", () => {

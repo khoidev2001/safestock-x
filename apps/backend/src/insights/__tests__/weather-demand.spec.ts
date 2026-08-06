@@ -30,6 +30,7 @@ describe("computeWeatherDemandForecast", () => {
       alert: true,
       periodHours: 72,
       daily: [],
+      horizons: [],
       fetchedAt: "2026-07-27T00:00:00.000Z",
       source: "open-meteo",
     })[0];
@@ -50,6 +51,7 @@ describe("computeWeatherDemandForecast", () => {
         alert: false,
         periodHours: 72,
         daily: [],
+        horizons: [],
         fetchedAt: "2026-07-27T00:00:00.000Z",
         source: "open-meteo",
       }),
@@ -63,6 +65,7 @@ describe("computeWeatherDemandForecast", () => {
       alert: true,
       periodHours: 72,
       daily: [],
+      horizons: [],
       fetchedAt: "2026-07-27T00:00:00.000Z",
       source: "open-meteo",
     });

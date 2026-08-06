@@ -6,6 +6,7 @@
  * diễn giải định tính (mục tiêu/giai đoạn/cảnh báo/câu hỏi) — ghép ở service.
  */
 
+import { incidentTypeLabel } from "@safestock/shared-types";
 import { IncidentInput } from "./mission.compute";
 
 export interface Forecast {
@@ -88,7 +89,7 @@ export function scoreSeverity(
   const highRisk = ["FLOOD", "LANDSLIDE", "STORM"];
   if (highRisk.includes(incident.incidentType)) {
     score += 1;
-    reasons.push(`Loại thiên tai nguy hiểm (${incident.incidentType}).`);
+    reasons.push(`Loại thiên tai nguy hiểm: ${incidentTypeLabel(incident.incidentType)}.`);
   }
 
   const vulnerable = incident.children + incident.elderly + incident.medicalSupportCases;
@@ -98,7 +99,7 @@ export function scoreSeverity(
   }
 
   if (incident.durationHours >= 24) {
-    reasons.push(`Thời gian cô lập dự kiến kéo dài (${incident.durationHours}h).`);
+    reasons.push(`Thời gian cô lập dự kiến kéo dài (${incident.durationHours} giờ).`);
   }
 
   if (fulfillment < 70) {

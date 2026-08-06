@@ -4,16 +4,26 @@ import { AiClientService } from "../ai/ai-client.service";
 import { WeatherService } from "../insights/weather";
 import { PrismaService } from "../prisma/prisma.service";
 import { ReadinessService } from "../readiness/readiness.service";
-import { resolveEmergencyAnswer } from "./assistant-emergency-answer";
+import {
+  detectEmergencySignal,
+  resolveEmergencyAnswer,
+  type EmergencySignal,
+} from "./assistant-emergency-answer";
 import {
   type AssistantSnapshot,
   isWeatherQuestion,
   resolveAssistantFastAnswer,
 } from "./assistant-fast-answer";
 
+export interface AssistantAnswer {
+  answer: string;
+  /** Có khi câu hỏi mô tả một sự việc cần điều phối. */
+  emergency?: EmergencySignal;
+}
+
 /**
  * Trợ lý ứng phó: trả lời tức thời các tình huống cứu hộ phổ biến, đồng thời dùng snapshot
- * kho cho câu hỏi tồn/readiness/sự cố. LLM không tự tra DB hoặc tự bịa số liệu.
+ * kho cho câu hỏi tồn/mức sẵn sàng/sự cố. LLM không tự tra DB hoặc tự bịa số liệu.
  */
 @Injectable()
 export class AssistantService {
@@ -24,9 +34,12 @@ export class AssistantService {
     private weather: WeatherService,
   ) {}
 
-  async ask(warehouseId: string, question: string): Promise<{ answer: string }> {
-    const emergencyAnswer = resolveEmergencyAnswer(question);
-    if (emergencyAnswer) return { answer: emergencyAnswer };
+  async ask(warehouseId: string, question: string): Promise<AssistantAnswer> {
+    // Kèm tín hiệu khẩn cấp để giao diện mời sang luồng điều phối. Nhận diện là
+    // luật cố định (từ khoá + số người), không phải AI đoán — mời sai chỗ thì
+    // người dùng mất niềm tin vào chính lời mời đó.
+    const emergency = detectEmergencySignal(question);
+    if (emergency) return this.answerEmergency(warehouseId, question, emergency);
 
     const snapshot = await this.buildSnapshot(warehouseId, isWeatherQuestion(question));
     const fastAnswer = resolveAssistantFastAnswer(question, snapshot);
@@ -36,6 +49,36 @@ export class AssistantService {
       const answer = await this.ai.assistantAsk(question, JSON.stringify(snapshot));
       return { answer };
     } catch {
+      throw new ServiceUnavailableException("Trợ lý AI tạm thời không phản hồi. Thử lại sau.");
+    }
+  }
+
+  /**
+   * Trả lời một sự việc cần cứu hộ: để AI đọc tình huống trên nền tồn kho thật.
+   *
+   * Trước đây nhánh này chặn ngay bằng câu dựng sẵn, nên trợ lý trả lời giống hệt
+   * nhau cho mọi sự việc — đúng nhưng vô hồn, và không hề dùng tới số vật tư đang
+   * có trong kho.
+   *
+   * Bản mẫu vẫn giữ nguyên, chỉ lùi về đúng vai: ĐƯỜNG LUI. Cả việc chụp trạng
+   * thái kho lẫn lượt gọi AI đều nằm trong cùng một `try`, nên mất điện, mất mạng,
+   * hay cơ sở dữ liệu chết thì người trực vẫn nhận được câu trả lời dùng được —
+   * đó là lúc cần nó nhất, không phải lúc mọi thứ đang chạy tốt.
+   */
+  private async answerEmergency(
+    warehouseId: string,
+    question: string,
+    emergency: EmergencySignal,
+  ): Promise<AssistantAnswer> {
+    try {
+      // Khẩn cấp thì LUÔN kèm thời tiết: mưa quyết định cách tiếp cận và vật tư,
+      // không đợi người dùng hỏi mới lấy.
+      const snapshot = await this.buildSnapshot(warehouseId, true);
+      const answer = await this.ai.assistantAsk(question, JSON.stringify(snapshot));
+      return { answer, emergency };
+    } catch {
+      const fallback = resolveEmergencyAnswer(question);
+      if (fallback) return { answer: fallback, emergency };
       throw new ServiceUnavailableException("Trợ lý AI tạm thời không phản hồi. Thử lại sau.");
     }
   }

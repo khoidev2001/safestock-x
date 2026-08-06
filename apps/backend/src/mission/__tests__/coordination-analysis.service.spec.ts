@@ -134,4 +134,83 @@ describe("CoordinationAnalysisService", () => {
       expect.arrayContaining([expect.objectContaining({ provenance: "AI_INFERENCE" })]),
     );
   });
+
+  it("nhập tay không lời kể: lấy số liệu biểu mẫu làm dữ kiện, không gọi AI", async () => {
+    // Nhiệm vụ lập từ form: không có reportText, nhưng cán bộ đã điền đủ số liệu.
+    const { service, ai, snapshots, persistence, missions } = makeService();
+    missions.getMission.mockResolvedValue({
+      id: "mission-1",
+      reportText: null,
+      incidentType: "FLOOD",
+      affectedPeople: 100,
+      durationHours: 24,
+      location: "Long Thăng",
+    });
+
+    await service.analyze("mission-1", "admin-1", null, { requestId: "analysis-req-0002" });
+
+    // Không có câu chữ nào thì không có gì cho AI bóc tách — gọi sang chỉ tốn thời gian.
+    expect(ai.analyzeSituation).not.toHaveBeenCalled();
+    const extraction = snapshots.compute.mock.calls[0][1] as SituationExtraction;
+    expect(extraction.facts.map((fact) => fact.key).sort()).toEqual([
+      "AFFECTED_PEOPLE",
+      "DURATION_HOURS",
+      "INCIDENT_TYPE",
+      "LOCATION",
+    ]);
+    // Trích dẫn là chính nội dung ô nhập, không phải câu văn dựng thêm.
+    for (const fact of extraction.facts) {
+      expect(fact.provenance).toBe("REPORTED");
+      expect(fact.source?.excerpt).toMatch(/^(Loại tình huống|Số người|Số giờ dự kiến|Địa điểm)/);
+    }
+    expect(extraction.facts.map((fact) => fact.source?.excerpt)).toContain("Số người: 100");
+    expect(persistence.saveAnalysisSnapshot).toHaveBeenCalledWith(
+      "mission-1",
+      "admin-1",
+      null,
+      expect.objectContaining({
+        provenance: expect.objectContaining({ extractionSource: "BACKEND_FALLBACK" }),
+      }),
+    );
+  });
+
+  it("thiếu địa điểm thì bỏ hẳn dữ kiện đó, không điền chuỗi rỗng", async () => {
+    const { service, snapshots, missions } = makeService();
+    missions.getMission.mockResolvedValue({
+      id: "mission-1",
+      reportText: null,
+      incidentType: "STORM",
+      affectedPeople: 30,
+      durationHours: 12,
+      location: "   ",
+    });
+
+    await service.analyze("mission-1", "admin-1", null, { requestId: "analysis-req-0005" });
+
+    const extraction = snapshots.compute.mock.calls[0][1] as SituationExtraction;
+    expect(extraction.facts.some((fact) => fact.key === "LOCATION")).toBe(false);
+  });
+
+  it("mọi câu hiển thị đều là tiếng Việt có dấu, không lọt tiếng Anh", async () => {
+    const { service, ai, snapshots, missions } = makeService();
+    ai.analyzeSituation.mockRejectedValue(new Error("offline"));
+    missions.getMission.mockResolvedValue({ id: "mission-1", reportText: "ngập sâu một mét" });
+    await service.analyze("mission-1", "admin-1", null, { requestId: "analysis-req-0004" });
+
+    const shown = snapshots.compute.mock.calls
+      .map(([, extraction]) => extraction as SituationExtraction)
+      .flatMap((extraction) => [
+        ...extraction.missingData.flatMap((item) => [item.question, item.impact]),
+        extraction.priorityQuestion?.question ?? "",
+        extraction.priorityQuestion?.expectedImpact ?? "",
+      ])
+      .filter(Boolean);
+
+    expect(shown.length).toBeGreaterThan(0);
+    for (const line of shown) {
+      expect(line).not.toMatch(/No report text/i);
+      // Tiếng Việt không dấu là dấu hiệu chuỗi bị viết vội; bắt tại đây.
+      expect(line).toMatch(/[ăâđêôơưáàảãạấầẩẫậéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/iu);
+    }
+  });
 });
