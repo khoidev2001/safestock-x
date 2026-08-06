@@ -833,6 +833,7 @@ enum InterCommuneLoanStatus {
   REJECTED // bên cho mượn từ chối
   APPROVED // bên cho mượn đồng ý và đã trừ kho
   ACTIVE // bên mượn đã xác nhận nhận hàng — đang nợ
+  PARTIALLY_RETURNED // đã trả một phần, còn nợ phần còn lại
   RETURNED // đã trả xong
   CANCELLED // bên yêu cầu tự huỷ trước khi có quyết định
 }
@@ -861,11 +862,31 @@ model InterCommuneLoan {
   /// thì phải đọc được y như lúc ghi.
   peerCommuneName String
   /// Id bản ghi tương ứng bên xã kia. Trống khi hai bên ghi tay lúc mất mạng.
-  peerLoanId      String?
+  ///
+  /// DUY NHẤT: hai bản ghi cùng trỏ về một khoản bên kia nghĩa là đã nhân đôi
+  /// khoản nợ. Ràng buộc ở tầng CSDL vì đây là thứ phải đúng kể cả khi tin tới
+  /// hai lần do gửi lại.
+  peerLoanId      String? @unique
+
+  /// Khoá chống nhận trùng cho yêu cầu tới từ xã kia.
+  ///
+  /// Đường truyền giữa hai xã là thứ hay đứt nhất trong cả hệ thống, nên xã gửi
+  /// sẽ gửi lại. Không có khoá này thì mỗi lần gửi lại là một khoản mượn mới, và
+  /// kho bên cho mượn bị trừ nhiều lần cho cùng một yêu cầu. Dự án đã dùng đúng
+  /// cách này cho lô số liệu cảm biến và cho thao tác kho.
+  inboundKey String? @unique
 
   itemSku  String
   itemName String
+  /// Số lượng mượn theo thoả thuận.
   quantity Int
+  /// Đã trả được bao nhiêu (cộng dồn).
+  ///
+  /// Trả TỪNG PHẦN là chuyện bình thường: mượn 200 chai, trả 180, hỏng mất 20.
+  /// Mô hình mượn trong xã của chính dự án này đã có returnedOk/returnedDamaged/
+  /// lost từ đầu; ghi nhận liên xã kiểu được-ăn-cả-ngã-về-không thì hoặc phải
+  /// khai khống là đã trả đủ, hoặc để khoản nợ mở mãi mãi.
+  returnedQuantity Int @default(0)
   unit     String
 
   /// Kho của xã mình chịu trách nhiệm cho khoản này (xuất ra hoặc nhận về).

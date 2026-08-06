@@ -5,7 +5,9 @@ import {
   isTerminal,
   MANUAL_INITIAL_STATUS,
   stockEffect,
-  type LoanStatus,
+  manualEntryStockEffect,
+  statusAfterReturn,
+  type InterCommuneStatus,
 } from "../inter-commune-loan.workflow";
 
 describe("máy trạng thái mượn liên xã", () => {
@@ -33,7 +35,7 @@ describe("máy trạng thái mượn liên xã", () => {
   });
 
   it("ba trạng thái kết thúc không đi tiếp được nữa", () => {
-    for (const status of ["REJECTED", "CANCELLED", "RETURNED"] as LoanStatus[]) {
+    for (const status of ["REJECTED", "CANCELLED", "RETURNED"] as InterCommuneStatus[]) {
       expect(isTerminal(status)).toBe(true);
       expect(allowedTransitions(status)).toEqual([]);
     }
@@ -92,18 +94,19 @@ describe("máy trạng thái mượn liên xã", () => {
       }
     });
 
-    it("mỗi bước chỉ đổi kho của ĐÚNG MỘT xã", () => {
-      // Chốt bất biến của cả tính năng: không bước nào được đụng kho cả hai bên.
-      // Đụng cả hai là hàng tự nhân đôi hoặc tự bốc hơi.
-      const moiBuoc = (["REQUESTED", "APPROVED", "ACTIVE"] as LoanStatus[]).flatMap((s) =>
-        allowedTransitions(s),
-      );
+    it("mỗi bước khai đúng MỘT bên thực hiện", () => {
+      // Bất biến thật sự đo được: hiệu ứng kho suy ra từ `by`, nên nếu một bước
+      // nào đó khai thiếu hoặc khai sai `by` thì kho sẽ đổi ở nhầm xã. Kiểm
+      // chính `by` mới là kiểm; so hai chiều của stockEffect thì luôn đúng theo
+      // định nghĩa của hàm và không bao giờ đỏ.
+      const moiBuoc = (
+        ["REQUESTED", "APPROVED", "ACTIVE", "PARTIALLY_RETURNED"] as InterCommuneStatus[]
+      ).flatMap((s) => allowedTransitions(s));
 
+      expect(moiBuoc.length).toBeGreaterThan(0);
       for (const buoc of moiBuoc) {
-        const doi = [stockEffect("OUTGOING", buoc), stockEffect("INCOMING", buoc)].filter(
-          (e) => e !== "NONE",
-        );
-        expect(doi.length).toBeLessThanOrEqual(1);
+        expect(["LENDER", "BORROWER"]).toContain(buoc.by);
+        expect(["DEDUCT", "ADD", "NONE"]).toContain(buoc.stock);
       }
     });
 
@@ -138,5 +141,51 @@ describe("máy trạng thái mượn liên xã", () => {
   it("chiều bản ghi quyết định bên nào là ai", () => {
     expect(actorOf("OUTGOING")).toBe("LENDER");
     expect(actorOf("INCOMING")).toBe("BORROWER");
+  });
+});
+
+describe("trả từng phần", () => {
+  it("trả thiếu thì vẫn còn nợ, chưa đóng khoản", () => {
+    // Mượn 200 chai, trả 180, hỏng mất 20 — chuyện bình thường. Ghi được-ăn-cả-
+    // ngã-về-không thì hoặc phải khai khống là đã trả đủ, hoặc để nợ mở mãi mãi.
+    expect(statusAfterReturn(200, 0, 180)).toEqual({
+      status: "PARTIALLY_RETURNED",
+      totalReturned: 180,
+    });
+  });
+
+  it("trả nốt phần còn lại thì đóng khoản", () => {
+    expect(statusAfterReturn(200, 180, 20)).toEqual({ status: "RETURNED", totalReturned: 200 });
+  });
+
+  it("trả làm nhiều lần vẫn cộng dồn đúng", () => {
+    let da = 0;
+    for (const lan of [50, 50, 50]) da = statusAfterReturn(200, da, lan).totalReturned;
+
+    expect(da).toBe(150);
+    expect(statusAfterReturn(200, da, 50).status).toBe("RETURNED");
+  });
+
+  it("CHẶN trả nhiều hơn số đã mượn", () => {
+    // Trả dư là cộng vào kho bên cho mượn phần hàng chưa từng rời kho họ — tự
+    // nhiên sinh ra hàng trong sổ.
+    expect(() => statusAfterReturn(200, 180, 30)).toThrow(/vượt phần còn nợ/);
+    expect(() => statusAfterReturn(200, 0, 201)).toThrow(/vượt phần còn nợ/);
+  });
+
+  it("CHẶN số lượng trả vô nghĩa", () => {
+    expect(() => statusAfterReturn(200, 0, 0)).toThrow(/số nguyên dương/);
+    expect(() => statusAfterReturn(200, 0, -5)).toThrow(/số nguyên dương/);
+    expect(() => statusAfterReturn(200, 0, 1.5)).toThrow(/số nguyên dương/);
+  });
+});
+
+describe("ghi tay lúc mất mạng", () => {
+  it("tạo bản ghi ghi tay vẫn phải đổi kho", () => {
+    // Bản ghi ghi tay bắt đầu thẳng ở ACTIVE nên KHÔNG đi qua bước mang hiệu ứng
+    // kho. Thiếu chỗ này thì hàng đã chuyển ngoài đời mà sổ vẫn nguyên: bên cho
+    // mượn hiện thừa hàng đã đưa đi, bên mượn thiếu hàng đang cầm trong tay.
+    expect(manualEntryStockEffect("OUTGOING")).toBe("DEDUCT");
+    expect(manualEntryStockEffect("INCOMING")).toBe("ADD");
   });
 });

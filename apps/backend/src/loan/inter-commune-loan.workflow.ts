@@ -1,15 +1,29 @@
-export type LoanDirection = "OUTGOING" | "INCOMING";
+export type InterCommuneDirection = "OUTGOING" | "INCOMING";
 
-export type LoanStatus =
-  "REQUESTED" | "REJECTED" | "CANCELLED" | "APPROVED" | "ACTIVE" | "RETURNED";
+/**
+ * Trạng thái khoản mượn LIÊN XÃ.
+ *
+ * Tên có tiền tố vì Prisma đã xuất sẵn một `LoanStatus` khác hẳn (ON_LOAN,
+ * PARTIALLY_RETURNED, CLOSED) cho khoản mượn TRONG xã. Hai kiểu cùng tên trong
+ * cùng một service là cái bẫy nhập nhầm, mà nhập nhầm ở đây thì trạng thái khoản
+ * nợ hiện sai.
+ */
+export type InterCommuneStatus =
+  | "REQUESTED"
+  | "REJECTED"
+  | "CANCELLED"
+  | "APPROVED"
+  | "ACTIVE"
+  | "PARTIALLY_RETURNED"
+  | "RETURNED";
 
 /** Ai đang thao tác, xét từ phía bản ghi đang xử lý. */
-export type LoanActor = "LENDER" | "BORROWER";
+export type InterCommuneActor = "LENDER" | "BORROWER";
 
-export interface LoanTransition {
-  to: LoanStatus;
+export interface InterCommuneTransition {
+  to: InterCommuneStatus;
   /** Bên được phép thực hiện. Bên kia bấm được nút này là lỗi phân quyền. */
-  by: LoanActor;
+  by: InterCommuneActor;
   /** Kho của bên thao tác thay đổi thế nào khi bước này xảy ra. */
   stock: "DEDUCT" | "ADD" | "NONE";
   label: string;
@@ -26,7 +40,7 @@ export interface LoanTransition {
  * kho nào thì cộng lúc bên đó xác nhận đã nhận.** Không cộng trước khi hàng tới:
  * kho hiện số mình chưa cầm trong tay là con số dẫn tới điều phối sai.
  */
-const TRANSITIONS: Record<LoanStatus, LoanTransition[]> = {
+const TRANSITIONS: Record<InterCommuneStatus, InterCommuneTransition[]> = {
   REQUESTED: [
     // Bên cho mượn đồng ý: hàng rời kho họ ngay lúc này.
     { to: "APPROVED", by: "LENDER", stock: "DEDUCT", label: "Đồng ý cho mượn" },
@@ -41,28 +55,42 @@ const TRANSITIONS: Record<LoanStatus, LoanTransition[]> = {
     { to: "CANCELLED", by: "LENDER", stock: "ADD", label: "Thu hồi, bên kia không nhận" },
   ],
   ACTIVE: [
-    // Bên mượn trả: hàng rời kho họ.
+    // Bên mượn trả: hàng rời kho họ. Trả thiếu thì dừng ở PARTIALLY_RETURNED,
+    // vẫn còn nợ; xem `statusAfterReturn`.
     { to: "RETURNED", by: "BORROWER", stock: "DEDUCT", label: "Ghi nhận đã trả" },
+    {
+      to: "PARTIALLY_RETURNED",
+      by: "BORROWER",
+      stock: "DEDUCT",
+      label: "Ghi nhận trả một phần",
+    },
+  ],
+  PARTIALLY_RETURNED: [
+    { to: "RETURNED", by: "BORROWER", stock: "DEDUCT", label: "Trả nốt phần còn lại" },
+    { to: "PARTIALLY_RETURNED", by: "BORROWER", stock: "DEDUCT", label: "Trả thêm một phần" },
   ],
   REJECTED: [],
   CANCELLED: [],
   RETURNED: [],
 };
 
-export function allowedTransitions(status: LoanStatus): LoanTransition[] {
+export function allowedTransitions(status: InterCommuneStatus): InterCommuneTransition[] {
   return TRANSITIONS[status] ?? [];
 }
 
-export function isTerminal(status: LoanStatus): boolean {
+export function isTerminal(status: InterCommuneStatus): boolean {
   return allowedTransitions(status).length === 0;
 }
 
-export function findTransition(from: LoanStatus, to: LoanStatus): LoanTransition | null {
+export function findTransition(
+  from: InterCommuneStatus,
+  to: InterCommuneStatus,
+): InterCommuneTransition | null {
   return allowedTransitions(from).find((item) => item.to === to) ?? null;
 }
 
 /** Bản ghi ở phía này thuộc về bên nào trong khoản mượn. */
-export function actorOf(direction: LoanDirection): LoanActor {
+export function actorOf(direction: InterCommuneDirection): InterCommuneActor {
   return direction === "OUTGOING" ? "LENDER" : "BORROWER";
 }
 
@@ -78,8 +106,8 @@ export function actorOf(direction: LoanDirection): LoanActor {
  * hoặc cùng trừ, và sổ sách lệch mà không ai thấy ngay.
  */
 export function stockEffect(
-  direction: LoanDirection,
-  transition: LoanTransition,
+  direction: InterCommuneDirection,
+  transition: InterCommuneTransition,
 ): "DEDUCT" | "ADD" | "NONE" {
   // Hiệu ứng khai báo trong bảng là của BÊN THỰC HIỆN bước đó. Xã còn lại chỉ ghi
   // nhận trạng thái, kho không đổi.
@@ -93,4 +121,54 @@ export function stockEffect(
  * Bắt bản ghi đó đi lại từ REQUESTED là bắt người dùng bấm ba nút giả cho một
  * việc đã xong — và trong lúc bấm, kho sẽ bị trừ thêm lần nữa.
  */
-export const MANUAL_INITIAL_STATUS: LoanStatus = "ACTIVE";
+export const MANUAL_INITIAL_STATUS: InterCommuneStatus = "ACTIVE";
+
+/**
+ * Trạng thái sau khi ghi nhận trả thêm một lượng.
+ *
+ * Tách riêng vì đây là chỗ duy nhất mà một bước chuyển có thể ra HAI đích khác
+ * nhau tuỳ con số, và quyết định đó phải nằm cùng chỗ với luật trạng thái chứ
+ * không nằm rải trong service.
+ *
+ * Trả dư bị chặn ở đây, không phải ở tầng giao diện: trả nhiều hơn số đã mượn là
+ * cộng vào kho bên cho mượn phần hàng chưa từng rời kho họ — tự nhiên sinh ra
+ * hàng trong sổ.
+ */
+export function statusAfterReturn(
+  borrowed: number,
+  alreadyReturned: number,
+  returningNow: number,
+): { status: InterCommuneStatus; totalReturned: number } {
+  if (!Number.isInteger(returningNow) || returningNow <= 0) {
+    throw new Error("Số lượng trả phải là số nguyên dương");
+  }
+  const totalReturned = alreadyReturned + returningNow;
+  if (totalReturned > borrowed) {
+    throw new Error(
+      `Trả ${returningNow} là vượt phần còn nợ (${borrowed - alreadyReturned}/${borrowed})`,
+    );
+  }
+  return {
+    status: totalReturned === borrowed ? "RETURNED" : "PARTIALLY_RETURNED",
+    totalReturned,
+  };
+}
+
+/**
+ * Kho thay đổi thế nào khi TẠO một bản ghi ghi tay lúc mất mạng.
+ *
+ * Bản ghi ghi tay bắt đầu thẳng ở ACTIVE, tức là nó KHÔNG đi qua bước "đồng ý
+ * cho mượn" hay "xác nhận đã nhận" — mà hai bước đó mới là nơi mang hiệu ứng
+ * kho. Không có hàm này thì hàng đã chuyển ngoài đời nhưng sổ vẫn nguyên: bên
+ * cho mượn hiện thừa hàng mình đã đưa đi, bên mượn thiếu hàng đang cầm trong tay.
+ *
+ * Đây là lỗ hổng chỉ lộ ra khi ghép hai quyết định lại với nhau — "ghi tay bắt
+ * đầu ở ACTIVE" và "hiệu ứng kho nằm ở các bước chuyển" — nên tách hẳn ra và ghi
+ * rõ lý do.
+ */
+export function manualEntryStockEffect(
+  direction: InterCommuneDirection,
+): "DEDUCT" | "ADD" | "NONE" {
+  // Cho mượn: hàng đã rời kho mình. Đi mượn: hàng đã vào kho mình.
+  return direction === "OUTGOING" ? "DEDUCT" : "ADD";
+}
