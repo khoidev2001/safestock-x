@@ -63,6 +63,13 @@ export function getPendingOperations(
 }
 
 export function enqueueOperation(operation: PendingSimulatorOperation): boolean {
+  // Chặn ngay thứ ghi được nhưng đọc lại không được.
+  //
+  // readQueue() lọc bỏ mọi bản ghi không qua isOperation, nên một thao tác thiếu
+  // ownerUserId sẽ ghi thành công rồi biến mất lặng lẽ ở lượt đọc kế tiếp — đúng
+  // lỗi đã xảy ra thật. Từ chối tại đây thì người dùng thấy báo lỗi, còn hơn tưởng
+  // đã gửi xong.
+  if (!isOperation(operation)) return false;
   const operations = readQueue();
   if (
     operations.some(

@@ -29,7 +29,9 @@ import {
 } from "./api";
 import { requireApiBase } from "./config";
 import { buildInventorySummary } from "./dashboard-state";
+import { splitBriefingSentences } from "@safestock/shared-types";
 import { readOfflineCache, writeOfflineCache } from "./offline-cache";
+import { mobileRoleLabel } from "./role-labels";
 import { c } from "./styles";
 
 interface DashboardSnapshot {
@@ -325,9 +327,7 @@ export function DashboardScreen({
             {view === "home" ? "TRUNG TÂM VẬN HÀNH" : "MỨC SẴN SÀNG"}
           </Text>
           <Text style={local.title}>
-            {view === "home"
-              ? `Chào ${shortName(user.fullName ?? user.email)}`
-              : snapshot.warehouse.name}
+            {view === "home" ? `Chào ${mobileRoleLabel(user.role)}` : snapshot.warehouse.name}
           </Text>
           <Text style={local.subtitle}>
             {view === "home"
@@ -438,15 +438,28 @@ function HomeDashboard({ snapshot }: { snapshot: DashboardSnapshot }) {
 
       {snapshot.briefing ? (
         <>
-          <Text style={local.sectionTitle}>Bản tin AI đầu ngày</Text>
+          <Text style={local.sectionTitle}>Bản tin đầu ngày</Text>
           <View style={local.aiCard}>
             <View style={local.aiHeader}>
-              <Text style={local.aiBadge}>
-                {snapshot.briefing.source === "AI" ? "AI LOCAL" : "DỰ PHÒNG"}
-              </Text>
+              {/* Chỉ gắn nhãn khi KHÔNG phải AI viết. Nhãn hiện mọi lúc thì thành
+                  nền, không ai đọc; còn lúc rơi về bản mẫu mới là tin phải nói,
+                  vì câu chữ khô hơn hẳn. */}
+              {snapshot.briefing.source === "AI" ? (
+                <View />
+              ) : (
+                <Text style={local.aiBadge}>DỰ PHÒNG</Text>
+              )}
               <Text style={local.aiTime}>{formatDateTime(snapshot.briefing.generatedAt)}</Text>
             </View>
-            <Text style={local.aiNarrative}>{snapshot.briefing.narrative}</Text>
+            {/* Mỗi câu một dòng, không phải một đoạn liền: bản tin gộp bốn mảng
+                vận hành (sẵn sàng, mưa, tồn kho, sự cố) nên đọc đoạn liền phải tự
+                dò câu nào nói chuyện gì. Cắt bằng hàm dùng chung với web. */}
+            {splitBriefingSentences(snapshot.briefing.narrative).map((cau) => (
+              <View key={cau} style={local.aiLine}>
+                <Text style={local.aiBullet}>–</Text>
+                <Text style={local.aiNarrative}>{cau}</Text>
+              </View>
+            ))}
             {snapshot.briefing.priorities.slice(0, 3).map((priority) => (
               <Text key={priority} style={local.aiPriority}>
                 • {priority}
@@ -638,11 +651,6 @@ function EmptyState({ text }: { text: string }) {
       <Text style={local.muted}>{text}</Text>
     </View>
   );
-}
-
-function shortName(value: string): string {
-  const parts = value.trim().split(/\s+/);
-  return parts[parts.length - 1] || value;
 }
 
 function formatDateTime(value: string): string {
@@ -862,7 +870,11 @@ const local = StyleSheet.create({
   },
   aiBadge: { color: c.amber, fontSize: 10, fontWeight: "900", letterSpacing: 1 },
   aiTime: { color: c.muted, fontSize: 10 },
-  aiNarrative: { color: c.text, fontSize: 13, lineHeight: 20 },
+  // flex: 1 để câu dài tự xuống dòng THẲNG HÀNG dưới chữ đầu, không thụt về sát
+  // gạch đầu dòng — thiếu nó là mỗi dòng gãy một kiểu, nhìn như lỗi.
+  aiLine: { flexDirection: "row", gap: 8, marginBottom: 6 },
+  aiBullet: { color: c.muted, fontSize: 13, lineHeight: 20 },
+  aiNarrative: { color: c.text, flex: 1, fontSize: 13, lineHeight: 20 },
   aiPriority: { color: c.muted, fontSize: 12, lineHeight: 18, marginTop: 6 },
   weatherCard: {
     backgroundColor: c.surface,

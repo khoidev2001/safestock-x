@@ -4,8 +4,10 @@ import {
   AppState,
   FlatList,
   Image,
+  Platform,
   Pressable,
   SafeAreaView,
+  StatusBar as ThanhTrangThaiHeDieuHanh,
   StyleSheet,
   Text,
   TextInput,
@@ -44,6 +46,22 @@ import {
 import { mobileRoleLabel } from "./role-labels";
 
 const brandLogo = require("./assets/brand/ung-pho-nhanh-logo.png");
+
+/**
+ * Khoảng chừa cho thanh trạng thái của điện thoại (giờ, sóng, pin).
+ *
+ * `SafeAreaView` của React Native **chỉ có tác dụng trên iOS**; trên Android nó
+ * là một View bình thường, không chừa gì cả. Từ Android 15, app nhắm targetSdk 35
+ * trở lên bị ép vẽ tràn viền, nên nội dung nằm THẲNG DƯỚI thanh trạng thái. Trên
+ * màn hình Báo cáo tình huống, dòng "Báo cáo tình huống" và nút "Đăng xuất" bị
+ * đồng hồ với biểu tượng sóng đè lên; ở các tab khác thì dải thông tin phiên mảnh
+ * hơn nên lọt hẳn xuống dưới thanh trạng thái, mất tăm mà không ai để ý.
+ *
+ * Chừa ở lớp ngoài cùng nên mọi màn hình được sửa một lần, không phải đi vá từng
+ * cái — và cái tiếp theo viết ra cũng đúng sẵn.
+ */
+const CHIEU_CAO_THANH_TRANG_THAI =
+  Platform.OS === "android" ? (ThanhTrangThaiHeDieuHanh.currentHeight ?? 0) : 0;
 
 export default function App() {
   const [session, setSession] = useState<LoginResult | null>(null);
@@ -131,7 +149,7 @@ export default function App() {
 
   if (restoringSession) {
     return (
-      <SafeAreaView style={styles.screen}>
+      <SafeAreaView style={[styles.screen, { paddingTop: CHIEU_CAO_THANH_TRANG_THAI }]}>
         <StatusBar style="dark" backgroundColor={c.bg} />
         <View style={styles.center}>
           <Image
@@ -147,7 +165,7 @@ export default function App() {
   }
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView style={[styles.screen, { paddingTop: CHIEU_CAO_THANH_TRANG_THAI }]}>
       <StatusBar style="dark" backgroundColor={c.bg} />
       {!session ? (
         <LoginScreen onLogin={handleLogin} />

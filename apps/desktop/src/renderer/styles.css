@@ -269,14 +269,28 @@ select {
   gap: 16px;
 }
 
+/* Thanh xác nhận DÍNH đáy khung điều khiển.
+   Bảng có 14 thanh trượt nên nút nằm tận cuối, ngoài tầm nhìn: người dùng kéo
+   thông số ở trên rồi tưởng đã xong, trong khi số liệu chưa hề rời khỏi máy.
+   Dính đáy thì lúc nào cũng thấy còn bao nhiêu thông số chưa gửi. */
 .confirm-row {
+  position: sticky;
+  bottom: -20px;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin-top: 18px;
-  padding-top: 14px;
+  padding: 14px 0 4px;
   border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+/* Còn thông số chưa gửi thì thanh phải đập vào mắt, không lẫn vào nền. */
+.confirm-row.has-pending {
+  border-top-color: var(--alert);
+  box-shadow: 0 -8px 18px -12px rgba(0, 0, 0, 0.9);
 }
 
 .slider-row {

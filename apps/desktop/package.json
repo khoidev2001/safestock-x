@@ -10,9 +10,11 @@
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:state": "tsc --target ES2021 --module commonjs --moduleResolution node --esModuleInterop --skipLibCheck --outDir .test-out src/renderer/lib/incident-alarm.ts __tests__/renderer-state.test.ts && node --test .test-out/__tests__/renderer-state.test.js",
+    "test:queue": "tsc --target ES2021 --module commonjs --moduleResolution node --esModuleInterop --skipLibCheck --outDir .test-out-queue src/renderer/lib/simulator-queue.ts __tests__/simulator-queue.test.ts && node --test .test-out-queue/__tests__/simulator-queue.test.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "package": "electron-vite build && electron-builder --win portable"
+    "package": "electron-vite build && electron-builder --win portable",
+    "test:login-error": "tsc --target ES2021 --module commonjs --moduleResolution node --esModuleInterop --skipLibCheck --outDir .test-out-login src/renderer/lib/login-error.ts src/renderer/lib/login-error.test.ts && node --test .test-out-login/login-error.test.js"
   },
   "dependencies": {
     "react": "^19.0.0",

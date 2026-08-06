@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { login, logout, logoutServer, setBase, type AuthUser } from "./lib/api";
+import { thongBaoDangNhapLoi } from "./lib/login-error";
 import {
   acknowledgeAlarm,
   firstWarehouse,
@@ -254,7 +255,7 @@ export function App() {
       setAuthed(false);
       setUser(null);
       setWarehouse(null);
-      setLoginError((error as Error).message);
+      setLoginError(thongBaoDangNhapLoi(error as Error, host, password));
     } finally {
       setBusy(false);
     }
@@ -539,9 +540,13 @@ export function App() {
                 })}
               </div>
             )}
-            <div className="confirm-row">
+            <div
+              className={`confirm-row${Object.keys(dirtyCodes).length > 0 ? " has-pending" : ""}`}
+            >
               <span className="muted">
-                {Object.keys(dirtyCodes).length} thông số đã chỉnh, chưa gửi.
+                {Object.keys(dirtyCodes).length === 0
+                  ? "Chưa chỉnh thông số nào."
+                  : `${Object.keys(dirtyCodes).length} thông số đã chỉnh — CHƯA gửi lên máy chủ.`}
               </span>
               <button
                 className="btn primary"

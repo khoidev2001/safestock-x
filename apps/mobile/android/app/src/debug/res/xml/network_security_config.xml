@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cấu hình mạng RIÊNG cho bản debug: cho phép HTTP thường.
+
+  Bản phát hành (app/src/main/res/xml/network_security_config.xml) vẫn cấm tuyệt
+  đối HTTP và chỉ tin ungphonhanh.life qua HTTPS — file này KHÔNG đụng tới nó.
+
+  Vì sao cần: AndroidManifest của bản debug đã khai usesCleartextTraffic="true",
+  nhưng khi có android:networkSecurityConfig thì cấu hình mạng ĐÈ LÊN cờ đó. Kết
+  quả là app debug vẫn bị chặn khi gọi backend LAN qua http://<ip>:3100, báo
+  "Network request failed" mà không có dấu vết gì trong log mạng.
+
+  Chỉ dùng khi chạy thử trên mạng nội bộ; bản giao cho người dùng không có file này.
+-->
+<network-security-config>
+  <base-config cleartextTrafficPermitted="true">
+    <trust-anchors>
+      <certificates src="system" />
+    </trust-anchors>
+  </base-config>
+
+  <domain-config cleartextTrafficPermitted="false">
+    <domain includeSubdomains="false">ungphonhanh.life</domain>
+    <trust-anchors>
+      <certificates src="system" />
+      <certificates src="@raw/ungphonhanh_local_ca" />
+    </trust-anchors>
+  </domain-config>
+</network-security-config>

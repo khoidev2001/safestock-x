@@ -84,6 +84,23 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Chuẩn hoá hồ sơ người dùng từ backend.
+ *
+ * Backend trả khoá `id`, còn cả app này dùng `userId`. Interface AuthUser có chỉ
+ * mục `[key: string]: unknown` nên TypeScript KHÔNG bắt được chỗ lệch — `user.userId`
+ * lặng lẽ là undefined ở lúc chạy. Hậu quả: mỗi lô số liệu xác nhận được ghi vào
+ * hàng chờ với ownerUserId rỗng, đọc lại thì bộ kiểm tra loại bỏ, vòng gửi chạy
+ * trên danh sách rỗng — không lỗi, không log, số liệu biến mất không dấu vết.
+ */
+function normalizeUser(raw: Record<string, unknown>): AuthUser {
+  const id = typeof raw.userId === "string" ? raw.userId : raw.id;
+  if (typeof id !== "string" || !id) {
+    throw new ApiError(500, "Máy chủ không trả về định danh người dùng.");
+  }
+  return { ...raw, userId: id } as AuthUser;
+}
+
 export async function login(email: string, password: string): Promise<AuthUser> {
   const res = await fetch(`${auth.base}/api/auth/login`, {
     method: "POST",
@@ -95,8 +112,8 @@ export async function login(email: string, password: string): Promise<AuthUser> 
   auth.sessionVersion += 1;
   auth.accessToken = data.accessToken;
   auth.refreshToken = data.refreshToken;
-  auth.user = data.user;
-  return data.user;
+  auth.user = normalizeUser(data.user);
+  return auth.user;
 }
 
 export function logout(): void {
@@ -178,7 +195,7 @@ async function tryRefresh(): Promise<boolean> {
     }
     auth.accessToken = data.accessToken;
     auth.refreshToken = data.refreshToken;
-    auth.user = data.user;
+    auth.user = normalizeUser(data.user);
     return true;
   } catch {
     return false;
