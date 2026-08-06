@@ -224,6 +224,20 @@ export class InterCommuneLoanService {
     // chung một cơ sở dữ liệu (một máy chủ phục vụ cả hai), và khi đó bản ghi bên
     // gửi nằm ngay đây là chuyện bình thường. Chỉ khi nó thuộc CÙNG đơn vị sắp
     // nhận thì mới đúng là tự gửi cho chính mình.
+    // Cùng một máy chủ phục vụ hai xã: tên xã gửi suy được từ chính bản ghi gốc,
+    // chính xác hơn hẳn tên đọc từ danh bạ của bên nhận — danh bạ ấy chỉ có một
+    // mục nên nó gọi tên chính mình. Đây là suy từ DỮ LIỆU, không phải tin theo
+    // lời khai của bên gửi, nên không nới lỏng gì về bảo mật.
+    let tenXaGui = input.peerCommuneName.trim();
+    if (banGhiGoc && banGhiGoc.organizationId !== input.organizationId) {
+      const org = await this.prisma.organization.findUnique({
+        where: { id: banGhiGoc.organizationId },
+        select: { name: true },
+      });
+      // Bỏ tiền tố tổ chức, giữ lại tên xã: "Hội Chữ thập đỏ xã Xuân Thọ" → "Xuân Thọ".
+      const tach = org?.name.split(/xã\s+/i);
+      if (tach && tach.length > 1) tenXaGui = tach[tach.length - 1].trim();
+    }
     if (banGhiGoc && banGhiGoc.organizationId === input.organizationId) {
       throw new BadRequestException(
         "Địa chỉ xã lân cận đang trỏ về chính máy chủ này. Sửa lại COMMUNE_PEER_* trong .env.",
@@ -235,7 +249,7 @@ export class InterCommuneLoanService {
         organizationId: input.organizationId,
         direction: InterCommuneLoanDirection.OUTGOING,
         status: InterCommuneLoanStatus.REQUESTED,
-        peerCommuneName: input.peerCommuneName.trim(),
+        peerCommuneName: tenXaGui,
         peerLoanId: input.peerLoanId,
         inboundKey: input.inboundKey,
         itemSku: input.itemSku.trim(),
@@ -255,7 +269,7 @@ export class InterCommuneLoanService {
       organizationId: input.organizationId,
       recipientRole: UserRole.ADMIN,
       kind: NotificationKind.INTER_WAREHOUSE_REQUEST,
-      title: `${input.peerCommuneName} xin mượn ${input.quantity} ${input.unit} ${input.itemName}`,
+      title: `${tenXaGui} xin mượn ${input.quantity} ${input.unit} ${input.itemName}`,
       body: input.note?.trim() || "Mở tab Mượn trả để đồng ý hoặc từ chối.",
       warehouseId: input.warehouseId,
     });
