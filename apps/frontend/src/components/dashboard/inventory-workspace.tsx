@@ -13,6 +13,7 @@ import {
 import { useAuth } from "@/lib/auth-store";
 import { InventoryActionDialog } from "./inventory-action-dialog";
 import { InventoryBulkExportDialog } from "./inventory-bulk-export-dialog";
+import { LoanStockMarksPanel } from "./loan-stock-marks-panel";
 import { InventoryQrDialog } from "./inventory-qr-dialog";
 import { InventoryReceivingDialog } from "./inventory-receiving-dialog";
 import { InventoryHistory } from "./inventory-history";
@@ -109,6 +110,10 @@ export function InventoryWorkspace({ warehouseId }: { warehouseId: string }) {
 
   return (
     <div className="space-y-4">
+      {/* Đặt TRƯỚC bảng tồn kho: tồn kho là một con số duy nhất, không nói được
+          bao nhiêu trong đó là hàng đi mượn. Thấy con số trước rồi mới thấy chú
+          thích thì đã kịp hiểu nhầm. */}
+      <LoanStockMarksPanel />
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-[var(--surface)] p-4">
         <div>
           <p className="font-semibold">Vận hành kho hằng ngày</p>

@@ -27,6 +27,12 @@ export class LoanController {
   // Mỗi xã một cơ sở dữ liệu riêng nên các endpoint này chỉ đọc/ghi bản ghi
   // PHÍA MÌNH; đồng bộ với xã kia là việc của lớp truyền tin, không phải ở đây.
 
+  /** Hàng đang cho mượn / đang mượn, gom theo mã vật tư — để tab Vật tư gắn nhãn. */
+  @Get("inter-commune/stock-marks")
+  interCommuneStockMarks(@Request() req: AuthenticatedRequest) {
+    return this.interCommune.stockMarks(req.user.userId);
+  }
+
   @Get("inter-commune")
   listInterCommune(@Request() req: AuthenticatedRequest) {
     return this.interCommune.list(req.user.userId);

@@ -534,3 +534,16 @@ export const advanceInterCommuneLoan = (
     method: "POST",
     body: JSON.stringify(body),
   });
+
+export interface LoanStockMark {
+  itemSku: string;
+  itemName: string;
+  unit: string;
+  lentOut: number;
+  borrowedIn: number;
+  peers: string[];
+}
+
+export function getLoanStockMarks(): Promise<LoanStockMark[]> {
+  return apiFetch<LoanStockMark[]>("/api/loans/inter-commune/stock-marks");
+}

@@ -16,6 +16,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { InventoryService } from "../inventory/inventory.service";
 import { NotificationService } from "../notification/notification.service";
 import { findPeer, parseCommunePeers } from "./commune-peer-registry";
+import { stockMarksFromLoans } from "./loan-stock-marks";
 import {
   actorOf,
   findTransition,
@@ -78,6 +79,21 @@ export class InterCommuneLoanService {
       CANCELLED: 6,
     };
     return rows.sort((a, b) => (uuTien[a.status] ?? 9) - (uuTien[b.status] ?? 9));
+  }
+
+  /**
+   * Số hàng đang mắc nợ với xã khác, gom theo mã vật tư.
+   *
+   * Tính từ sổ mượn chứ không thêm cột vào lô: suy từ sổ thì con số không bao giờ
+   * lệch với sổ, còn nuôi thêm một cột song song là nuôi thêm một chỗ để sai — mà
+   * cái sai đó chỉ lộ ra lúc đối chiếu cuối kỳ.
+   */
+  async stockMarks(userId: string) {
+    const organizationId = await this.orgOf(userId);
+    const loans = await this.prisma.interCommuneLoan.findMany({
+      where: { organizationId, status: { in: ["ACTIVE", "PARTIALLY_RETURNED"] } },
+    });
+    return stockMarksFromLoans(loans as never);
   }
 
   /**
