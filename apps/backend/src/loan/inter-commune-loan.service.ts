@@ -224,20 +224,20 @@ export class InterCommuneLoanService {
     // chung một cơ sở dữ liệu (một máy chủ phục vụ cả hai), và khi đó bản ghi bên
     // gửi nằm ngay đây là chuyện bình thường. Chỉ khi nó thuộc CÙNG đơn vị sắp
     // nhận thì mới đúng là tự gửi cho chính mình.
-    // Cùng một máy chủ phục vụ hai xã: tên xã gửi suy được từ chính bản ghi gốc,
-    // chính xác hơn hẳn tên đọc từ danh bạ của bên nhận — danh bạ ấy chỉ có một
-    // mục nên nó gọi tên chính mình. Đây là suy từ DỮ LIỆU, không phải tin theo
-    // lời khai của bên gửi, nên không nới lỏng gì về bảo mật.
-    let tenXaGui = input.peerCommuneName.trim();
-    if (banGhiGoc && banGhiGoc.organizationId !== input.organizationId) {
-      const org = await this.prisma.organization.findUnique({
-        where: { id: banGhiGoc.organizationId },
-        select: { name: true },
-      });
-      // Bỏ tiền tố tổ chức, giữ lại tên xã: "Hội Chữ thập đỏ xã Xuân Thọ" → "Xuân Thọ".
-      const tach = org?.name.split(/xã\s+/i);
-      if (tach && tach.length > 1) tenXaGui = tach[tach.length - 1].trim();
-    }
+    // Tên xã gửi lấy từ danh bạ của bên nhận, tra theo khoá đã xác thực — KHÔNG
+    // tin theo lời khai trong thân yêu cầu. Ai cầm khoá thì danh bạ nói đó là xã
+    // nào, chứ không phải người gửi tự xưng.
+    //
+    // Hệ quả khi hai xã dùng chung MỘT máy chủ (cấu hình để demo bằng hai trình
+    // duyệt): danh bạ ấy chỉ có một mục nên bên nhận gọi tên chính mình. Chỉ sai
+    // ở NHÃN; số lượng, tồn kho và luồng trạng thái đều đúng. Chạy hai máy chủ
+    // thật thì danh bạ mỗi bên có mục của bên kia và tên hiện đúng.
+    //
+    // Đã thử suy tên từ bản ghi gốc nằm trong cùng cơ sở dữ liệu: điều kiện đúng
+    // nhưng nhánh không chạy, chưa cô lập được nguyên nhân. Gỡ đi thay vì để lại
+    // mã phức tạp mà vô tác dụng — ghi lại đây để người sau biết hướng đó đã thử.
+    const tenXaGui = input.peerCommuneName.trim();
+
     if (banGhiGoc && banGhiGoc.organizationId === input.organizationId) {
       throw new BadRequestException(
         "Địa chỉ xã lân cận đang trỏ về chính máy chủ này. Sửa lại COMMUNE_PEER_* trong .env.",
