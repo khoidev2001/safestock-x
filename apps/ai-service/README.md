@@ -59,8 +59,11 @@ Whisper fine-tune cho tiếng Việt, **chạy local/offline** trên GPU máy de
 
 - **Con người là trọng tài:** UI ghi âm → nhận dạng → điền vào ô mô tả để cán bộ **đọc lại & sửa**
   trước khi bấm "Phân tích bằng AI". AI chỉ hỗ trợ nhập liệu, không tự quyết.
-- **Lazy-load an toàn:** model chỉ nạp ở lần gọi đầu (`transcribe.py`). Thiếu `torch`/model →
-  endpoint trả **503**, các endpoint LLM khác vẫn chạy, frontend degrade về gõ tay.
+- **Hâm nóng lúc khởi động:** service nạp sẵn model ở luồng nền (`PHOWHISPER_WARM=false` để
+  tắt). Không hâm thì lần bấm micro đầu tiên phải chờ **~60 giây** nạp trọng số — quá thời
+  gian chờ của backend, người dùng nhận "chưa sẵn sàng" và tưởng tính năng hỏng.
+- **Thiếu torch/model vẫn an toàn:** endpoint trả **503**, các endpoint LLM khác vẫn chạy,
+  frontend degrade về gõ tay.
 - **Không cần ffmpeg:** giải mã WAV bằng `soundfile`; trình duyệt đã encode sẵn WAV 16kHz.
 
 ### Cài cho máy demo (có GPU)
@@ -73,8 +76,25 @@ cd apps/ai-service
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-Đổi cỡ model qua env `PHOWHISPER_MODEL` (mặc định `vinai/PhoWhisper-medium`). Lần chạy đầu sẽ
-tải model từ HuggingFace (~1.5GB) rồi cache; các lần sau chạy hoàn toàn offline.
+### Chọn cỡ model — vấn đề là VRAM, không phải tốc độ thuần tuý
+
+Đổi qua env `PHOWHISPER_MODEL`, **mặc định `vinai/PhoWhisper-small`**. Lần chạy đầu tải model
+từ HuggingFace rồi cache; các lần sau hoàn toàn offline.
+
+RTX 2060 có 6 GB, Ollama đã giữ ~4 GB thường trú cho `qwen3.5:4b`. Bản `medium` chiếm thêm
+1.5 GB, chỉ chừa lại chưa tới 500 MB — và ở mức đó CUDA bắt đầu giành giật bộ nhớ. Đo trên máy
+demo, **cùng một clip 14.5 giây**, lặp lại nhiều lần:
+
+| Model | VRAM | Thời gian nhận dạng | Ghi chú |
+|---|---|---|---|
+| `PhoWhisper-medium` | 1458 MiB | 6.7 – **59.8 s** | thất thường; lần chậm nhất vượt thời gian chờ của backend |
+| `PhoWhisper-small` | 478 MiB | 4.7 – 5.1 s | ổn định |
+
+Con số 59.8 giây không phải mô hình tính chậm — cùng model đó chạy 5.0 giây khi GPU trống.
+Đó là dấu hiệu hết chỗ trong VRAM. Máy nào có GPU ≥ 8 GB thì dùng `medium` được, chính xác hơn.
+
+Chọn cỡ nào là đánh đổi **độ chính xác lấy độ ổn định** — hãy tự đọc thử vài câu bằng giọng
+mình rồi so, đừng tin suy đoán.
 
 > Không dùng voice? Bỏ qua khối cài đặt trên — `/transcribe` trả 503 và UI vẫn cho gõ tay.
 

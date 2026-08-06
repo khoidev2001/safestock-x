@@ -6,11 +6,14 @@ kho/kết luận số liệu (backend + rule engine lo). Provider pluggable.
 import json
 import os
 import re
+import threading
 import unicodedata
 from contextlib import asynccontextmanager
 
+import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 import keep_warm
@@ -54,15 +57,58 @@ from schemas import (
 # Đọc .env ở repo root (AI_PROVIDER, GEMINI_API_KEY...).
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
 
+def _ham_nong_nhan_dang_giong_noi() -> None:
+    """Nạp sẵn PhoWhisper ở luồng nền (bật/tắt bằng PHOWHISPER_WARM)."""
+    if os.getenv("PHOWHISPER_WARM", "true").strip().lower() in {"false", "0", "no"}:
+        return
+
+    def chay() -> None:
+        try:
+            import transcribe
+
+            transcribe.warm_up()
+        except Exception as error:  # noqa: BLE001 — thiếu torch/model thì bỏ qua
+            # Không có nhận dạng giọng nói thì app vẫn gõ tay được; đừng để việc
+            # hâm nóng một tính năng tuỳ chọn làm ồn hay chặn lúc khởi động.
+            print(f"[phowhisper] khong ham nong duoc: {error}", flush=True)
+
+    threading.Thread(target=chay, name="phowhisper-warm", daemon=True).start()
+
+
 @asynccontextmanager
 async def _lifespan(_: FastAPI):
     # Nạp model ngay khi service lên, đừng để người hỏi câu đầu tiên phải trả giá
     # 15 giây chờ nạp — sau khi bật lại máy thì đó luôn là câu đầu của buổi diễn.
     keep_warm.start()
+    _ham_nong_nhan_dang_giong_noi()
     yield
 
 
 app = FastAPI(title="Ứng phó nhanh — AI Service", version="0.1.0", lifespan=_lifespan)
+
+
+@app.exception_handler(httpx.TimeoutException)
+async def _mo_hinh_qua_han(_: Request, exc: httpx.TimeoutException) -> JSONResponse:
+    """Quá hạn chờ Ollama → 503 kèm câu nói rõ nguyên nhân, thay vì 500 trống rỗng.
+
+    Ollama sinh văn bản MỖI LẦN MỘT YÊU CẦU trên một GPU. Trang theo dõi đang mở
+    sẽ đều đặn gọi bản tin và phân tích ở nền; người dùng bấm "Phân tích bằng AI"
+    đúng lúc đó là xếp hàng phía sau, và có thể chờ quá hạn 90 giây.
+
+    Trước đây lỗi này không ai bắt nên FastAPI trả 500, backend dịch thành "AI
+    service không xử lý được yêu cầu" — câu đẩy người dùng đi kiểm tra dịch vụ,
+    trong khi dịch vụ vẫn chạy tốt và việc cần làm chỉ là chờ vài giây rồi bấm lại.
+    """
+    print(f"[ai] qua han cho mo hinh: {type(exc).__name__}", flush=True)
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": (
+                "Mô hình AI đang bận xử lý yêu cầu khác. "
+                "Chờ vài giây rồi bấm lại; không cần khởi động lại gì cả."
+            )
+        },
+    )
 provider = build_provider()
 
 _MAX_RETRY = 2
@@ -948,6 +994,9 @@ def action_plan(req: ActionPlanRequest) -> ActionPlanNarrative:
                 raise ValueError(
                     f"Kế hoạch tự thêm số ngoài context: {unsupported_numbers}"
                 )
+            broken = _find_broken_sentences(plan)
+            if broken:
+                raise ValueError(f"Có mục không phải câu tiếng Việt: {broken}")
             return plan
         except (ValidationError, json.JSONDecodeError, ValueError) as exc:
             last_error = str(exc)
@@ -971,6 +1020,34 @@ def _redact_action_plan(plan: ActionPlanNarrative) -> ActionPlanNarrative:
     plan.warnings = [_redact_identity(w) for w in plan.warnings]
     plan.followUpQuestions = [_redact_identity(q) for q in plan.followUpQuestions]
     return plan
+
+
+# Ky tu chi xuat hien khi manh JSON lot vao chuoi noi dung.
+_JSON_DEBRIS = re.compile(r'[{}\[\]"]|:\s*$')
+
+
+def _find_broken_sentences(plan: ActionPlanNarrative) -> list[str]:
+    """Bắt mảnh JSON lọt vào nội dung hiển thị.
+
+    Ollama sinh JSON theo văn phạm ràng buộc, nên khi model định mở khoá `phases`
+    trong lúc còn đang ở giữa mảng `objectives`, văn phạm ép cụm đó thành một
+    PHẦN TỬ CHUỖI hợp lệ. Kết quả: schema qua hết, nhưng giao diện hiện ra một
+    mục tiêu tên là `phases [{`. Lỗi này không thể bắt bằng schema — phải soi
+    chính nội dung câu.
+    """
+    broken: list[str] = []
+    items = [
+        *plan.objectives,
+        *[action for phase in plan.phases for action in phase.actions],
+        *plan.warnings,
+        *plan.followUpQuestions,
+    ]
+    for item in items:
+        text = item.strip()
+        # Câu thật luôn dài hơn thế này; mảnh JSON thì ngắn cụt.
+        if len(text) < 12 or _JSON_DEBRIS.search(text):
+            broken.append(text)
+    return broken
 
 
 def _find_unsupported_numbers(

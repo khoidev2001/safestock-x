@@ -10,9 +10,39 @@ import base64
 import io
 import os
 import threading
+import time
 
-# Cho phép đổi cỡ model qua env (small/medium/large). Mặc định medium — cân bằng cho giọng Việt.
-_MODEL_ID = os.getenv("PHOWHISPER_MODEL", "vinai/PhoWhisper-medium")
+
+def _log(message: str) -> None:
+    """Ghi một dòng vào log của service.
+
+    KHÔNG dùng `logging.getLogger(...).info(...)`: dưới uvicorn, logger của module
+    không được cấu hình nên mức INFO bị nuốt sạch — đã kiểm lại toàn bộ file log
+    lịch sử, không có một dòng nào lọt ra. Bao nhiêu câu lệnh chẩn đoán viết theo
+    kiểu đó đều vô hình đúng lúc cần nhất.
+
+    Giữ ASCII: service chạy dưới SYSTEM với stdout mã cp1252, một dòng tiếng Việt
+    có dấu là ném UnicodeEncodeError và kéo đổ luôn service.
+    """
+    try:
+        print(f"[transcribe] {message}", flush=True)
+    except Exception:  # noqa: BLE001 — log hỏng không được phép làm chết service
+        pass
+
+# Cỡ model đổi được qua env (small/medium/large).
+#
+# Mặc định là SMALL vì lý do bộ nhớ, không phải vì tốc độ thuần tuý. Máy demo có
+# RTX 2060 6 GB, mà Ollama đã giữ ~4 GB thường trú cho qwen3.5. Bản medium chiếm
+# thêm 1.5 GB, chỉ chừa lại chưa tới 500 MB — và ở mức đó CUDA bắt đầu giành giật:
+# đo trên chính máy này, CÙNG một clip 14.5 giây chạy lúc 6.7 giây, lúc 59.8 giây.
+# Bản small chiếm 478 MB, còn dư ~1.9 GB, và thời gian ổn định lại: 4.7–5.1 giây.
+#
+#   medium: 6.7 – 59.8 s  (thất thường, có lúc quá hạn chờ của backend)
+#   small:   4.7 –  5.1 s  (ổn định)
+#
+# Muốn đổi lại thì sửa PHOWHISPER_MODEL trong .env — cả hai bản đã nằm sẵn trong
+# cache HuggingFace nên không phải tải lại.
+_MODEL_ID = os.getenv("PHOWHISPER_MODEL", "vinai/PhoWhisper-small")
 _TARGET_SR = 16_000  # PhoWhisper/Whisper yêu cầu 16kHz mono.
 
 _pipe = None
@@ -54,6 +84,33 @@ def _load_pipeline():
             ) from exc
 
 
+def warm_up() -> float:
+    """Nạp model và chạy một lượt giải mã nháp. Trả số giây đã tốn.
+
+    Lần nhận dạng ĐẦU TIÊN sau mỗi lần khởi động lại service đắt hơn hẳn các lần
+    sau: phải đọc 2.9 GB trọng số từ đĩa, đẩy lên VRAM, rồi biên dịch nhân CUDA ở
+    lượt giải mã đầu. Đo trên chính máy này: **124 giây** khi Ollama đang giữ 4 GB
+    VRAM (chỉ 7 giây nếu GPU trống), so với 5 giây cho các lượt sau.
+
+    124 giây thì backend đã hết thời gian chờ, người dùng thấy "Nhận dạng giọng nói
+    chưa sẵn sàng" và tưởng tính năng hỏng — trong khi nó chỉ đang nạp. Trả giá đó
+    lúc service khởi động, không bắt người bấm micro đầu tiên trả.
+
+    Chạy ở luồng nền: model chưa nóng thì các endpoint khác vẫn phục vụ bình thường.
+    """
+    started = time.perf_counter()
+    import numpy as np
+
+    pipe = _load_pipeline()
+    # Một giây tiếng ồn rất nhỏ: đủ để chạy hết đường giải mã (encoder → decoder →
+    # tokenizer) mà không cần file mẫu nào trong repo. Nội dung trả về vứt đi.
+    nhap = (np.random.default_rng(0).standard_normal(_TARGET_SR) * 0.01).astype("float32")
+    _run_pipeline(pipe, nhap)
+    elapsed = time.perf_counter() - started
+    _log(f"PhoWhisper ({_MODEL_ID}) da nong sau {elapsed:.1f}s")
+    return elapsed
+
+
 def _decode_wav(audio_bytes: bytes):
     """Giải mã WAV/PCM → mảng float32 mono 16kHz. Dùng soundfile (không cần ffmpeg)."""
     import numpy as np
@@ -72,6 +129,25 @@ def _decode_wav(audio_bytes: bytes):
     return mono
 
 
+# Ngưỡng biên độ trung bình dưới mức này coi như không có tiếng nói. Đặt thấp để
+# vẫn nhận giọng nói nhỏ trong kho ồn, chỉ loại đúng phần im lặng thật.
+# Hạ thấp có chủ đích: micro máy ảo và micro điện thoại rẻ tiền thu rất nhỏ, đặt
+# cao là chặn nhầm giọng nói thật rồi báo "chưa nghe rõ" trong khi người ta có nói.
+_SILENCE_RMS = 0.0015
+
+
+def measure_rms(audio) -> float:
+    """Biên độ trung bình bình phương của đoạn ghi (0…1)."""
+    import numpy as np
+
+    return float(np.sqrt(np.mean(np.square(audio, dtype="float64"))))
+
+
+def _is_silent(audio) -> bool:
+    """Đoạn ghi có tiếng nói không, đo bằng năng lượng trung bình bình phương."""
+    return measure_rms(audio) < _SILENCE_RMS
+
+
 def transcribe_base64(audio_base64: str) -> str:
     """base64(WAV) → text tiếng Việt. Ném RuntimeError/ValueError nếu lỗi (endpoint đổi thành 503)."""
     try:
@@ -81,9 +157,84 @@ def transcribe_base64(audio_base64: str) -> str:
 
     audio = _decode_wav(audio_bytes)
     if audio.size == 0:
+        _log("Doan ghi rong (0 mau)")
+        return ""
+    # Ghi lại độ dài và độ to để dò được khi người dùng báo "chưa nghe rõ": phân
+    # biệt được micro không thu (rms ~ 0) với mô hình không nhận ra (rms bình thường).
+    _log(
+        f"Nhan dang: {audio.size / _TARGET_SR:.1f}s, "
+        f"rms={measure_rms(audio):.5f}, nguong={_SILENCE_RMS:.5f}"
+    )
+    if _is_silent(audio):
+        # Whisper BỊA khi không có tiếng nói: đưa vào hai giây im lặng, nó trả về
+        # một câu hoàn chỉnh nghe xuôi tai nhưng không ai nói cả. Người dùng bấm
+        # nhầm nút ghi âm rồi thả ra sẽ thấy một câu lạ hoắc trong ô mô tả.
+        # Chặn ở đây rẻ hơn và chắc hơn là mong mô hình tự im.
         return ""
 
     pipe = _load_pipeline()
-    result = pipe({"array": audio, "sampling_rate": _TARGET_SR})
+    started = time.perf_counter()
+    result = _run_pipeline(pipe, audio)
     text = (result or {}).get("text", "") if isinstance(result, dict) else str(result)
+    # Ghi thời gian nhận dạng riêng, tách khỏi thời gian nạp model: người dùng kêu
+    # chậm thì nhìn số này là biết ngay chậm ở bước nào.
+    ton = time.perf_counter() - started
+    _log(f"Nhan dang xong sau {ton:.2f}s (x{ton / max(audio.size / _TARGET_SR, 0.001):.2f} thoi luong)")
     return text.strip()
+
+
+def _run_pipeline(pipe, audio):
+    """Chạy nhận dạng với tham số đã ép đúng cho tiếng Việt.
+
+    Hai thứ bắt buộc, thiếu là sai hoàn toàn chứ không phải sai chút ít:
+
+    1. `language="vi"` + `task="transcribe"`. PhoWhisper là bản tinh chỉnh của
+       Whisper; không ép thì bộ giải mã TỰ ĐOÁN ngôn ngữ từ vài giây đầu. Đoán
+       nhầm là nó dịch hoặc bịa ra một câu tiếng khác nghe xuôi tai — đúng hiện
+       tượng "nhận diện sai hoàn toàn".
+
+    2. `chunk_length_s=30`. Whisper chỉ nhìn cửa sổ 30 giây. Không khai báo thì
+       clip dài hơn bị CẮT ÂM THẦM, phần sau mất sạch mà không báo gì. Người báo
+       cáo hiện trường nói một phút là mất hai phần ba.
+
+    `stride_length_s` cho các khối chồng lấn nhau, tránh nuốt từ ở chỗ nối.
+
+    3. `max_new_tokens` chặn theo độ dài tiếng. Whisper có tật lặp: gặp đoạn khó
+       nghe là nó lặp lại một cụm cho tới khi cạn 448 token của cả cửa sổ. Một clip
+       ba giây có thể tốn thời gian như clip ba mươi giây, mà kết quả là rác. Chặn
+       theo độ dài thật vừa cắt được trường hợp xấu nhất, vừa không đụng gì tới clip
+       bình thường — tiếng Việt nói nhanh cũng chỉ khoảng 7 token mỗi giây.
+
+    Bọc trong try để không phụ thuộc chữ ký của một phiên bản transformers cụ thể:
+    tham số bị từ chối thì vẫn nhận dạng được, chỉ kém chính xác hơn. Mỗi lần gọi
+    phải dựng payload MỚI: pipeline lấy dữ liệu ra bằng `pop`, nên dict đã dùng một
+    lần là rỗng — dùng lại sẽ ném ValueError khó hiểu về khoá "raw".
+    """
+    generate_kwargs = {
+        "language": "vi",
+        "task": "transcribe",
+        "max_new_tokens": _gioi_han_token(audio),
+    }
+    try:
+        return pipe(
+            {"array": audio, "sampling_rate": _TARGET_SR},
+            chunk_length_s=30,
+            stride_length_s=(5, 5),
+            generate_kwargs=generate_kwargs,
+        )
+    except (TypeError, ValueError):
+        return pipe({"array": audio, "sampling_rate": _TARGET_SR})
+
+
+# Whisper giải mã tối đa 448 token cho mỗi cửa sổ 30 giây; chừa lại ít chỗ cho các
+# token điều khiển ở đầu chuỗi.
+_TOKEN_TOI_DA = 440
+_TOKEN_MOI_GIAY = 12  # gấp đôi tốc độ nói nhanh nhất, chỉ cắt đúng phần lặp vô hạn
+
+
+def _gioi_han_token(audio) -> int:
+    """Số token tối đa cho một cửa sổ giải mã, suy từ độ dài đoạn ghi."""
+    # Clip dài hơn 30 giây bị cắt thành nhiều khối, mỗi khối tự giải mã riêng, nên
+    # hạn mức tính theo khối chứ không theo tổng.
+    giay = min(audio.size / _TARGET_SR, 30.0)
+    return max(32, min(_TOKEN_TOI_DA, int(giay * _TOKEN_MOI_GIAY) + 24))

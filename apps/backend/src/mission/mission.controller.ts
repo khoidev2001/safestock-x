@@ -60,11 +60,19 @@ export class MissionController {
     return this.ai.parse(dto.description);
   }
 
-  /** Giọng nói (WAV base64) → text tiếng Việt bằng PhoWhisper local (proxy AI). */
+  /**
+   * Giọng nói (WAV base64) → text tiếng Việt bằng PhoWhisper local (proxy AI).
+   *
+   * Bọc trong `{ text }` chứ không trả chuỗi trần: Nest serialize chuỗi trần thành
+   * `text/html`, mà cả web lẫn điện thoại đều gọi `res.json()` rồi đọc `.text` —
+   * parse hỏng, và chúng bắt lỗi chung nên hiện ra "Nhận dạng giọng nói chưa sẵn
+   * sàng". Nhận dạng chạy đúng, chỉ hình dạng phản hồi sai.
+   */
   @RequirePermission(Permission.INCIDENT_REPORT_SUBMIT)
   @Post("transcribe")
-  transcribe(@Body() dto: TranscribeDto) {
-    return this.ai.transcribe(dto.audioBase64, dto.mimeType ?? "audio/wav");
+  async transcribe(@Body() dto: TranscribeDto): Promise<{ text: string }> {
+    const text = await this.ai.transcribe(dto.audioBase64, dto.mimeType ?? "audio/wav");
+    return { text };
   }
 
   /**
@@ -112,6 +120,9 @@ export class MissionController {
       req.user.userId,
       incidentPoint,
       req.user.warehouseId,
+      // Web gửi kèm cả `incident` đã parse lẫn lời kể gốc: `incident` dùng để tính
+      // phương án, còn lời kể được lưu lại làm nguồn cho bản tham mưu.
+      dto.description,
     );
   }
 

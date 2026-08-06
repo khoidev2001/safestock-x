@@ -106,8 +106,21 @@ _HOURS = r"\b(\d{1,5})\s*(?:gio|tieng|h)\b"
 _DAYS = r"\b(\d{1,4})\s*ngay\b"
 _WEEKS = r"\b(\d{1,3})\s*tuan\b"
 
-# "thôn Triêm Đức, 12 hộ..." → giữ đúng cụm viết hoa liền sau, dừng trước số/chữ thường.
-_LOCATION_RE = re.compile(r"(?i)\b(?:thôn|xã|buôn|làng)\s+(.{1,60}?)(?=[,.;:\n]|$)")
+# "thôn Triêm Đức, 12 hộ..." → lấy cụm ngay sau danh xưng, dừng ở dấu ngắt câu.
+#
+# TÁCH LÀM HAI và thử THÔN TRƯỚC, có lý do. Hệ thống điều phối theo THÔN: chuỗi
+# trả về đây được đối chiếu với danh mục thôn đã được ADMIN xác minh. Gộp chung
+# "xã" vào một biểu thức thì câu "ở xã Đồng Xuân, có lụt ở thôn Tân Phước" khớp
+# "xã" trước — vì nó đứng trước trong câu — rồi trả về tên XÃ. Tên xã không bao
+# giờ có trong danh mục thôn, nên phương án bị chặn dù người dùng đã nói rõ thôn.
+#
+# Bắt "tối đa 60 ký tự KHÔNG phải dấu ngắt câu", chứ KHÔNG bắt "tối đa 60 ký tự
+# rồi phải gặp dấu ngắt câu". Nghe thì giống nhau, nhưng cách sau hỏng nặng: câu
+# nào có tên thôn cách dấu chấm xa hơn 60 ký tự là **không khớp gì cả** — không
+# phải lấy thiếu, mà là mất trắng. Và câu người ta đọc bằng giọng nói thường dài
+# đúng như thế, lại hiếm khi có dấu phẩy.
+_HAMLET_RE = re.compile(r"(?i)\b(?:thôn|buôn|làng|xóm|khu phố|tổ)\s+([^,.;:\n]{1,60})")
+_COMMUNE_RE = re.compile(r"(?i)\b(?:xã|phường|thị trấn)\s+([^,.;:\n]{1,60})")
 
 
 def _grounded_int(pattern: str, folded: str) -> "int | None":
@@ -126,15 +139,57 @@ def extract_duration_hours(folded: str) -> "int | None":
     return weeks * 168 if weeks is not None else None
 
 
+# Chữ đầu tiên cho biết câu đã chuyển sang nói chuyện khác, không còn là tên thôn.
+#
+# Trước đây chỗ này cắt theo CHỮ HOA: giữ các từ viết hoa liền sau "thôn". Cách đó
+# chết hẳn với giọng nói — PhoWhisper trả về chữ thường tuốt, nên "thôn long châu"
+# dừng ngay từ đầu và không lấy được gì. Mà đọc bằng lời lại chính là đường nhập
+# liệu app mời gọi người dùng nhất.
+#
+# Viết không dấu vì so khớp sau khi đã bỏ dấu; kèm số đếm bằng chữ vì lời nói hay
+# ra "khoảng hai trăm người" chứ không ra "200".
+#
+# Từ nào TRÙNG ÂM TIẾT với tên địa danh có thật thì tuyệt đối không được cho vào.
+# Đã dính hai lần: "phụ nữ" nuốt chữ "Phú" của thôn Phú Sơn và Tân Phú, "động đất"
+# nuốt chữ "Đồng" của xã Đồng Xuân. Mỗi lần như vậy là một địa danh có thật biến
+# mất khỏi hệ thống, mà thông báo lỗi lại chỉ nói chung chung "chưa xác nhận địa
+# điểm" nên không ai lần ra được. Thêm từ vào đây thì chạy lại
+# test_moi_ten_thon_that_deu_lay_duoc_ca_khi_khong_viet_hoa để chốt.
+_LOCATION_STOP_WORDS = frozenset(
+    """
+    khoang chung uoc gan tren duoi hon co bi dang hien nay con va voi cung
+    nhieu it toan ca deu can phai nen se da vua moi
+    nguoi ho dan nha truong tram cho duong cau song suoi
+    tre em gia benh thuong tat
+    nuoc lu ngap mua bao sat lo chay lap thiet hai nang
+    tu tai o den ra vao theo truoc sau ke bat dau
+    sang chieu toi dem hom qua nay mai luc gio ngay
+    mot hai ba bon nam sau bay tam chin muoi tram nghin ngan
+    """.split()
+)
+
+# Tên thôn ở đây dài nhiều nhất ba tiếng ("Long Châu", "Triêm Đức", "Kỳ Đu").
+# Lấy quá tay thì chuỗi không khớp danh mục thôn đã xác minh, cũng hỏng như lấy
+# thiếu — nên chặn cứng, đừng nuốt cả câu.
+_LOCATION_MAX_WORDS = 3
+
+
 def extract_location(report: str) -> "str | None":
-    match = _LOCATION_RE.search(report)
+    # Nói tới thôn thì lấy thôn, kể cả khi tên xã đứng trước trong câu. Chỉ khi
+    # không nhắc thôn nào mới đành lấy tên xã.
+    match = _HAMLET_RE.search(report) or _COMMUNE_RE.search(report)
     if not match:
         return None
     kept: list[str] = []
     for word in match.group(1).split():
-        if not word[:1].isupper():
+        clean = word.strip(" ,.;:")
+        if not clean or clean[:1].isdigit():
             break
-        kept.append(word)
+        if fold_report_text(clean) in _LOCATION_STOP_WORDS:
+            break
+        kept.append(clean)
+        if len(kept) >= _LOCATION_MAX_WORDS:
+            break
     return " ".join(kept).strip(" ,.;:") or None
 
 
