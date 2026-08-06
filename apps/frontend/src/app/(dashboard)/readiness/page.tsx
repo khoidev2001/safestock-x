@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DashboardPage } from "@/components/dashboard/dashboard-page";
+import { DispatchBlockersBanner } from "@/components/dashboard/dispatch-blockers-banner";
 import { OperationsSummary } from "@/components/dashboard/operations-summary";
 import { ReadinessOverview } from "@/components/dashboard/readiness-overview";
 import { SimulatorPanel } from "@/components/dashboard/simulator-panel";
@@ -69,6 +70,9 @@ function ReadinessContent({ warehouseId }: { warehouseId: string }) {
 
   return (
     <>
+      {/* Việc đang chặn điều phối lên TRƯỚC mọi thứ: đây là thứ duy nhất trên
+          trang cần hành động ngay. Không có thì khối này biến mất hẳn. */}
+      <DispatchBlockersBanner blockers={readinessQuery.data?.blockers} />
       <OperationsSummary
         batches={batchesQuery.data}
         incidents={incidentsQuery.data}
