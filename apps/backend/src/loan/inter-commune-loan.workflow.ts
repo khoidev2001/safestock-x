@@ -172,3 +172,29 @@ export function manualEntryStockEffect(
   // Cho mượn: hàng đã rời kho mình. Đi mượn: hàng đã vào kho mình.
   return direction === "OUTGOING" ? "DEDUCT" : "ADD";
 }
+
+/**
+ * Hiệu ứng kho cho bản ghi GHI TAY, ở mọi bước.
+ *
+ * Bản ghi ghi tay không có bản ghi đối ứng ở xã kia — xã kia không đăng nhập vào
+ * hệ thống này. Người giữ bản ghi làm thay cả hai vai: họ vừa ghi lúc đưa hàng đi,
+ * vừa ghi lúc nhận hàng về. Vì vậy luật "bên nào thực hiện thì bên đó đổi kho"
+ * không áp được, và nếu cứ áp thì `stockEffect` trả NONE cho mọi bước trả — hàng
+ * quay về kho ngoài đời mà sổ đứng yên.
+ *
+ * Quy tắc đúng và duy nhất cần nhớ: **kho của người giữ bản ghi đổi theo hướng
+ * hàng thật sự đi.**
+ *
+ *   cho mượn, lúc đưa đi   → trừ        cho mượn, lúc nhận về  → cộng
+ *   đi mượn,  lúc nhận về  → cộng       đi mượn,  lúc trả đi   → trừ
+ */
+export function manualStockEffect(
+  direction: InterCommuneDirection,
+  to: InterCommuneStatus,
+): "DEDUCT" | "ADD" | "NONE" {
+  const laBuocTra = to === "RETURNED" || to === "PARTIALLY_RETURNED";
+  if (laBuocTra) return direction === "OUTGOING" ? "ADD" : "DEDUCT";
+  // Các bước còn lại của bản ghi ghi tay không chuyển hàng: khoản đã ở ACTIVE
+  // ngay từ lúc tạo, nên không còn bước duyệt hay xác nhận nhận nào nữa.
+  return "NONE";
+}

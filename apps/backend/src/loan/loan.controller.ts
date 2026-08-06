@@ -4,14 +4,71 @@ import { AuthenticatedRequest } from "../auth/authenticated-request";
 import { JwtAuthGuard } from "../auth/guards";
 import { PermissionGuard } from "../rbac/permission.guard";
 import { RequirePermission } from "../rbac/permissions.decorator";
-import { BorrowDto, ReturnDto } from "./dto";
+import {
+  AdvanceInterCommuneLoanDto,
+  BorrowDto,
+  RecordManualInterCommuneLoanDto,
+  RequestInterCommuneLoanDto,
+  ReturnDto,
+} from "./dto";
+import { InterCommuneLoanService } from "./inter-commune-loan.service";
 import { LoanService } from "./loan.service";
 
 @UseGuards(JwtAuthGuard, PermissionGuard)
 @RequirePermission(Permission.LOAN_MANAGE)
 @Controller("loans")
 export class LoanController {
-  constructor(private loans: LoanService) {}
+  constructor(
+    private loans: LoanService,
+    private interCommune: InterCommuneLoanService,
+  ) {}
+
+  // ---- Mượn giữa hai xã ----
+  // Mỗi xã một cơ sở dữ liệu riêng nên các endpoint này chỉ đọc/ghi bản ghi
+  // PHÍA MÌNH; đồng bộ với xã kia là việc của lớp truyền tin, không phải ở đây.
+
+  @Get("inter-commune")
+  listInterCommune(@Request() req: AuthenticatedRequest) {
+    return this.interCommune.list(req.user.userId);
+  }
+
+  @Post("inter-commune/request")
+  requestInterCommune(
+    @Request() req: AuthenticatedRequest,
+    @Body() dto: RequestInterCommuneLoanDto,
+  ) {
+    return this.interCommune.requestFromPeer({
+      userId: req.user.userId,
+      warehouseId: req.user.warehouseId ?? "",
+      ...dto,
+    });
+  }
+
+  @Post("inter-commune/manual")
+  recordManualInterCommune(
+    @Request() req: AuthenticatedRequest,
+    @Body() dto: RecordManualInterCommuneLoanDto,
+  ) {
+    return this.interCommune.recordManually({
+      userId: req.user.userId,
+      scopeWarehouseId: req.user.warehouseId,
+      ...dto,
+    });
+  }
+
+  @Post("inter-commune/:id/advance")
+  advanceInterCommune(
+    @Request() req: AuthenticatedRequest,
+    @Param("id") id: string,
+    @Body() dto: AdvanceInterCommuneLoanDto,
+  ) {
+    return this.interCommune.advance({
+      loanId: id,
+      userId: req.user.userId,
+      scopeWarehouseId: req.user.warehouseId,
+      ...dto,
+    });
+  }
 
   @Get("warehouses/:id/open")
   listOpen(@Request() req: AuthenticatedRequest, @Param("id") id: string) {

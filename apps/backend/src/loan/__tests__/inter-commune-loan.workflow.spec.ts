@@ -6,6 +6,7 @@ import {
   MANUAL_INITIAL_STATUS,
   stockEffect,
   manualEntryStockEffect,
+  manualStockEffect,
   statusAfterReturn,
   type InterCommuneStatus,
 } from "../inter-commune-loan.workflow";
@@ -187,5 +188,34 @@ describe("ghi tay lúc mất mạng", () => {
     // mượn hiện thừa hàng đã đưa đi, bên mượn thiếu hàng đang cầm trong tay.
     expect(manualEntryStockEffect("OUTGOING")).toBe("DEDUCT");
     expect(manualEntryStockEffect("INCOMING")).toBe("ADD");
+  });
+});
+
+describe("bản ghi ghi tay: kho đổi theo hướng hàng thật sự đi", () => {
+  it("cho mượn rồi nhận lại: trừ lúc đưa, CỘNG lúc nhận về", () => {
+    // Bản ghi ghi tay không có bản ghi đối ứng ở xã kia — xã kia không đăng nhập
+    // vào hệ thống này. Áp luật "bên nào thực hiện thì bên đó đổi kho" là mọi
+    // bước trả đều ra NONE: hàng quay về kho ngoài đời mà sổ đứng yên.
+    expect(manualEntryStockEffect("OUTGOING")).toBe("DEDUCT");
+    expect(manualStockEffect("OUTGOING", "PARTIALLY_RETURNED")).toBe("ADD");
+    expect(manualStockEffect("OUTGOING", "RETURNED")).toBe("ADD");
+  });
+
+  it("đi mượn rồi trả lại: cộng lúc nhận, TRỪ lúc trả đi", () => {
+    expect(manualEntryStockEffect("INCOMING")).toBe("ADD");
+    expect(manualStockEffect("INCOMING", "PARTIALLY_RETURNED")).toBe("DEDUCT");
+    expect(manualStockEffect("INCOMING", "RETURNED")).toBe("DEDUCT");
+  });
+
+  it("một vòng ghi tay trọn vẹn đưa kho về đúng như trước", () => {
+    const diem = (huong: "OUTGOING" | "INCOMING") => {
+      const diem1 = manualEntryStockEffect(huong);
+      const diem2 = manualStockEffect(huong, "RETURNED");
+      const so = (e: string) => (e === "ADD" ? 1 : e === "DEDUCT" ? -1 : 0);
+      return so(diem1) + so(diem2);
+    };
+
+    expect(diem("OUTGOING")).toBe(0);
+    expect(diem("INCOMING")).toBe(0);
   });
 });
