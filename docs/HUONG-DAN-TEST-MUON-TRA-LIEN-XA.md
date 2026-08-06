@@ -145,10 +145,11 @@ Tắt máy chủ B rồi gửi yêu cầu từ A.
 
 Đúng: **yêu cầu vẫn được ghi vào sổ bên A**, chỉ là không sang được B. Màn hình A không báo lỗi đỏ làm người dùng hoảng. Lúc này hai xã gọi điện cho nhau, rồi mỗi bên tự ghi tay vào sổ.
 
-> **CHƯA LÀM XONG.** Máy chủ đã có đường ghi tay (và nó cộng trừ kho đúng như
-> luồng tự động, chỉ khác là không có thông báo nào đi qua mạng), nhưng **màn
-> hình chưa có nút nào gọi tới nó**. Hiện tại mất mạng thì chỉ ghi được bằng cách
-> gọi thẳng API. Khoản mượn ghi tay hiện trên danh sách với nhãn `· ghi tay`.
+Bấm nút **"Ghi tay khoản đã thoả thuận qua điện thoại"** ở đầu tab Mượn trả, chọn chiều (cho mượn hay đi mượn), điền tên xã bên kia, mã lô vật tư, số lượng và ghi chú ai gọi lúc mấy giờ.
+
+Ghi tay **vẫn cộng trừ kho thật** như luồng tự động, chỉ khác là không có thông báo nào đi qua mạng. Khoản ghi tay hiện trên danh sách với nhãn `· ghi tay` để sau này đối chiếu còn phân biệt được.
+
+Mã lô chép từ tab Vật tư. Bắt điền mã lô chứ không cho chọn tên vật tư là có chủ đích: một vật tư có nhiều lô với hạn dùng khác nhau, chọn nhầm lô là trừ nhầm hàng sắp hết hạn hoặc hàng còn mới.
 
 ### Hai người cùng bấm một lúc
 

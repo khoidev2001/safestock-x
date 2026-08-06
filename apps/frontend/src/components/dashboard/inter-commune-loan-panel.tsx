@@ -6,6 +6,7 @@ import { ColorIcon } from "@/components/shared/color-icon";
 import {
   advanceInterCommuneLoan,
   getInterCommuneLoans,
+  recordManualInterCommuneLoan,
   type InterCommuneLoan,
 } from "@/lib/dashboard-api";
 import {
@@ -38,6 +39,59 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
     refetchInterval: 20_000,
   });
 
+  const [moGhiTay, setMoGhiTay] = useState(false);
+  const [ghiTay, setGhiTay] = useState({
+    direction: "OUTGOING" as "OUTGOING" | "INCOMING",
+    peerCommuneName: "",
+    batchId: "",
+    quantity: "",
+    note: "",
+  });
+
+  /**
+   * Ghi tay một khoản đã thoả thuận qua điện thoại.
+   *
+   * Đây là ĐƯỜNG LUI khi mất mạng — tình huống thường gặp nhất lúc thiên tai, và
+   * cũng là lúc hai xã cần nhau nhất. Không có đường này thì đúng lúc quan trọng
+   * nhất người trực không ghi được gì, rồi hôm sau không ai nhớ đã cho ai mượn
+   * bao nhiêu.
+   *
+   * Vẫn cộng trừ kho thật như luồng tự động: hàng đã đi thì kho phải phản ánh
+   * đúng, dù thoả thuận diễn ra qua điện thoại chứ không qua mạng.
+   */
+  const ghiTayMutation = useMutation({
+    mutationFn: () => {
+      const soLuong = Number(ghiTay.quantity);
+      if (!ghiTay.peerCommuneName.trim()) throw new Error("Cần tên xã bên kia.");
+      if (!ghiTay.batchId.trim()) throw new Error("Cần mã lô vật tư để cộng trừ đúng kho.");
+      if (!Number.isInteger(soLuong) || soLuong < 1) {
+        throw new Error("Số lượng phải là số nguyên dương.");
+      }
+      return recordManualInterCommuneLoan({
+        direction: ghiTay.direction,
+        peerCommuneName: ghiTay.peerCommuneName.trim(),
+        batchId: ghiTay.batchId.trim(),
+        quantity: soLuong,
+        note: ghiTay.note.trim() || undefined,
+      });
+    },
+    onMutate: () => setError(null),
+    onSuccess: () => {
+      setGhiTay({
+        direction: "OUTGOING",
+        peerCommuneName: "",
+        batchId: "",
+        quantity: "",
+        note: "",
+      });
+      setMoGhiTay(false);
+      queryClient.invalidateQueries({ queryKey: ["inter-commune-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["loan-stock-marks"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-batches", warehouseId] });
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Không ghi được khoản mượn"),
+  });
+
   const advance = useMutation({
     mutationFn: (input: { loan: InterCommuneLoan; action: LoanAction }) =>
       advanceInterCommuneLoan(input.loan.id, {
@@ -65,6 +119,119 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
       <p className="mt-1 text-sm text-[var(--text-muted)]">
         Mỗi xã giữ sổ riêng. Khoản ghi tay là khoản đã thoả thuận qua điện thoại lúc mất mạng.
       </p>
+
+      <div className="mt-3">
+        <button
+          className="rounded-md border px-3 py-2 text-xs font-semibold"
+          onClick={() => setMoGhiTay((truoc) => !truoc)}
+          type="button"
+        >
+          {moGhiTay ? "Đóng" : "Ghi tay khoản đã thoả thuận qua điện thoại"}
+        </button>
+      </div>
+
+      {moGhiTay ? (
+        <form
+          className="mt-3 space-y-3 rounded-md border p-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            ghiTayMutation.mutate();
+          }}
+        >
+          <p className="text-xs text-[var(--text-muted)]">
+            Dùng khi mất mạng: hai xã gọi điện thoả thuận xong, mỗi bên tự ghi vào sổ của mình. Kho
+            vẫn cộng trừ thật, nên phải ghi đúng lô và đúng số.
+          </p>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="block text-xs font-medium" htmlFor="ghi-tay-chieu">
+                Chiều
+              </label>
+              <select
+                className="mt-1 w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+                id="ghi-tay-chieu"
+                onChange={(event) =>
+                  setGhiTay((truoc) => ({
+                    ...truoc,
+                    direction: event.target.value as "OUTGOING" | "INCOMING",
+                  }))
+                }
+                value={ghiTay.direction}
+              >
+                <option value="OUTGOING">Mình cho xã khác mượn (kho mình GIẢM)</option>
+                <option value="INCOMING">Mình mượn của xã khác (kho mình TĂNG)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium" htmlFor="ghi-tay-xa">
+                Xã bên kia
+              </label>
+              <input
+                className="mt-1 w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+                id="ghi-tay-xa"
+                maxLength={120}
+                onChange={(event) =>
+                  setGhiTay((truoc) => ({ ...truoc, peerCommuneName: event.target.value }))
+                }
+                placeholder="Xuân Thọ"
+                value={ghiTay.peerCommuneName}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium" htmlFor="ghi-tay-lo">
+                Mã lô vật tư
+              </label>
+              <input
+                className="mt-1 w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+                id="ghi-tay-lo"
+                onChange={(event) =>
+                  setGhiTay((truoc) => ({ ...truoc, batchId: event.target.value }))
+                }
+                placeholder="Chép từ tab Vật tư"
+                value={ghiTay.batchId}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium" htmlFor="ghi-tay-so">
+                Số lượng
+              </label>
+              <input
+                className="mt-1 w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+                id="ghi-tay-so"
+                min={1}
+                onChange={(event) =>
+                  setGhiTay((truoc) => ({ ...truoc, quantity: event.target.value }))
+                }
+                type="number"
+                value={ghiTay.quantity}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium" htmlFor="ghi-tay-ghichu">
+              Ghi chú (ai gọi, lúc mấy giờ)
+            </label>
+            <input
+              className="mt-1 w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+              id="ghi-tay-ghichu"
+              maxLength={500}
+              onChange={(event) => setGhiTay((truoc) => ({ ...truoc, note: event.target.value }))}
+              placeholder="Anh Tuấn xã Xuân Thọ gọi lúc 14h, mất mạng"
+              value={ghiTay.note}
+            />
+          </div>
+
+          <button
+            className="rounded-md border px-3 py-2 text-xs font-semibold disabled:opacity-60"
+            disabled={ghiTayMutation.isPending}
+            type="submit"
+          >
+            {ghiTayMutation.isPending ? "Đang ghi…" : "Ghi vào sổ"}
+          </button>
+        </form>
+      ) : null}
 
       {error ? (
         <p className="mt-3 rounded-md border border-[var(--color-critical)] p-3 text-sm text-[var(--color-critical)]">
