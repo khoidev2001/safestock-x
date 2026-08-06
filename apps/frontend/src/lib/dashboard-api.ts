@@ -547,3 +547,25 @@ export interface LoanStockMark {
 export function getLoanStockMarks(): Promise<LoanStockMark[]> {
   return apiFetch<LoanStockMark[]>("/api/loans/inter-commune/stock-marks");
 }
+
+export interface CommuneStockShare {
+  warehouseId: string;
+  warehouseName: string;
+  kind: "CENTRAL" | "HAMLET";
+  quantity: number;
+}
+
+export interface CommuneStockRow {
+  itemSku: string;
+  itemName: string;
+  unit: string;
+  total: number;
+  atCentral: number;
+  atHamlets: number;
+  byWarehouse: CommuneStockShare[];
+}
+
+/** Tồn kho toàn xã: kho tổng cộng với hàng đang nằm ở các kho thôn. */
+export function getCommuneStock(warehouseId: string): Promise<CommuneStockRow[]> {
+  return apiFetch<CommuneStockRow[]>(`/api/inventory/warehouses/${warehouseId}/commune-stock`);
+}

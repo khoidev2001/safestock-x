@@ -104,6 +104,7 @@ model User {
   missionPreparations     MissionWarehousePreparation[]
   missionRequestsAccepted MissionWarehouseRequest[]     @relation("MissionWarehouseRequestAcceptedBy")
   missionRequestsPrepared MissionWarehouseRequest[]     @relation("MissionWarehouseRequestPreparedBy")
+  missionRequestsPickedUp MissionWarehouseRequest[]     @relation("MissionWarehouseRequestPickedUpBy")
   analysisSnapshots       MissionAnalysisSnapshot[]     @relation("MissionAnalysisActor")
   fieldUpdates            MissionFieldUpdate[]          @relation("MissionFieldUpdateActor")
   sensorSubmissions       SensorSubmission[]
@@ -494,6 +495,9 @@ enum MissionWarehouseRequestStatus {
   PENDING
   ACCEPTED
   PREPARED
+  // Người đi lấy đã ký nhận. Tách khỏi PREPARED vì "kho đã soạn" và "hàng đã rời
+  // kho" là hai việc khác nhau, và khoảng giữa hai việc đó là nơi hàng bị thiếu.
+  PICKED_UP
 }
 
 // Nhiệm vụ cứu hộ — sinh từ tình huống, gồm nhu cầu + phương án phân bổ.
@@ -663,6 +667,12 @@ model MissionWarehouseRequest {
   preparationClaimedAt  DateTime?
   acceptedAt            DateTime?
   preparedAt            DateTime?
+  // Xác nhận LẤY hàng. Để rỗng nghĩa là chưa ai ký nhận, khác hẳn với nhận đủ 0.
+  pickedUpQuantity      Int?
+  pickupNote            String?
+  pickedUpByUserId      String?
+  pickedUpBy            User?                         @relation("MissionWarehouseRequestPickedUpBy", fields: [pickedUpByUserId], references: [id], onDelete: SetNull)
+  pickedUpAt            DateTime?
   createdAt             DateTime                      @default(now())
   updatedAt             DateTime                      @updatedAt
 

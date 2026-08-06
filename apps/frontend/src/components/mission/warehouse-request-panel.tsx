@@ -6,6 +6,7 @@ import { CollapsiblePanel } from "@/components/shared/collapsible-panel";
 import { warehouseProgress } from "./warehouse-request-progress";
 import {
   acceptWarehouseRequest,
+  confirmWarehousePickup,
   prepareWarehouseRequest,
   reportWarehouseRequestDiscrepancy,
   reviewWarehouseRequest,
@@ -32,13 +33,29 @@ export function WarehouseRequestPanel({
       kind,
       request,
     }: {
-      kind: "accept" | "prepare" | "discrepancy" | "review";
+      kind: "accept" | "prepare" | "discrepancy" | "review" | "pickup";
       request: MissionWarehouseRequest;
     }) => {
       if (kind === "accept") {
         return acceptWarehouseRequest(request.id, notes[request.id]?.trim() || undefined);
       }
       if (kind === "prepare") return prepareWarehouseRequest(request.id);
+      if (kind === "pickup") {
+        const raw = (quantities[request.id] ?? "").trim();
+        // Bỏ trống nghĩa là lấy đủ. Bắt gõ lại đúng con số đã hiện sẵn chỉ tạo
+        // thêm một chỗ để gõ nhầm, mà lấy đủ mới là trường hợp thường gặp.
+        const receivedQuantity = raw === "" ? request.preparedQuantity : Number(raw);
+        if (!Number.isInteger(receivedQuantity) || receivedQuantity < 0) {
+          throw new Error("Số đã lấy phải là số nguyên không âm.");
+        }
+        const note = notes[request.id]?.trim();
+        if (receivedQuantity < request.preparedQuantity && !note) {
+          throw new Error(
+            `Thiếu ${request.preparedQuantity - receivedQuantity} so với số đã soạn — phải ghi rõ lý do.`,
+          );
+        }
+        return confirmWarehousePickup(request.id, { receivedQuantity, note: note || undefined });
+      }
       if (kind === "discrepancy") {
         const note = notes[request.id]?.trim();
         if (!note || note.length < 3) throw new Error("Cần ghi rõ chênh lệch (ít nhất 3 ký tự).");
@@ -186,6 +203,83 @@ export function WarehouseRequestPanel({
                   </div>
                 ) : null}
 
+                {request.status === "PICKED_UP" ? (
+                  <p
+                    className={
+                      (request.pickedUpQuantity ?? 0) < request.preparedQuantity
+                        ? "mt-3 rounded-md border border-amber-300/60 bg-amber-50/60 p-2.5 text-sm dark:bg-amber-950/20"
+                        : "mt-3 text-sm text-[var(--text-muted)]"
+                    }
+                  >
+                    Đã ký nhận {request.pickedUpQuantity ?? 0}/{request.preparedQuantity}{" "}
+                    {request.unit}
+                    {(request.pickedUpQuantity ?? 0) < request.preparedQuantity
+                      ? ` — thiếu ${request.preparedQuantity - (request.pickedUpQuantity ?? 0)}. Lý do: ${request.pickupNote ?? "không ghi"}`
+                      : " (đủ)"}
+                  </p>
+                ) : null}
+
+                {isOwnWarehouse && request.status === "PREPARED" ? (
+                  <div className="mt-3 space-y-2 rounded-md border p-3">
+                    <p className="text-xs font-semibold">Người đi lấy ký nhận</p>
+                    <div className="grid gap-2 sm:grid-cols-[140px_1fr]">
+                      <div>
+                        <label
+                          className="block text-xs font-medium"
+                          htmlFor={`pickup-quantity-${request.id}`}
+                        >
+                          Số thực lấy
+                        </label>
+                        <input
+                          className="mt-1 w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+                          id={`pickup-quantity-${request.id}`}
+                          max={request.preparedQuantity}
+                          min={0}
+                          onChange={(event) =>
+                            setQuantities((current) => ({
+                              ...current,
+                              [request.id]: event.target.value,
+                            }))
+                          }
+                          placeholder={String(request.preparedQuantity)}
+                          type="number"
+                          value={quantities[request.id] ?? ""}
+                        />
+                      </div>
+                      <div>
+                        <label
+                          className="block text-xs font-medium"
+                          htmlFor={`pickup-note-${request.id}`}
+                        >
+                          Thiếu thì ghi rõ vì sao
+                        </label>
+                        <input
+                          className="mt-1 w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+                          id={`pickup-note-${request.id}`}
+                          maxLength={1_000}
+                          onChange={(event) =>
+                            setNotes((current) => ({
+                              ...current,
+                              [request.id]: event.target.value,
+                            }))
+                          }
+                          placeholder="Kho hết hàng / xe không chở hết / lô bị ướt…"
+                          value={notes[request.id] ?? ""}
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      Để trống số thực lấy nghĩa là lấy đủ {request.preparedQuantity} {request.unit}
+                      .
+                    </p>
+                    <ActionButton
+                      disabled={busy}
+                      label="Ký nhận đã lấy hàng"
+                      onClick={() => action.mutate({ kind: "pickup", request })}
+                    />
+                  </div>
+                ) : null}
+
                 {role === "ADMIN" && request.status !== "PREPARED" && request.warehouseNote ? (
                   <div className="mt-3 grid gap-2 sm:grid-cols-[140px_1fr_auto]">
                     <label className="sr-only" htmlFor={`request-quantity-${request.id}`}>
@@ -264,5 +358,8 @@ function ActionButton({
 function requestStatusLabel(status: MissionWarehouseRequest["status"]): string {
   if (status === "PENDING") return "Chờ kho tiếp nhận";
   if (status === "ACCEPTED") return "Kho đã tiếp nhận";
-  return "Đã xuất vật tư";
+  // "Đã xuất" và "đã có người cầm đi" là hai việc khác nhau, và khoảng giữa hai
+  // việc ấy là nơi hàng bị thiếu mà không ai ghi lại.
+  if (status === "PREPARED") return "Đã soạn — chờ người lấy";
+  return "Đã ký nhận";
 }

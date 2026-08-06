@@ -53,8 +53,12 @@ export interface MissionWarehouseRequest {
   unit: string;
   requestedQuantity: number;
   preparedQuantity: number;
-  status: "PENDING" | "ACCEPTED" | "PREPARED";
+  status: "PENDING" | "ACCEPTED" | "PREPARED" | "PICKED_UP";
   warehouseNote: string | null;
+  /** Rỗng nghĩa là chưa ai ký nhận — khác hẳn với ký nhận 0. */
+  pickedUpQuantity: number | null;
+  pickupNote: string | null;
+  pickedUpAt: string | null;
   adminNote: string | null;
   acceptedAt: string | null;
   preparedAt: string | null;
@@ -364,6 +368,15 @@ export const reportWarehouseRequestDiscrepancy = (requestId: string, note: strin
 export const prepareWarehouseRequest = (requestId: string) =>
   apiFetch<MissionWarehouseRequest>(`/api/missions/warehouse-requests/${requestId}/prepare`, {
     method: "POST",
+  });
+/** Người đi lấy ký nhận: cầm đi bao nhiêu, thiếu thì vì sao. */
+export const confirmWarehousePickup = (
+  requestId: string,
+  input: { receivedQuantity: number; note?: string },
+) =>
+  apiFetch<MissionWarehouseRequest>(`/api/missions/warehouse-requests/${requestId}/pickup`, {
+    method: "POST",
+    body: JSON.stringify(input),
   });
 export const reviewWarehouseRequest = (
   requestId: string,

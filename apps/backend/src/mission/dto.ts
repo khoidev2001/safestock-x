@@ -74,6 +74,22 @@ export class WarehouseRequestDiscrepancyDto {
   note!: string;
 }
 
+export class ConfirmPickupDto {
+  @IsInt()
+  @Min(0)
+  receivedQuantity!: number;
+
+  /**
+   * Lý do thiếu. Không bắt buộc ở tầng này vì lấy ĐỦ thì không có gì để ghi;
+   * bắt buộc khi thiếu là luật nghiệp vụ, và nó nằm ở validatePickup nơi biết
+   * được số đã soạn là bao nhiêu.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(1_000)
+  note?: string;
+}
+
 export class ReviewWarehouseRequestDto {
   @IsInt()
   @Min(1)

@@ -11,6 +11,7 @@ import { TransactionType } from "@safestock/shared-types";
 import { PrismaService } from "../prisma/prisma.service";
 import { ReadinessService } from "../readiness/readiness.service";
 import { lockLoanBatch, lockLoanTableForApproval } from "../loan/loan-table-lock";
+import { communeStockRollup } from "./commune-stock-rollup";
 import { sumOutstanding } from "./loan-math";
 import { transferInventoryInTx } from "./inventory-transfer";
 import { mutationFingerprint, withMutationIdempotency } from "./mutation-idempotency";
@@ -194,6 +195,74 @@ export class InventoryService {
       orderBy: { createdAt: "desc" },
       take: Math.min(Math.max(limit, 1), 200),
     });
+  }
+
+  /**
+   * Tồn kho TOÀN XÃ gom theo mã vật tư, kèm phân rã từng kho đang giữ bao nhiêu.
+   *
+   * Chỉ người ở kho tổng gọi được. Trưởng thôn có `warehouseId` gắn cứng, cho họ
+   * xem tồn của thôn khác là mở rộng quyền qua một đường vòng — cùng một dữ liệu
+   * mà đường chính đã chặn.
+   */
+  async communeStock(
+    warehouseId: string,
+    scopeWarehouseId: string | null | undefined,
+    actorUserId: string,
+  ) {
+    await assertActorCanAccessWarehouse(this.prisma, actorUserId, scopeWarehouseId, warehouseId);
+
+    const kho = await this.prisma.warehouse.findUnique({
+      where: { id: warehouseId },
+      select: { organizationId: true, kind: true },
+    });
+    if (!kho) throw new NotFoundException("Không tìm thấy kho");
+    if (kho.kind !== "CENTRAL") {
+      throw new ForbiddenException("Chỉ kho tổng mới xem được tồn kho toàn xã");
+    }
+
+    const batches = await this.prisma.itemBatch.findMany({
+      where: {
+        circulation: "IN_STOCK",
+        shelf: { zone: { warehouse: { organizationId: kho.organizationId } } },
+      },
+      select: {
+        quantity: true,
+        item: { select: { sku: true, name: true, category: { select: { unit: true } } } },
+        shelf: {
+          select: {
+            zone: {
+              select: { warehouse: { select: { id: true, name: true, kind: true } } },
+            },
+          },
+        },
+        loans: {
+          where: { status: { in: [LoanStatus.ON_LOAN, LoanStatus.PARTIALLY_RETURNED] } },
+          select: { quantity: true, returnedOk: true, returnedDamaged: true, lost: true },
+        },
+      },
+    });
+
+    return communeStockRollup(
+      // Lô chưa xếp lên kệ thì chưa thuộc kho nào — bỏ ra thay vì đoán. Điều kiện
+      // truy vấn đã lọc rồi, nhưng kiểu dữ liệu vẫn cho phép rỗng và một ngày nào
+      // đó điều kiện ấy sẽ đổi.
+      batches.flatMap((b) => {
+        const kho = b.shelf?.zone.warehouse;
+        if (!kho) return [];
+        return [
+          {
+            warehouseId: kho.id,
+            warehouseName: kho.name,
+            warehouseKind: kho.kind,
+            itemSku: b.item.sku,
+            itemName: b.item.name,
+            unit: b.item.category.unit,
+            quantity: b.quantity,
+            onLoan: sumOutstanding(b.loans),
+          },
+        ];
+      }),
+    );
   }
 
   async listBatchesPage(

@@ -31,6 +31,7 @@ import {
   WarehouseRequestDiscrepancyDto,
   WarehouseRequestNoteDto,
   WhatIfDto,
+  ConfirmPickupDto,
 } from "./dto";
 import { IncidentInput } from "./mission.compute";
 import { MissionService } from "./mission.service";
@@ -230,6 +231,28 @@ export class MissionController {
     @Param("requestId") requestId: string,
   ) {
     return this.warehouseRequestService.prepare(requestId, req.user.userId, req.user.warehouseId);
+  }
+
+  /**
+   * Người đi lấy ký nhận. Quyền MISSION_FULFILL giống bước chuẩn bị: ở xã, người
+   * giao và người nhận thường đứng cạnh nhau tại kho, tách thành hai quyền riêng
+   * chỉ làm họ phải mượn tài khoản của nhau — mà mượn tài khoản thì chữ ký mất
+   * hết ý nghĩa.
+   */
+  @RequirePermission(Permission.MISSION_FULFILL)
+  @Post("warehouse-requests/:requestId/pickup")
+  confirmWarehousePickup(
+    @Request() req: AuthenticatedRequest,
+    @Param("requestId") requestId: string,
+    @Body() dto: ConfirmPickupDto,
+  ) {
+    return this.warehouseRequestService.confirmPickup(
+      requestId,
+      req.user.userId,
+      dto.receivedQuantity,
+      dto.note,
+      req.user.warehouseId,
+    );
   }
 
   @RequirePermission(Permission.MISSION_APPROVE)

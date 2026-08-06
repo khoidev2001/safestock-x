@@ -50,6 +50,12 @@ export class InventoryController {
     return this.inv.listBatches(id, req.user.warehouseId, req.user.userId);
   }
 
+  /** Tồn kho toàn xã: kho tổng cộng với hàng đang nằm ở các kho thôn. */
+  @Get("warehouses/:id/commune-stock")
+  communeStock(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.inv.communeStock(id, req.user.warehouseId, req.user.userId);
+  }
+
   @Get("warehouses/:id/batches-page")
   batchesPage(
     @Request() req: AuthenticatedRequest,

@@ -13,6 +13,7 @@ import {
 import { useAuth } from "@/lib/auth-store";
 import { InventoryActionDialog } from "./inventory-action-dialog";
 import { InventoryBulkExportDialog } from "./inventory-bulk-export-dialog";
+import { CommuneStockPanel } from "./commune-stock-panel";
 import { LoanStockMarksPanel } from "./loan-stock-marks-panel";
 import { InventoryQrDialog } from "./inventory-qr-dialog";
 import { InventoryReceivingDialog } from "./inventory-receiving-dialog";
@@ -114,6 +115,10 @@ export function InventoryWorkspace({ warehouseId }: { warehouseId: string }) {
           bao nhiêu trong đó là hàng đi mượn. Thấy con số trước rồi mới thấy chú
           thích thì đã kịp hiểu nhầm. */}
       <LoanStockMarksPanel />
+      {/* Kho tổng nhìn được hàng đang nằm ở các thôn. Bảng tồn ngay bên dưới
+          chỉ đếm hàng trong chính kho tổng, nên thiếu khối này người trực
+          tưởng xã hết hàng trong khi các thôn vẫn còn. */}
+      <CommuneStockPanel warehouseId={warehouseId} />
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-[var(--surface)] p-4">
         <div>
           <p className="font-semibold">Vận hành kho hằng ngày</p>

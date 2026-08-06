@@ -11,6 +11,7 @@ import { InventoryService } from "../inventory/inventory.service";
 import { assertWarehouseInScope } from "../inventory/warehouse-scope";
 import { NotificationService } from "../notification/notification.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { PickupError, validatePickup } from "./mission-pickup";
 import { requestBatchItems, resizeRequestAllocations } from "./mission-warehouse-request";
 
 @Injectable()
@@ -22,6 +23,85 @@ export class MissionWarehouseRequestService {
     private readonly inventory: InventoryService,
     private readonly notifications: NotificationService,
   ) {}
+
+  /**
+   * Người đi lấy ký nhận: cầm đi bao nhiêu, thiếu thì vì sao.
+   *
+   * Chỉ ghi SỔ, KHÔNG đụng tới tồn kho. Hàng đã trừ khỏi kho ở bước chuẩn bị rồi;
+   * trừ thêm lần nữa ở đây là trừ hai lần cho một lần xuất. Phần thiếu là hàng
+   * chưa từng rời kho, nên nó vẫn còn nằm đó và không cần cộng lại — cộng lại mới
+   * là làm sai, vì bước chuẩn bị đã trừ đúng số soạn ra.
+   *
+   * Không cho ký lại: ký nhận là chữ ký, sửa được thì nó không còn là chữ ký nữa.
+   */
+  async confirmPickup(
+    requestId: string,
+    userId: string,
+    receivedQuantity: number,
+    note: string | null | undefined,
+    scopeWarehouseId?: string | null,
+  ) {
+    const request = await this.prisma.missionWarehouseRequest.findUnique({
+      where: { id: requestId },
+      include: { warehouse: { select: { id: true, name: true, organizationId: true } } },
+    });
+    if (!request) throw new NotFoundException("Không tìm thấy yêu cầu vật tư");
+    assertWarehouseInScope(scopeWarehouseId, request.warehouseId);
+    if (request.status !== MissionWarehouseRequestStatus.PREPARED) {
+      throw new BadRequestException(
+        request.status === MissionWarehouseRequestStatus.PICKED_UP
+          ? "Yêu cầu này đã có người ký nhận rồi"
+          : "Kho chưa chuẩn bị xong, chưa lấy hàng được",
+      );
+    }
+
+    let ket: ReturnType<typeof validatePickup>;
+    try {
+      ket = validatePickup({
+        preparedQuantity: request.preparedQuantity,
+        receivedQuantity,
+        note,
+      });
+    } catch (error) {
+      if (error instanceof PickupError) throw new BadRequestException(error.message);
+      throw error;
+    }
+
+    // Chốt bằng điều kiện trạng thái: hai người cùng bấm ký nhận thì chỉ một người
+    // thắng, người kia nhận câu báo rõ ràng thay vì ghi đè im lặng lên chữ ký trước.
+    const chot = await this.prisma.missionWarehouseRequest.updateMany({
+      where: { id: requestId, status: MissionWarehouseRequestStatus.PREPARED },
+      data: {
+        status: MissionWarehouseRequestStatus.PICKED_UP,
+        pickedUpQuantity: ket.receivedQuantity,
+        pickupNote: ket.note,
+        pickedUpByUserId: userId,
+        pickedUpAt: new Date(),
+      },
+    });
+    if (chot.count !== 1) {
+      throw new BadRequestException("Yêu cầu vừa được ký nhận ở nơi khác, vui lòng tải lại");
+    }
+
+    if (ket.shortage > 0) {
+      // Chỉ báo khi THIẾU. Lấy đủ là chuyện bình thường; báo cả những lần bình
+      // thường thì người điều phối quen tay bỏ qua, rồi bỏ qua luôn lần thiếu thật.
+      await this.notify(
+        {
+          recipientRole: UserRole.ADMIN,
+          kind: NotificationKind.WAREHOUSE_READY,
+          title: "Lấy hàng THIẾU so với số đã soạn",
+          body: `${request.warehouse.name}: ${request.itemName} lấy ${ket.receivedQuantity}/${request.preparedQuantity} ${request.unit} — thiếu ${ket.shortage}. Lý do: ${ket.note}`,
+          missionId: request.missionId,
+          warehouseId: request.warehouseId,
+          organizationId: request.warehouse.organizationId,
+        },
+        `pickup thiếu SKU ${requestId}`,
+      );
+    }
+
+    return this.prisma.missionWarehouseRequest.findUniqueOrThrow({ where: { id: requestId } });
+  }
 
   async list(userId: string, scopeWarehouseId?: string | null) {
     const warehouseId = await this.resolveWarehouseId(userId, scopeWarehouseId);
