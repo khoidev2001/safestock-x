@@ -11,7 +11,7 @@ Sợi dây duy nhất nối hai bên là **thông báo** đi qua đường truy�
 Hệ quả trực tiếp, và đây là chỗ hay hiểu nhầm nhất khi thử:
 
 - Trừ kho bên A và cộng kho bên B là **hai việc riêng biệt**, xảy ra ở hai máy chủ, cách nhau vài giây.
-- **Mất mạng thì không có thông báo nào cả.** Đó không phải lỗi. Lúc đó hai xã gọi điện cho nhau rồi mỗi bên tự ghi tay vào tab Mượn trả — đúng như cách họ vẫn làm với nhau từ trước khi có phần mềm.
+- **Mất mạng thì không có thông báo nào cả.** Đó không phải lỗi. Lúc đó hai xã gọi điện cho nhau rồi mỗi bên tự ghi tay vào tab Mượn, trả — đúng như cách họ vẫn làm với nhau từ trước khi có phần mềm.
 
 ## Chuẩn bị
 
@@ -53,13 +53,13 @@ Mỗi bên đăng nhập bằng một tài khoản quản trị khác nhau, **m�
 
 ## Vòng thử đầy đủ
 
-Mọi thao tác đều nằm ở tab **Mượn trả**.
+Mọi thao tác đều nằm ở tab **Mượn, trả**.
 
 ### Bước 1 — Xã A xin mượn
 
 Ở trình duyệt của **xã A** (bên đi mượn):
 
-1. Vào tab Mượn trả, khối "Mượn của xã khác".
+1. Vào tab Mượn, trả, khối "Mượn của xã khác".
 2. Điền: xã cho mượn, mã vật tư, tên vật tư, đơn vị, số lượng. Ghi chú nếu muốn.
 3. Bấm gửi.
 
@@ -71,7 +71,7 @@ Mọi thao tác đều nằm ở tab **Mượn trả**.
 
 Ở trình duyệt của **xã B**, thông báo hiện ở góc phải màn hình trong vòng vài giây.
 
-**Nhìn vào đâu để biết đúng:** trong tab Mượn trả của B xuất hiện một dòng mới, chiều **Cho mượn**, tên xã gửi là **A**, trạng thái **Chờ bên kia quyết** (ở đây bên kia là chính mình).
+**Nhìn vào đâu để biết đúng:** trong tab Mượn, trả của B xuất hiện một dòng mới, chiều **Cho mượn**, tên xã gửi là **A**, trạng thái **Chờ bên kia quyết** (ở đây bên kia là chính mình).
 
 **Không thấy gì?** Kiểm theo thứ tự này:
 
@@ -145,7 +145,7 @@ Tắt máy chủ B rồi gửi yêu cầu từ A.
 
 Đúng: **yêu cầu vẫn được ghi vào sổ bên A**, chỉ là không sang được B. Màn hình A không báo lỗi đỏ làm người dùng hoảng. Lúc này hai xã gọi điện cho nhau, rồi mỗi bên tự ghi tay vào sổ.
 
-Bấm nút **"Ghi tay khoản đã thoả thuận qua điện thoại"** ở đầu tab Mượn trả, chọn chiều (cho mượn hay đi mượn), điền tên xã bên kia, mã lô vật tư, số lượng và ghi chú ai gọi lúc mấy giờ.
+Bấm nút **"Ghi tay khoản đã thoả thuận qua điện thoại"** ở đầu tab Mượn, trả, chọn chiều (cho mượn hay đi mượn), điền tên xã bên kia, mã lô vật tư, số lượng và ghi chú ai gọi lúc mấy giờ.
 
 Ghi tay **vẫn cộng trừ kho thật** như luồng tự động, chỉ khác là không có thông báo nào đi qua mạng. Khoản ghi tay hiện trên danh sách với nhãn `· ghi tay` để sau này đối chiếu còn phân biệt được.
 
