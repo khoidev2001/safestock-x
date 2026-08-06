@@ -3,23 +3,38 @@
 import { ColorIcon, type ColorIconName, type ColorIconTone } from "@/components/shared/color-icon";
 import type { MissionStatus } from "@/lib/mission-api";
 import { FIELD_FORCE_ROLE_LABEL } from "@safestock/shared-types";
+import { activeStepIndex, completedStepIndex } from "./workflow-progress";
 
-/** Ba bước phối hợp giữa bộ phận điều phối, lực lượng hiện trường và kho. */
+/**
+ * Ba bước phối hợp, xếp đúng thứ tự của state machine điều phối.
+ *
+ * Xã phát hành phương án THẲNG tới kho nên hiện trường không xác nhận ở giữa;
+ * họ đứng ở cuối, đi giao rồi báo kết quả để đóng nhiệm vụ. Trước đây thanh này
+ * còn giữ thứ tự cũ (hiện trường xác nhận trước kho), nên nhiệm vụ vừa lập xong
+ * hiện "Đang chờ" ở một bước không bao giờ xảy ra — người dùng ngồi đợi hiện
+ * trường trong khi việc đang nằm ở tay chính họ.
+ */
 const STEPS = [
-  { key: "admin", label: "Điều phối lập kế hoạch", role: "ADMIN", icon: "workflow", tone: "blue" },
   {
-    key: "rescue",
-    label: `${FIELD_FORCE_ROLE_LABEL} xác nhận`,
-    role: "RESCUE",
-    icon: "mission",
-    tone: "orange",
+    key: "admin",
+    label: "Điều phối lập và phát hành",
+    role: "ADMIN",
+    icon: "workflow",
+    tone: "blue",
   },
   {
     key: "warehouse",
-    label: "Kho chuẩn bị và giao",
+    label: "Kho chuẩn bị và xuất",
     role: "WAREHOUSE",
     icon: "warehouse",
     tone: "green",
+  },
+  {
+    key: "rescue",
+    label: `${FIELD_FORCE_ROLE_LABEL} giao và báo kết quả`,
+    role: "RESCUE",
+    icon: "mission",
+    tone: "orange",
   },
 ] satisfies {
   key: string;
@@ -28,24 +43,6 @@ const STEPS = [
   icon: ColorIconName;
   tone: ColorIconTone;
 }[];
-
-/** Trạng thái mission → bước nào đã xong (index cuối cùng hoàn tất). */
-function completedIndex(status: MissionStatus): number {
-  switch (status) {
-    case "DRAFT":
-      return 0; // đã lập, chờ gửi
-    case "PENDING_RESCUE":
-      return 0; // chờ lực lượng hiện trường
-    case "RESCUE_CONFIRMED":
-    case "PENDING_WAREHOUSE":
-      return 1; // hiện trường đã xác nhận, chờ kho
-    case "READY":
-    case "COMPLETED":
-      return 2; // xong hết
-    default:
-      return -1;
-  }
-}
 
 /** Trạng thái ngoài luồng 3 bước — hiện băng riêng thay vì stepper. */
 const OFF_FLOW: Partial<Record<MissionStatus, { label: string; tone: string }>> = {
@@ -58,7 +55,8 @@ const OFF_FLOW: Partial<Record<MissionStatus, { label: string; tone: string }>> 
 };
 
 export function WorkflowStepper({ status }: { status: MissionStatus }) {
-  const done = completedIndex(status);
+  const done = completedStepIndex(status);
+  const active = activeStepIndex(status);
   const offFlow = OFF_FLOW[status];
 
   if (offFlow) {
@@ -79,8 +77,8 @@ export function WorkflowStepper({ status }: { status: MissionStatus }) {
     <div className="flex items-center">
       {STEPS.map((step, i) => {
         const isDone = i <= done;
-        const isActive =
-          i === done + 1 || (i === done && status !== "READY" && status !== "COMPLETED");
+        // Đúng một bước được gắn "Đang chờ": bước kế ngay sau bước đã xong.
+        const isActive = i === active;
         return (
           <div key={step.key} className="flex flex-1 items-center">
             <div className="flex flex-col items-center gap-1.5">

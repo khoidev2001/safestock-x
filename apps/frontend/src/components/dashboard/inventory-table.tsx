@@ -117,9 +117,7 @@ export function InventoryTable({
                   <tr key={batch.id} className="align-top hover:bg-[var(--surface-2)]">
                     <td className="px-4 py-3">
                       <p className="font-medium">{batch.item.name}</p>
-                      <p className="text-xs text-[var(--text-muted)]">
-                        {batch.item.sku} · {batch.batchCode}
-                      </p>
+                      <p className="text-xs text-[var(--text-muted)]">Lô {batch.batchCode}</p>
                     </td>
                     <td className="px-4 py-3">
                       {batch.shelf

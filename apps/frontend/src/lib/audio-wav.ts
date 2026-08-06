@@ -76,10 +76,36 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 }
 
 /**
+ * Ngưỡng coi như đoạn ghi không có tiếng. Bằng đúng ngưỡng phía AI service
+ * (`_SILENCE_RMS` trong transcribe.py) để hai bên không kết luận trái nhau.
+ */
+export const SILENCE_RMS = 0.0015;
+
+/** Biên độ trung bình bình phương của đoạn ghi (0…1). */
+export function measureRms(samples: Float32Array): number {
+  if (samples.length === 0) return 0;
+  let sum = 0;
+  for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
+  return Math.sqrt(sum / samples.length);
+}
+
+export interface WavRecording {
+  base64: string;
+  /** Độ to trung bình. Bằng 0 nghĩa là micro trả về im lặng số học, không phải phòng yên. */
+  rms: number;
+  seconds: number;
+}
+
+/**
  * Blob ghi âm (webm/ogg/mp4… tuỳ trình duyệt) → WAV 16kHz mono base64.
  * decodeAudioData tự lo codec đầu vào nên không cần biết định dạng gốc.
+ *
+ * Trả kèm độ to, vì đó là thứ phân biệt được hai hỏng hóc trông y hệt nhau:
+ * micro không thu được gì (rms = 0, nhưng vẫn đủ số giây) khác hẳn với model
+ * nghe mà không ra chữ. Không đo thì cả hai đều hiện "chưa nghe rõ nội dung",
+ * và người dùng đi sửa nhầm chỗ.
  */
-export async function blobToWavBase64(blob: Blob): Promise<string> {
+export async function blobToWavBase64(blob: Blob): Promise<WavRecording> {
   const arrayBuffer = await blob.arrayBuffer();
   const AudioCtx =
     window.AudioContext ??
@@ -89,7 +115,11 @@ export async function blobToWavBase64(blob: Blob): Promise<string> {
     const decoded = await ctx.decodeAudioData(arrayBuffer);
     const mono = toMono(decoded);
     const resampled = resampleTo16k(mono, decoded.sampleRate);
-    return arrayBufferToBase64(encodeWav(resampled, TARGET_SR));
+    return {
+      base64: arrayBufferToBase64(encodeWav(resampled, TARGET_SR)),
+      rms: measureRms(resampled),
+      seconds: resampled.length / TARGET_SR,
+    };
   } finally {
     void ctx.close();
   }

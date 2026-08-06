@@ -5,15 +5,20 @@ import { ColorIcon } from "@/components/shared/color-icon";
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-store";
-import { mergeHamletCoordinateDrafts, type CoordinateDraft } from "@/lib/map-marker-state";
+import type { CoordinateDraft } from "@/lib/map-marker-state";
 import {
   beginWarehouseSave,
   clearMatchingSavedDraft,
   finishWarehouseSave,
   mergeWarehouseDraft,
 } from "./map-view-state";
-import { listAllWarehouses, updateWarehouseLocation } from "@/lib/warehouse-api";
-import { createHamlet, listHamlets, updateHamlet, type AdminHamlet } from "@/lib/hamlet-api";
+import {
+  clearWarehouseLocation,
+  listAllWarehouses,
+  updateWarehouseLocation,
+  type AdminWarehouse,
+} from "@/lib/warehouse-api";
+import { listHamlets, updateHamlet } from "@/lib/hamlet-api";
 import type { MapMarkerTarget } from "./map-canvas";
 
 const MapCanvas = dynamic(() => import("./map-canvas").then((m) => m.MapCanvas), {
@@ -32,65 +37,55 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
   // Toạ độ tạm (chưa lưu) theo id — cho phép kéo/click nhiều lần rồi Lưu.
   const [warehouseDraft, setWarehouseDraft] = useState<CoordinateDraft>({});
   const [pendingWarehouseSaves, setPendingWarehouseSaves] = useState<Set<string>>(() => new Set());
-  const [hamletDraft, setHamletDraft] = useState<CoordinateDraft>({});
-  const [hamletForm, setHamletForm] = useState({ name: "", aliases: "", lat: "", lng: "" });
 
   const query = useQuery({ queryKey: ["all-warehouses", warehouseId], queryFn: listAllWarehouses });
   const hamletsQuery = useQuery({
     queryKey: ["admin-hamlets"],
     queryFn: () => listHamlets("dong-xuan"),
   });
-  const hamletMutation = useMutation({
-    mutationFn: () =>
-      createHamlet({
-        name: hamletForm.name,
-        aliases: hamletForm.aliases
-          .split(",")
-          .map((value) => value.trim())
-          .filter(Boolean),
-        lat: hamletForm.lat === "" ? null : Number(hamletForm.lat),
-        lng: hamletForm.lng === "" ? null : Number(hamletForm.lng),
-        verified: false,
-      }),
-    onSuccess: () => {
-      setHamletForm({ name: "", aliases: "", lat: "", lng: "" });
-      qc.invalidateQueries({ queryKey: ["admin-hamlets"] });
-    },
-  });
-  const verifyHamlet = useMutation({
-    mutationFn: (hamlet: AdminHamlet) =>
-      updateHamlet(hamlet.id, {
-        name: hamlet.name,
-        aliases: hamlet.aliases,
-        communeId: hamlet.communeId,
-        lat: hamlet.lat,
-        lng: hamlet.lng,
-        verified: true,
-      }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-hamlets"] }),
-  });
-  const saveHamletLocation = useMutation({
-    mutationFn: ({ hamlet, lat, lng }: { hamlet: AdminHamlet; lat: number; lng: number }) =>
-      updateHamlet(hamlet.id, {
-        name: hamlet.name,
-        aliases: hamlet.aliases,
-        communeId: hamlet.communeId,
-        lat,
-        lng,
-        verified: false,
-      }),
-    onSuccess: (_, variables) => {
-      setHamletDraft((current) => omitDraft(current, variables.hamlet.id));
-      if (pickingTarget?.kind === "hamlet" && pickingTarget.id === variables.hamlet.id) {
-        setPickingTarget(null);
-      }
-      qc.invalidateQueries({ queryKey: ["admin-hamlets"] });
-    },
-  });
+
+  /**
+   * Điểm ứng phó của thôn đi kèm kho thôn: kho đặt ngay tại Nhà văn hoá, cũng là
+   * chỗ tập kết khi thôn có sự cố. Một toạ độ, hai bảng.
+   *
+   * Trước đây phải ghim hai chỗ rời nhau nên lệch âm thầm — kho có toạ độ mà điểm
+   * thôn chưa, hoặc ngược lại. Đã xảy ra hai lần, mỗi lần vài kho, và không có
+   * thông báo nào. Nay ghim kho là điểm thôn theo luôn.
+   */
+  const syncHamletWithWarehouse = async (
+    warehouseName: string,
+    point: { lat: number; lng: number } | null,
+  ) => {
+    const hamletName = warehouseName.replace(/^Kho\s+thôn\s+/iu, "");
+    if (hamletName === warehouseName) return; // Kho trung tâm, không có thôn tương ứng.
+    const hamlet = (hamletsQuery.data ?? []).find((item) => item.name === hamletName);
+    if (!hamlet) return;
+    await updateHamlet(hamlet.id, {
+      name: hamlet.name,
+      aliases: hamlet.aliases,
+      communeId: hamlet.communeId,
+      lat: point?.lat ?? null,
+      lng: point?.lng ?? null,
+      // ADMIN tự tay đặt dấu ghim rồi bấm Lưu — đó chính là hành vi xác minh.
+      verified: point != null,
+    });
+  };
 
   const save = useMutation({
-    mutationFn: ({ id, lat, lng }: { id: string; lat: number; lng: number }) =>
-      updateWarehouseLocation(id, lat, lng),
+    mutationFn: async ({
+      id,
+      name,
+      lat,
+      lng,
+    }: {
+      id: string;
+      name: string;
+      lat: number;
+      lng: number;
+    }) => {
+      await updateWarehouseLocation(id, lat, lng);
+      await syncHamletWithWarehouse(name, { lat, lng });
+    },
     onSuccess: (_, variables) => {
       setWarehouseDraft((current) =>
         clearMatchingSavedDraft(current, variables.id, {
@@ -102,6 +97,7 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
         setPickingTarget(null);
       }
       qc.invalidateQueries({ queryKey: ["all-warehouses", warehouseId] });
+      qc.invalidateQueries({ queryKey: ["admin-hamlets"] });
     },
     onSettled: (_, __, variables) => {
       setPendingWarehouseSaves((current) => finishWarehouseSave(current, variables.id));
@@ -109,35 +105,39 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
   });
 
   const warehouses = mergeWarehouseDraft(query.data ?? [], warehouseDraft);
-  const hamlets = mergeHamletCoordinateDrafts(hamletsQuery.data ?? [], hamletDraft);
   const unlocated = warehouses.filter((w) => w.lat == null || w.lng == null);
 
-  function setDraftCoord(kind: MapMarkerTarget["kind"], id: string, lat: number, lng: number) {
-    if (kind === "warehouse") {
-      setWarehouseDraft((current) => ({
-        ...current,
-        [id]: { lat, lng },
-      }));
-      return;
-    }
-    setHamletDraft((current) => ({ ...current, [id]: { lat, lng } }));
+  // Chỉ còn ghim kho; điểm ứng phó của thôn đi theo kho, xem syncHamletWithWarehouse.
+  function setDraftCoord(_kind: MapMarkerTarget["kind"], id: string, lat: number, lng: number) {
+    setWarehouseDraft((current) => ({ ...current, [id]: { lat, lng } }));
   }
 
   function saveOne(id: string) {
     const c = warehouseDraft[id];
     if (!c || pendingWarehouseSaves.has(id)) return;
+    const warehouse = (query.data ?? []).find((item) => item.id === id);
+    if (!warehouse) return;
     setPendingWarehouseSaves((current) => beginWarehouseSave(current, id) ?? current);
-    save.mutate({ id, lat: c.lat, lng: c.lng });
+    save.mutate({ id, name: warehouse.name, lat: c.lat, lng: c.lng });
   }
 
-  function saveHamletOne(hamlet: AdminHamlet) {
-    const coordinate = hamletDraft[hamlet.id];
-    if (!coordinate) return;
-    saveHamletLocation.mutate({ hamlet, ...coordinate });
-  }
+  /** Xoá toạ độ kho và điểm thôn đi kèm, đưa cả hai về trạng thái chưa ghim. */
+  const clearWarehousePin = useMutation({
+    mutationFn: async (warehouse: AdminWarehouse) => {
+      await clearWarehouseLocation(warehouse.id);
+      await syncHamletWithWarehouse(warehouse.name, null);
+    },
+    onSuccess: (_, warehouse) => {
+      setWarehouseDraft((current) => omitDraft(current, warehouse.id));
+      if (pickingTarget?.kind === "warehouse" && pickingTarget.id === warehouse.id) {
+        setPickingTarget(null);
+      }
+      qc.invalidateQueries({ queryKey: ["all-warehouses", warehouseId] });
+      qc.invalidateQueries({ queryKey: ["admin-hamlets"] });
+    },
+  });
 
   const dirtyIds = Object.keys(warehouseDraft);
-  const dirtyHamletIds = Object.keys(hamletDraft);
 
   return (
     // Panel chức năng chia theo tỉ lệ chứ không cố định 320px: thu thanh điều hướng
@@ -148,33 +148,17 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
       <div className="space-y-3 xl:sticky xl:top-20 xl:self-start">
         <MapCanvas
           warehouses={warehouses}
-          hamlets={hamlets}
           devMode={devMode}
           pickingTarget={pickingTarget}
           onMarkerMove={setDraftCoord}
           onPickOnMap={(lat, lng) => {
             if (!pickingTarget) return;
-            if (pickingTarget.kind === "hamlet" && pickingTarget.id === "__new__") {
-              setHamletForm((current) => ({
-                ...current,
-                lat: lat.toFixed(6),
-                lng: lng.toFixed(6),
-              }));
-              setPickingTarget(null);
-              return;
-            }
             setDraftCoord(pickingTarget.kind, pickingTarget.id, lat, lng);
           }}
         />
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-[var(--text-muted)]">
           <Legend color="var(--color-accent, #2f9e6e)" label="Kho tổng xã" />
           <Legend color="var(--text-muted, #8a8f98)" label="Kho thôn" />
-          {devMode ? (
-            <>
-              <Legend color="#7a2e12" label="Điểm thôn đã xác minh" />
-              <Legend color="#d97706" label="Điểm thôn chờ xác minh" />
-            </>
-          ) : null}
         </div>
       </div>
 
@@ -257,6 +241,29 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
                             <ColorIcon name="save" size={15} tone="green" /> Lưu
                           </button>
                         )}
+                        {/* Chỉ hiện khi có gì để xoá. Ghim sai vẫn tính là "có toạ
+                            độ" nên hệ thống cứ thế điều xe tới — trắng thì bị từ
+                            chối, an toàn hơn là điều tới chỗ sai mà không ai biết. */}
+                        {w.lat != null || w.lng != null || dirty ? (
+                          <button
+                            type="button"
+                            disabled={clearWarehousePin.isPending}
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  `Xoá toạ độ ${w.name}?\n\n` +
+                                    "Kho và điểm ứng phó của thôn cùng trở về trạng thái chưa " +
+                                    "ghim, tạm thời không điều phối tới được cho tới khi ghim lại.",
+                                )
+                              ) {
+                                clearWarehousePin.mutate(w);
+                              }
+                            }}
+                            className="rounded-md border px-2 py-1 text-xs text-[var(--color-critical)] disabled:opacity-60"
+                          >
+                            Xoá ghim
+                          </button>
+                        ) : null}
                       </div>
                     </div>
                   </li>
@@ -284,172 +291,6 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
                 Bật chế độ ghim để đặt vị trí.
               </p>
             )}
-          </section>
-        )}
-
-        {isAdmin && (
-          <section className="rounded-md border bg-[var(--surface)] p-4">
-            <h4 className="text-sm font-semibold">Danh mục thôn / điểm cứu hộ</h4>
-            <p className="mt-1 text-xs text-[var(--text-muted)]">
-              Tạo tên chuẩn và alias trước; chỉ xác minh sau khi đã nhập đủ tọa độ.
-            </p>
-            <div className="mt-3 space-y-2">
-              <input
-                className="w-full rounded-md border bg-[var(--surface-2)] px-2 py-1.5 text-sm"
-                placeholder="Tên chuẩn, ví dụ Tân Bình"
-                value={hamletForm.name}
-                onChange={(event) =>
-                  setHamletForm((current) => ({
-                    ...current,
-                    name: event.target.value,
-                  }))
-                }
-              />
-              <input
-                className="w-full rounded-md border bg-[var(--surface-2)] px-2 py-1.5 text-sm"
-                placeholder="Alias, phân cách bằng dấu phẩy"
-                value={hamletForm.aliases}
-                onChange={(event) =>
-                  setHamletForm((current) => ({
-                    ...current,
-                    aliases: event.target.value,
-                  }))
-                }
-              />
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  className="rounded-md border bg-[var(--surface-2)] px-2 py-1.5 text-sm"
-                  inputMode="decimal"
-                  placeholder="Vĩ độ"
-                  value={hamletForm.lat}
-                  onChange={(event) =>
-                    setHamletForm((current) => ({
-                      ...current,
-                      lat: event.target.value,
-                    }))
-                  }
-                />
-                <input
-                  className="rounded-md border bg-[var(--surface-2)] px-2 py-1.5 text-sm"
-                  inputMode="decimal"
-                  placeholder="Kinh độ"
-                  value={hamletForm.lng}
-                  onChange={(event) =>
-                    setHamletForm((current) => ({
-                      ...current,
-                      lng: event.target.value,
-                    }))
-                  }
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setDevMode(true);
-                  setPickingTarget({ kind: "hamlet", id: "__new__" });
-                }}
-                className={`w-full rounded-md border px-3 py-2 text-sm font-medium ${
-                  pickingTarget?.kind === "hamlet" && pickingTarget.id === "__new__"
-                    ? "border-[var(--color-accent)] text-[var(--color-accent)]"
-                    : ""
-                }`}
-              >
-                {pickingTarget?.kind === "hamlet" && pickingTarget.id === "__new__"
-                  ? "Bấm vị trí thôn trên bản đồ…"
-                  : "Chọn tọa độ trên bản đồ"}
-              </button>
-              <button
-                type="button"
-                disabled={hamletMutation.isPending || !hamletForm.name.trim()}
-                onClick={() => hamletMutation.mutate()}
-                className="w-full rounded-md bg-[var(--color-accent)] px-3 py-2 text-sm font-semibold text-[var(--color-accent-fg)] disabled:opacity-50"
-              >
-                {hamletMutation.isPending ? "Đang lưu…" : "Tạo thôn"}
-              </button>
-              {hamletMutation.error ? (
-                <p role="alert" className="text-xs text-[var(--color-critical)]">
-                  Không lưu được cấu hình thôn.
-                </p>
-              ) : null}
-            </div>
-            <ul className="mt-4 space-y-2">
-              {hamlets.map((hamlet) => {
-                const dirty = dirtyHamletIds.includes(hamlet.id);
-                const picking = pickingTarget?.kind === "hamlet" && pickingTarget.id === hamlet.id;
-                return (
-                  <li
-                    key={hamlet.id}
-                    className="rounded-md border bg-[var(--surface-2)] px-3 py-2 text-sm"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="min-w-0">
-                        <b className="block truncate">{hamlet.name}</b>
-                        <span className="text-xs text-[var(--text-muted)]">
-                          {hamlet.lat != null && hamlet.lng != null
-                            ? `${hamlet.lat.toFixed(5)}, ${hamlet.lng.toFixed(5)}`
-                            : "chưa ghim"}
-                        </span>
-                      </span>
-                      <span
-                        className={`text-xs ${
-                          hamlet.verified
-                            ? "text-[var(--color-ready)]"
-                            : "text-[var(--color-attention)]"
-                        }`}
-                      >
-                        {dirty ? "Chờ lưu" : hamlet.verified ? "Đã xác minh" : "Chờ xác minh"}
-                      </span>
-                    </div>
-                    <div className="mt-2 flex flex-wrap justify-end gap-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDevMode(true);
-                          setPickingTarget(picking ? null : { kind: "hamlet", id: hamlet.id });
-                        }}
-                        className={`rounded-md px-2 py-1 text-xs ${
-                          picking
-                            ? "bg-[var(--color-accent)] text-[var(--color-accent-fg)]"
-                            : "border"
-                        }`}
-                      >
-                        {picking ? "Đang chọn…" : "Chọn trên bản đồ"}
-                      </button>
-                      {dirty ? (
-                        <button
-                          type="button"
-                          disabled={saveHamletLocation.isPending}
-                          onClick={() => saveHamletOne(hamlet)}
-                          className="rounded-md bg-[var(--color-accent)] px-2 py-1 text-xs font-semibold text-[var(--color-accent-fg)] disabled:opacity-50"
-                        >
-                          Lưu vị trí
-                        </button>
-                      ) : null}
-                      {!hamlet.verified ? (
-                        <button
-                          type="button"
-                          disabled={
-                            dirty ||
-                            hamlet.lat == null ||
-                            hamlet.lng == null ||
-                            verifyHamlet.isPending
-                          }
-                          onClick={() => verifyHamlet.mutate(hamlet)}
-                          className="rounded-md border px-2 py-1 text-xs disabled:opacity-50"
-                        >
-                          Xác minh
-                        </button>
-                      ) : null}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-            {saveHamletLocation.error ? (
-              <p role="alert" className="mt-2 text-xs text-[var(--color-critical)]">
-                Không lưu được vị trí thôn.
-              </p>
-            ) : null}
           </section>
         )}
       </aside>

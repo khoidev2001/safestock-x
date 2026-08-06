@@ -31,7 +31,10 @@ function SimulatorContent({ warehouseId }: { warehouseId: string }) {
   });
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[480px_1fr]">
+    /* Xếp theo hàng, mỗi khối chiếm trọn bề ngang.
+       Hai cột làm cột trái chỉ rộng 480px, mà ở đó có 14 thẻ cảm biến — nhét vừa
+       hai thẻ một hàng nên phải cuộn rất dài, trong khi cột phải thừa chỗ. */
+    <div className="grid gap-4">
       <SimulatorPanel
         devices={devicesQuery.data}
         isLoading={devicesQuery.isLoading || timelineQuery.isLoading}

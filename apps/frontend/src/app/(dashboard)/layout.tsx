@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { io, type Socket } from "socket.io-client";
 import { BASE } from "@/lib/api";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
@@ -43,18 +43,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     refetchInterval: 12_000,
   });
 
+  // Kho đang xem chỉ dùng lúc có thông báo tới, không dùng để mở kết nối. Giữ nó
+  // trong ref thay vì trong danh sách phụ thuộc, vì lý do ở khối dưới.
+  const warehouseIdRef = useRef(warehouseId);
+  useEffect(() => {
+    warehouseIdRef.current = warehouseId;
+  }, [warehouseId]);
+
   // Sensor snapshots are read by REST polling in their own pages. Socket.IO
   // remains only for lightweight user notifications.
+  //
+  // CHỈ phụ thuộc vào token. Trước đây có cả `warehouseId`, mà giá trị đó lúc
+  // dựng trang đầu tiên là `undefined` rồi vài trăm mili giây sau mới có — nên
+  // effect chạy lại và ngắt kết nối vừa mở, đúng lúc nó còn đang bắt tay. Console
+  // in ra "WebSocket is closed before the connection is established", và mỗi lần
+  // vào trang lại tốn một kết nối chết yểu. Thông báo vẫn tới nhờ socket mở lại
+  // và nhờ lượt hỏi định kỳ, nên không ai để ý là có gì đó sai.
   useEffect(() => {
     if (!token) return;
     const socket: Socket = io(BASE, { transports: ["websocket"], auth: { token } });
     socket.on("notification", () => {
-      queryClient.invalidateQueries({ queryKey: ["open-incidents", warehouseId] });
+      queryClient.invalidateQueries({ queryKey: ["open-incidents", warehouseIdRef.current] });
     });
     return () => {
       socket.disconnect();
     };
-  }, [token, warehouseId, queryClient]);
+  }, [token, queryClient]);
 
   useIncidentAlertsBridge(incidentsQuery.data);
 
@@ -62,9 +76,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <DashboardShell warehouseName={warehouseQuery.data?.name}>
       {children}
-      {warehouseId ? (
-        <FloatingAssistant isHidden={pathname === "/assistant"} warehouseId={warehouseId} />
-      ) : null}
+      {warehouseId ? <FloatingAssistant warehouseId={warehouseId} /> : null}
     </DashboardShell>
   );
 }

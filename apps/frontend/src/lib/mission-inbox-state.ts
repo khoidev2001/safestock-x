@@ -118,7 +118,10 @@ export function missionDeepLink(missionId: string, fieldUpdateId?: string | null
   if (!normalizedId) return "/mission";
   const normalizedFieldUpdateId = fieldUpdateId?.trim();
   const target = normalizedFieldUpdateId
-    ? `&fieldUpdate=${encodeURIComponent(normalizedFieldUpdateId)}`
+    ? `?fieldUpdate=${encodeURIComponent(normalizedFieldUpdateId)}`
     : "";
-  return `/mission?mission=${encodeURIComponent(normalizedId)}${target}`;
+  // Trang riêng cho từng nhiệm vụ, không còn là tham số trên tab điều phối: một
+  // nhiệm vụ đang chạy kéo theo cả chục khối thông tin, để chung với form khai
+  // tình huống mới thì trang dài lê thê mà hai việc chẳng liên quan gì nhau.
+  return `/mission/${encodeURIComponent(normalizedId)}${target}`;
 }

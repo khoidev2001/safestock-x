@@ -170,6 +170,18 @@ button:disabled {
   font-variation-settings: "FILL" 1;
 }
 
+/* Nhốt mọi lớp của Leaflet lại trong khung bản đồ.
+
+   Leaflet đặt z-index rất cao cho các lớp bên trong: pane 400, popup 700,
+   control 800. Còn .leaflet-container thì chỉ có position:relative mà không có
+   z-index, nên nó KHÔNG tạo stacking context — mấy con số kia leo thẳng ra ngữ
+   cảnh gốc và đè lên thanh tiêu đề (z-10), cột chức năng bên trái và nút trợ lý
+   nổi (z-50). Nâng z-index của những thứ đó lên là chạy đua vô tận; isolate một
+   lần ở đây thì mọi bản đồ trong ứng dụng đều nằm yên trong khung của nó. */
+.leaflet-container {
+  isolation: isolate;
+}
+
 /* Nhãn tên kho luôn hiện trên bản đồ (kiểu ghim Google Maps).
    Nền trắng mờ + viền để đọc rõ trên cả ảnh vệ tinh lẫn bản đồ đường phố. */
 .leaflet-tooltip.wh-label {
@@ -186,6 +198,14 @@ button:disabled {
   /* Để nhãn không chặn click vào marker/tile bên dưới. */
   pointer-events: none;
 }
+/* Nhiệm vụ khác đang chạy: viền cam để phân biệt ngay với nhãn kho.
+   Nền đục hơn một chút vì nhãn này hay nằm chồng lên đường và nhà cửa. */
+.leaflet-tooltip.wh-label-ongoing {
+  color: #8a4b06;
+  border-color: rgba(217, 134, 19, 0.65);
+  background: rgba(255, 247, 235, 0.95);
+}
+
 /* Kho tổng xã nổi bật hơn: viền và chữ theo màu nhấn. */
 .leaflet-tooltip.wh-label-central {
   color: #1f7a52;

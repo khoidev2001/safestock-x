@@ -7,30 +7,22 @@ import { useIncidentAlerts } from "@/lib/incident-alert-store";
 
 interface FloatingAssistantProps {
   warehouseId: string;
-  isHidden?: boolean;
 }
 
-export function FloatingAssistant({ warehouseId, isHidden = false }: FloatingAssistantProps) {
+export function FloatingAssistant({ warehouseId }: FloatingAssistantProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const autoOpenReq = useIncidentAlerts((s) => s.autoOpenReq);
   const clearAutoOpen = useIncidentAlerts((s) => s.clearAutoOpen);
 
-  useEffect(() => {
-    if (isHidden) {
-      setIsOpen(false);
-      setIsExpanded(false);
-    }
-  }, [isHidden]);
-
   // Sự cố nghiêm trọng (HIGH/CRITICAL) đã được AI giải thích → tự mở trợ lý để người dùng thấy ngay.
   useEffect(() => {
-    if (autoOpenReq === 0 || isHidden) return;
+    if (autoOpenReq === 0) return;
     setIsOpen(true);
     setIsExpanded(true);
     clearAutoOpen();
-  }, [autoOpenReq, isHidden, clearAutoOpen]);
+  }, [autoOpenReq, clearAutoOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -58,8 +50,6 @@ export function FloatingAssistant({ warehouseId, isHidden = false }: FloatingAss
       document.body.style.overflow = previousOverflow;
     };
   }, [isExpanded, isOpen]);
-
-  if (isHidden) return null;
 
   return (
     <div className="fixed bottom-4 right-3 z-50 sm:bottom-6 sm:right-6">
@@ -129,6 +119,10 @@ export function FloatingAssistant({ warehouseId, isHidden = false }: FloatingAss
         </header>
 
         <AssistantChat
+          onNavigateAway={() => {
+            setIsOpen(false);
+            setIsExpanded(false);
+          }}
           compact
           isActive={isOpen}
           onLongResponse={() => setIsExpanded(true)}

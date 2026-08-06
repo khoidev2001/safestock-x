@@ -173,8 +173,7 @@ function ReportRows({ rows }: { rows: ReportRow[] }) {
           {rows.map((row, index) => (
             <tr key={row.batchId ?? `${row.sku}-${index}`}>
               <td className="px-3 py-2">
-                <b className="block">{row.sku}</b>
-                <span className="text-xs text-[var(--text-muted)]">{row.itemName}</span>
+                <b className="block">{row.itemName}</b>
               </td>
               <td className="px-3 py-2">
                 <b className="block">{row.batchCode || "Chưa định danh lô"}</b>

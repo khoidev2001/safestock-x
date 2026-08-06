@@ -103,13 +103,18 @@ test("tìm kiếm không phân biệt dấu theo địa điểm hoặc loại t�
   );
 });
 
-test("deep-link encode mission id để giữ lựa chọn qua refresh/tab mới", () => {
-  assert.equal(missionDeepLink("mission/with spaces"), "/mission?mission=mission%2Fwith%20spaces");
+test("deep-link trỏ sang trang riêng của nhiệm vụ, id được encode", () => {
+  // Encode để id có dấu gạch chéo không tự đẻ thêm một tầng route.
+  assert.equal(missionDeepLink("mission/with spaces"), "/mission/mission%2Fwith%20spaces");
 });
 
 test("deep-link giữ evidence hiện trường cần ADMIN xem lại sau refresh", () => {
   assert.equal(
     missionDeepLink("mission/with spaces", "field update/1"),
-    "/mission?mission=mission%2Fwith%20spaces&fieldUpdate=field%20update%2F1",
+    "/mission/mission%2Fwith%20spaces?fieldUpdate=field%20update%2F1",
   );
+});
+
+test("không có id thì về lại danh sách, không dựng đường dẫn rỗng", () => {
+  assert.equal(missionDeepLink("   "), "/mission");
 });

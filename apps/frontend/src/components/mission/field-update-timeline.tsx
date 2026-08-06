@@ -46,45 +46,44 @@ export function FieldUpdateTimeline({
     focusedItemRef.current.focus({ preventScroll: true });
   }, [focusUpdateId, query.data]);
 
+  // Không còn khối riêng: nằm gọn trong khối tham mưu, vì bằng chứng hiện trường
+  // chính là nguồn làm bản tham mưu thay đổi — để tách ra thì phải cuộn qua lại
+  // giữa hai khối mới đối chiếu được.
   return (
-    <section className="app-panel p-5" aria-labelledby="field-update-timeline-title">
-      <div className="flex items-start gap-2">
-        <ColorIcon name="mission" size={18} tone="blue" />
-        <div>
-          <h3 id="field-update-timeline-title" className="text-sm font-semibold">
-            Bằng chứng từ Lực lượng hiện trường
-          </h3>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">
-            Text/voice đã được người gửi xác nhận. AI chỉ gắn nhãn để tham khảo; ADMIN phải xác minh
-            trước khi đổi phương án.
+    <section aria-labelledby="field-update-timeline-title">
+      <h4
+        id="field-update-timeline-title"
+        className="flex items-center gap-2 text-sm font-semibold"
+      >
+        <ColorIcon name="mission" size={17} tone="blue" />
+        Bằng chứng từ Lực lượng hiện trường
+      </h4>
+      <div className="mt-2">
+        {query.isLoading && (
+          <p className="text-sm text-[var(--text-muted)]">Đang tải cập nhật hiện trường…</p>
+        )}
+        {query.error && (
+          <p className="mt-4 text-sm text-[var(--color-critical)]">
+            {query.error instanceof ApiError
+              ? query.error.message
+              : "Không tải được cập nhật hiện trường."}
           </p>
-        </div>
+        )}
+        {!query.isLoading && !query.error && query.data?.length === 0 && (
+          <p className="mt-4 rounded-md border border-dashed p-3 text-sm text-[var(--text-muted)]">
+            Chưa có cập nhật được Lực lượng hiện trường xác nhận.
+          </p>
+        )}
+        <ol className="space-y-3" aria-live="polite">
+          {query.data?.map((update) => (
+            <FieldUpdateItem
+              key={update.id}
+              update={update}
+              focusRef={update.id === focusUpdateId ? focusedItemRef : undefined}
+            />
+          ))}
+        </ol>
       </div>
-
-      {query.isLoading && (
-        <p className="mt-4 text-sm text-[var(--text-muted)]">Đang tải cập nhật hiện trường…</p>
-      )}
-      {query.error && (
-        <p className="mt-4 text-sm text-[var(--color-critical)]">
-          {query.error instanceof ApiError
-            ? query.error.message
-            : "Không tải được cập nhật hiện trường."}
-        </p>
-      )}
-      {!query.isLoading && !query.error && query.data?.length === 0 && (
-        <p className="mt-4 rounded-md border border-dashed p-3 text-sm text-[var(--text-muted)]">
-          Chưa có cập nhật được Lực lượng hiện trường xác nhận.
-        </p>
-      )}
-      <ol className="mt-4 space-y-3" aria-live="polite">
-        {query.data?.map((update) => (
-          <FieldUpdateItem
-            key={update.id}
-            update={update}
-            focusRef={update.id === focusUpdateId ? focusedItemRef : undefined}
-          />
-        ))}
-      </ol>
     </section>
   );
 }
@@ -155,7 +154,7 @@ function SimulationStatus({
     const metrics = simulationSnapshot?.input?.simulation?.delta.metrics ?? [];
     return (
       <div className="mt-2 text-xs text-[var(--color-ready)]">
-        <p>Đã tạo What-if sơ bộ trên snapshot tách biệt; phương án thực tế chưa đổi.</p>
+        <p>Đã thử giả định sơ bộ trên một bản ghi tách biệt; phương án thực tế chưa đổi.</p>
         {metrics.length > 0 && (
           <p className="mt-1 text-[var(--text-muted)]">
             Delta:{" "}

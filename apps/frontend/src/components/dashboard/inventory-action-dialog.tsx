@@ -142,15 +142,16 @@ export function InventoryActionDialog({ action, batch, shelves, onClose, onSucce
       <section className="w-full max-w-lg rounded-lg border bg-[var(--surface)] p-5 shadow-2xl">
         <header className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold text-[var(--color-accent)]">
-              {batch.item.sku} · {batch.batchCode}
-            </p>
+            <p className="text-xs font-semibold text-[var(--color-accent)]">Lô {batch.batchCode}</p>
             <h2 className="mt-1 text-xl font-semibold">{actionTitles[action]}</h2>
             <p className="mt-1 text-sm text-[var(--text-muted)]">
               Tồn vật lý hiện tại: {batch.quantity}
             </p>
           </div>
-          <button aria-label="Đóng" className="rounded border px-3 py-1.5" onClick={onClose}>
+          <button aria-label="Đóng"
+            // Vùng bấm 44px: nút cũ chỉ cao 30px, trên màn hình cảm ứng và
+            // laptop nhỏ phải nhắm mới trúng.
+            className="flex h-11 w-11 items-center justify-center rounded-md border text-xl leading-none transition hover:bg-[var(--surface-2)]" onClick={onClose}>
             ×
           </button>
         </header>

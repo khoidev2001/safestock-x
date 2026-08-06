@@ -240,6 +240,13 @@ export interface GenerateInput {
   };
   incidentLat?: number;
   incidentLng?: number;
+  /**
+   * Lời kể gốc, gửi kèm để backend lưu làm nguồn cho bản tham mưu.
+   *
+   * `incident` ở trên đã là kết quả parse nên backend không parse lại; trường này
+   * chỉ để giữ nguyên văn câu chữ đã sinh ra các con số đó.
+   */
+  description?: string;
 }
 
 export const generatePlan = (input: GenerateInput) =>

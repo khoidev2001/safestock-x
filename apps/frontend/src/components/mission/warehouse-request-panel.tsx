@@ -2,6 +2,8 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { CollapsiblePanel } from "@/components/shared/collapsible-panel";
+import { warehouseProgress } from "./warehouse-request-progress";
 import {
   acceptWarehouseRequest,
   prepareWarehouseRequest,
@@ -68,29 +70,41 @@ export function WarehouseRequestPanel({
       ? requests.filter((request) => request.warehouseId === assignedWarehouseId)
       : requests;
   const preparedCount = requests.filter((request) => request.status === "PREPARED").length;
+  const tienDoTheoKho = warehouseProgress(requests);
 
   return (
-    <section className="app-panel p-5" aria-labelledby="warehouse-request-title">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <h3 id="warehouse-request-title" className="text-sm font-semibold">
-            Chuẩn bị vật tư theo SKU
-          </h3>
-          <p className="mt-1 text-xs text-[var(--text-muted)]">
-            {preparedCount}/{requests.length} vật tư đã xuất. Mỗi dòng chỉ được xuất một lần.
-          </p>
-        </div>
+    <CollapsiblePanel
+      headingId="warehouse-request-title"
+      title="Chuẩn bị vật tư theo SKU"
+      subtitle={
+        <>
+          {preparedCount}/{requests.length} vật tư đã xuất. Mỗi dòng chỉ được xuất một lần.
+          {/* Con số gộp không nói được kho nào còn nợ. Điều phối đang chờ hàng chỉ
+              cần đúng một thứ: gọi cho ai. */}
+          <span className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+            {tienDoTheoKho.map((kho) => (
+              <span
+                key={kho.warehouseId}
+                className={kho.done ? "text-[var(--color-success)]" : "font-semibold"}
+              >
+                {kho.done ? "✓" : "•"} {kho.name} {kho.prepared}/{kho.total}
+              </span>
+            ))}
+          </span>
+        </>
+      }
+      badge={
         <span className="rounded-full border px-2.5 py-1 text-xs font-semibold">
           {preparedCount === requests.length ? "Đã hoàn tất" : "Đang chuẩn bị"}
         </span>
-      </div>
-
+      }
+    >
       {visible.length === 0 ? (
-        <p className="mt-4 rounded-md border border-dashed p-4 text-sm text-[var(--text-muted)]">
+        <p className="rounded-md border border-dashed p-4 text-sm text-[var(--text-muted)]">
           Kho đang đăng nhập không có vật tư được phân bổ trong phương án này.
         </p>
       ) : (
-        <div className="mt-4 divide-y rounded-md border">
+        <div className="divide-y rounded-md border">
           {visible.map((request) => {
             const isOwnWarehouse =
               role === "WAREHOUSE" && request.warehouseId === assignedWarehouseId;
@@ -101,7 +115,7 @@ export function WarehouseRequestPanel({
                   <div>
                     <p className="font-semibold">{request.itemName}</p>
                     <p className="mt-1 text-xs text-[var(--text-muted)]">
-                      {request.sku} · {request.warehouse?.name ?? request.warehouseId}
+                      {request.warehouse?.name ?? request.warehouseId}
                     </p>
                   </div>
                   <div className="text-right">
@@ -222,7 +236,7 @@ export function WarehouseRequestPanel({
           {actionError}
         </p>
       ) : null}
-    </section>
+    </CollapsiblePanel>
   );
 }
 

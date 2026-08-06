@@ -1,3 +1,4 @@
+import { CollapsiblePanel } from "@/components/shared/collapsible-panel";
 import { ColorIcon } from "@/components/shared/color-icon";
 import type { MissionReadinessAssessment, MissionReadinessStatus } from "@/lib/mission-api";
 
@@ -10,26 +11,19 @@ const STATUS_META: Record<MissionReadinessStatus, { label: string; color: string
 export function MissionReadinessPanel({ assessment }: { assessment: MissionReadinessAssessment }) {
   const meta = STATUS_META[assessment.status];
   return (
-    <section className="overflow-hidden rounded-md border bg-[var(--surface)]">
-      <div className="flex items-start justify-between gap-4 border-b px-5 py-4">
-        <div className="flex items-start gap-3">
-          <span className="mt-0.5" style={{ color: meta.color }}>
-            <StatusIcon status={assessment.status} />
-          </span>
-          <div>
-            <p className="text-xs font-medium text-[var(--text-muted)]">
-              Khả năng đáp ứng nhiệm vụ
-            </p>
-            <h3 className="mt-1 font-semibold" style={{ color: meta.color }}>
-              {meta.label}
-            </h3>
-          </div>
-        </div>
-        <span className="tabular shrink-0 text-sm font-semibold">{assessment.fulfillment}%</span>
-      </div>
-
+    <CollapsiblePanel
+      className="overflow-hidden rounded-md border bg-[var(--surface)] px-5 py-4"
+      icon={<StatusIcon status={assessment.status} />}
+      title="Khả năng đáp ứng nhiệm vụ"
+      subtitle={
+        <span className="font-semibold" style={{ color: meta.color }}>
+          {meta.label}
+        </span>
+      }
+      badge={<span className="tabular text-sm font-semibold">{assessment.fulfillment}%</span>}
+    >
       {assessment.blockers.length > 0 && (
-        <div className="border-b bg-[color-mix(in_oklch,var(--color-critical)_6%,transparent)] px-5 py-4">
+        <div className="mb-3 rounded-md bg-[color-mix(in_oklch,var(--color-critical)_6%,transparent)] px-4 py-3">
           {assessment.blockers.map((blocker) => (
             <div key={blocker.sku}>
               <p className="text-sm font-semibold">Thiếu hoàn toàn: {blocker.itemName}</p>
@@ -39,13 +33,13 @@ export function MissionReadinessPanel({ assessment }: { assessment: MissionReadi
         </div>
       )}
 
-      <div className="divide-y">
+      <div className="divide-y rounded-md border">
         {assessment.items.map((item) => (
-          <div className="grid grid-cols-[1fr_auto] gap-3 px-5 py-3" key={item.sku}>
+          <div className="grid grid-cols-[1fr_auto] gap-3 px-4 py-3" key={item.sku}>
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{item.itemName}</p>
               <p className="mt-0.5 text-xs text-[var(--text-muted)]">
-                Cấp {item.allocated}/{item.required}, thiếu {item.shortage}
+                Đáp ứng {item.allocated}/{item.required}, thiếu {item.shortage}
               </p>
             </div>
             <span
@@ -57,7 +51,7 @@ export function MissionReadinessPanel({ assessment }: { assessment: MissionReadi
           </div>
         ))}
       </div>
-    </section>
+    </CollapsiblePanel>
   );
 }
 

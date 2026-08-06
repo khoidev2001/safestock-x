@@ -1,5 +1,6 @@
 "use client";
 
+import { CollapsiblePanel } from "@/components/shared/collapsible-panel";
 import { ColorIcon } from "@/components/shared/color-icon";
 import type { WarehouseTree } from "@/lib/dashboard-api";
 
@@ -15,23 +16,30 @@ export function WarehouseMap({ tree, isLoading }: WarehouseMapProps) {
 
   if (!tree) {
     return (
-      <section className="rounded-md border bg-[var(--surface)] p-5">
-        <PanelTitle />
-        <p className="mt-4 text-sm text-[var(--text-muted)]">Chưa có cây kho để hiển thị.</p>
-      </section>
+      <CollapsiblePanel
+        className="rounded-md border bg-[var(--surface)] p-5"
+        icon={<ColorIcon name="map" size={20} tone="blue" />}
+        title="Sơ đồ kho"
+        subtitle="Vị trí các kệ được sắp theo từng khu"
+      >
+        <p className="text-sm text-[var(--text-muted)]">Chưa có cây kho để hiển thị.</p>
+      </CollapsiblePanel>
     );
   }
 
   return (
-    <section className="rounded-md border bg-[var(--surface)] p-5">
-      <div className="flex items-start justify-between gap-4">
-        <PanelTitle />
+    <CollapsiblePanel
+      className="rounded-md border bg-[var(--surface)] p-5"
+      icon={<ColorIcon name="map" size={20} tone="blue" />}
+      title="Sơ đồ kho"
+      subtitle="Vị trí các kệ được sắp theo từng khu"
+      badge={
         <span className="rounded-md bg-[var(--surface-2)] px-2.5 py-1 text-xs font-medium text-[var(--text-muted)]">
           {tree.zones.length} khu
         </span>
-      </div>
-
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      }
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
         {tree.zones.map((zone) => (
           <div key={zone.id} className="rounded-md border bg-[var(--surface-2)] p-3">
             <div className="flex items-center justify-between gap-2">
@@ -60,18 +68,6 @@ export function WarehouseMap({ tree, isLoading }: WarehouseMapProps) {
           </div>
         ))}
       </div>
-    </section>
-  );
-}
-
-function PanelTitle() {
-  return (
-    <div className="flex items-center gap-2">
-      <ColorIcon name="map" size={20} tone="blue" />
-      <div>
-        <h2 className="text-sm font-semibold">Sơ đồ kho</h2>
-        <p className="text-xs text-[var(--text-muted)]">Vị trí các kệ được sắp theo từng khu</p>
-      </div>
-    </div>
+    </CollapsiblePanel>
   );
 }

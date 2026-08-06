@@ -78,7 +78,7 @@ export function InventoryHistory({ warehouseId }: { warehouseId: string }) {
                   <td className="px-4 py-3">
                     <b className="block">{event.batch.item.name}</b>
                     <span className="text-xs text-[var(--text-muted)]">
-                      {event.batch.item.sku} · {event.batch.batchCode}
+                      Lô {event.batch.batchCode}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right font-semibold">

@@ -2,25 +2,15 @@
 
 import L from "leaflet";
 import { useEffect, useMemo, useState } from "react";
-import {
-  GeoJSON,
-  MapContainer,
-  Marker,
-  Popup,
-  TileLayer,
-  Tooltip,
-  useMap,
-  useMapEvents,
-} from "react-leaflet";
+import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import type { AdminWarehouse } from "@/lib/warehouse-api";
-import type { AdminHamlet } from "@/lib/hamlet-api";
 import {
   buildLabelCandidates,
   selectVisibleLabels,
-  type GeoData,
   type PlaceFeature,
   type ScreenLabelCandidate,
 } from "./map-labels";
+import { CommuneBoundaries, useCommuneGeo } from "./commune-boundaries";
 import { markerIconHtml } from "./map-markers";
 import {
   BLANK_TILE,
@@ -53,7 +43,6 @@ interface PlacesData {
 
 export interface MapCanvasProps {
   warehouses: AdminWarehouse[];
-  hamlets: AdminHamlet[];
   devMode: boolean;
   pickingTarget: MapMarkerTarget | null;
   onMarkerMove: (kind: MapMarkerTarget["kind"], id: string, lat: number, lng: number) => void;
@@ -61,43 +50,21 @@ export interface MapCanvasProps {
 }
 
 export interface MapMarkerTarget {
-  kind: "warehouse" | "hamlet";
+  kind: "warehouse";
   id: string;
 }
 
 export function MapCanvas({
   warehouses,
-  hamlets,
   devMode,
   pickingTarget,
   onMarkerMove,
   onPickOnMap,
 }: MapCanvasProps) {
-  const [geo, setGeo] = useState<GeoData | null>(null);
+  const geo = useCommuneGeo();
   const [places, setPlaces] = useState<PlacesData | null>(null);
   const centralIcon = useMemo(() => pinIcon("var(--color-accent, #2f9e6e)"), []);
   const warehouseHamletIcon = useMemo(() => pinIcon("var(--text-muted, #8a8f98)", 26), []);
-  const verifiedHamletIcon = useMemo(() => pinIcon("#7a2e12", 24), []);
-  const unverifiedHamletIcon = useMemo(() => pinIcon("#d97706", 24), []);
-
-  useEffect(() => {
-    // Ưu tiên gói local Đồng Xuân + 6 xã giáp ranh; toàn tỉnh chỉ là fallback.
-    const load = async () => {
-      for (const src of ["/geo/communes.geojson", "/geo/daklak-communes.geojson"]) {
-        try {
-          const r = await fetch(src);
-          if (r.ok) {
-            setGeo(await r.json());
-            return;
-          }
-        } catch {
-          /* thử nguồn kế tiếp */
-        }
-      }
-      setGeo(null);
-    };
-    load();
-  }, []);
 
   useEffect(() => {
     // Địa danh tự vẽ (đã bỏ "huyện"). Không có file cũng không sao — chỉ là lớp phủ.
@@ -108,14 +75,7 @@ export function MapCanvas({
   }, []);
 
   const located = warehouses.filter((w) => w.lat != null && w.lng != null);
-  const locatedHamlets = hamlets.filter((hamlet) => hamlet.lat != null && hamlet.lng != null);
-  const boundsPoints = [
-    ...located.map((w) => ({ lat: w.lat as number, lng: w.lng as number })),
-    ...locatedHamlets.map((hamlet) => ({
-      lat: hamlet.lat as number,
-      lng: hamlet.lng as number,
-    })),
-  ];
+  const boundsPoints = located.map((w) => ({ lat: w.lat as number, lng: w.lng as number }));
 
   return (
     <div className="h-[calc(100dvh-190px)] min-h-[520px] overflow-hidden rounded-md border">
@@ -186,64 +146,8 @@ export function MapCanvas({
             </Popup>
           </Marker>
         ))}
-        {/* Điểm ứng phó của thôn trùng đúng vị trí kho thôn nên hiện cả hai là hai
-            dấu chồng lên nhau. Chỉ hiện khi ADMIN đang ghim toạ độ. */}
-        {(devMode ? locatedHamlets : []).map((hamlet) => (
-          <Marker
-            key={`hamlet-${hamlet.id}`}
-            position={[hamlet.lat as number, hamlet.lng as number]}
-            icon={hamlet.verified ? verifiedHamletIcon : unverifiedHamletIcon}
-            draggable={devMode}
-            eventHandlers={
-              devMode
-                ? {
-                    dragend: (event) => {
-                      const point = (event.target as L.Marker).getLatLng();
-                      onMarkerMove("hamlet", hamlet.id, point.lat, point.lng);
-                    },
-                  }
-                : undefined
-            }
-          >
-            <Tooltip direction="right" offset={[10, -12]}>
-              {hamlet.name}
-            </Tooltip>
-            <Popup>
-              <strong>{hamlet.name}</strong>
-              <br />
-              {hamlet.verified ? "Điểm thôn đã xác minh" : "Điểm thôn chờ xác minh"}
-              <br />
-              <span className="tabular">
-                {(hamlet.lat as number).toFixed(5)}, {(hamlet.lng as number).toFixed(5)}
-              </span>
-              {devMode ? (
-                <>
-                  <br />
-                  <em>Kéo marker để đổi vị trí; cần xác minh lại sau khi lưu.</em>
-                </>
-              ) : null}
-            </Popup>
-          </Marker>
-        ))}
       </MapContainer>
     </div>
-  );
-}
-
-// Ranh giới xã/phường + nhãn tên (kiểu Google Maps: viền + chữ ở tâm xã).
-function CommuneBoundaries({ geo }: { geo: GeoData }) {
-  return (
-    <GeoJSON
-      data={geo as never}
-      style={() => ({
-        color: "#e05a2b",
-        weight: 1.4,
-        fillColor: "#f0a020",
-        fillOpacity: 0.04,
-        // Đường viền nét đứt mảnh cho giống cách bản đồ hành chính.
-        dashArray: "4 3",
-      })}
-    />
   );
 }
 

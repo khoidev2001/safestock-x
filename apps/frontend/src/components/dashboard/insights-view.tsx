@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { splitBriefingSentences } from "@safestock/shared-types";
 import { ColorIcon } from "@/components/shared/color-icon";
 import {
   getMonthlyReport,
@@ -11,10 +12,15 @@ import {
   type MonthlyReport,
   type TrendItem,
   type WarehouseInsights,
+  type WeatherAlert,
   type WeatherDemandItem,
 } from "@/lib/insights-api";
 
 /** Theo dõi vận hành thường ngày: dự báo, hết hạn, cân bằng, thời tiết và báo cáo tháng. */
+
+// Cắt câu nằm ở gói dùng chung để web và điện thoại hiện GIỐNG nhau.
+export { splitBriefingSentences };
+
 export function InsightsView({ warehouseId }: { warehouseId: string }) {
   const insightsQuery = useQuery({
     queryKey: ["insights", warehouseId],
@@ -73,11 +79,14 @@ function DailyBriefingCard({ warehouseId }: { warehouseId: string }) {
         <Header
           icon={<ColorIcon name="magic" size={20} tone="amber" />}
           tone="var(--color-accent)"
-          title="Bản tin AI đầu ngày"
+          title="Bản tin đầu ngày"
         />
-        {briefing.data && (
-          <span className="rounded-md bg-[var(--surface-2)] px-2 py-1 text-[11px] font-semibold text-[var(--text-muted)]">
-            {briefing.data.source === "AI" ? "AI local" : "Bản dự phòng"}
+        {/* Chỉ báo khi KHÔNG phải AI viết. Trường hợp bình thường thì nhãn "AI
+            local" hiện mọi lúc nên thành nền, không ai đọc; còn lúc AI không gọi
+            được và rơi về bản mẫu thì đó là tin phải nói, vì câu chữ khô hơn hẳn. */}
+        {briefing.data && briefing.data.source !== "AI" && (
+          <span className="rounded-md bg-[var(--surface-2)] px-2 py-1 text-[11px] font-semibold text-[var(--color-attention)]">
+            Bản dự phòng — AI chưa sẵn sàng
           </span>
         )}
       </div>
@@ -89,9 +98,19 @@ function DailyBriefingCard({ warehouseId }: { warehouseId: string }) {
         </p>
       ) : (
         <>
-          <p className="mt-4 whitespace-pre-line text-sm leading-relaxed">
-            {briefing.data.narrative}
-          </p>
+          {/* Tách câu thành từng gạch đầu dòng: bản tin gộp bốn mảng vận hành
+              (sẵn sàng, mưa, tồn kho, sự cố) vào một đoạn liền, đọc phải tự dò
+              xem câu nào nói chuyện gì. Mỗi mảng một dòng thì liếc là ra. */}
+          <ul className="mt-4 space-y-1.5">
+            {splitBriefingSentences(briefing.data.narrative).map((sentence) => (
+              <li className="flex gap-2 text-sm leading-relaxed" key={sentence}>
+                <span aria-hidden="true" className="text-[var(--text-muted)]">
+                  •
+                </span>
+                <span>{sentence}</span>
+              </li>
+            ))}
+          </ul>
           <ul className="mt-4 space-y-2 border-t pt-3">
             {briefing.data.priorities.map((priority) => (
               <li className="flex gap-2 text-sm" key={priority}>
@@ -106,6 +125,51 @@ function DailyBriefingCard({ warehouseId }: { warehouseId: string }) {
   );
 }
 
+/**
+ * Mưa theo từng mốc giờ.
+ *
+ * Chỉ có tổng 72 giờ thì không quyết định được: 100 mm rơi đều ba ngày khác hẳn
+ * 100 mm dồn vào sáu tiếng tới. Mốc nào có mưa thì tô đậm để mắt bắt được ngay
+ * thời điểm cần chuẩn bị.
+ */
+function WeatherHorizons({ horizons }: { horizons: WeatherAlert["horizons"] }) {
+  if (!horizons || horizons.length === 0) return null;
+  return (
+    <div className="overflow-x-auto rounded-md border">
+      <table className="min-w-full text-left text-sm">
+        <thead className="bg-[var(--surface-2)] text-xs text-[var(--text-muted)]">
+          <tr>
+            <th className="px-3 py-2 font-medium">Mốc</th>
+            <th className="px-3 py-2 font-medium">Mưa</th>
+            <th className="px-3 py-2 font-medium">Gió mạnh nhất</th>
+            <th className="px-3 py-2 font-medium">Nhiệt độ</th>
+          </tr>
+        </thead>
+        <tbody>
+          {horizons.map((item) => (
+            <tr className="border-t" key={item.hours}>
+              <td className="px-3 py-2 font-medium">{item.hours} giờ tới</td>
+              <td className="tabular px-3 py-2">
+                <b style={{ color: item.rainMm > 0 ? "var(--text)" : "var(--text-muted)" }}>
+                  {item.rainMm.toFixed(1)} mm
+                </b>
+              </td>
+              <td className="tabular px-3 py-2 text-[var(--text-muted)]">
+                {item.maxWindKph == null ? "—" : `${item.maxWindKph.toFixed(0)} km/h`}
+              </td>
+              <td className="tabular px-3 py-2 text-[var(--text-muted)]">
+                {item.minTempC == null || item.maxTempC == null
+                  ? "—"
+                  : `${item.minTempC.toFixed(0)}–${item.maxTempC.toFixed(0)}°C`}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function WeatherDemandCard({ data }: { data: WarehouseInsights }) {
   const risks = data.weatherDemand.filter((item) => item.atRisk);
   return (
@@ -113,24 +177,26 @@ function WeatherDemandCard({ data }: { data: WarehouseInsights }) {
       <Header
         icon={<ColorIcon name="weather" size={20} tone="blue" />}
         tone="var(--color-accent)"
-        title="Nhu cầu theo mưa 72 giờ"
+        title="Thời tiết và nhu cầu theo mưa"
       />
       {!data.weatherAlert ? (
-        <Empty text="Chưa lấy được Open-Meteo; hệ thống không tự suy đoán lượng mưa." />
+        <Empty text="Chưa lấy được dự báo thời tiết. Hệ thống không tự suy đoán lượng mưa; sẽ thử lại ở lần làm mới sau." />
       ) : !data.weatherAlert.alert ? (
         <div className="mt-4">
-          <p className="text-sm">
-            Tổng mưa dự báo:{" "}
-            <b className="tabular">{data.weatherAlert.totalRainMm.toFixed(1)} mm</b>.
-          </p>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">
-            Chưa chạm ngưỡng 100 mm/72 giờ nên không nhân hệ số nhu cầu.
+          <WeatherHorizons horizons={data.weatherAlert.horizons} />
+          <p className="mt-3 text-sm text-[var(--text-muted)]">
+            Tổng mưa 72 giờ{" "}
+            <b className="tabular text-[var(--text)]">
+              {data.weatherAlert.totalRainMm.toFixed(1)} mm
+            </b>{" "}
+            — chưa chạm ngưỡng 100 mm nên không nhân hệ số nhu cầu.
           </p>
           <RainDays daily={data.weatherAlert.daily} />
         </div>
       ) : risks.length === 0 ? (
         <div className="mt-4">
-          <p className="text-sm">
+          <WeatherHorizons horizons={data.weatherAlert.horizons} />
+          <p className="mt-3 text-sm">
             Mưa dự báo <b className="tabular">{data.weatherAlert.totalRainMm.toFixed(1)} mm</b>,
             nhưng chưa đủ lịch sử xuất kho tin cậy để kết luận thiếu.
           </p>
@@ -138,8 +204,9 @@ function WeatherDemandCard({ data }: { data: WarehouseInsights }) {
         </div>
       ) : (
         <>
-          <p className="mt-2 text-sm text-[var(--text-muted)]">
-            EWMA tiêu thụ × hệ số nhóm cứu trợ; số liệu chỉ dùng để cảnh báo sớm.
+          <WeatherHorizons horizons={data.weatherAlert.horizons} />
+          <p className="mt-3 text-sm text-[var(--text-muted)]">
+            Ước lượng từ mức tiêu thụ gần đây nhân hệ số nhóm cứu trợ; chỉ dùng để cảnh báo sớm.
           </p>
           <ul className="mt-3 divide-y">
             {risks.slice(0, 6).map((item) => (
@@ -337,9 +404,7 @@ function ExpiryCard({ data }: { data: WarehouseInsights }) {
               <li key={a.batchId} className="flex items-center justify-between gap-3 py-2.5">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{a.itemName}</p>
-                  <p className="text-xs text-[var(--text-muted)]">
-                    SL {a.quantity} · {a.sku}
-                  </p>
+                  <p className="text-xs text-[var(--text-muted)]">Số lượng {a.quantity}</p>
                 </div>
                 <span
                   className="tabular shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold"
@@ -386,7 +451,7 @@ function RebalanceCard({ data }: { data: WarehouseInsights }) {
                 <span className="truncate font-medium">{r.toWarehouseName}</span>
               </div>
               <p className="mt-1 text-xs text-[var(--text-muted)]">
-                Chuyển <b className="tabular text-[var(--text)]">{r.suggestedQty}</b> {r.sku}
+                Chuyển <b className="tabular text-[var(--text)]">{r.suggestedQty}</b> {r.itemName}
               </p>
             </li>
           ))}

@@ -1,16 +1,19 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AiProgressDialog } from "@/components/shared/ai-progress-dialog";
 import { ColorIcon } from "@/components/shared/color-icon";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-store";
 import { useMissionFocus } from "@/lib/mission-focus-store";
-import { filterMissionInbox, missionDeepLink } from "@/lib/mission-inbox-state";
+import { missionDeepLink } from "@/lib/mission-inbox-state";
 import type { LatLng } from "@/lib/geo";
 import { ApiError } from "@/lib/api";
 import {
+  analyzeMission,
   approveMission,
   cancelMission,
   generateActionPlan,
@@ -26,12 +29,11 @@ import {
   type Mission,
 } from "@/lib/mission-api";
 import { listAllWarehouses } from "@/lib/warehouse-api";
-import { blobToWavBase64 } from "@/lib/audio-wav";
+import { blobToWavBase64, SILENCE_RMS } from "@/lib/audio-wav";
 import { ActionPlanView } from "./action-plan-view";
-import { MissionInbox } from "./mission-inbox";
+import { MissionInbox, STATUS_LABELS } from "./mission-inbox";
 import { MissionReadinessPanel } from "./mission-readiness-panel";
-import { CoordinationAnalysisPanel } from "./coordination-analysis-panel";
-import { FieldUpdateTimeline } from "./field-update-timeline";
+import { CoordinationAnalysisPanel, requestId } from "./coordination-analysis-panel";
 import { WarehouseRequestPanel } from "./warehouse-request-panel";
 import { WorkflowStepper } from "./workflow-stepper";
 import { FIELD_FORCE_ROLE_LABEL } from "@safestock/shared-types";
@@ -93,14 +95,30 @@ type IncidentForm = GenerateInput["incident"] & {
   medicalSupportCases: number;
 };
 
-export function MissionView({ warehouseId }: { warehouseId: string }) {
+export interface MissionViewProps {
+  warehouseId: string;
+  /**
+   * Có id thì đây là TRANG CHI TIẾT của đúng nhiệm vụ đó; không có thì đây là tab
+   * điều phối: form khai tình huống mới cộng hộp nhiệm vụ.
+   *
+   * Một component phục vụ cả hai vì phần lớn state dùng chung (form, điểm ghim,
+   * các mutation). Tách đôi thì phải nhân bản chỗ đó, mà chúng vốn là một luồng.
+   */
+  missionId?: string;
+}
+
+export function MissionView({ warehouseId, missionId: missionIdProp }: MissionViewProps) {
   const role = useAuth((s) => s.user?.role);
   const assignedWarehouseId = useAuth((s) => s.user?.warehouseId);
   const queryClient = useQueryClient();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const missionId = searchParams.get("mission")?.trim() || null;
+  const missionId = missionIdProp?.trim() || null;
+  /** Trang chi tiết mới hiện các khối thuộc về một nhiệm vụ. */
+  const isDetailPage = Boolean(missionId);
   const fieldUpdateId = searchParams.get("fieldUpdate")?.trim() || null;
+  /** Lời kể mang sang từ khung trợ lý, để không phải gõ lại y nguyên. */
+  const describeParam = searchParams.get("describe")?.trim() || null;
   const selectMission = useCallback(
     (id: string, replace = false) => {
       const href = missionDeepLink(id);
@@ -121,13 +139,19 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
     elderly: 0,
     medicalSupportCases: 0,
   });
-  // Điểm sự cố ghim tay trên bản đồ. Dùng khi chỗ xảy ra việc không trùng thôn nào
-  // trong danh mục — ngập giữa hai thôn, sạt lở trên đường liên xã.
-  const [incidentPoint, setIncidentPoint] = useState<LatLng | null>(null);
-  const [planError, setPlanError] = useState<string | null>(null);
+  /**
+   * Điểm sự cố ghim tay trên bản đồ, dùng khi chỗ xảy ra việc không trùng thôn nào
+   * trong danh mục — ngập giữa hai thôn, sạt lở trên đường liên xã.
+   *
+   * Ba trạng thái, không phải hai: `undefined` là chưa đụng tới (lấy điểm của
+   * nhiệm vụ đang mở), `null` là đã chủ động xoá, còn lại là điểm vừa đặt. Thiếu
+   * trạng thái "chưa đụng" thì không phân biệt được xoá với chưa chọn.
+   */
+  const [incidentPoint, setIncidentPoint] = useState<LatLng | null | undefined>(undefined);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
   const [description, setDescription] = useState("");
   const [parseError, setParseError] = useState<string | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   // Mở đúng nhiệm vụ khi bấm thông báo (chuông) — kể cả mission đã REJECTED/DEFERRED.
   const focusMissionId = useMissionFocus((s) => s.focusMissionId);
@@ -157,20 +181,6 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
     staleTime: 5 * 60 * 1000,
   });
 
-  useEffect(() => {
-    if (missionId || !missionListQuery.data?.length) {
-      return;
-    }
-
-    const activeMission = filterMissionInbox(missionListQuery.data, {
-      view: "active",
-      search: "",
-      role,
-      warehouseId: assignedWarehouseId,
-    })[0];
-    selectMission(activeMission?.id ?? missionListQuery.data[0].id, true);
-  }, [assignedWarehouseId, missionId, missionListQuery.data, role, selectMission]);
-
   const missionQuery = useQuery({
     queryKey: ["mission", missionId],
     queryFn: () => getMission(missionId as string),
@@ -192,6 +202,20 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
     if (isReportDraft && mission?.reportText) setDescription(mission.reportText);
   }, [isReportDraft, mission?.reportText]);
 
+  // Trợ lý chuyển sang kèm lời kể: điền sẵn vào ô mô tả, chỉ một lần cho mỗi
+  // lời kể để không đè lên phần người dùng đang sửa dở.
+  const seededDescribeRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!describeParam || seededDescribeRef.current === describeParam) return;
+    seededDescribeRef.current = describeParam;
+    setDescription(describeParam);
+  }, [describeParam]);
+
+  // Đổi nhiệm vụ thì bỏ điểm đang sửa dở, nếu không nó dính sang nhiệm vụ kế tiếp.
+  useEffect(() => {
+    setIncidentPoint(undefined);
+  }, [missionId]);
+
   // Phân tích BÁO CÁO đang mở ngay trên nó (không tạo mission mới) — dùng lại cho cả
   // đường "mô tả bằng lời" lẫn "nhập tay form", tránh đẻ DRAFT mồ côi bỏ quên báo cáo.
   const analyzeOpenReport = (incident: GenerateInput["incident"]) => {
@@ -205,28 +229,19 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
     });
   };
 
-  const genPlan = useMutation({
-    mutationFn: () => {
-      if (missionId && isReportDraft) return analyzeOpenReport(form);
-      return generatePlan({
-        warehouseId,
-        incident: form,
-        ...(incidentPoint
-          ? { incidentLat: incidentPoint.lat, incidentLng: incidentPoint.lng }
-          : {}),
-      });
-    },
-    onSuccess: (m: Mission) => {
-      selectMission(m.id);
-      setPlanError(null);
-      queryClient.invalidateQueries({ queryKey: ["mission", m.id] });
-      queryClient.invalidateQueries({ queryKey: ["missions", "inbox"] });
-    },
-    onError: (err) =>
-      setPlanError(
-        err instanceof ApiError ? err.message : "Chưa thể lập phương án. Vui lòng thử lại.",
-      ),
-  });
+  /** Dựng phương án từ số liệu đang có trên form (hoặc phân tích ngay trên báo cáo đang mở). */
+  const planFromForm = () => {
+    if (missionId && isReportDraft) return analyzeOpenReport(form);
+    return generatePlan({
+      warehouseId,
+      incident: form,
+      // Nhập tay vẫn có thể kèm lời kể; có thì giữ lại làm nguồn cho bản tham mưu.
+      ...(description.trim() ? { description } : {}),
+      ...(formIncidentPoint
+        ? { incidentLat: formIncidentPoint.lat, incidentLng: formIncidentPoint.lng }
+        : {}),
+    });
+  };
 
   // AI phân tích lời kể → tính nhu cầu vật tư + lập phương án NGAY trong một bước.
   // Backend chỉ chấp nhận thôn đã xác minh hoặc tọa độ thật; không sinh điểm giả để lấp dữ liệu.
@@ -247,15 +262,15 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
       return generatePlan({
         warehouseId,
         incident,
-        ...(incidentPoint
-          ? { incidentLat: incidentPoint.lat, incidentLng: incidentPoint.lng }
+        description,
+        ...(formIncidentPoint
+          ? { incidentLat: formIncidentPoint.lat, incidentLng: formIncidentPoint.lng }
           : {}),
       });
     },
     onSuccess: (m: Mission) => {
       selectMission(m.id);
       setParseError(null);
-      setPlanError(null);
       queryClient.invalidateQueries({ queryKey: ["mission", m.id] });
       queryClient.invalidateQueries({ queryKey: ["missions", "inbox"] });
     },
@@ -266,6 +281,44 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
           : "Chưa phân tích được mô tả. Thử diễn đạt rõ hơn hoặc nhập tay bên dưới.",
       );
     },
+  });
+
+  /**
+   * Lập bản tham mưu cho nhiệm vụ đang mở.
+   *
+   * Nút nằm ở khối tình huống nhưng kết quả hiện ở khối tham mưu bên dưới: ghi
+   * thẳng vào cache của query mà khối đó đang đọc, khỏi phải dựng đường truyền
+   * state xuyên qua mấy tầng component chỉ để chuyển một cú bấm.
+   */
+  const analyzeCoordination = useMutation({
+    mutationFn: async () => {
+      // Chưa có nhiệm vụ thì tự tính nhu cầu vật tư trước rồi mới tham mưu.
+      //
+      // Bản tham mưu vốn dựng TRÊN nhu cầu đã tính (backend đọc mission.requirements),
+      // nên hai việc này là một chuỗi chứ không phải hai lựa chọn. Bắt người dùng
+      // bấm đúng thứ tự chỉ để hệ thống có cái mà đọc là bắt họ gánh chi tiết cài
+      // đặt của mình.
+      let id = missionId;
+      if (!id) {
+        const created = await planFromForm();
+        id = created.id;
+        queryClient.invalidateQueries({ queryKey: ["missions", "inbox"] });
+        selectMission(created.id);
+      }
+      const result = await analyzeMission(id, { requestId: requestId() });
+      return { missionId: id, snapshot: result.snapshot };
+    },
+    onSuccess: (result) => {
+      setAnalysisError(null);
+      queryClient.setQueryData(
+        ["mission", result.missionId, "coordination-analysis"],
+        result.snapshot,
+      );
+    },
+    onError: (err) =>
+      setAnalysisError(
+        err instanceof ApiError ? err.message : "Chưa lập được bản tham mưu. Vui lòng thử lại.",
+      ),
   });
 
   const genActionPlan = useMutation({
@@ -297,19 +350,141 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
   });
 
   const isAdmin = role === "ADMIN";
-  const effectiveIncidentPoint =
-    mission?.incidentLat != null && mission?.incidentLng != null
-      ? { lat: mission.incidentLat, lng: mission.incidentLng }
-      : incidentPoint;
   const missionHasIncidentPoint = mission?.incidentLat != null && mission?.incidentLng != null;
+  const missionPoint = missionHasIncidentPoint
+    ? { lat: mission!.incidentLat as number, lng: mission!.incidentLng as number }
+    : null;
+
+  /**
+   * Nhiệm vụ đang mở có còn nhận chỉnh sửa không.
+   *
+   * Đã phát hành rồi thì khối "Tình huống khẩn cấp" không còn là chỗ sửa nhiệm vụ
+   * đó nữa — nó quay về đúng vai trò gốc: form khai một sự việc MỚI.
+   */
+  const isMissionEditable = !mission || mission.status === "DRAFT";
+
+  /**
+   * Khối "Tình huống khẩn cấp" có đang hiện không.
+   *
+   * Quan trọng vì hai nút AI nằm trong đó. Nhiệm vụ đã phát hành thì khối này ẩn
+   * đi — và trước đây nút "Lập bản tham mưu" ẩn theo, khiến nhiệm vụ đã phát hành
+   * không còn đường nào lập tham mưu. Khối tham mưu phải tự có nút của nó cho
+   * đúng trường hợp đó.
+   */
+  const composerVisible = isAdmin && (!isDetailPage || isMissionEditable);
+
+  /**
+   * Điểm nạn của các nhiệm vụ ĐÃ DUYỆT và chưa đóng, để hiện lên bản đồ.
+   *
+   * Bản nháp cố tình không tính: nó chưa phải quyết định của xã, hiện lên chỉ làm
+   * rối. Nhiệm vụ đã hoàn tất/huỷ cũng bỏ — chỗ đó không còn ai đang xử lý nên
+   * lập vụ mới ở đấy là hợp lệ. Nhiệm vụ đang mở cũng loại, vì nó đã có dấu ghim
+   * đỏ riêng rồi, vẽ thêm một chấm cam chồng lên chỉ gây hiểu nhầm.
+   */
+  const ongoingIncidents = useMemo(() => {
+    const ACTIVE: string[] = ["PENDING_WAREHOUSE", "READY", "PENDING_RESCUE", "RESCUE_CONFIRMED"];
+    return (missionListQuery.data ?? [])
+      .filter(
+        (item) =>
+          ACTIVE.includes(item.status) &&
+          item.id !== missionId &&
+          item.incidentLat != null &&
+          item.incidentLng != null,
+      )
+      .map((item) => ({
+        id: item.id,
+        label:
+          item.location?.trim() ||
+          (INCIDENT_TYPES.find((t) => t.value === item.incidentType)?.label ?? item.incidentType),
+        statusLabel: STATUS_LABELS[item.status] ?? item.status,
+        lat: item.incidentLat as number,
+        lng: item.incidentLng as number,
+        // Chỉ lấy tuyến đã tính được thật; kho chưa có tuyến thì không vẽ đường
+        // thẳng thay thế — một đường chim bay trên bản đồ đọc y như đường đi thật.
+        routes: (item.actionPlan?.warehouses ?? [])
+          .filter((w) => w.routeStatus === "ROUTED" && w.routeGeometry)
+          .map((w) => w.routeGeometry!.coordinates),
+      }));
+  }, [missionListQuery.data, missionId]);
+
+  /**
+   * Điểm đang dùng cho form khai tình huống.
+   *
+   * Người vận hành vừa ghim thì lấy của họ. Chưa đụng thì mượn điểm của nhiệm vụ
+   * — nhưng CHỈ khi nhiệm vụ còn là nháp. Nhiệm vụ đã phát hành mà vẫn mượn điểm
+   * của nó thì form khai sự việc mới lại hiện dấu ghim của vụ cũ, và trước đây
+   * còn bị khoá luôn không ghim được chỗ khác: một xã đang có hai điểm nạn cùng
+   * lúc là chuyện bình thường, mà giao diện lại chặn mất.
+   */
+  const formIncidentPoint =
+    incidentPoint !== undefined ? incidentPoint : isMissionEditable ? missionPoint : null;
+
+  /**
+   * ADMIN luôn ghim được: hoặc đang sửa nhiệm vụ nháp, hoặc đang khai vụ mới.
+   * Không còn trường hợp nào bản đồ chỉ để nhìn đối với người điều phối.
+   */
+  const canEditIncidentPoint = isAdmin;
+
   const reportHasIncidentPoint = isReportDraft && missionHasIncidentPoint;
   const canCalculatePlan = Boolean(
-    incidentPoint || form.location?.trim() || reportHasIncidentPoint,
+    formIncidentPoint || form.location?.trim() || reportHasIncidentPoint,
   );
 
   return (
     <div className="space-y-4">
-      {isAdmin && (
+      {/* Các bước liệt kê là việc hệ thống THẬT SỰ chạy cho từng nút, không phải
+          chữ trang trí cho có vẻ bận rộn. */}
+      <AiProgressDialog
+        open={analyze.isPending}
+        title="Phân tích lời kể thành số liệu"
+        estimate="7 giây"
+        steps={[
+          "Bóc tách loại tình huống, số người và nhóm dễ tổn thương từ lời kể",
+          "Đối chiếu từng con số ngược lại với chính câu vừa nhập",
+          "Đối chiếu địa điểm với danh mục thôn đã xác minh",
+          "Tính nhu cầu vật tư và phân bổ kho theo định mức",
+        ]}
+      />
+      <AiProgressDialog
+        open={analyzeCoordination.isPending}
+        title="Lập bản tham mưu điều phối"
+        estimate="20 giây"
+        steps={[
+          "Trích dữ kiện có nguồn từ lời kể, gắn nhãn đã báo cáo hay suy luận",
+          "Tính nhu cầu vật tư theo định mức của hệ thống",
+          "Dò tuyến đường thật từ từng kho tới điểm nạn",
+          "Đối chiếu dự báo mưa và nêu các điểm còn phải xác minh",
+        ]}
+      />
+      <AiProgressDialog
+        open={genActionPlan.isPending}
+        title="Lập kế hoạch cứu hộ"
+        estimate="40 giây"
+        steps={[
+          "Chấm mức khẩn cấp và dự báo bằng công thức của hệ thống",
+          "Viết mục tiêu 6 giờ đầu",
+          "Viết việc phải làm theo mốc 0–2 giờ, 2–6 giờ, 6–24 giờ",
+          "Kiểm lại: chặn mọi con số không có trong dữ liệu đã tính",
+        ]}
+      />
+
+      {/* Đường về danh sách. Là <Link> chứ không phải nút gọi router.back(): mở
+          thẳng bằng link từ chuông thông báo thì lịch sử trình duyệt không có
+          trang trước, bấm lùi sẽ văng ra khỏi ứng dụng. */}
+      {isDetailPage && (
+        <Link
+          href="/mission"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--text-muted)] transition hover:text-[var(--text)]"
+        >
+          <ColorIcon name="left" size={16} tone="blue" />
+          Về điều phối cứu hộ
+        </Link>
+      )}
+
+      {/* Trang chi tiết chỉ mở lại form khi nhiệm vụ còn là nháp — lúc đó sửa số
+          liệu rồi tính lại là việc hợp lệ. Đã phát hành thì form không còn chỗ ở
+          đây nữa; muốn khai vụ mới thì quay về tab điều phối. */}
+      {composerVisible && (
         <section className="app-panel p-5">
           <h2 className="font-semibold">Tình huống khẩn cấp</h2>
           <p className="mt-1 text-sm text-[var(--text-muted)]">
@@ -371,9 +546,9 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
                 <p className="text-xs text-[var(--text-muted)]">
                   {form.location?.trim()
                     ? "Đang dùng tên thôn ở trên. Xoá ô này để ghim tự do một điểm không thuộc thôn nào."
-                    : incidentPoint
-                      ? "Đang dùng điểm đã ghim trên bản đồ Vị trí bên dưới."
-                      : "Bỏ trống ô trên rồi bấm lên bản đồ Vị trí bên dưới để ghim đúng chỗ đang xảy ra sự việc."}
+                    : formIncidentPoint
+                      ? "Đang dùng điểm đã ghim. Bấm vào chính dấu ghim đỏ để bỏ, hoặc kéo nó sang chỗ khác."
+                      : "Bỏ trống ô trên rồi bấm lên bản đồ bên phải để ghim đúng chỗ đang xảy ra sự việc."}
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   <NumberField
@@ -404,46 +579,59 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => genPlan.mutate()}
-                disabled={genPlan.isPending || !canCalculatePlan}
-                title={
-                  canCalculatePlan ? undefined : "Cần nhập thôn đã xác minh trước khi tính nhu cầu"
-                }
-                className="mt-4 flex w-full items-center justify-center gap-2 rounded-md bg-[var(--color-accent)] px-4 py-2.5 font-semibold text-[var(--color-accent-fg)] transition hover:brightness-95 active:translate-y-px disabled:opacity-60"
-              >
-                <ColorIcon name="mission" size={19} tone="orange" />
-                {genPlan.isPending ? "Đang tính nhu cầu" : "Tính nhu cầu vật tư"}
-              </button>
-              {!canCalculatePlan && (
-                <p className="mt-2 text-xs text-[var(--color-critical)]">
-                  Cần nhập tên thôn đã được ADMIN xác minh, hoặc ghim một điểm trên bản đồ Vị trí
-                  bên dưới, trước khi tính nhu cầu vật tư.
-                </p>
-              )}
-              {planError && (
-                <p className="mt-2 text-xs text-[var(--color-critical)]">{planError}</p>
+              {/* Một nút cho một ý định. Tính nhu cầu vật tư vốn chỉ là bước hệ thống
+                  phải làm trước để có cái mà tham mưu — bắt người dùng bấm riêng là
+                  bắt họ gánh chi tiết cài đặt của mình. */}
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={() => analyzeCoordination.mutate()}
+                  disabled={analyzeCoordination.isPending || (!missionId && !canCalculatePlan)}
+                  title={
+                    missionId || canCalculatePlan
+                      ? "Tính nhu cầu vật tư rồi lập bản tham mưu trong một lượt"
+                      : "Cần nhập thôn đã xác minh hoặc ghim một điểm trên bản đồ"
+                  }
+                  className="flex w-full items-center justify-center gap-2 rounded-md bg-[var(--color-accent)] px-4 py-2.5 font-semibold text-[var(--color-accent-fg)] transition hover:brightness-95 active:translate-y-px disabled:opacity-60"
+                >
+                  <ColorIcon name="magic" size={19} tone="amber" />
+                  {analyzeCoordination.isPending
+                    ? "Đang tính nhu cầu và lập bản tham mưu…"
+                    : "Lập bản tham mưu"}
+                </button>
+              </div>
+              {analysisError && (
+                <p className="mt-2 text-xs text-[var(--color-critical)]">{analysisError}</p>
               )}
             </div>
 
             <div className="min-w-0">
               <h3 className="text-sm font-semibold">Vị trí sự cố và các kho</h3>
               <p className="mt-1 text-sm text-[var(--text-muted)]">
-                {mission
-                  ? missionHasIncidentPoint
-                    ? "Vị trí đã được ghi nhận trong phương án."
-                    : "Nhiệm vụ chưa có điểm ứng phó. Hãy nhập thôn đã xác minh và tính lại phương án."
-                  : "Nhập tên thôn đã xác minh ở khối trên, hoặc bấm thẳng lên bản đồ để ghim đúng chỗ đang xảy ra sự việc — hữu ích khi nơi đó không thuộc thôn nào trong danh mục."}
+                {!isMissionEditable
+                  ? "Nhiệm vụ đang mở đã phát hành. Bấm lên bản đồ để ghim một sự việc MỚI — nhiệm vụ cũ không bị ảnh hưởng."
+                  : mission
+                    ? missionHasIncidentPoint
+                      ? "Vị trí đã được ghi nhận trong phương án. Kéo dấu ghim đỏ để dời, bấm vào nó để bỏ."
+                      : "Nhiệm vụ chưa có điểm ứng phó. Hãy nhập thôn đã xác minh và tính lại phương án."
+                    : "Bấm lên bản đồ để ghim chỗ đang xảy ra sự việc; bấm vào dấu ghim đỏ để bỏ, kéo để dời. Dùng khi nơi đó không thuộc thôn nào trong danh mục — còn lại cứ nhập tên thôn ở khối bên trái."}
               </p>
               <div className="mt-3">
                 {/* Bản đồ này làm cả hai việc: chưa có phương án thì chọn điểm, có
-                  rồi thì xem tuyến. Bày hai bản đồ chỉ tổ rối. */}
+                  rồi thì xem tuyến. Bày hai bản đồ chỉ tổ rối.
+
+                  Tuyến của nhiệm vụ ĐÃ PHÁT HÀNH thì không vẽ ở đây: lúc đó khối
+                  này là form khai sự việc mới, để nguyên tuyến cũ thì người dùng
+                  tưởng mình đang sửa vụ cũ. Tuyến đó vẫn xem được ở khối kế hoạch
+                  bên dưới. */}
                 <IncidentMap
-                  warehouses={mission?.actionPlan?.warehouses ?? []}
+                  warehouses={isMissionEditable ? (mission?.actionPlan?.warehouses ?? []) : []}
                   baseWarehouses={warehouseListQuery.data ?? []}
-                  incidentPoint={effectiveIncidentPoint}
-                  onPickIncident={mission ? undefined : setIncidentPoint}
+                  incidentPoint={formIncidentPoint}
+                  onPickIncident={canEditIncidentPoint ? setIncidentPoint : undefined}
+                  ongoingIncidents={ongoingIncidents}
+                  onOpenIncident={selectMission}
+                  keepIncidentFocus
                 />
               </div>
             </div>
@@ -451,96 +639,98 @@ export function MissionView({ warehouseId }: { warehouseId: string }) {
         </section>
       )}
 
-      <MissionInbox
-        missions={missionListQuery.data ?? []}
-        selectedMissionId={missionId}
-        role={role}
-        warehouseId={assignedWarehouseId}
-        isLoading={missionListQuery.isPending}
-        error={missionListQuery.error}
-        onRetry={() => missionListQuery.refetch()}
-        onSelect={selectMission}
-      />
-
-      {/* Bảng phân bổ nhanh khi đã có mission */}
-      {mission && (
-        <section className="app-panel p-5">
-          <h3 className="text-sm font-semibold">Tóm tắt nhu cầu</h3>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">
-            {INCIDENT_TYPES.find((item) => item.value === mission.incidentType)?.label ??
-              mission.incidentType}{" "}
-            · {mission.affectedPeople} người · có thể đáp ứng{" "}
-            <b
-              style={{
-                color: mission.fulfillment >= 70 ? "var(--color-ready)" : "var(--color-critical)",
-              }}
-            >
-              {mission.fulfillment}%
-            </b>
-          </p>
-        </section>
-      )}
-      {missionId && missionQuery.isPending ? (
-        <MissionDetailLoading />
-      ) : missionQuery.isError ? (
-        <MissionDetailError
-          message={
-            missionQuery.error instanceof ApiError
-              ? missionQuery.error.message
-              : "Không mở được nhiệm vụ này. Nhiệm vụ có thể đã bị xóa hoặc bạn không có quyền truy cập."
-          }
-          onRetry={() => missionQuery.refetch()}
+      {!isDetailPage && (
+        <MissionInbox
+          missions={missionListQuery.data ?? []}
+          selectedMissionId={missionId}
+          role={role}
+          warehouseId={assignedWarehouseId}
+          isLoading={missionListQuery.isPending}
+          error={missionListQuery.error}
+          onRetry={() => missionListQuery.refetch()}
+          onSelect={selectMission}
         />
-      ) : !mission ? (
-        <EmptyState isAdmin={isAdmin} />
-      ) : (
+      )}
+
+      {/* Từ đây trở xuống là thông tin của MỘT nhiệm vụ, chỉ có ở trang riêng của
+          nó. Trước đây tất cả nằm chung tab điều phối nên trang dài lê thê: form
+          khai vụ mới, hộp nhiệm vụ, rồi cả chục khối của vụ đang chạy nối đuôi
+          nhau — mà hai việc đó chẳng liên quan gì nhau. */}
+      {isDetailPage && (
         <>
-          {isReportDraft && (
-            <ReportDraftBanner
-              reportText={mission.reportText ?? ""}
-              isAdmin={isAdmin}
-              onAnalyze={() => analyze.mutate()}
-              analyzing={analyze.isPending}
+          {missionQuery.isPending ? (
+            <MissionDetailLoading />
+          ) : missionQuery.isError ? (
+            <MissionDetailError
+              message={
+                missionQuery.error instanceof ApiError
+                  ? missionQuery.error.message
+                  : "Không mở được nhiệm vụ này. Nhiệm vụ có thể đã bị xóa hoặc bạn không có quyền truy cập."
+              }
+              onRetry={() => missionQuery.refetch()}
             />
-          )}
-          {mission.readinessAssessment && (
-            <MissionReadinessPanel assessment={mission.readinessAssessment} />
-          )}
-          <WarehouseRequestPanel
-            missionId={mission.id}
-            requests={mission.warehouseRequests ?? []}
-            role={role}
-            assignedWarehouseId={assignedWarehouseId}
-          />
-          {isAdmin && <CoordinationAnalysisPanel missionId={mission.id} />}
-          {isAdmin && <FieldUpdateTimeline missionId={mission.id} focusUpdateId={fieldUpdateId} />}
-          <section className="app-panel p-5">
-            <WorkflowStepper status={mission.status} />
-            <div className="mt-5 border-t pt-4">
-              <RoleActions
-                mission={mission}
+          ) : !mission ? (
+            <EmptyState isAdmin={isAdmin} />
+          ) : (
+            <>
+              {isReportDraft && (
+                <ReportDraftBanner
+                  reportText={mission.reportText ?? ""}
+                  isAdmin={isAdmin}
+                  onAnalyze={() => analyze.mutate()}
+                  analyzing={analyze.isPending}
+                />
+              )}
+              {mission.readinessAssessment && (
+                <MissionReadinessPanel assessment={mission.readinessAssessment} />
+              )}
+              <WarehouseRequestPanel
+                missionId={mission.id}
+                requests={mission.warehouseRequests ?? []}
                 role={role}
                 assignedWarehouseId={assignedWarehouseId}
-                isReportDraft={isReportDraft}
-                hasIncidentPoint={missionHasIncidentPoint}
-                onGenerateActionPlan={() => genActionPlan.mutate()}
-                onPublish={() => step.mutate(approveMission)}
-                onPrepare={() => step.mutate(prepareMission)}
-                onCancel={(note) => step.mutate((id) => cancelMission(id, note))}
-                busy={genActionPlan.isPending || step.isPending}
               />
-            </div>
-            {workflowError && (
-              <p className="mt-3 text-sm text-[var(--color-critical)]">{workflowError}</p>
-            )}
-          </section>
+              {/* Bằng chứng hiện trường nằm bên trong khối tham mưu: nó chính là
+                  nguồn làm bản tham mưu đổi, tách ra thì phải cuộn qua lại giữa
+                  hai khối mới đối chiếu được. */}
+              {isAdmin && (
+                <CoordinationAnalysisPanel
+                  missionId={mission.id}
+                  fieldUpdateId={fieldUpdateId}
+                  onRun={composerVisible ? undefined : () => analyzeCoordination.mutate()}
+                  running={analyzeCoordination.isPending}
+                  error={composerVisible ? null : analysisError}
+                />
+              )}
+              <section className="app-panel p-5">
+                <WorkflowStepper status={mission.status} />
+                <div className="mt-5 border-t pt-4">
+                  <RoleActions
+                    mission={mission}
+                    role={role}
+                    assignedWarehouseId={assignedWarehouseId}
+                    isReportDraft={isReportDraft}
+                    hasIncidentPoint={missionHasIncidentPoint}
+                    onGenerateActionPlan={() => genActionPlan.mutate()}
+                    onPublish={() => step.mutate(approveMission)}
+                    onPrepare={() => step.mutate(prepareMission)}
+                    onCancel={(note) => step.mutate((id) => cancelMission(id, note))}
+                    busy={genActionPlan.isPending || step.isPending}
+                  />
+                </div>
+                {workflowError && (
+                  <p className="mt-3 text-sm text-[var(--color-critical)]">{workflowError}</p>
+                )}
+              </section>
 
-          {mission.actionPlan ? (
-            <ActionPlanView plan={mission.actionPlan} incidentPoint={effectiveIncidentPoint} />
-          ) : (
-            <div className="rounded-md border border-dashed bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-muted)]">
-              Chọn <b>Lập kế hoạch cứu hộ</b> để tạo các bước thực hiện chi tiết.
-            </div>
+              {mission.actionPlan ? (
+                <ActionPlanView plan={mission.actionPlan} incidentPoint={missionPoint} />
+              ) : (
+                <div className="rounded-md border border-dashed bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-muted)]">
+                  Chọn <b>Lập kế hoạch cứu hộ</b> để tạo các bước thực hiện chi tiết.
+                </div>
+              )}
+            </>
           )}
         </>
       )}
@@ -622,9 +812,19 @@ function RoleActions({
     role === "WAREHOUSE" &&
     mission.status === "PENDING_WAREHOUSE" &&
     Boolean(assignedPreparation?.preparedAt);
-  // Admin huỷ được khi nhiệm vụ đang chạy nhưng kho CHƯA xuất vật tư.
+  /**
+   * ADMIN huỷ được khi chưa có kho nào xuất vật tư.
+   *
+   * Gồm cả bản nháp: lập nhầm, lập trùng một sự việc đã có người điều phối, hay
+   * đọc lại thấy sai — đều cần đường bỏ đi. Trước đây chỉ cho huỷ sau khi phát
+   * hành, nên bản nháp sai nằm lại mãi trong hộp nhiệm vụ, và cách duy nhất để
+   * dọn là phát hành nó ra rồi mới huỷ — tức là bắt kho nhận một lệnh biết thừa
+   * là sai. State machine ở backend vốn đã cho DRAFT → CANCELLED.
+   */
   const adminCanCancelActive =
-    isAdmin && mission.status === "PENDING_WAREHOUSE" && preparedWarehouseCount === 0;
+    isAdmin &&
+    preparedWarehouseCount === 0 &&
+    (mission.status === "DRAFT" || mission.status === "PENDING_WAREHOUSE");
 
   return (
     <div className="space-y-4">
@@ -1000,6 +1200,7 @@ function useAudioRecorder(onText: (text: string) => void) {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const micLabelRef = useRef<string>("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1027,6 +1228,10 @@ function useAudioRecorder(onText: (text: string) => void) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
+      // Nhớ tên thiết bị trình duyệt thực sự chọn, để lúc báo lỗi gọi đúng tên nó
+      // ra. Máy này có tới bốn micro đang bật, trong đó có một micro ảo — biết
+      // trình duyệt lấy cái nào là biết ngay phải sửa gì.
+      micLabelRef.current = stream.getAudioTracks()[0]?.label ?? "";
       chunksRef.current = [];
       const recorder = new MediaRecorder(stream);
       recorder.ondataavailable = (e) => {
@@ -1041,7 +1246,22 @@ function useAudioRecorder(onText: (text: string) => void) {
         }
         setStatus("transcribing");
         try {
-          const base64 = await blobToWavBase64(blob);
+          const { base64, rms } = await blobToWavBase64(blob);
+          // Micro trả về im lặng SỐ HỌC (rms = 0) tuy đoạn ghi vẫn đủ số giây —
+          // đó là dấu hiệu trình duyệt đang lấy nhầm thiết bị, hay gặp nhất là
+          // micro ảo của phần mềm đổi giọng: nó tồn tại, cấp quyền được, ghi đủ
+          // thời lượng, nhưng không có phần mềm nào bơm tiếng vào. Gửi lên máy
+          // chủ thì cũng chỉ nhận lại "chưa nghe rõ", mà đó là câu chỉ sai đường:
+          // người dùng sẽ đi nói to hơn thay vì đi đổi thiết bị. Chặn tại đây và
+          // gọi đúng tên thiết bị ra.
+          if (rms < SILENCE_RMS) {
+            const micro = micLabelRef.current;
+            setVoiceError(
+              `Micro${micro ? ` "${micro}"` : ""} không thu được tiếng nào. ` +
+                "Chọn micro khác ở biểu tượng bên phải thanh địa chỉ trình duyệt, rồi thử lại.",
+            );
+            return;
+          }
           const { text } = await transcribeAudio(base64);
           if (text.trim()) onText(text);
           else setVoiceError("Chưa nghe rõ nội dung. Vui lòng nói lại hoặc gõ tay.");

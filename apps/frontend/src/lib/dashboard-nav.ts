@@ -54,16 +54,6 @@ export const navItems: NavItem[] = [
     subtitle: "Nhận biết sớm nguy cơ thiếu hàng, hết hạn và nhu cầu điều chuyển giữa các kho.",
   },
   {
-    path: "/assistant",
-    label: "Tra cứu kho",
-    icon: "assistant",
-    tone: "blue",
-    group: "Điều hành",
-    requiredPermission: Permission.INVENTORY_READ,
-    title: "Tra cứu kho",
-    subtitle: "Hỏi nhanh về số lượng, hạn dùng, sự cố và khả năng đáp ứng hiện tại.",
-  },
-  {
     path: "/inventory",
     label: "Vật tư",
     icon: "inventory",
@@ -160,5 +150,11 @@ export const navGroups: NavGroup[] = ["Điều hành", "Nghiệp vụ kho", "Qu�
 
 /** Lấy metadata của trang theo path (dùng cho tiêu đề đầu trang). */
 export function getNavItem(path: string): NavItem | undefined {
-  return navItems.find((item) => item.path === path);
+  const exact = navItems.find((item) => item.path === path);
+  if (exact) return exact;
+  // Trang con (vd /mission/<id>) mượn tiêu đề của mục cha, nếu không thì tiêu đề
+  // trang trống trơn. Lấy tiền tố DÀI NHẤT để mục cha đúng nhất thắng.
+  return navItems
+    .filter((item) => path.startsWith(`${item.path}/`))
+    .sort((a, b) => b.path.length - a.path.length)[0];
 }

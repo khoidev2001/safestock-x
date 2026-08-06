@@ -2,6 +2,7 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { ColorIcon } from "@/components/shared/color-icon";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { askAssistant } from "@/lib/assistant-api";
 import { ApiError } from "@/lib/api";
@@ -11,6 +12,14 @@ interface ChatTurn {
   role: "user" | "assistant";
   text: string;
   kind?: "alert"; // bong bóng cảnh báo AI tự sinh (khác câu trả lời hỏi-đáp thường)
+  /**
+   * Lời kể gốc để mở thẳng luồng điều phối.
+   *
+   * Có giá trị khi backend nhận ra câu hỏi đang mô tả một sự việc cần cứu hộ.
+   * Trợ lý nghe xong rồi thôi là bỏ dở đúng lúc cần hành động — người trực phải
+   * tự nhớ đường sang tab điều phối rồi gõ lại y nguyên những gì vừa kể.
+   */
+  dispatchFrom?: string;
 }
 
 interface AssistantChatProps {
@@ -18,6 +27,8 @@ interface AssistantChatProps {
   compact?: boolean;
   isActive?: boolean;
   onLongResponse?: () => void;
+  /** Đóng khung trợ lý trước khi chuyển trang; trợ lý nổi truyền vào. */
+  onNavigateAway?: () => void;
 }
 
 const LONG_RESPONSE_LENGTH = 280;
@@ -35,7 +46,9 @@ export function AssistantChat({
   compact = false,
   isActive = true,
   onLongResponse,
+  onNavigateAway,
 }: AssistantChatProps) {
+  const router = useRouter();
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -45,7 +58,8 @@ export function AssistantChat({
 
   const ask = useMutation({
     mutationFn: (question: string) => askAssistant(warehouseId, question),
-    onSuccess: (response) => appendAssistantTurn(response.answer),
+    onSuccess: (response, question) =>
+      appendAssistantTurn(response.answer, response.emergency ? question : undefined),
     onError: (error) => {
       appendAssistantTurn(getAssistantErrorMessage(error));
     },
@@ -80,10 +94,16 @@ export function AssistantChat({
     });
   }
 
-  function appendAssistantTurn(text: string) {
-    setTurns((currentTurns) => [...currentTurns, { role: "assistant", text }]);
+  function appendAssistantTurn(text: string, dispatchFrom?: string) {
+    setTurns((currentTurns) => [...currentTurns, { role: "assistant", text, dispatchFrom }]);
     if (compact && isLongResponse(text)) onLongResponse?.();
     scrollToLatest();
+  }
+
+  /** Mở luồng điều phối với lời kể đã điền sẵn — không bắt gõ lại. */
+  function openDispatch(description: string) {
+    onNavigateAway?.();
+    router.push(`/mission?describe=${encodeURIComponent(description)}`);
   }
 
   function submit(question: string) {
@@ -111,7 +131,9 @@ export function AssistantChat({
         {turns.length === 0 ? (
           <EmptyChat compact={compact} onSuggestion={submit} />
         ) : (
-          turns.map((turn, index) => <ChatBubble key={`${turn.role}-${index}`} turn={turn} />)
+          turns.map((turn, index) => (
+            <ChatBubble key={`${turn.role}-${index}`} turn={turn} onDispatch={openDispatch} />
+          ))
         )}
 
         {ask.isPending ? (
@@ -204,7 +226,7 @@ function EmptyChat({
   );
 }
 
-function ChatBubble({ turn }: { turn: ChatTurn }) {
+function ChatBubble({ turn, onDispatch }: { turn: ChatTurn; onDispatch: (text: string) => void }) {
   const isUser = turn.role === "user";
   const isAlert = turn.kind === "alert";
 
@@ -245,6 +267,16 @@ function ChatBubble({ turn }: { turn: ChatTurn }) {
         }}
       >
         {turn.text}
+        {turn.dispatchFrom ? (
+          <button
+            type="button"
+            onClick={() => onDispatch(turn.dispatchFrom as string)}
+            className="mt-3 inline-flex items-center gap-2 rounded-md bg-[var(--color-accent)] px-3 py-2 text-xs font-semibold text-[var(--color-accent-fg)] transition hover:brightness-95 active:translate-y-px"
+          >
+            <ColorIcon name="mission" size={15} tone="orange" />
+            Mở điều phối cứu hộ cho tình huống này
+          </button>
+        ) : null}
       </div>
     </div>
   );

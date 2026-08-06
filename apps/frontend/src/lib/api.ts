@@ -1,4 +1,5 @@
 import { useAuth } from "./auth-store";
+import { coTheConPhien, danhDauCoPhien, xoaDauPhien } from "./session-marker";
 
 function resolveApiBase(): string {
   const configuredBase = process.env.NEXT_PUBLIC_API_URL;
@@ -68,10 +69,16 @@ async function tryRefresh(): Promise<boolean> {
         "X-Session-Transport": "web",
       },
     });
-    if (!response.ok) return false;
+    if (!response.ok) {
+      // Cookie đã hết hạn hoặc bị thu hồi: xoá dấu để lần mở trang sau không gọi
+      // lại một lượt chắc chắn hỏng nữa.
+      xoaDauPhien();
+      return false;
+    }
 
     const data = await response.json();
     setAuth(data.accessToken, data.user);
+    danhDauCoPhien();
     return true;
   } catch {
     return false;
@@ -79,6 +86,9 @@ async function tryRefresh(): Promise<boolean> {
 }
 
 export async function restoreWebSession(): Promise<boolean> {
+  // Chưa từng đăng nhập trên máy này thì không có gì để khôi phục. Gọi vẫn chỉ
+  // nhận 401, mà lại in một dòng đỏ trong Console làm người xem tưởng app hỏng.
+  if (!coTheConPhien()) return false;
   return tryRefresh();
 }
 
@@ -92,6 +102,7 @@ export async function closeWebSession(): Promise<void> {
     });
   } finally {
     useAuth.getState().clear();
+    xoaDauPhien();
   }
 }
 

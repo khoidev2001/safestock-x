@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { CollapsiblePanel } from "@/components/shared/collapsible-panel";
 import { ColorIcon } from "@/components/shared/color-icon";
 import type { ActionPlan } from "@/lib/mission-api";
 import type { LatLng } from "@/lib/geo";
@@ -9,6 +10,55 @@ const IncidentMap = dynamic(() => import("./incident-map").then((m) => m.Inciden
   ssr: false,
   loading: () => <div className="h-[320px] animate-pulse rounded-md border bg-[var(--surface)]" />,
 });
+
+/**
+ * Kể lại thứ tự lấy hàng bằng lời, dựng từ chính quãng đường đã tính.
+ *
+ * Không nhờ AI viết đoạn này: mọi chữ ở đây đều suy ra được từ số liệu, mà đã suy
+ * ra được thì để mô hình viết chỉ tạo thêm một chỗ có thể sai. Kho chưa tính được
+ * tuyến xếp cuối và nói rõ là chưa có tuyến, không giả vờ nó ở xa.
+ */
+interface DispatchStop {
+  id: string;
+  name: string;
+  /** "0.7 km · ~2 phút", hoặc câu báo chưa tính được tuyến. */
+  reach: string;
+  routed: boolean;
+  /** Nhãn ngắn cho chặng đầu / chặng cuối. */
+  note: string | null;
+  items: string;
+}
+
+function describeDispatchOrder(warehouses: ActionPlan["warehouses"]): DispatchStop[] {
+  const routed = warehouses
+    .filter((w) => w.routeStatus === "ROUTED" && w.distanceKm != null)
+    .sort((a, b) => (a.distanceKm as number) - (b.distanceKm as number));
+  const unrouted = warehouses.filter((w) => w.routeStatus !== "ROUTED" || w.distanceKm == null);
+
+  const listItems = (w: ActionPlan["warehouses"][number]) =>
+    w.contributions.map((item) => `${item.itemName} ${item.quantity} ${item.unit}`).join(" · ");
+
+  const stops: DispatchStop[] = routed.map((w, index) => ({
+    id: w.id,
+    name: w.name,
+    reach: `${w.distanceKm} km · ~${w.etaMinutes} phút`,
+    routed: true,
+    note: index === 0 ? "gần nhất, lấy trước" : index === routed.length - 1 ? "xa nhất" : null,
+    items: listItems(w),
+  }));
+
+  for (const w of unrouted) {
+    stops.push({
+      id: w.id,
+      name: w.name,
+      reach: "Chưa tính được tuyến — cần liên hệ trực tiếp",
+      routed: false,
+      note: null,
+      items: listItems(w),
+    });
+  }
+  return stops;
+}
 
 /** Màu theo mức khẩn cấp 1-5 — trực quan, người chưa rành nghiệp vụ đọc được ngay. */
 const SEVERITY = [
@@ -27,35 +77,38 @@ export function ActionPlanView({
   incidentPoint?: LatLng | null;
 }) {
   const sev = SEVERITY[Math.min(4, Math.max(0, plan.severityLevel - 1))];
+  const dispatchOrder = describeDispatchOrder(plan.warehouses);
 
   return (
     <div className="space-y-4">
-      {/* Nêu rõ nguồn lập phương án để người dùng biết mức hỗ trợ tự động. */}
-      <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-        <ColorIcon name="magic" size={16} tone="amber" />
-        {plan.generatedBy === "ai"
-          ? "Phương án được hỗ trợ tự động từ số liệu hiện có"
-          : "Phương án dự phòng được lập từ quy tắc nghiệp vụ"}
-      </div>
+      {/* Chỉ báo khi phương án KHÔNG do AI lập.
+          Trường hợp bình thường thì câu "được hỗ trợ tự động" chẳng thêm gì —
+          lần nào cũng hiện thì thành nền, không ai đọc. Còn lúc AI không gọi được
+          và hệ thống rơi về quy tắc nghiệp vụ thì đó là tin phải nói: nội dung
+          định tính sơ sài hơn hẳn, người đọc cần biết để không tin quá mức. */}
+      {plan.generatedBy !== "ai" && (
+        <div className="flex items-center gap-2 text-xs text-[var(--color-attention)]">
+          <ColorIcon name="warning" size={16} tone="amber" />
+          Phương án dự phòng được lập từ quy tắc nghiệp vụ (AI chưa sẵn sàng)
+        </div>
+      )}
 
       {/* 1. Đánh giá tình huống + mức khẩn cấp */}
-      <section
+      <CollapsiblePanel
         className="rounded-md border p-5"
         style={{ background: `color-mix(in oklch, ${sev.color} 8%, var(--surface))` }}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <SectionTitle
-            icon={<ColorIcon name="warning" size={19} tone="red" />}
-            title="Đánh giá tình huống"
-          />
+        icon={<ColorIcon name="warning" size={19} tone="red" />}
+        title="Đánh giá tình huống"
+        badge={
           <span
             className="rounded-md px-3 py-1 text-sm font-semibold"
             style={{ background: sev.color, color: "white" }}
           >
             Mức {plan.severityLevel}/5 · {sev.label}
           </span>
-        </div>
-        <ul className="mt-3 space-y-1.5">
+        }
+      >
+        <ul className="space-y-1.5">
           {plan.severityReason.map((r, i) => (
             <li key={i} className="flex gap-2 text-sm">
               <span style={{ color: sev.color }}>•</span>
@@ -71,21 +124,7 @@ export function ActionPlanView({
             Đáp ứng kho: <b className="text-[var(--text)]">{plan.fulfillment}%</b>
           </span>
         </div>
-      </section>
-
-      {/* 2. Mục tiêu cứu hộ */}
-      <Panel icon={<ColorIcon name="target" size={19} tone="blue" />} title="Mục tiêu 6 giờ đầu">
-        <ol className="space-y-2">
-          {plan.narrative.objectives.map((o, i) => (
-            <li key={i} className="flex gap-3 text-sm">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-xs font-bold text-[var(--color-accent-fg)]">
-                {i + 1}
-              </span>
-              <span>{o}</span>
-            </li>
-          ))}
-        </ol>
-      </Panel>
+      </CollapsiblePanel>
 
       {/* 3. Phương án cấp phát vật tư */}
       <Panel
@@ -127,36 +166,110 @@ export function ActionPlanView({
         </div>
       </Panel>
 
-      {/* 4. Điều phối kho (ETA) */}
-      {plan.warehouses.length > 0 && (
+      {/* Mục tiêu + điều phối kho trong một khối: mục tiêu nói phải đạt được gì
+          trong 6 giờ đầu, danh sách kho nói lấy hàng ở đâu và mất bao lâu để tới.
+          Đọc rời hai khối thì phải nhớ vế này để hiểu vế kia; ghép lại còn lấp
+          được khoảng trống bên trái khung bản đồ vuông. */}
+      {(plan.warehouses.length > 0 || plan.narrative.objectives.length > 0) && (
         <Panel
           icon={<ColorIcon name="location" size={19} tone="blue" />}
-          title="Điều phối kho (thời gian tới điểm nạn)"
+          title="Mục tiêu 6 giờ đầu và điều phối kho"
         >
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {plan.warehouses.map((w) => (
-              <div key={w.id} className="rounded-md border bg-[var(--surface-2)] p-3">
-                <p className="text-sm font-medium">{w.name}</p>
-                <p className="tabular mt-1 text-xs text-[var(--text-muted)]">
-                  {w.routeStatus === "ROUTED" && w.distanceKm != null
-                    ? `${w.distanceKm} km · ~${w.etaMinutes} phút`
-                    : `Chưa tính được tuyến (${w.routeStatus})`}
-                </p>
-                <ul className="mt-2 space-y-1 text-xs text-[var(--text-muted)]">
-                  {w.contributions.map((item) => (
-                    <li key={item.sku}>
-                      {item.itemName}: <b>{item.quantity}</b> {item.unit}
-                    </li>
-                  ))}
-                </ul>
+          {/* Danh sách kho bên trái, bản đồ bên phải.
+              Xếp bản đồ nằm dưới thì nó chiếm trọn bề ngang, mà khung vuông nên
+              cao gần bằng cả màn hình — phải cuộn qua nó mới đọc tiếp được. Đặt
+              cạnh nhau vừa thu nhỏ bản đồ vừa cho đọc quãng đường và nhìn vị trí
+              kho cùng lúc, đúng cặp thông tin người dùng đang so. */}
+          <div className={incidentPoint ? "grid gap-4 lg:grid-cols-2" : undefined}>
+            <div className="min-w-0">
+              {plan.narrative.objectives.length > 0 && (
+                <>
+                  <h4 className="flex items-center gap-2 text-sm font-semibold">
+                    <ColorIcon name="target" size={17} tone="blue" />
+                    Mục tiêu 6 giờ đầu
+                  </h4>
+                  <ol className="mb-4 mt-2 space-y-2">
+                    {plan.narrative.objectives.map((o, i) => (
+                      <li key={i} className="flex gap-3 text-sm">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-xs font-bold text-[var(--color-accent-fg)]">
+                          {i + 1}
+                        </span>
+                        <span>{o}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </>
+              )}
+              {plan.warehouses.length > 0 && (
+                <h4 className="mb-2 text-sm font-semibold">
+                  Kho tham gia và thời gian tới điểm nạn
+                </h4>
+              )}
+              {/* auto-fill thay vì số cột cố định: cùng một danh sách phải vừa cột
+                  hẹp (khi có bản đồ bên cạnh) vừa cột rộng (khi không có), không
+                  phải đoán breakpoint cho từng trường hợp. */}
+              <div className="grid content-start gap-2 [grid-template-columns:repeat(auto-fill,minmax(170px,1fr))]">
+                {plan.warehouses.map((w) => (
+                  <div key={w.id} className="rounded-md border bg-[var(--surface-2)] p-3">
+                    <p className="text-sm font-medium">{w.name}</p>
+                    <p className="tabular mt-1 text-xs text-[var(--text-muted)]">
+                      {w.routeStatus === "ROUTED" && w.distanceKm != null
+                        ? `${w.distanceKm} km · ~${w.etaMinutes} phút`
+                        : `Chưa tính được tuyến (${w.routeStatus})`}
+                    </p>
+                    <ul className="mt-2 space-y-1 text-xs text-[var(--text-muted)]">
+                      {w.contributions.map((item) => (
+                        <li key={item.sku}>
+                          {item.itemName}: <b>{item.quantity}</b> {item.unit}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          {incidentPoint ? (
-            <div className="mt-3">
-              <IncidentMap warehouses={plan.warehouses} incidentPoint={incidentPoint} />
+              {/* Diễn giải bằng lời cho đúng bảng số ngay trên.
+                  Bảng thẻ cho biết kho nào góp gì, nhưng người điều hành còn cần
+                  biết ĐI THEO THỨ TỰ NÀO — thứ đó nằm ở cột quãng đường, phải tự
+                  so từng thẻ mới ra. Câu này nói thẳng ra, và là câu dựng từ chính
+                  số liệu đã tính chứ không phải AI viết thêm. */}
+              {dispatchOrder.length > 0 && (
+                <div className="mt-3 rounded-md border border-dashed bg-[var(--surface-2)] p-3">
+                  <p className="text-sm font-semibold">Thứ tự lấy hàng (gần đến xa)</p>
+                  <ol className="mt-2 space-y-2">
+                    {dispatchOrder.map((stop, index) => (
+                      <li key={stop.id} className="flex gap-2.5 text-sm">
+                        <span className="tabular w-5 shrink-0 text-right font-semibold text-[var(--text-muted)]">
+                          {index + 1}.
+                        </span>
+                        <span className="min-w-0">
+                          <span className="font-medium">{stop.name}</span>
+                          <span
+                            className="tabular ml-2 text-xs"
+                            style={{
+                              color: stop.routed ? "var(--text-muted)" : "var(--color-attention)",
+                            }}
+                          >
+                            {stop.reach}
+                          </span>
+                          {stop.note ? (
+                            <span className="ml-2 rounded-full border px-2 py-0.5 text-[11px] text-[var(--text-muted)]">
+                              {stop.note}
+                            </span>
+                          ) : null}
+                          <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
+                            {stop.items}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
             </div>
-          ) : null}
+            {incidentPoint ? (
+              <IncidentMap warehouses={plan.warehouses} incidentPoint={incidentPoint} />
+            ) : null}
+          </div>
         </Panel>
       )}
 
@@ -240,15 +353,11 @@ export function ActionPlanView({
   );
 }
 
-function SectionTitle({ icon, title }: { icon: React.ReactNode; title: string }) {
-  return (
-    <div className="flex items-center gap-2 font-semibold">
-      {icon}
-      <span>{title}</span>
-    </div>
-  );
-}
-
+/**
+ * Mọi khối của kế hoạch đều gập được — kế hoạch đầy đủ dài vài màn hình, người
+ * dùng thường chỉ soi một phần. Dùng chung CollapsiblePanel với các khối bên
+ * ngoài để cách gập/mở ở đâu cũng giống nhau.
+ */
 function Panel({
   icon,
   title,
@@ -261,15 +370,13 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-md border bg-[var(--surface)] p-5">
-      <div
-        className="mb-3 flex items-center gap-2 font-semibold"
-        style={tone ? { color: tone } : undefined}
-      >
-        {icon}
-        <span>{title}</span>
-      </div>
+    <CollapsiblePanel
+      className="rounded-md border bg-[var(--surface)] p-5"
+      icon={icon}
+      title={title}
+      tone={tone}
+    >
       {children}
-    </section>
+    </CollapsiblePanel>
   );
 }

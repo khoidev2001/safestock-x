@@ -1,5 +1,6 @@
 "use client";
 
+import { CollapsiblePanel } from "@/components/shared/collapsible-panel";
 import { ColorIcon } from "@/components/shared/color-icon";
 import type { SensorTimelineEvent, VirtualDevice } from "@/lib/dashboard-api";
 
@@ -20,6 +21,17 @@ const deviceTypeLabels: Record<string, string> = {
   SMOKE: "Cảm biến khói",
   CAMERA_AI: "Camera AI",
 };
+
+/** Mỗi loại một biểu tượng riêng: 19 ô giống hệt nhau thì phải đọc từng chữ mới phân biệt được. */
+function deviceIconName(type: string) {
+  if (type === "TEMPERATURE") return "temperature" as const;
+  if (type === "HUMIDITY") return "weather" as const;
+  if (type === "SMOKE") return "warning" as const;
+  if (type === "LOADCELL") return "inventory" as const;
+  if (type === "DOOR" || type === "RFID_GATEWAY") return "warehouse" as const;
+  if (type === "CAMERA_AI") return "simulator" as const;
+  return "wifiOff" as const;
+}
 
 const eventTypeLabels: Record<string, string> = {
   TEMP_READING: "Ghi nhận nhiệt độ",
@@ -108,34 +120,44 @@ export function SimulatorPanel({ devices, timeline, isLoading }: SimulatorPanelP
     );
   }
 
+  /**
+   * Đúng danh sách app mô phỏng đang hiện, giữ nguyên thứ tự backend trả về.
+   *
+   * Trước đây khối này lọc còn bốn loại rồi `.slice(0, 4)` nên chỉ hiện 4 ô: cân
+   * tải kệ và cảm biến khói biến mất, dù app cho chỉnh đủ. Hai màn hình ra hai bộ
+   * số khác nhau thì không ai tin bên nào.
+   *
+   * Cửa, RFID, camera, nguồn và bộ kết nối không nằm trong danh sách vì app không
+   * mô phỏng được chúng — hiện ở đây thì web lại có thứ app không có, vẫn là lệch.
+   */
+  const SIMULATED_TYPES = ["LOADCELL", "TEMPERATURE", "HUMIDITY", "SMOKE"];
   const environmentDevices = (devices ?? []).filter((device) =>
-    ["TEMPERATURE", "HUMIDITY", "GATEWAY", "POWER"].includes(device.type),
+    SIMULATED_TYPES.includes(device.type),
   );
 
   return (
-    <section className="rounded-md border bg-[var(--surface)] p-5">
-      <div className="flex items-center gap-2">
-        <ColorIcon name="simulator" size={20} tone="amber" />
-        <div>
-          <h2 className="text-sm font-semibold">Dữ liệu cảm biến</h2>
-          <p className="text-xs text-[var(--text-muted)]">Số liệu thử nghiệm gần nhất của kho</p>
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        {environmentDevices.slice(0, 4).map((device) => (
-          <div key={device.id} className="rounded-md border bg-[var(--surface-2)] p-3">
-            <div className="flex items-center justify-between gap-2">
+    <CollapsiblePanel
+      className="rounded-md border bg-[var(--surface)] p-5"
+      icon={<ColorIcon name="simulator" size={20} tone="amber" />}
+      title="Dữ liệu cảm biến"
+      subtitle={`Số liệu thử nghiệm gần nhất · ${environmentDevices.length} thiết bị`}
+    >
+      {/* auto-fill: 19 thiết bị phải vừa cột hẹp lẫn màn rộng mà không cần đoán
+          breakpoint. Ô nào chưa có số đo thì làm mờ, để mắt bắt ngay cái đã có. */}
+      <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(150px,1fr))]">
+        {environmentDevices.map((device) => (
+          <div
+            key={device.id}
+            className="rounded-md border bg-[var(--surface-2)] p-3"
+            style={device.currentValue == null ? { opacity: 0.6 } : undefined}
+          >
+            <div className="flex items-start justify-between gap-2">
               <span className="text-xs font-semibold">
                 {formatDeviceName(device.code, device.type)}
               </span>
-              {device.type === "GATEWAY" || device.type === "POWER" ? (
-                <ColorIcon name="wifiOff" size={16} tone="red" />
-              ) : (
-                <ColorIcon name="temperature" size={16} tone="orange" />
-              )}
+              <ColorIcon name={deviceIconName(device.type)} size={16} tone="orange" />
             </div>
-            <p className="tabular mt-3 text-2xl font-semibold">
+            <p className="tabular mt-3 text-xl font-semibold">
               {device.currentValue ?? "--"}
               <span className="ml-1 text-xs text-[var(--text-muted)]">{device.unit ?? ""}</span>
             </p>
@@ -185,6 +207,6 @@ export function SimulatorPanel({ devices, timeline, isLoading }: SimulatorPanelP
           </ol>
         )}
       </div>
-    </section>
+    </CollapsiblePanel>
   );
 }

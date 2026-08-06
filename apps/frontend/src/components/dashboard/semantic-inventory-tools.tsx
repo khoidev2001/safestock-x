@@ -144,7 +144,7 @@ function SemanticResults({
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{item.name}</p>
                 <p className="text-xs text-[var(--text-muted)]">
-                  {item.sku} · {item.categoryName}
+                  {item.categoryName}
                   {item.availableQuantity != null
                     ? ` · tồn ${item.availableQuantity} ${item.unit}`
                     : ""}

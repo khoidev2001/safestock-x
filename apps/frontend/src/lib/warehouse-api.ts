@@ -24,3 +24,11 @@ export function updateWarehouseLocation(
     body: JSON.stringify({ lat, lng }),
   });
 }
+
+/** Xoá toạ độ kho, đưa về trạng thái chưa ghim. */
+export function clearWarehouseLocation(id: string): Promise<AdminWarehouse> {
+  return apiFetch<AdminWarehouse>(`/api/admin/warehouses/${id}/location`, {
+    method: "PATCH",
+    body: JSON.stringify({ lat: null, lng: null }),
+  });
+}

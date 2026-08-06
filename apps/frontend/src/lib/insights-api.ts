@@ -27,6 +27,7 @@ export interface ExpiryAlertItem {
 
 export interface RebalanceItem {
   sku: string;
+  itemName: string;
   fromWarehouseName: string;
   toWarehouseName: string;
   suggestedQty: number;
@@ -37,6 +38,14 @@ export interface WeatherAlert {
   alert: boolean;
   periodHours: 72;
   daily: { date: string; precipitationMm: number }[];
+  /** Mưa/gió/nhiệt theo mốc 1, 6, 12, 24, 48, 72 giờ kể từ bây giờ. */
+  horizons: {
+    hours: number;
+    rainMm: number;
+    maxWindKph: number | null;
+    maxTempC: number | null;
+    minTempC: number | null;
+  }[];
   fetchedAt: string;
   source: "open-meteo";
   cached?: boolean;

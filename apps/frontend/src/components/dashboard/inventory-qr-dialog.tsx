@@ -44,8 +44,8 @@ export function InventoryQrDialog({
       .write(`<!doctype html><html><head><title>Nhãn ${escapeHtml(batch.batchCode)}</title>
       <style>body{font-family:Arial,sans-serif;margin:0;padding:36px;color:#111827}.label{width:420px;border:2px solid #111827;padding:24px;text-align:center}.qr{width:320px;height:320px}.sku{font-size:24px;font-weight:800;margin:12px 0 4px}.meta{font-size:15px;margin:4px 0}</style>
       </head><body><div class="label"><img class="qr" src="${dataUrl}" alt="">
-      <div class="sku">${escapeHtml(batch.item.sku)}</div>
-      <div class="meta">${escapeHtml(batch.item.name)}</div>
+      <div class="sku">${escapeHtml(batch.item.name)}</div>
+      <div class="meta">Mã ${escapeHtml(batch.item.sku)}</div>
       <div class="meta">Lô: ${escapeHtml(batch.batchCode)}</div>
       <div class="meta">${escapeHtml(batch.shelf ? `${batch.shelf.zone.code}/${batch.shelf.code}` : "Chưa xếp kệ")}</div>
       </div><script>window.onload=()=>{window.print();window.close()}</script></body></html>`);
@@ -64,20 +64,27 @@ export function InventoryQrDialog({
             <p className="text-xs font-semibold text-[var(--color-accent)]">NHÃN VẬT TƯ</p>
             <h2 className="mt-1 text-xl font-semibold">{batch.item.name}</h2>
           </div>
-          <button aria-label="Đóng" className="rounded border px-3 py-1.5" onClick={onClose}>
+          <button aria-label="Đóng"
+            // Vùng bấm 44px: nút cũ chỉ cao 30px, trên màn hình cảm ứng và
+            // laptop nhỏ phải nhắm mới trúng.
+            className="flex h-11 w-11 items-center justify-center rounded-md border text-xl leading-none transition hover:bg-[var(--surface-2)]" onClick={onClose}>
             ×
           </button>
         </header>
         <div className="mt-5 grid place-items-center rounded-md bg-white p-4">
           {dataUrl ? (
-            <Image alt={`QR ${batch.item.sku}`} height={320} src={dataUrl} width={320} />
+            <Image alt={`QR ${batch.item.name}`} height={320} src={dataUrl} width={320} />
           ) : (
             "Đang tạo QR…"
           )}
         </div>
         <div className="mt-4 text-center">
-          <p className="text-lg font-bold">{batch.item.sku}</p>
-          <p className="text-sm text-[var(--text-muted)]">Lô {batch.batchCode}</p>
+          <p className="text-lg font-bold">{batch.item.name}</p>
+          {/* Mã vẫn phải còn: đây là nhãn dán lên thùng hàng, máy quét đọc mã chứ
+              không đọc tên. Chỉ hạ nó xuống dòng phụ để người đọc thấy tên trước. */}
+          <p className="text-sm text-[var(--text-muted)]">
+            Mã {batch.item.sku} · Lô {batch.batchCode}
+          </p>
           <p className="text-sm text-[var(--text-muted)]">
             {batch.shelf ? `${batch.shelf.zone.code} / ${batch.shelf.code}` : "Chưa xếp kệ"}
           </p>

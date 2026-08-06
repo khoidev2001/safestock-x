@@ -105,7 +105,10 @@ export function InventoryReceivingDialog({
               Tạo lô, ledger nhập và nhãn QR trong một giao dịch.
             </p>
           </div>
-          <button aria-label="Đóng" className="rounded border px-3 py-1.5" onClick={onClose}>
+          <button aria-label="Đóng"
+            // Vùng bấm 44px: nút cũ chỉ cao 30px, trên màn hình cảm ứng và
+            // laptop nhỏ phải nhắm mới trúng.
+            className="flex h-11 w-11 items-center justify-center rounded-md border text-xl leading-none transition hover:bg-[var(--surface-2)]" onClick={onClose}>
             ×
           </button>
         </header>
@@ -133,7 +136,7 @@ export function InventoryReceivingDialog({
                 <option value="">Chọn vật tư</option>
                 {catalog.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.sku} · {item.name}
+                    {item.name}
                   </option>
                 ))}
               </select>

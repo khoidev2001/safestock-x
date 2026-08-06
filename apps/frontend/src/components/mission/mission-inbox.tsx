@@ -18,7 +18,8 @@ const INCIDENT_LABELS: Record<string, string> = {
   OTHER: "Khác",
 };
 
-const STATUS_LABELS: Record<string, string> = {
+/** Nhãn trạng thái nhiệm vụ; xuất ra để bản đồ điều phối dùng đúng chữ này. */
+export const STATUS_LABELS: Record<string, string> = {
   DRAFT: "Bản nháp",
   PENDING_RESCUE: `Chờ ${FIELD_FORCE_ROLE_LABEL}`,
   RESCUE_CONFIRMED: `${FIELD_FORCE_ROLE_LABEL} đã nhận`,
