@@ -200,6 +200,24 @@ export class InterCommuneLoanService {
     });
     if (daCo) return daCo;
 
+    // TỰ GỬI CHO CHÍNH MÌNH. Khai địa chỉ xã lân cận trỏ về đúng máy chủ này —
+    // rất dễ xảy ra khi cấu hình demo, hoặc khi hai xã cùng dùng một tên miền —
+    // thì yêu cầu vừa gửi đi lại quay về, và cơ sở dữ liệu có hai bản ghi cho
+    // một khoản: bản đi mượn của mình, cộng thêm một bản "xã kia xin mượn" ma.
+    // Duyệt cái ma đó là tự trừ kho của chính mình.
+    //
+    // Nhận ra bằng chính dữ liệu, không cần khai thêm địa chỉ của mình: id bản
+    // ghi bên gửi mà đã có sẵn trong cơ sở dữ liệu này thì người gửi chính là ta.
+    const laChinhMinh = await this.prisma.interCommuneLoan.findUnique({
+      where: { id: input.peerLoanId },
+      select: { id: true },
+    });
+    if (laChinhMinh) {
+      throw new BadRequestException(
+        "Địa chỉ xã lân cận đang trỏ về chính máy chủ này. Sửa lại COMMUNE_PEER_* trong .env.",
+      );
+    }
+
     return this.prisma.interCommuneLoan.create({
       data: {
         organizationId: input.organizationId,
@@ -236,8 +254,11 @@ export class InterCommuneLoanService {
       note?: string;
     },
   ) {
+    // Sắp theo ngày tạo để chọn ổn định: `findFirst` không kèm thứ tự thì mỗi
+    // lần gọi có thể ra một kho khác khi cơ sở dữ liệu có nhiều đơn vị.
     const warehouse = await this.prisma.warehouse.findFirst({
       where: { kind: "CENTRAL" },
+      orderBy: { createdAt: "asc" },
       select: { id: true, organizationId: true },
     });
     if (!warehouse) throw new NotFoundException("Xã này chưa cấu hình kho trung tâm");
