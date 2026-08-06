@@ -7,6 +7,7 @@ import { useState } from "react";
 import { ColorIcon } from "@/components/shared/color-icon";
 import { BASE } from "@/lib/api";
 import { useAuth } from "@/lib/auth-store";
+import { danhDauCoPhien } from "@/lib/session-marker";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -29,11 +30,24 @@ export default function LoginPage() {
           "Content-Type": "application/json",
           "X-Session-Transport": "web",
         },
-        body: JSON.stringify({ email, password }),
+        // Cắt khoảng trắng ngay tại đây, đừng để nó đi tới máy chủ rồi mới hỏng:
+        // mỗi lần hỏng là một lần bị bộ chống dò đếm, sai năm lần là khoá 15 phút.
+        // Mật khẩu KHÔNG cắt — khoảng trắng có thể là một phần thật của mật khẩu.
+        body: JSON.stringify({ email: email.trim(), password }),
       });
       if (!response.ok) {
         if (response.status === 401) {
           throw new Error("Tên đăng nhập hoặc mật khẩu không đúng.");
+        }
+        // Sai 5 lần là khoá 15 phút — và trong 15 phút đó MẬT KHẨU ĐÚNG CŨNG BỊ
+        // TỪ CHỐI. Không nói ra thì người dùng gõ lại đúng mật khẩu, vẫn hỏng,
+        // rồi đi nghi ngờ tài khoản hoặc máy chủ. Đây là chỗ duy nhất trong app
+        // mà "thử lại ngay" là việc chắc chắn vô ích.
+        if (response.status === 429) {
+          throw new Error(
+            "Đã sai quá 5 lần nên tài khoản bị khoá tạm 15 phút. " +
+              "Trong lúc này gõ đúng mật khẩu cũng không vào được — hãy chờ rồi thử lại.",
+          );
         }
         if (response.status >= 500) {
           throw new Error("Hệ thống đang tạm gián đoạn. Vui lòng thử lại sau.");
@@ -42,6 +56,8 @@ export default function LoginPage() {
       }
       const data = await response.json();
       setAuth(data.accessToken, data.user);
+      // Từ giờ máy này mới có cái để khôi phục ở những lần mở trang sau.
+      danhDauCoPhien();
       router.push("/readiness");
     } catch (err) {
       setError(

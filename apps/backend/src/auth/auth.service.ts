@@ -8,6 +8,7 @@ import { JwtPayload } from "./jwt.strategy";
 import { UpdateProfileDto } from "./dto";
 import { isSimulationSystemActorEmail } from "../simulation/simulation-system-actor-identity";
 import { AuthRateLimitService } from "./auth-rate-limit.service";
+import { normalizeLoginEmail } from "./login-email";
 
 @Injectable()
 export class AuthService {
@@ -19,17 +20,18 @@ export class AuthService {
   ) {}
 
   async login(email: string, password: string, sourceIp = "unknown") {
-    this.rateLimit?.assertAllowed(email, sourceIp);
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const normalizedEmail = normalizeLoginEmail(email);
+    this.rateLimit?.assertAllowed(normalizedEmail, sourceIp);
+    const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
     if (
       !user ||
       isSimulationSystemActorEmail(user.email) ||
       !(await bcrypt.compare(password, user.passwordHash))
     ) {
-      this.rateLimit?.recordFailure(email, sourceIp);
+      this.rateLimit?.recordFailure(normalizedEmail, sourceIp);
       throw new UnauthorizedException("Email hoặc mật khẩu sai");
     }
-    this.rateLimit?.clear(email, sourceIp);
+    this.rateLimit?.clear(normalizedEmail, sourceIp);
     const rotatedUser = await this.prisma.user.update({
       where: { id: user.id },
       data: { tokenVersion: { increment: 1 } },
