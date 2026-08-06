@@ -4,7 +4,11 @@ import { VirtualDeviceType } from "@prisma/client";
 import { SimulationService } from "../simulation.service";
 
 describe("SimulationService confirmed snapshots", () => {
-  const now = new Date("2026-07-30T08:00:00.000Z");
+  // Mốc thời gian phải TÍNH TỪ LÚC CHẠY, không được ghi cứng: service từ chối
+  // observedAt nằm ngoài cửa sổ cho phép so với hiện tại, nên một ngày cố định
+  // sẽ tự hỏng khi ngày đó trôi qua — bộ test xanh hôm nay, đỏ vào tuần sau mà
+  // không ai đụng vào mã. Đúng là chuyện đã xảy ra với ba test này.
+  const now = new Date();
   const readings = [{ deviceCode: "temp_A", value: 36 }];
   const payloadHash = createHash("sha256")
     .update(
