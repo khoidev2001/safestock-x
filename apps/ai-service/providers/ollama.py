@@ -71,7 +71,11 @@ class OllamaProvider(LLMProvider):
             "stream": True,
             "think": False,
             "keep_alive": KEEP_ALIVE,
-            "options": {"temperature": 0.1, "num_predict": 512},
+            # Đây là LƯỚI CHẶN LAN MAN, không phải cách rút ngắn câu trả lời. Rút
+            # ngắn thì dặn trong lời nhắc ("tối đa 4 câu"); cắt cứng ở đây là cắt
+            # ngang giữa một con số, và nửa con số thì lớp chống bịa số bác cả câu
+            # — đã thử ở mức 220 và mọi câu khẩn cấp đều bị bác đúng như vậy.
+            "options": {"temperature": 0.1, "num_predict": 400},
         }
         with httpx.Client(timeout=_TIMEOUT) as client:
             with client.stream("POST", f"{self._base_url}/api/generate", json=payload) as response:

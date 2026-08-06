@@ -267,7 +267,7 @@ Knowledge rỗng. Trả lời bằng VĂN XUÔI tiếng Việt, KHÔNG dùng JSO
   hiện trong question hoặc snapshot; không tự suy luận thiếu/đủ và không tự đề xuất
   số lượng xuất.
 - Kiến thức chuyên môn không có trong knowledge thì nói chưa có trong tài liệu tham khảo.
-- Trả lời ngắn, đi thẳng vào việc."""
+- Trả lời TỐI ĐA 4 câu, đi thẳng vào việc. Không mở bài, không dặn dò chung chung."""
 
 _ACTION_PLAN_SYSTEM = _IDENTITY_GUARD + """
 

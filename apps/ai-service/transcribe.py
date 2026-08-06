@@ -47,6 +47,7 @@ _TARGET_SR = 16_000  # PhoWhisper/Whisper yêu cầu 16kHz mono.
 
 _pipe = None
 _load_lock = threading.Lock()
+_card_lock = threading.Lock()
 _load_error: str | None = None
 
 
@@ -82,6 +83,56 @@ def _load_pipeline():
                 f"Không nạp được PhoWhisper ({_MODEL_ID}). "
                 f"Kiểm tra torch/transformers/soundfile đã cài và model đã tải chưa. Chi tiết: {_load_error}"
             ) from exc
+
+
+def _muon_card(pipe) -> None:
+    """Đẩy trọng số lên card ngay trước khi nhận dạng."""
+    _doi_cho(pipe, "cuda:0")
+
+
+def _tra_card(pipe) -> None:
+    """Đưa trọng số về RAM và trả sạch chỗ trên card."""
+    _doi_cho(pipe, "cpu")
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:  # noqa: BLE001 — trả chỗ không được thì vẫn phải chạy tiếp
+        pass
+
+
+def _doi_cho(pipe, dich: str) -> None:
+    """Chuyển pipeline sang một chỗ chứa khác (card hoặc RAM).
+
+    VÌ SAO PHẢI TRẢ CARD SAU MỖI LƯỢT — đây là bài học đắt nhất trên máy demo:
+
+    Card chỉ có 6 GB. Ollama giữ 3,4 GB thường trực. PhoWhisper giữ thêm ~0,95 GB
+    nữa là vượt ngưỡng, và Windows bắt đầu tráo bộ nhớ GPU ra RAM. Lúc đó KHÔNG có
+    gì báo lỗi cả — mọi thứ vẫn chạy, chỉ là chậm đi một bậc. Đo trên chính máy này:
+
+        PhoWhisper nằm lì trên card : đọc đề  65 chữ/s, viết  15 chữ/s → ~24 s một câu
+        PhoWhisper trả card về RAM  : đọc đề 241 chữ/s, viết  50 chữ/s → ~1,7 s một câu
+
+    Mười bốn lần. Không phải do mã trợ lý, không phải do mô hình, chỉ là hai thứ
+    giành nhau chỗ trên một cái card.
+
+    Trọng số vẫn nằm trong RAM chứ không bị xoá, nên lượt sau chỉ tốn một lần chép
+    RAM → card, không phải đọc lại 2,9 GB từ đĩa. Nhận dạng giọng nói và trả lời
+    bằng chữ không bao giờ chạy cùng lúc — người ta nói xong rồi mới đọc — nên giữ
+    cả hai thường trực là trả giá cho một thứ không ai dùng tới.
+    """
+    try:
+        import torch
+
+        if not torch.cuda.is_available():
+            return
+        pipe.model.to(dich)
+        # `pipe.device` quyết định nơi transformers đặt dữ liệu vào; quên dòng này
+        # thì dữ liệu ở một chỗ, trọng số ở chỗ khác, và nó ném lỗi lệch thiết bị.
+        pipe.device = torch.device(dich)
+    except Exception as exc:  # noqa: BLE001
+        _log(f"Khong doi cho duoc sang {dich}: {type(exc).__name__}: {exc}")
 
 
 def warm_up() -> float:
@@ -215,15 +266,25 @@ def _run_pipeline(pipe, audio):
         "task": "transcribe",
         "max_new_tokens": _gioi_han_token(audio),
     }
-    try:
-        return pipe(
-            {"array": audio, "sampling_rate": _TARGET_SR},
-            chunk_length_s=30,
-            stride_length_s=(5, 5),
-            generate_kwargs=generate_kwargs,
-        )
-    except (TypeError, ValueError):
-        return pipe({"array": audio, "sampling_rate": _TARGET_SR})
+    # Khoá để hai lượt nhận dạng cùng lúc không đổi chỗ trọng số ngay dưới chân
+    # nhau: lượt này trả card về RAM trong khi lượt kia đang chạy trên card là lỗi
+    # lệch thiết bị giữa chừng, rất khó lần ra.
+    with _card_lock:
+        _muon_card(pipe)
+        try:
+            try:
+                return pipe(
+                    {"array": audio, "sampling_rate": _TARGET_SR},
+                    chunk_length_s=30,
+                    stride_length_s=(5, 5),
+                    generate_kwargs=generate_kwargs,
+                )
+            except (TypeError, ValueError):
+                return pipe({"array": audio, "sampling_rate": _TARGET_SR})
+        finally:
+            # Nhận dạng hỏng cũng phải trả card. Giữ lại là để nguyên cái bẫy đã
+            # làm trợ lý chậm mười bốn lần, chỉ khác là lần này không ai ngờ tới.
+            _tra_card(pipe)
 
 
 # Whisper giải mã tối đa 448 token cho mỗi cửa sổ 30 giây; chừa lại ít chỗ cho các
