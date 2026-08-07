@@ -1,6 +1,6 @@
 # Lời dẫn quay video — đọc thẳng, không phải soạn lại
 
-Phần mở đầu và phần kết của video, **tổng 2 phút 10**, kẹp hai đầu phần thao tác trong [KICH-BAN-DEMO.md](KICH-BAN-DEMO.md).
+Phần mở đầu và phần kết của video, **tổng 2 phút 40**, kẹp hai đầu phần thao tác trong [KICH-BAN-DEMO.md](KICH-BAN-DEMO.md).
 
 Đọc y nguyên, không phải soạn lại.
 
@@ -8,25 +8,41 @@ Phần mở đầu và phần kết của video, **tổng 2 phút 10**, kẹp ha
 
 ---
 
-# PHẦN MỞ ĐẦU — 70 giây
+# PHẦN MỞ ĐẦU — 100 giây
 
 **Hình:** ngồi trước máy, hoặc màn hình logo Ứng phó nhanh.
+
+## Chào và giới thiệu — 20 giây
 
 > Em xin chào ban tổ chức và ban giám khảo.
 >
 > Em tên là **Trần Đình Khôi**, hiện đang là kỹ sư phần mềm tại Tuy Hoà, Đắk Lắk. Em là trưởng nhóm **Lũ Trẻ**.
 >
-> Hôm nay nhóm chúng em mang đến cuộc thi một dự án mang tên **Ứng phó nhanh** — hệ thống điều phối cứu hộ và quản lý kho cứu trợ cho cấp xã.
+> Hôm nay nhóm chúng em mang đến cuộc thi một dự án mang tên **Ứng phó nhanh** — giải pháp trí tuệ nhân tạo điều phối cứu hộ cứu nạn và hậu cần thông minh cho cấp xã.
 
-**Ngừng một nhịp, rồi nói tiếp phần mục tiêu.**
+**Ngừng một nhịp.**
 
-> Ý tưởng bắt đầu từ một câu hỏi rất cụ thể: **lúc bão vào, người trực ở kho xã đang phải làm gì bằng tay?**
+## Vì sao làm — 45 giây
+
+> Ý tưởng này không đến từ một bài toán trên giấy. Nó đến từ **quê nhà chúng em** — xã Đồng Xuân, tỉnh Phú Yên cũ, nay thuộc Đắk Lắk. Trong gia đình nhóm có người tham gia công tác Hội Chữ thập đỏ tại xã, nên chúng em nhìn thấy tận nơi việc chuẩn bị và cấp phát vật tư cứu trợ diễn ra thế nào.
 >
-> Họ tính định mức cứu trợ bằng máy tính bỏ túi. Tra tồn kho bằng sổ giấy. Và gọi điện từng thôn để hỏi còn hàng hay không. Ba việc ấy, mỗi việc mất hàng chục phút — đúng lúc từng phút đều quý.
+> Năm hai nghìn không trăm hai mươi lăm là dấu mốc trực tiếp thúc đẩy chúng em bắt tay vào làm.
 >
-> Ứng phó nhanh làm đúng ba việc đó. Nhận tin từ hiện trường bằng giọng nói, chuyển lời kể thành phương án có số dựa trên tồn kho thật, và cho các xã mượn trả vật tư của nhau.
+> Đợt mưa lũ giữa tháng Mười một, lũ trên sông Ba và sông Kỳ Lộ **vượt các đỉnh lũ lịch sử**. Toàn tỉnh ghi nhận **mười chín người chết, sáu người mất tích**. Hơn **tám mươi lăm nghìn lượt nhà bị ngập**, hơn **mười hai nghìn tám trăm hộ bị cô lập**. **Bốn mươi xã phường** phải công bố tình huống khẩn cấp — trong đó có Đồng Xuân, quê chúng em.
 >
-> Ba điều chúng em đặt ra từ đầu: **máy tính toán, người quyết định** — máy không tự xuất hàng của ai bao giờ. **Không bịa số** — mọi con số trên màn hình đều phải có thật trong kho. Và **hỏng cũng phải dùng được** — mất mạng, mất điện thì vẫn phải chạy, vì đó chính là lúc cần nó nhất.
+> Tổng thiệt hại của tỉnh năm đó ước tính **vượt chín nghìn bảy trăm tỷ đồng**.
+
+**Ngừng hai giây. Đây là chỗ nặng nhất của cả bài — đừng đọc lướt.**
+
+## Bài toán cụ thể — 35 giây
+
+> Giữa lúc đó, ở cấp xã, mọi việc vẫn làm bằng tay.
+>
+> Một xã có một kho tổng và hơn mười kho thôn. Dữ liệu vật tư nằm rải rác trên **sổ giấy, bảng Excel, tin nhắn** — và trong trí nhớ của từng cán bộ. Muốn biết cả xã còn bao nhiêu áo phao thì phải gọi điện từng thôn.
+>
+> Nhưng điều khiến chúng em quyết tâm nhất là điều này: **mất điện và mất mạng thường xảy ra đúng lúc thiên tai đỉnh điểm.** Mọi giải pháp phụ thuộc hoàn toàn vào internet đều trở nên vô dụng đúng lúc cần nhất.
+>
+> Nên Ứng phó nhanh được xây quanh ba nguyên tắc: **máy tính toán, người quyết định** — máy không tự xuất hàng của ai bao giờ. **Không bịa số** — mọi con số trên màn hình đều phải có thật trong kho. Và **hỏng cũng phải dùng được** — mô hình trí tuệ nhân tạo chạy ngay trên máy đặt tại xã, mất internet vẫn dùng đủ.
 
 **Ngừng hai giây.**
 
@@ -70,7 +86,7 @@ Câu nối:
 
 | | Nội dung | Thời lượng | Hình |
 |---|---|---|---|
-| 1 | Mở đầu — chào, giới thiệu, mục tiêu dự án | 70s | Mặt hoặc logo |
+| 1 | Mở đầu — chào, vì sao làm, bài toán, ba nguyên tắc | 100s | Mặt hoặc logo |
 | 2 | **Thao tác** — theo KICH-BAN-DEMO.md | 15–28 phút | Năm màn hình |
 | 3 | Kết — đối chiếu số + ba điều làm nghiêm túc | 1 phút | Màn hình Vật tư |
 
@@ -84,7 +100,9 @@ Câu nối:
 
 **Vấp thì quay lại từ đầu câu**, đừng quay lại cả đoạn. Cắt ghép ở chỗ ngừng giữa hai câu thì không ai nhận ra.
 
-**Ba chỗ nên ngừng hẳn**: sau tên dự án, sau "đúng lúc từng phút đều quý", và trước "Sau đây em xin phép thực hiện phần demo."
+**Ba chỗ nên ngừng hẳn**: sau tên dự án, sau "vượt chín nghìn bảy trăm tỷ đồng", và trước "Sau đây em xin phép thực hiện phần demo."
+
+**Đoạn số liệu thiên tai đọc CHẬM hẳn lại.** Đó là chỗ nặng nhất của cả bài, và là lý do dự án tồn tại. Đọc lướt thì nó thành một dãy số; đọc chậm thì người nghe kịp hình dung.
 
 **Nhấn vào ba từ khoá** trong đoạn nguyên tắc: *người quyết định*, *không bịa số*, *hỏng cũng phải dùng được*. Đó là ba thứ ban giám khảo sẽ nhớ, và phần thao tác phía sau chính là bằng chứng cho từng cái.
 
@@ -92,6 +110,6 @@ Câu nối:
 
 # Việc phải làm trước khi bấm máy
 
-1. Đọc to phần mở đầu một lượt, bấm giờ — quá 90 giây thì bỏ bớt câu ở đoạn nguyên tắc.
+1. Đọc to phần mở đầu một lượt, bấm giờ — quá 2 phút thì bỏ bớt câu ở đoạn bài toán, GIỮ NGUYÊN đoạn số liệu.
 2. Làm xong mục **Chuẩn bị** trong [KICH-BAN-DEMO.md](KICH-BAN-DEMO.md): đóng bớt trình duyệt, đăng nhập 5 màn hình, ghi tồn kho ra giấy.
 3. Chạy thử một lượt toàn bộ thao tác với bảng kiểm — **trước** khi quay thật.
