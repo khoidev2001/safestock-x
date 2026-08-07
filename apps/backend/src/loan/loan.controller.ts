@@ -53,6 +53,18 @@ export class LoanController {
     });
   }
 
+  /** Xã lân cận đã khai trong sổ đăng ký — giao diện dựng danh sách chọn từ đây. */
+  @Get("inter-commune/peers")
+  listPeers(@Request() req: AuthenticatedRequest) {
+    return this.interCommune.peerCommuneNames(req.user.userId);
+  }
+
+  /** Vật tư đang có trong kho, kèm lô hạn gần nhất sẽ dùng nếu chọn mặt hàng đó. */
+  @Get("inter-commune/available-items")
+  listAvailableItems(@Request() req: AuthenticatedRequest) {
+    return this.interCommune.availableItemsForManualEntry(req.user.userId, req.user.warehouseId);
+  }
+
   @Post("inter-commune/manual")
   recordManualInterCommune(
     @Request() req: AuthenticatedRequest,

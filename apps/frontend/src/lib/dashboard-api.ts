@@ -521,10 +521,27 @@ export const requestInterCommuneLoan = (body: {
 export const recordManualInterCommuneLoan = (body: {
   direction: "OUTGOING" | "INCOMING";
   peerCommuneName: string;
-  batchId: string;
+  /** Một trong hai: mã vật tư (giao diện dùng) hoặc mã lô cụ thể. */
+  itemSku?: string;
+  batchId?: string;
   quantity: number;
   note?: string;
 }) => apiFetch("/api/loans/inter-commune/manual", { method: "POST", body: JSON.stringify(body) });
+
+/** Tên các xã lân cận đã khai trong sổ đăng ký. */
+export const getPeerCommunes = () => apiFetch<string[]>("/api/loans/inter-commune/peers");
+
+export interface AvailableItem {
+  itemSku: string;
+  itemName: string;
+  unit: string;
+  available: number;
+  batchId: string;
+}
+
+/** Vật tư đang có trong kho, để chọn theo TÊN thay vì phải chép mã lô. */
+export const getAvailableItemsForLoan = () =>
+  apiFetch<AvailableItem[]>("/api/loans/inter-commune/available-items");
 
 export const advanceInterCommuneLoan = (
   id: string,

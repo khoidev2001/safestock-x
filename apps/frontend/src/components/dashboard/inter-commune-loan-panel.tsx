@@ -5,7 +5,9 @@ import { useState } from "react";
 import { ColorIcon } from "@/components/shared/color-icon";
 import {
   advanceInterCommuneLoan,
+  getAvailableItemsForLoan,
   getInterCommuneLoans,
+  getPeerCommunes,
   recordManualInterCommuneLoan,
   type InterCommuneLoan,
 } from "@/lib/dashboard-api";
@@ -43,9 +45,25 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
   const [ghiTay, setGhiTay] = useState({
     direction: "OUTGOING" as "OUTGOING" | "INCOMING",
     peerCommuneName: "",
-    batchId: "",
+    itemSku: "",
     quantity: "",
     note: "",
+  });
+
+  // Chỉ tải danh sách khi form MỞ RA. Người dùng vào tab Mượn trả thường chỉ để
+  // xem sổ; tải sẵn hai danh sách cho một form chưa chắc ai mở là tốn hai lượt
+  // gọi mỗi lần vào tab.
+  const xaLanCan = useQuery({
+    queryKey: ["peer-communes"],
+    queryFn: getPeerCommunes,
+    enabled: moGhiTay,
+    staleTime: 5 * 60_000,
+  });
+  const vatTuCoSan = useQuery({
+    queryKey: ["available-items-for-loan"],
+    queryFn: getAvailableItemsForLoan,
+    enabled: moGhiTay,
+    staleTime: 60_000,
   });
 
   /**
@@ -62,15 +80,15 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
   const ghiTayMutation = useMutation({
     mutationFn: () => {
       const soLuong = Number(ghiTay.quantity);
-      if (!ghiTay.peerCommuneName.trim()) throw new Error("Cần tên xã bên kia.");
-      if (!ghiTay.batchId.trim()) throw new Error("Cần mã lô vật tư để cộng trừ đúng kho.");
+      if (!ghiTay.peerCommuneName.trim()) throw new Error("Cần chọn xã bên kia.");
+      if (!ghiTay.itemSku.trim()) throw new Error("Cần chọn vật tư.");
       if (!Number.isInteger(soLuong) || soLuong < 1) {
         throw new Error("Số lượng phải là số nguyên dương.");
       }
       return recordManualInterCommuneLoan({
         direction: ghiTay.direction,
         peerCommuneName: ghiTay.peerCommuneName.trim(),
-        batchId: ghiTay.batchId.trim(),
+        itemSku: ghiTay.itemSku.trim(),
         quantity: soLuong,
         note: ghiTay.note.trim() || undefined,
       });
@@ -80,7 +98,7 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
       setGhiTay({
         direction: "OUTGOING",
         peerCommuneName: "",
-        batchId: "",
+        itemSku: "",
         quantity: "",
         note: "",
       });
@@ -167,30 +185,53 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
               <label className="block text-xs font-medium" htmlFor="ghi-tay-xa">
                 Xã bên kia
               </label>
-              <input
+              {/* Chọn từ danh sách chứ không gõ tay: tên xã phải khớp CHÍNH XÁC
+                  với sổ đăng ký thì hệ thống mới gửi thông báo sang đúng nơi.
+                  Gõ tay lệch một dấu là khoản mượn nằm im mà không ai biết vì sao. */}
+              <select
                 className="mt-1 w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
                 id="ghi-tay-xa"
-                maxLength={120}
                 onChange={(event) =>
                   setGhiTay((truoc) => ({ ...truoc, peerCommuneName: event.target.value }))
                 }
-                placeholder="Xuân Thọ"
                 value={ghiTay.peerCommuneName}
-              />
+              >
+                <option value="">— chọn xã —</option>
+                {(xaLanCan.data ?? []).map((ten) => (
+                  <option key={ten} value={ten}>
+                    {ten}
+                  </option>
+                ))}
+              </select>
+              {xaLanCan.data?.length === 0 ? (
+                <p className="mt-1 text-xs text-[var(--text-muted)]">
+                  Chưa khai xã lân cận nào trong cấu hình máy chủ.
+                </p>
+              ) : null}
             </div>
             <div>
-              <label className="block text-xs font-medium" htmlFor="ghi-tay-lo">
-                Mã lô vật tư
+              <label className="block text-xs font-medium" htmlFor="ghi-tay-vattu">
+                Vật tư
               </label>
-              <input
+              {/* Chọn theo TÊN, không bắt chép mã lô. Mã lô là thứ chỉ máy cần;
+                  người trực đang gọi điện thoả thuận nói "nước uống", không nói
+                  "lô WATER-01-B3". Hệ thống tự lấy lô có hạn dùng GẦN NHẤT, đúng
+                  nguyên tắc hạn gần xuất trước mà kho vẫn theo. */}
+              <select
                 className="mt-1 w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
-                id="ghi-tay-lo"
+                id="ghi-tay-vattu"
                 onChange={(event) =>
-                  setGhiTay((truoc) => ({ ...truoc, batchId: event.target.value }))
+                  setGhiTay((truoc) => ({ ...truoc, itemSku: event.target.value }))
                 }
-                placeholder="Chép từ tab Vật tư"
-                value={ghiTay.batchId}
-              />
+                value={ghiTay.itemSku}
+              >
+                <option value="">— chọn vật tư —</option>
+                {(vatTuCoSan.data ?? []).map((mon) => (
+                  <option key={mon.itemSku} value={mon.itemSku}>
+                    {mon.itemName} (còn {mon.available} {mon.unit})
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-xs font-medium" htmlFor="ghi-tay-so">

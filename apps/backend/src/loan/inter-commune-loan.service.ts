@@ -438,23 +438,136 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
    * bước chuyển nên PHẢI tự áp hiệu ứng kho ở đây — thiếu chỗ này thì sổ đứng yên
    * trong khi hàng đã đi.
    */
+  /**
+   * Tên các xã lân cận, BỎ xã của chính người đang hỏi.
+   *
+   * Sổ đăng ký có thể chứa cả tên xã mình — chuyện thường khi một cấu hình được
+   * chép qua lại giữa các máy chủ trong cùng huyện. Để nguyên thì danh sách chọn
+   * có "Đồng Xuân" ngay trên máy của Đồng Xuân, và người dùng có thể tạo một
+   * khoản mượn với chính mình: sổ ghi có nợ, kho trừ thật, mà không ai nợ ai cả.
+   */
+  async peerCommuneNames(userId: string): Promise<string[]> {
+    const tenMinh = (await this.tenXaCuaMinh(await this.orgOf(userId)))?.toLowerCase();
+    return parseCommunePeers(process.env)
+      .map((peer) => peer.communeName)
+      .filter((ten) => !tenMinh || ten.trim().toLowerCase() !== tenMinh)
+      .sort((a, b) => a.localeCompare(b, "vi"));
+  }
+
+  /**
+   * Vật tư đang có trong kho, kèm lô sẽ dùng nếu chọn mặt hàng đó.
+   *
+   * Giao diện cho người dùng chọn TÊN vật tư, không bắt chép mã lô. Mã lô là thứ
+   * chỉ máy cần: người trực đang gọi điện thoả thuận với xã bên kia không nói "lô
+   * WATER-01-B3", họ nói "nước uống".
+   *
+   * Lô chọn sẵn là lô có hạn dùng GẦN NHẤT — đúng nguyên tắc hạn gần xuất trước
+   * mà kho vẫn theo. Chọn lô mới nhất thì lô cũ nằm lại tới lúc hỏng rồi phải bỏ.
+   * Lô không có hạn xếp sau cùng: không có hạn nghĩa là không gấp.
+   */
+  async availableItemsForManualEntry(userId: string, scopeWarehouseId?: string | null) {
+    const organizationId = await this.orgOf(userId);
+    const batches = await this.prisma.itemBatch.findMany({
+      where: {
+        circulation: "IN_STOCK",
+        quantity: { gt: 0 },
+        shelf: scopeWarehouseId
+          ? { zone: { warehouseId: scopeWarehouseId } }
+          : { zone: { warehouse: { organizationId } } },
+      },
+      select: {
+        id: true,
+        quantity: true,
+        expiryDate: true,
+        item: { select: { sku: true, name: true, category: { select: { unit: true } } } },
+      },
+      orderBy: [{ expiryDate: "asc" }, { createdAt: "asc" }],
+    });
+
+    const theoSku = new Map<
+      string,
+      { itemSku: string; itemName: string; unit: string; available: number; batchId: string }
+    >();
+    for (const b of batches) {
+      const cu = theoSku.get(b.item.sku);
+      if (cu) {
+        cu.available += b.quantity;
+        continue;
+      }
+      // Lô đầu tiên gặp là lô hạn gần nhất nhờ thứ tự truy vấn ở trên. Prisma xếp
+      // giá trị rỗng sau cùng theo mặc định của Postgres với `asc`, đúng ý muốn.
+      theoSku.set(b.item.sku, {
+        itemSku: b.item.sku,
+        itemName: b.item.name,
+        unit: b.item.category.unit,
+        available: b.quantity,
+        batchId: b.id,
+      });
+    }
+
+    return [...theoSku.values()].sort((a, b) => a.itemName.localeCompare(b.itemName, "vi"));
+  }
+
+  /**
+   * Chọn lô cho một mã vật tư: lô có hạn dùng GẦN NHẤT.
+   *
+   * Đúng nguyên tắc hạn gần xuất trước mà kho vẫn theo. Chọn lô mới nhất thì lô
+   * cũ nằm lại tới lúc hỏng rồi phải bỏ — kho cứu trợ mà bỏ hàng vì hết hạn là
+   * mất đúng thứ cần dùng lúc bão.
+   */
+  private async chonLoTheoSku(input: {
+    itemSku?: string;
+    userId: string;
+    scopeWarehouseId?: string | null;
+  }): Promise<string> {
+    const sku = input.itemSku?.trim();
+    if (!sku) throw new BadRequestException("Cần chọn vật tư hoặc nhập mã lô");
+
+    const organizationId = await this.orgOf(input.userId);
+    const lo = await this.prisma.itemBatch.findFirst({
+      where: {
+        item: { sku },
+        circulation: "IN_STOCK",
+        quantity: { gt: 0 },
+        shelf: input.scopeWarehouseId
+          ? { zone: { warehouseId: input.scopeWarehouseId } }
+          : { zone: { warehouse: { organizationId } } },
+      },
+      orderBy: [{ expiryDate: "asc" }, { createdAt: "asc" }],
+      select: { id: true },
+    });
+    if (!lo) throw new BadRequestException(`Kho không còn lô nào của vật tư ${sku}`);
+    return lo.id;
+  }
+
   async recordManually(input: {
     userId: string;
     direction: InterCommuneDirection;
     peerCommuneName: string;
-    batchId: string;
+    /** Mã lô cụ thể. Bỏ trống thì phải có `itemSku` để tự chọn lô. */
+    batchId?: string;
+    /** Mã vật tư — hệ thống tự lấy lô hạn gần nhất. */
+    itemSku?: string;
     quantity: number;
     scopeWarehouseId?: string | null;
     note?: string;
   }) {
     this.assertQuantity(input.quantity);
-    const batch = await this.batchInfo(input.batchId);
+
+    // Nhận CẢ HAI cách chỉ định hàng.
+    //
+    // Giao diện gửi mã vật tư vì người trực nói "nước uống", không nói "lô
+    // WATER-01-B3". Nhưng đường nhận mã lô vẫn giữ: có lúc người ta cần chỉ đúng
+    // một lô cụ thể (lô sắp hỏng, lô vừa nhận về), và bỏ đường đó là lấy mất khả
+    // năng ấy chỉ để cho gọn chữ ký hàm.
+    const batchId = input.batchId?.trim() || (await this.chonLoTheoSku(input));
+    const batch = await this.batchInfo(batchId);
 
     const effect = manualEntryStockEffect(input.direction);
-    const requestId = `loan-manual-${input.batchId}-${Date.now()}`;
+    const requestId = `loan-manual-${batchId}-${Date.now()}`;
     await this.moveStock(effect, {
       userId: input.userId,
-      batchId: input.batchId,
+      batchId,
       quantity: input.quantity,
       scopeWarehouseId: input.scopeWarehouseId,
       note: `Mượn liên xã (ghi tay) với ${input.peerCommuneName}`,

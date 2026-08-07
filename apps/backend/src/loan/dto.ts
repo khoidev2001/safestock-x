@@ -85,8 +85,19 @@ export class RecordManualInterCommuneLoanDto {
   @MaxLength(120)
   peerCommuneName!: string;
 
+  /**
+   * Chỉ định hàng bằng MỘT trong hai cách: mã vật tư (giao diện dùng) hoặc mã lô
+   * (khi cần chỉ đúng một lô cụ thể). Thiếu cả hai thì service từ chối — không
+   * kiểm ở đây được vì luật "một trong hai" cần nhìn cả hai trường cùng lúc.
+   */
+  @IsOptional()
   @IsString()
-  batchId!: string;
+  batchId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  itemSku?: string;
 
   @IsInt()
   @Min(1)

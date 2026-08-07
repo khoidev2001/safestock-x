@@ -32,7 +32,7 @@ Ghi từ nhận xét trực tiếp khi xem demo. Đánh dấu `[x]` khi xong và
 
 ## Nhóm C — có phần nghiệp vụ
 
-- [ ] **C1. Ghi tay mượn trả — sửa form**:
+- [x] **C1. Ghi tay mượn trả — sửa form**:
       - Xã bên kia: đổi ô gõ tay thành **dropdown** các xã lân cận.
       - Vật tư: nhập **TÊN vật tư**, không phải mã lô.
       - Kiểm lại toàn bộ luồng sau khi sửa.
