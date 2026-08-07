@@ -122,13 +122,20 @@ function TheKho({ kho }: { kho: WarehouseStock }) {
       ) : (
         <ul className="mt-2 space-y-1 text-xs">
           {hien.map((mon) => (
-            <li className="flex items-baseline justify-between gap-2" key={mon.itemSku}>
-              <span className="truncate" title={mon.itemName}>
-                {mon.itemName}
-              </span>
-              <span className="shrink-0 font-mono font-semibold">
-                {mon.quantity.toLocaleString("vi")} {mon.unit}
-              </span>
+            <li key={mon.itemSku}>
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="truncate" title={mon.itemName}>
+                  {mon.itemName}
+                </span>
+                <span className="shrink-0 font-mono font-semibold">
+                  {mon.quantity.toLocaleString("vi")} {mon.unit}
+                </span>
+              </div>
+              {/* Quy đổi ra lốc và lít cho hàng đếm theo chai — ba cách đếm cho
+                  cùng một đống hàng, ai cũng đọc được ngay phần mình cần. */}
+              {mon.conversion ? (
+                <div className="text-[10px] text-[var(--text-muted)]">{mon.conversion}</div>
+              ) : null}
             </li>
           ))}
           {conLai > 0 ? (

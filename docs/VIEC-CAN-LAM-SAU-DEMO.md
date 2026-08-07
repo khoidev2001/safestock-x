@@ -45,7 +45,7 @@ Ghi từ nhận xét trực tiếp khi xem demo. Đánh dấu `[x]` khi xong và
 
 ## Nhóm D — đụng cơ sở dữ liệu
 
-- [ ] **D1. Đơn vị nước**: đang ghi trần là "chai". Phải thêm **loại chai** (5 lít,
+- [x] **D1. Đơn vị nước**: đang ghi trần là "chai". Phải thêm **loại chai** (5 lít,
       10 lít…) và **quy đổi** — 12 chai = 1 lốc. Việc này sửa cả lược đồ dữ liệu,
       không chỉ giao diện.
 
@@ -58,3 +58,12 @@ Nhóm A trước (nhanh, thấy ngay), rồi B, rồi C, cuối cùng D.
 D1 để sau cùng vì nó đụng lược đồ dữ liệu: đổi đơn vị đo là đổi cách mọi con số
 tồn kho được hiểu, nên phải làm lúc không còn việc gì khác chen ngang, và phải
 tính đường chuyển dữ liệu cũ sang.
+
+---
+
+## Đã xong toàn bộ 14 việc — 2026-08-07
+
+Riêng D1 để lại một quyết định phải nhớ: con số tồn nước **là số CHAI**, nhãn
+"lít" trong cơ sở dữ liệu là ghi sai từ bản cũ. Đã sửa nhãn, KHÔNG đổi con số —
+đổi con số là mọi báo cáo và phương án phân bổ lịch sử lệch hết mà không báo lỗi.
+Cỡ chai chốt 5 lít, 12 chai một lốc, quy ước chung cho mọi loại nước.

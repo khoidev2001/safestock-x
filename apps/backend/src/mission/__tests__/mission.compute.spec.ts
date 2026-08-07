@@ -31,23 +31,25 @@ describe("computeRequirements", () => {
   });
 
   it("nước tính theo CHAI, không phải lít (48h = 2 ngày)", () => {
-    // Chuẩn Sphere là 15 lít/người/ngày, nhưng kho xuất theo chai 1.5 lít:
-    // 15 / 1.5 = 10 chai/người/ngày → 10 * 100 người * 2 ngày = 2000 chai.
+    // Chuẩn Sphere là 15 lít/người/ngày, nhưng kho xuất theo chai 5 lít:
+    // 15 / 5 = 3 chai/người/ngày → 3 * 100 người * 2 ngày = 600 chai.
     // Ghi định mức theo lít là đẩy phép chia sang người đang vội bốc hàng.
     const reqs = computeRequirements(flood({ affectedPeople: 100, durationHours: 48 }));
-    expect(reqs.find((r) => r.sku === "WATER-01")?.required).toBe(2000);
+    expect(reqs.find((r) => r.sku === "WATER-01")?.required).toBe(600);
     expect(reqs.find((r) => r.sku === "WATER-01")?.unit).toBe("chai");
   });
 
   it("should round duration up to full days", () => {
     const reqs = computeRequirements(flood({ affectedPeople: 10, durationHours: 25 }));
-    // 25h → 2 ngày → 10 chai * 10 người * 2 ngày = 200 chai
-    expect(reqs.find((r) => r.sku === "WATER-01")?.required).toBe(200);
+    // 25h → 2 ngày → 3 chai * 10 người * 2 ngày = 60 chai
+    expect(reqs.find((r) => r.sku === "WATER-01")?.required).toBe(60);
   });
 
-  it("phần lẻ khi quy đổi chai vẫn được làm tròn LÊN, không thiếu nước", () => {
-    // Cháy dùng 5 lít/người/ngày → 3.333 chai. Một người, một ngày phải ra 4 chai
-    // chứ không phải 3: làm tròn xuống là cấp thiếu nước cho người thật.
+  it("cháy dùng 5 lít/người/ngày → đúng một chai 5 lít", () => {
+    // Với cỡ chai 5 lít, MỌI định mức hiện có đều chia hết nên không còn phần lẻ
+    // để quan sát. Phép làm tròn LÊN vẫn giữ nguyên trong mã và có bài kiểm riêng
+    // ở `bottle-units.spec` — đổi cỡ chai lần nữa là phần lẻ quay lại ngay, và
+    // lúc đó làm tròn xuống là cấp thiếu nước cho người thật.
     const reqs = computeRequirements({
       incidentType: IncidentType.FIRE,
       affectedPeople: 1,
@@ -56,7 +58,7 @@ describe("computeRequirements", () => {
       elderly: 0,
       medicalSupportCases: 0,
     });
-    expect(reqs.find((r) => r.sku === "WATER-01")?.required).toBe(4);
+    expect(reqs.find((r) => r.sku === "WATER-01")?.required).toBe(1);
   });
 
   it("should round requirements up (ceil) for safety", () => {
@@ -67,7 +69,7 @@ describe("computeRequirements", () => {
 });
 
 describe("allocateGreedy (FEFO)", () => {
-  const req: Requirement = { sku: "WATER-01", itemName: "Nước", unit: "lít", required: 100 };
+  const req: Requirement = { sku: "WATER-01", itemName: "Nước", unit: "chai", required: 100 };
 
   it("should take from earliest-expiry batch first", () => {
     const batches: AvailableBatch[] = [

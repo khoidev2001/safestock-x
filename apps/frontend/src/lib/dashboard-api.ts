@@ -587,6 +587,8 @@ export interface WarehouseStockItem {
   itemName: string;
   unit: string;
   quantity: number;
+  /** Câu quy đổi cho hàng đếm theo chai: "100 chai (8 lốc lẻ 4) · 500 lít". */
+  conversion?: string;
 }
 
 export interface WarehouseStock {

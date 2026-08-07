@@ -23,7 +23,13 @@ import { IncidentType } from "@safestock/shared-types";
  * Giữ hằng số ở đây để đổi cỡ chai chỉ phải sửa một chỗ, và để phép quy đổi luôn
  * nhìn thấy được thay vì nằm ẩn trong một con số đã nhân sẵn.
  */
-export const LIT_MOI_CHAI_NUOC = 1.5;
+// 5 lít/chai, thống nhất với `LIT_MOI_CHAI_MAC_DINH` bên inventory/bottle-units.
+//
+// Trước đây là 1,5 — cỡ chai nước uống bán lẻ. Nhưng kho cứu trợ nhận nước theo
+// bình lớn, và người quản kho đã chốt cỡ 5 lít. Để 1,5 thì định mức tính ra số
+// chai gấp hơn ba lần thực tế, và phương án phân bổ đòi kho xuất một lượng hàng
+// không tồn tại.
+export const LIT_MOI_CHAI_NUOC = 5;
 
 /** Lít/người/ngày theo chuẩn Sphere → số chai, giữ nguyên phần lẻ để tổng mới làm tròn. */
 function chaiTuLit(litMoiNgay: number): number {

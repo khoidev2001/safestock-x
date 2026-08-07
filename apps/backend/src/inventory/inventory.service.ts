@@ -11,6 +11,7 @@ import { TransactionType } from "@safestock/shared-types";
 import { PrismaService } from "../prisma/prisma.service";
 import { ReadinessService } from "../readiness/readiness.service";
 import { lockLoanBatch, lockLoanTableForApproval } from "../loan/loan-table-lock";
+import { moTaQuyDoi } from "./bottle-units";
 import { communeStockByWarehouse, communeStockRollup } from "./commune-stock-rollup";
 import { sumOutstanding } from "./loan-math";
 import { transferInventoryInTx } from "./inventory-transfer";
@@ -269,9 +270,18 @@ export class InventoryService {
     // nhiêu" và "thôn này đang có những gì". Tách thành hai đường gọi là đọc lô
     // hàng hai lần cho cùng một màn hình, và mở ra khả năng hai con số lệch nhau
     // khi kho thay đổi giữa hai lượt gọi.
+    const byWarehouse = communeStockByWarehouse(duLieu);
     return {
       byItem: communeStockRollup(duLieu),
-      byWarehouse: communeStockByWarehouse(duLieu),
+      // Kèm câu quy đổi cho hàng đếm theo chai: người phụ trách xe cần lốc,
+      // người tính định mức cần lít, người đứng ở kệ cần chai. Hiện sẵn cả ba
+      // thì không ai phải nhẩm giữa lúc đang vội.
+      byWarehouse: byWarehouse.map((kho) => ({
+        ...kho,
+        items: kho.items.map((mon) =>
+          mon.unit === "chai" ? { ...mon, conversion: moTaQuyDoi(mon.quantity) } : mon,
+        ),
+      })),
     };
   }
 
