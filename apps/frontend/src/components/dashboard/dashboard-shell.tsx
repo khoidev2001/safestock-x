@@ -229,7 +229,13 @@ function NavLink({
           // Đọc thành lời cho trình đọc màn hình: một con số trần cạnh nhãn tab
           // không nói được nó đếm cái gì.
           aria-label={`${badge} việc chưa xem`}
-          className={`ml-auto inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 text-[11px] font-bold text-white ${
+          // `h-5` cùng `min-w-5` cho số một chữ số thành HÌNH TRÒN thật. Thiếu
+          // chiều cao cố định thì ô co theo dòng chữ, và `rounded-full` chỉ bo
+          // được thành hình thuốc con nhộng dẹt — nhìn ra ngay là lệch.
+          //
+          // Số từ hai chữ số trở lên vẫn giãn ngang thành viên nang; đó là đánh
+          // đổi đúng, vì bóp chữ vào một ô tròn cố định thì số 99+ đọc không ra.
+          className={`ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-bold leading-none text-white ${
             rail ? "absolute right-1 top-1" : ""
           }`}
           style={{ background: "var(--color-critical)" }}

@@ -15,7 +15,7 @@ export interface ToastItem {
 const GIAY_TU_TAT = 6;
 
 /**
- * Thẻ thông báo toạt ra ở góc phải trên.
+ * Thẻ thông báo toạt ra ở góc phải dưới, giống Zalo.
  *
  * Trước đây mọi thông báo chỉ nằm trong chuông ở góc: muốn biết có việc gì phải
  * chủ động mở ra xem. Lúc đang chạy nhiều việc thì không ai nhớ mở, nên một sự
@@ -43,7 +43,12 @@ export function NotificationToasts({
     <div
       aria-live="polite"
       aria-label="Thông báo mới"
-      className="pointer-events-none fixed right-4 top-4 z-[1200] flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2"
+      /* Góc phải DƯỚI, giống Zalo. Góc trên đè lên thanh điều hướng và nút của
+         trang, nên thông báo vừa che mất chỗ người ta đang bấm vừa dễ bị bấm nhầm.
+
+         `flex-col-reverse`: thông báo mới nhất nằm sát đáy, cái cũ bị đẩy lên
+         trên. Xếp xuôi thì cái mới rơi ra ngoài tầm mắt ở phía trên chồng. */
+      className="pointer-events-none fixed bottom-4 right-4 z-[1200] flex max-h-[min(70vh,32rem)] w-[min(22rem,calc(100vw-2rem))] flex-col-reverse gap-2 overflow-y-auto"
     >
       {items.map((item) => (
         <Toast key={item.id} item={item} onOpen={onOpen} onDismiss={onDismiss} />
@@ -87,7 +92,7 @@ function Toast({
 
   return (
     <article
-      className="pointer-events-auto rounded-lg border bg-[var(--surface)] p-3 shadow-lg"
+      className="pointer-events-auto rounded-lg border bg-[var(--surface)] p-3.5 shadow-lg"
       style={sticky ? { borderColor: "var(--color-critical)" } : undefined}
       role={sticky ? "alert" : undefined}
     >
@@ -99,7 +104,11 @@ function Toast({
         />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold leading-snug">{item.title}</p>
-          <p className="mt-0.5 line-clamp-3 text-xs text-[var(--text-muted)]">{item.body}</p>
+          {/* Cho phép cao tới 6 dòng thay vì 3: nhiều thông báo bị cắt đúng chỗ
+              có con số hoặc tên kho, mà đó lại là phần người đọc cần nhất. */}
+          <p className="mt-0.5 line-clamp-6 whitespace-pre-line text-xs leading-relaxed text-[var(--text-muted)]">
+            {item.body}
+          </p>
           {onOpen && item.missionId ? (
             <button
               type="button"
