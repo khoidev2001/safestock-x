@@ -471,6 +471,8 @@ Cuối buổi sẽ đối chiếu — đó là bằng chứng mạnh nhất rằ
 
 # Tài liệu liên quan
 
+- [Lời dẫn quay video](LOI-DAN-QUAY-VIDEO.md) — giới thiệu bản thân, nhóm, sơ lược ứng dụng và phần kết; đọc trước khi vào Phần 2
+
 - [Hướng dẫn thử luồng mượn — trả liên xã](HUONG-DAN-TEST-MUON-TRA-LIEN-XA.md) — chi tiết từng nhánh rẽ và cách gỡ khi hỏng
 - [Tài khoản demo](TAI-KHOAN-DEMO.md) — toàn bộ 20 tài khoản
 - [Bàn giao vận hành](BAN-GIAO-VAN-HANH.md) — cách các dịch vụ chạy nền trên máy demo
