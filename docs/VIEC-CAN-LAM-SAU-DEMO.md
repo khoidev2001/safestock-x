@@ -18,14 +18,17 @@ Ghi từ nhận xét trực tiếp khi xem demo. Đánh dấu `[x]` khi xong và
 - [x] **B2. Tồn kho toàn xã — đổi cách liệt kê**: hiện đang gom theo VẬT TƯ. Phải
       gom **theo THÔN**: mỗi thôn một khối, bên trong liệt kê thôn đó có gì.
 - [x] **B3. Tồn kho toàn xã — sửa giao diện** (ngoài việc đổi cách gom ở B2).
-- [ ] **B4. Navbar mobile**: thêm màu sắc và ảnh cho các biểu tượng.
-- [ ] **B5. Trang Tổng quan — sắp lại thứ tự**, quan trọng lên đầu:
+- [x] **B4. Navbar mobile**: thêm màu sắc và ảnh cho các biểu tượng.
+- [x] **B5. Trang Tổng quan — sắp lại thứ tự**, quan trọng lên đầu:
       1. Nhiệm vụ (theo độ ưu tiên)
       2. Sự cố
       3. Cảnh báo
       4. Kiểm kê
       5. Dự báo
       6. Kho nào mượn / trả kho nào
+
+      CHƯA CÓ KHỐI DỰ BÁO trên trang này — dự báo mưa hiện chỉ nằm ở tab Theo dõi.
+      Đưa sang cần một khối tóm tắt mới, chưa làm.
 
 ## Nhóm C — có phần nghiệp vụ
 

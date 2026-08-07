@@ -240,10 +240,24 @@ function MobileRoleShell({
             accessibilityState={{ selected: tab === item }}
             style={shellStyles.tab}
           >
-            <Text style={[shellStyles.tabIcon, tab === item && shellStyles.tabIconActive]}>
+            <Text
+              style={[
+                shellStyles.tabIcon,
+                // Tab đang chọn: nền đặc màu của chính nó. Tab khác: chữ và viền
+                // cùng màu nhưng nền nhạt, đủ để phân biệt mà không tranh chú ý
+                // với tab đang mở.
+                tab === item
+                  ? {
+                      backgroundColor: tabColor(item),
+                      borderColor: tabColor(item),
+                      color: "#FFFFFF",
+                    }
+                  : { borderColor: tabColor(item), color: tabColor(item) },
+              ]}
+            >
               {tabIcon(item)}
             </Text>
-            <Text style={[shellStyles.tabLabel, tab === item && shellStyles.tabLabelActive]}>
+            <Text style={[shellStyles.tabLabel, tab === item && { color: tabColor(item) }]}>
               {tabLabel(item)}
             </Text>
           </Pressable>
@@ -284,6 +298,33 @@ function tabIcon(tab: MobileTab): string {
     missions: "➤",
     alerts: "!",
     report: "✎",
+  }[tab];
+}
+
+/**
+ * Màu riêng cho từng tab.
+ *
+ * Trước đây bảy biểu tượng cùng một màu xám, và tab đang chọn thì tô xanh — tức
+ * là hình dạng là dấu hiệu DUY NHẤT để phân biệt. Trên màn hình điện thoại nhỏ,
+ * bảy hình nhỏ xíu cùng màu nhìn như một dãy ô vuông giống hệt nhau; người dùng
+ * phải đọc nhãn mới biết bấm vào đâu, mà đọc nhãn thì biểu tượng thành vô dụng.
+ *
+ * Màu chọn theo NGHĨA chứ không cho đẹp: việc phải làm màu xanh dương, cảnh
+ * huống nguy màu đỏ, chờ xử lý màu cam, đã xong màu xanh lá. Nhìn quen rồi thì
+ * chỉ liếc màu là biết tab nào.
+ *
+ * Không dùng ảnh: mỗi ảnh là một tệp phải tải, phải có bản @2x @3x, và trên máy
+ * yếu thì chúng hiện sau chữ khiến thanh tab giật một nhịp lúc mở app.
+ */
+function tabColor(tab: MobileTab): string {
+  return {
+    home: c.primary,
+    readiness: c.green,
+    inventory: c.primary,
+    "monthly-report": c.green,
+    missions: c.amber,
+    alerts: c.red,
+    report: c.amber,
   }[tab];
 }
 
