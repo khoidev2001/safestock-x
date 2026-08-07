@@ -28,7 +28,9 @@ test("tách tiến độ theo từng kho thay vì một con số gộp", () => {
 
 test("kho CHƯA xong xếp lên trước — đó mới là việc phải làm", () => {
   const ra = warehouseProgress([
-    yc("w1", "A xong", "PREPARED"),
+    // XONG nghĩa là ĐỘI ĐÃ KÝ NHẬN, nên phải dùng PICKED_UP. Trước đây dùng
+    // PREPARED vì lúc đó "kho xuất xong" bị coi là hết việc — không đúng.
+    yc("w1", "A xong", "PICKED_UP"),
     yc("w2", "Z chưa xong", "PENDING"),
   ]);
 
@@ -56,14 +58,50 @@ test("danh sách rỗng trả mảng rỗng", () => {
   assert.deepEqual(warehouseProgress([]), []);
 });
 
-test("kho đã có người ký nhận vẫn tính là XONG", () => {
-  // Lỗi đã suýt lọt: thêm trạng thái PICKED_UP nhưng vẫn chỉ đếm PREPARED, nên
-  // kho vừa soạn xong lại lùi về "chưa xong" ngay lúc người lấy hàng ký tên.
+test("kho XUẤT XONG nhưng đội chưa lấy thì CHƯA xong", () => {
+  // Đây là luật quan trọng nhất của khối này. Hàng ra sân kho mà chưa ai tới lấy
+  // thì việc chưa xong — người cần vẫn chưa có. Bật xong ở bước xuất là báo cho
+  // điều phối một tin mừng chưa xảy ra, và họ thôi không gọi nhắc nữa.
   const ra = warehouseProgress([
     { warehouseId: "k1", warehouse: { name: "Kho A" }, status: "PREPARED" },
-    { warehouseId: "k1", warehouse: { name: "Kho A" }, status: "PICKED_UP" },
+    { warehouseId: "k1", warehouse: { name: "Kho A" }, status: "PREPARED" },
   ]);
 
   assert.equal(ra[0].prepared, 2);
+  assert.equal(ra[0].pickedUp, 0);
+  assert.equal(ra[0].done, false);
+  assert.equal(ra[0].awaitingPickup, true);
+});
+
+test("đội ký nhận ĐỦ thì mới XONG", () => {
+  const ra = warehouseProgress([
+    { warehouseId: "k1", warehouse: { name: "Kho A" }, status: "PICKED_UP" },
+    { warehouseId: "k1", warehouse: { name: "Kho A" }, status: "PICKED_UP" },
+  ]);
+
+  assert.equal(ra[0].pickedUp, 2);
   assert.equal(ra[0].done, true);
+  assert.equal(ra[0].awaitingPickup, false);
+});
+
+test("đội mới lấy một phần thì vẫn CHƯA xong", () => {
+  const ra = warehouseProgress([
+    { warehouseId: "k1", warehouse: { name: "Kho A" }, status: "PICKED_UP" },
+    { warehouseId: "k1", warehouse: { name: "Kho A" }, status: "PREPARED" },
+  ]);
+
+  assert.equal(ra[0].done, false);
+  assert.equal(ra[0].awaitingPickup, true);
+});
+
+test("kho chưa xuất xong thì KHÔNG phải trạng thái chờ lấy", () => {
+  // Phân biệt "chưa xuất xong" với "xuất xong, chờ lấy" — hai việc phải gọi hai
+  // người khác nhau: một bên gọi kho, một bên gọi đội.
+  const ra = warehouseProgress([
+    { warehouseId: "k1", warehouse: { name: "Kho A" }, status: "ACCEPTED" },
+    { warehouseId: "k1", warehouse: { name: "Kho A" }, status: "PREPARED" },
+  ]);
+
+  assert.equal(ra[0].done, false);
+  assert.equal(ra[0].awaitingPickup, false);
 });

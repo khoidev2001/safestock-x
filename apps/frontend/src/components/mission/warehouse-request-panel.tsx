@@ -91,6 +91,9 @@ export function WarehouseRequestPanel({
   const preparedCount = requests.filter(
     (request) => request.status === "PREPARED" || request.status === "PICKED_UP",
   ).length;
+  // XONG là khi ĐỘI ĐÃ KÝ NHẬN, không phải khi kho vừa xuất. Hàng ra sân kho mà
+  // chưa ai tới lấy thì việc chưa xong — người cần vẫn chưa có.
+  const pickedUpCount = requests.filter((request) => request.status === "PICKED_UP").length;
   const tienDoTheoKho = warehouseProgress(requests);
 
   return (
@@ -99,7 +102,8 @@ export function WarehouseRequestPanel({
       title="Chuẩn bị vật tư theo SKU"
       subtitle={
         <>
-          {preparedCount}/{requests.length} vật tư đã xuất. Mỗi dòng chỉ được xuất một lần.
+          {preparedCount}/{requests.length} vật tư kho đã xuất · {pickedUpCount}/{requests.length}{" "}
+          đội đã ký nhận.
           {/* Con số gộp không nói được kho nào còn nợ. Điều phối đang chờ hàng chỉ
               cần đúng một thứ: gọi cho ai. */}
           {/* Mỗi kho một thẻ có MÀU: xanh lá là xong, cam là còn nợ. Màu đọc
@@ -118,19 +122,36 @@ export function WarehouseRequestPanel({
                         color: "var(--color-ready)",
                         background: "color-mix(in srgb, var(--color-ready) 10%, transparent)",
                       }
-                    : {
-                        borderColor: "var(--color-attention)",
-                        color: "var(--color-attention)",
-                        background: "color-mix(in srgb, var(--color-attention) 12%, transparent)",
-                      }
+                    : kho.awaitingPickup
+                      ? {
+                          borderColor: "var(--color-accent)",
+                          color: "var(--color-accent)",
+                          background: "color-mix(in srgb, var(--color-accent) 10%, transparent)",
+                        }
+                      : {
+                          borderColor: "var(--color-attention)",
+                          color: "var(--color-attention)",
+                          background: "color-mix(in srgb, var(--color-attention) 12%, transparent)",
+                        }
                 }
               >
-                <span aria-hidden="true">{kho.done ? "✓" : "•"}</span>
+                {/* Ba dấu cho ba mốc, để người phân biệt màu kém vẫn đọc được:
+                    • chưa xuất xong · → đã xuất, chờ đội lấy · ✓ đội đã ký nhận. */}
+                <span aria-hidden="true">{kho.done ? "✓" : kho.awaitingPickup ? "→" : "•"}</span>
                 {kho.name}
                 <span className="font-mono font-normal">
-                  {kho.prepared}/{kho.total}
+                  {/* Hiện số ĐỘI ĐÃ KÝ khi kho xuất xong — đó mới là việc còn lại. */}
+                  {kho.awaitingPickup || kho.done
+                    ? `${kho.pickedUp}/${kho.total} đã lấy`
+                    : `${kho.prepared}/${kho.total} đã xuất`}
                 </span>
-                <span className="sr-only">{kho.done ? " — đã xong" : " — chưa xong"}</span>
+                <span className="sr-only">
+                  {kho.done
+                    ? " — đội đã ký nhận đủ"
+                    : kho.awaitingPickup
+                      ? " — kho đã xuất, chờ đội tới lấy"
+                      : " — kho chưa xuất xong"}
+                </span>
               </span>
             ))}
           </span>
@@ -138,7 +159,11 @@ export function WarehouseRequestPanel({
       }
       badge={
         <span className="rounded-full border px-2.5 py-1 text-xs font-semibold">
-          {preparedCount === requests.length ? "Đã hoàn tất" : "Đang chuẩn bị"}
+          {pickedUpCount === requests.length
+            ? "Đã hoàn tất"
+            : preparedCount === requests.length
+              ? "Chờ đội tới lấy"
+              : "Đang chuẩn bị"}
         </span>
       }
     >
