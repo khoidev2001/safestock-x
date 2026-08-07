@@ -39,7 +39,15 @@ export const navItems: NavItem[] = [
     icon: "mission",
     tone: "orange",
     group: "Điều hành",
-    requiredPermission: Permission.MISSION_VIEW,
+    // MISSION_CREATE chứ không phải MISSION_VIEW.
+    //
+    // Trang này CHỈ có form khai tình huống, mà form đó chỉ hiện cho người lập
+    // được phương án. Ai xem được nhưng không lập được thì bấm vào chỉ thấy một
+    // trang trắng có mỗi cái tiêu đề — tệ hơn hẳn việc không có tab.
+    //
+    // Kho vẫn xem được nhiệm vụ của mình ở tab "Nhiệm vụ" ngay bên dưới, nên
+    // giấu tab này không lấy đi thông tin nào của họ.
+    requiredPermission: Permission.MISSION_CREATE,
     title: "Điều phối cứu hộ",
     subtitle: "Ghi nhận tình huống và chỉ chỗ xảy ra sự việc để hệ thống tính nhu cầu.",
   },

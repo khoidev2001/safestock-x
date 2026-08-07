@@ -11,6 +11,12 @@ Nền tảng đánh giá mức sẵn sàng kho và điều phối vật tư cứ
   điểm trước/sau, finding đã khắc phục và release gate còn chờ.
 - [Bàn giao chênh lệch so với GitHub](docs/BAN-GIAO-CHENH-LECH-SO-VOI-GITHUB.md):
   danh sách chức năng/file/schema để dev khác tiếp nhận.
+- ⭐ [Hướng dẫn dùng thử và cài đặt](HUONG-DAN-DUNG-THU-VA-CAI-DAT.md):
+  đường dẫn demo, tài khoản dùng thử, hướng dẫn sử dụng ba ứng dụng và các bước
+  cài đặt đầy đủ trên máy mới — đọc file này trước.
+- ⭐ [Toàn bộ chức năng và luồng nghiệp vụ](docs/TOAN-BO-CHUC-NANG-VA-LUONG-NGHIEP-VU.md):
+  tài liệu tham chiếu đầy đủ — mọi chức năng, thao tác, trạng thái và API, đọc trực
+  tiếp từ mã nguồn.
 - ⭐ [Hướng dẫn test toàn diện (cho giám khảo)](docs/HUONG-DAN-TEST-TOAN-DIEN.md):
   một file tất-tần-tật từ clone → chạy → test mọi thành phần (backend, web, AI, mobile,
   desktop simulator, email cảnh báo, test tự động).
