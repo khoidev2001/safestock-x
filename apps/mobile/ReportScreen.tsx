@@ -183,11 +183,20 @@ export function ReportScreen({
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Báo cáo tình huống</Text>
-          <Text style={styles.subtitle}>{user.fullName ?? user.email} · Trưởng thôn</Text>
+        {/* Co lại được để không đè lên nút bên phải — xem ghi chú ở App.tsx. */}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text numberOfLines={1} style={styles.title}>
+            Báo cáo tình huống
+          </Text>
+          <Text numberOfLines={1} style={styles.subtitle}>
+            {user.fullName ?? user.email} · Trưởng thôn
+          </Text>
         </View>
-        <Pressable onPress={onLogout} accessibilityRole="button">
+        <Pressable
+          accessibilityRole="button"
+          onPress={onLogout}
+          style={{ flexShrink: 0, marginLeft: 12 }}
+        >
           <Text style={[styles.pillText, { color: c.amber }]}>Đăng xuất</Text>
         </Pressable>
       </View>

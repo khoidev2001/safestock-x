@@ -507,13 +507,21 @@ function NotificationsScreen({
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Thông báo điều phối</Text>
-          <Text style={styles.subtitle}>
+        {/* `flex: 1` + `minWidth: 0` để khối chữ CO LẠI được.
+            Thiếu hai thứ này thì cột trái giãn theo dòng chữ dài nhất và đè lên
+            nút Đăng xuất bên phải — tên vai "Lực lượng hiện trường" dài gấp đôi
+            các vai khác nên chỉ tài khoản đó mới lộ lỗi, dễ lọt qua lúc thử. */}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text numberOfLines={1} style={styles.title}>
+            Thông báo điều phối
+          </Text>
+          {/* Cắt ở một dòng: tên người kèm vai có thể rất dài, mà đây chỉ là dòng
+              phụ — xuống dòng thì nó đẩy cả thanh tiêu đề cao lên. */}
+          <Text numberOfLines={1} style={styles.subtitle}>
             {user.fullName ?? user.email} · {mobileRoleLabel(user.role)}
           </Text>
         </View>
-        <View style={{ alignItems: "flex-end", gap: 8 }}>
+        <View style={{ alignItems: "flex-end", flexShrink: 0, gap: 8, marginLeft: 12 }}>
           <View style={styles.pill}>
             <View style={[styles.dot, { backgroundColor: connected ? c.green : c.muted }]} />
             <Text style={styles.pillText}>{connected ? "Đã kết nối" : "Mất kết nối"}</Text>

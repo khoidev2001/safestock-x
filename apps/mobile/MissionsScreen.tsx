@@ -136,9 +136,12 @@ export function MissionsScreen({
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Lệnh điều phối</Text>
-          <Text style={styles.subtitle}>
+        {/* Co lại được để không đè lên nút bên phải — xem ghi chú ở App.tsx. */}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text numberOfLines={1} style={styles.title}>
+            Lệnh điều phối
+          </Text>
+          <Text numberOfLines={1} style={styles.subtitle}>
             {loading
               ? "Đang tải…"
               : `${missions.filter((m) => isMissionOpen(m.status)).length} lệnh đang mở`}
