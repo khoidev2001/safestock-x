@@ -40,7 +40,7 @@ Ghi từ nhận xét trực tiếp khi xem demo. Đánh dấu `[x]` khi xong và
       số lượng, **dropdown xã lân cận**, ghi chú. Bấm gửi → xã được chọn nhận
       **thông báo đẩy kiểu Zalo** có sẵn hai nút **Từ chối** / **Chấp nhận**.
       Từ đó trở đi dùng luồng đã có.
-- [ ] **C3. Đội hiện trường xác nhận lấy hàng, thiếu gì ghi lại** — mới làm ở màn
+- [x] **C3. Đội hiện trường xác nhận lấy hàng, thiếu gì ghi lại** — mới làm ở màn
       hình web (tab Nhiệm vụ), **chưa có ở app đội hiện trường**.
 
 ## Nhóm D — đụng cơ sở dữ liệu

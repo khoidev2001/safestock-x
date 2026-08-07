@@ -4,6 +4,7 @@ import {
   acceptWarehouseMaterialRequest,
   fetchMission,
   fetchWarehouseMaterialRequests,
+  confirmWarehousePickup,
   prepareWarehouseMaterialRequest,
   reportWarehouseMaterialDiscrepancy,
   submitFieldUpdate,
@@ -55,6 +56,7 @@ export function MissionDetailScreen({
   const [fieldRecording, setFieldRecording] = useState(false);
   const [warehouseActionId, setWarehouseActionId] = useState<string | null>(null);
   const [warehouseNotes, setWarehouseNotes] = useState<Record<string, string>>({});
+  const [soThucLay, setSoThucLay] = useState<Record<string, string>>({});
   const recordingRef = useRef<AudioRecording | null>(null);
 
   useEffect(
@@ -161,7 +163,7 @@ export function MissionDetailScreen({
   }
 
   async function updateWarehouseRequest(
-    kind: "accept" | "prepare" | "discrepancy",
+    kind: "accept" | "prepare" | "discrepancy" | "pickup",
     request: WarehouseMaterialRequest,
   ) {
     setWarehouseActionId(request.id);
@@ -171,7 +173,22 @@ export function MissionDetailScreen({
       if (kind === "discrepancy" && (!note || note.length < 3)) {
         throw new Error("Cần ghi rõ chênh lệch (ít nhất 3 ký tự).");
       }
-      if (kind === "accept") {
+      if (kind === "pickup") {
+        const raw = (soThucLay[request.id] ?? "").trim();
+        // Để trống nghĩa là lấy đủ. Lấy đủ mới là trường hợp thường gặp; bắt gõ
+        // lại đúng con số đã hiện sẵn chỉ tạo thêm một chỗ để gõ nhầm.
+        const soLuong = raw === "" ? request.preparedQuantity : Number(raw);
+        if (!Number.isInteger(soLuong) || soLuong < 0) {
+          throw new Error("Số thực lấy phải là số nguyên không âm.");
+        }
+        if (soLuong < request.preparedQuantity && !note) {
+          throw new Error(
+            `Thiếu ${request.preparedQuantity - soLuong} so với số đã soạn — phải ghi rõ lý do.`,
+          );
+        }
+        await confirmWarehousePickup(token, request.id, soLuong, note || undefined);
+        setSoThucLay((current) => ({ ...current, [request.id]: "" }));
+      } else if (kind === "accept") {
         await acceptWarehouseMaterialRequest(token, request.id, note || undefined);
       } else if (kind === "prepare") {
         await prepareWarehouseMaterialRequest(token, request.id);
@@ -253,6 +270,10 @@ export function MissionDetailScreen({
                 setWarehouseNotes((current) => ({ ...current, [requestId]: note }))
               }
               onAction={(kind, request) => void updateWarehouseRequest(kind, request)}
+              onSoThucLayChange={(requestId, value) =>
+                setSoThucLay((current) => ({ ...current, [requestId]: value }))
+              }
+              soThucLay={soThucLay}
               offline={Boolean(cacheStoredAt)}
             />
           ) : null}
@@ -304,16 +325,27 @@ function WarehouseMaterialRequestPanel({
   busyRequestId,
   onNoteChange,
   onAction,
+  onSoThucLayChange,
+  soThucLay,
   offline,
 }: {
   requests: WarehouseMaterialRequest[];
   notes: Record<string, string>;
   busyRequestId: string | null;
   onNoteChange: (requestId: string, note: string) => void;
-  onAction: (kind: "accept" | "prepare" | "discrepancy", request: WarehouseMaterialRequest) => void;
+  onAction: (
+    kind: "accept" | "prepare" | "discrepancy" | "pickup",
+    request: WarehouseMaterialRequest,
+  ) => void;
+  soThucLay: Record<string, string>;
+  onSoThucLayChange: (requestId: string, value: string) => void;
   offline: boolean;
 }) {
-  const prepared = requests.filter((request) => request.status === "PREPARED").length;
+  // Đếm cả khoản đã ký nhận: hàng đã có người mang đi thì đương nhiên kho đã
+  // soạn xong. Đếm thiếu là kho vừa làm xong lại lùi về "chưa xong".
+  const prepared = requests.filter(
+    (request) => request.status === "PREPARED" || request.status === "PICKED_UP",
+  ).length;
   return (
     <View style={{ marginTop: 18 }}>
       <Text style={styles.sectionTitle}>
@@ -330,7 +362,12 @@ function WarehouseMaterialRequestPanel({
             style={{
               backgroundColor: c.surface,
               borderWidth: 1,
-              borderColor: request.status === "PREPARED" ? c.green : c.border,
+              borderColor:
+                request.status === "PICKED_UP"
+                  ? c.green
+                  : request.status === "PREPARED"
+                    ? c.amber
+                    : c.border,
               borderRadius: 12,
               padding: 14,
               marginBottom: 10,
@@ -345,14 +382,21 @@ function WarehouseMaterialRequestPanel({
               </View>
               <View style={{ alignItems: "flex-end" }}>
                 <Text style={{ color: c.text, fontSize: 15, fontWeight: "800" }}>
-                  {request.status === "PREPARED"
-                    ? request.preparedQuantity
-                    : request.requestedQuantity}{" "}
+                  {request.status === "PICKED_UP"
+                    ? (request.pickedUpQuantity ?? 0)
+                    : request.status === "PREPARED"
+                      ? request.preparedQuantity
+                      : request.requestedQuantity}{" "}
                   {request.unit}
                 </Text>
                 <Text
                   style={{
-                    color: request.status === "PREPARED" ? c.green : c.amber,
+                    color:
+                      request.status === "PICKED_UP"
+                        ? c.green
+                        : request.status === "PREPARED"
+                          ? c.amber
+                          : c.muted,
                     fontSize: 11,
                     fontWeight: "800",
                     marginTop: 3,
@@ -374,7 +418,66 @@ function WarehouseMaterialRequestPanel({
               </Text>
             ) : null}
 
-            {request.status !== "PREPARED" && !offline ? (
+            {request.status === "PICKED_UP" ? (
+              <Text
+                style={{
+                  color:
+                    (request.pickedUpQuantity ?? 0) < request.preparedQuantity ? c.amber : c.green,
+                  fontSize: 12,
+                  lineHeight: 18,
+                  marginTop: 8,
+                  fontWeight: "700",
+                }}
+              >
+                Đã ký nhận {request.pickedUpQuantity ?? 0}/{request.preparedQuantity} {request.unit}
+                {(request.pickedUpQuantity ?? 0) < request.preparedQuantity
+                  ? ` — thiếu ${request.preparedQuantity - (request.pickedUpQuantity ?? 0)}. Lý do: ${request.pickupNote ?? "không ghi"}`
+                  : " (đủ)"}
+              </Text>
+            ) : null}
+
+            {/* KÝ NHẬN LẤY HÀNG — màn hình của đội hiện trường.
+                Họ làm việc trên điện thoại chứ không ngồi máy tính, nên thiếu ở
+                đây là thiếu đúng chỗ người ta dùng. Để trống ô số nghĩa là lấy
+                đủ: lấy đủ mới là trường hợp thường gặp, bắt gõ lại đúng con số
+                đã hiện sẵn chỉ tạo thêm một chỗ để gõ nhầm. */}
+            {request.status === "PREPARED" && !offline ? (
+              <View style={{ marginTop: 10 }}>
+                <Text style={{ color: c.text, fontSize: 12, fontWeight: "800", marginBottom: 6 }}>
+                  Ký nhận đã lấy hàng
+                </Text>
+                <TextInput
+                  accessibilityLabel={`Số thực lấy của ${request.itemName}`}
+                  keyboardType="number-pad"
+                  onChangeText={(text) => onSoThucLayChange(request.id, text)}
+                  placeholder={`Số thực lấy (để trống = đủ ${request.preparedQuantity})`}
+                  placeholderTextColor={c.muted}
+                  style={[styles.reasonInput, { marginBottom: 8 }]}
+                  value={soThucLay[request.id] ?? ""}
+                />
+                <TextInput
+                  accessibilityLabel={`Lý do thiếu của ${request.itemName}`}
+                  maxLength={1_000}
+                  onChangeText={(text) => onNoteChange(request.id, text)}
+                  placeholder="Thiếu thì ghi rõ vì sao (kho hết, xe không chở hết…)"
+                  placeholderTextColor={c.muted}
+                  style={[styles.reasonInput, { marginBottom: 8 }]}
+                  value={notes[request.id] ?? ""}
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={busy}
+                  onPress={() => onAction("pickup", request)}
+                  style={[styles.actionButton, { opacity: busy ? 0.6 : 1 }]}
+                >
+                  <Text style={styles.actionButtonText}>
+                    {busy ? "Đang gửi…" : "Ký nhận đã lấy hàng"}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
+
+            {request.status !== "PREPARED" && request.status !== "PICKED_UP" && !offline ? (
               <>
                 <TextInput
                   value={notes[request.id] ?? ""}
@@ -433,7 +536,10 @@ function WarehouseMaterialRequestPanel({
 function warehouseRequestStatus(status: WarehouseMaterialRequest["status"]): string {
   if (status === "PENDING") return "CHỜ TIẾP NHẬN";
   if (status === "ACCEPTED") return "ĐÃ TIẾP NHẬN";
-  return "ĐÃ XUẤT";
+  // "Đã soạn" và "đã có người cầm đi" là hai việc khác nhau, và khoảng giữa hai
+  // việc ấy chính là nơi hàng bị thiếu mà không ai ghi lại.
+  if (status === "PREPARED") return "CHỜ NGƯỜI LẤY";
+  return "ĐÃ KÝ NHẬN";
 }
 
 /** Banner đầu màn: mức nguy hiểm + loại thiên tai + số người gặp nạn (thứ bậc rõ). */

@@ -410,8 +410,12 @@ export interface WarehouseMaterialRequest {
   unit: string;
   requestedQuantity: number;
   preparedQuantity: number;
-  status: "PENDING" | "ACCEPTED" | "PREPARED";
+  status: "PENDING" | "ACCEPTED" | "PREPARED" | "PICKED_UP";
   warehouseNote: string | null;
+  /** Rỗng nghĩa là chưa ai ký nhận — khác hẳn với ký nhận 0. */
+  pickedUpQuantity: number | null;
+  pickupNote: string | null;
+  pickedUpAt: string | null;
   adminNote: string | null;
   acceptedAt: string | null;
   preparedAt: string | null;
@@ -485,10 +489,25 @@ export async function reportWarehouseMaterialDiscrepancy(
   return mutateWarehouseMaterialRequest(token, requestId, "discrepancy", { note });
 }
 
+/**
+ * Người đi lấy ký nhận: cầm đi bao nhiêu, thiếu thì vì sao.
+ *
+ * Đây là màn hình của ĐỘI HIỆN TRƯỜNG, và họ làm việc trên điện thoại chứ không
+ * ngồi máy tính. Có ở web mà thiếu ở app là có cho người không dùng tới.
+ */
+export async function confirmWarehousePickup(
+  token: string,
+  requestId: string,
+  receivedQuantity: number,
+  note?: string,
+): Promise<WarehouseMaterialRequest> {
+  return mutateWarehouseMaterialRequest(token, requestId, "pickup", { receivedQuantity, note });
+}
+
 async function mutateWarehouseMaterialRequest(
   token: string,
   requestId: string,
-  action: "accept" | "prepare" | "discrepancy",
+  action: "accept" | "prepare" | "discrepancy" | "pickup",
   body?: Record<string, unknown>,
 ): Promise<WarehouseMaterialRequest> {
   const res = await request(
