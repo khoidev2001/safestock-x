@@ -55,3 +55,15 @@ test("kho thiếu tên vẫn hiện được, không ra chuỗi rỗng", () => {
 test("danh sách rỗng trả mảng rỗng", () => {
   assert.deepEqual(warehouseProgress([]), []);
 });
+
+test("kho đã có người ký nhận vẫn tính là XONG", () => {
+  // Lỗi đã suýt lọt: thêm trạng thái PICKED_UP nhưng vẫn chỉ đếm PREPARED, nên
+  // kho vừa soạn xong lại lùi về "chưa xong" ngay lúc người lấy hàng ký tên.
+  const ra = warehouseProgress([
+    { warehouseId: "k1", warehouse: { name: "Kho A" }, status: "PREPARED" },
+    { warehouseId: "k1", warehouse: { name: "Kho A" }, status: "PICKED_UP" },
+  ]);
+
+  assert.equal(ra[0].prepared, 2);
+  assert.equal(ra[0].done, true);
+});

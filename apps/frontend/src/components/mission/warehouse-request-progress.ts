@@ -36,7 +36,10 @@ export function warehouseProgress(requests: RequestLike[]): WarehouseProgress[] 
       done: false,
     };
     current.total += 1;
-    if (request.status === "PREPARED") current.prepared += 1;
+    // PICKED_UP cũng tính là ĐÃ XUẤT. Hàng đã có người ký nhận mang đi thì
+    // đương nhiên kho đã soạn xong; đếm thiếu nó là kho vừa làm xong bỗng lùi về
+    // "chưa xong" ngay khi người lấy hàng ký tên.
+    if (request.status === "PREPARED" || request.status === "PICKED_UP") current.prepared += 1;
     theoKho.set(key, current);
   }
 

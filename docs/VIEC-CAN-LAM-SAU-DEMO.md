@@ -9,11 +9,11 @@ Ghi từ nhận xét trực tiếp khi xem demo. Đánh dấu `[x]` khi xong và
 - [x] **A3. Badge trên tab**: đổi thành **hình tròn** (đang không tròn).
 - [x] **A4. Navbar mobile**: đổi chữ "Cảnh báo" thành **"Thông báo"** — kiểm ra
       nhãn ĐÃ đúng sẵn trong `apps/mobile/App.tsx`, không phải sửa gì.
-- [ ] **A5. Chiều cao hộp nhiệm vụ**: chỉnh lại.
+- [x] **A5. Chiều cao hộp nhiệm vụ**: buộc theo chiều cao cửa sổ thay vì 380px cứng.
 
 ## Nhóm B — sửa giao diện, cần đọc lại bố cục
 
-- [ ] **B1. Kho nào đã chuẩn bị**: đang chỉ hiện `1/5`, không nói kho nào. Phải hiện
+- [x] **B1. Kho nào đã chuẩn bị**: đang chỉ hiện `1/5`, không nói kho nào. Phải hiện
       từng kho: **xanh lá = xong**, **cam = chưa xong**.
 - [ ] **B2. Tồn kho toàn xã — đổi cách liệt kê**: hiện đang gom theo VẬT TƯ. Phải
       gom **theo THÔN**: mỗi thôn một khối, bên trong liệt kê thôn đó có gì.

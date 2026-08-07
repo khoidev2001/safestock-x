@@ -178,7 +178,16 @@ export function MissionInbox({
             </p>
           </div>
         ) : (
-          <div className="grid max-h-[380px] gap-3 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
+          /* Cao theo MÀN HÌNH chứ không phải một con số cứng.
+
+             380px cố định là chiều cao chọn cho một màn hình tưởng tượng: trên
+             màn to nó chừa khoảng trắng lớn phía dưới trong khi danh sách vẫn
+             phải cuộn, còn trên màn nhỏ thì nó ăn gần hết chỗ. Buộc theo chiều
+             cao cửa sổ thì cùng một lượng nhiệm vụ hiện được nhiều hơn ở mọi cỡ.
+
+             Vẫn giữ trần: không có trần thì danh sách dài đẩy phần chi tiết bên
+             dưới ra khỏi màn hình, và người trực mất chỗ thao tác. */
+          <div className="grid max-h-[min(62vh,720px)] min-h-[220px] gap-3 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
             {visibleMissions.map((mission) => {
               const selected = mission.id === selectedMissionId;
               const needsAction = missionNeedsAction(mission, role, warehouseId);

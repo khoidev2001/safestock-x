@@ -86,7 +86,11 @@ export function WarehouseRequestPanel({
     role === "WAREHOUSE" && assignedWarehouseId
       ? requests.filter((request) => request.warehouseId === assignedWarehouseId)
       : requests;
-  const preparedCount = requests.filter((request) => request.status === "PREPARED").length;
+  // Đã xuất gồm cả khoản đã có người ký nhận mang đi — không thì kho vừa làm
+  // xong lại lùi về "chưa xong" ngay lúc người lấy hàng ký tên.
+  const preparedCount = requests.filter(
+    (request) => request.status === "PREPARED" || request.status === "PICKED_UP",
+  ).length;
   const tienDoTheoKho = warehouseProgress(requests);
 
   return (
@@ -98,13 +102,35 @@ export function WarehouseRequestPanel({
           {preparedCount}/{requests.length} vật tư đã xuất. Mỗi dòng chỉ được xuất một lần.
           {/* Con số gộp không nói được kho nào còn nợ. Điều phối đang chờ hàng chỉ
               cần đúng một thứ: gọi cho ai. */}
-          <span className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+          {/* Mỗi kho một thẻ có MÀU: xanh lá là xong, cam là còn nợ. Màu đọc
+              được từ xa và trong một cái liếc, còn con số thì phải dừng lại đọc
+              — mà lúc đang điều phối thì không ai dừng lại. Vẫn giữ dấu ✓ / •
+              bên cạnh cho người phân biệt màu kém. */}
+          <span className="mt-2 flex flex-wrap gap-1.5">
             {tienDoTheoKho.map((kho) => (
               <span
+                className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold"
                 key={kho.warehouseId}
-                className={kho.done ? "text-[var(--color-success)]" : "font-semibold"}
+                style={
+                  kho.done
+                    ? {
+                        borderColor: "var(--color-ready)",
+                        color: "var(--color-ready)",
+                        background: "color-mix(in srgb, var(--color-ready) 10%, transparent)",
+                      }
+                    : {
+                        borderColor: "var(--color-attention)",
+                        color: "var(--color-attention)",
+                        background: "color-mix(in srgb, var(--color-attention) 12%, transparent)",
+                      }
+                }
               >
-                {kho.done ? "✓" : "•"} {kho.name} {kho.prepared}/{kho.total}
+                <span aria-hidden="true">{kho.done ? "✓" : "•"}</span>
+                {kho.name}
+                <span className="font-mono font-normal">
+                  {kho.prepared}/{kho.total}
+                </span>
+                <span className="sr-only">{kho.done ? " — đã xong" : " — chưa xong"}</span>
               </span>
             ))}
           </span>
