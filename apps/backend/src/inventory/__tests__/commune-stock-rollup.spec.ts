@@ -1,4 +1,8 @@
-import { communeStockRollup, type BatchForRollup } from "../commune-stock-rollup";
+import {
+  communeStockByWarehouse,
+  communeStockRollup,
+  type BatchForRollup,
+} from "../commune-stock-rollup";
 
 const lo = (o: Partial<BatchForRollup> = {}): BatchForRollup => ({
   warehouseId: "kho-tong",
@@ -110,5 +114,77 @@ describe("tồn kho toàn xã gom theo mã vật tư", () => {
 
   it("không có lô nào thì trả mảng rỗng", () => {
     expect(communeStockRollup([])).toEqual([]);
+  });
+});
+
+describe("tồn kho toàn xã gom theo KHO", () => {
+  it("mỗi kho một khối, bên trong là những gì kho đó đang giữ", () => {
+    const ra = communeStockByWarehouse([
+      lo({ quantity: 100 }),
+      lo({ itemSku: "LIFE-01", itemName: "Áo phao", quantity: 30 }),
+      lo({
+        warehouseId: "thon-a",
+        warehouseName: "Kho thôn A",
+        warehouseKind: "HAMLET",
+        quantity: 40,
+      }),
+    ]);
+
+    expect(ra).toHaveLength(2);
+    expect(ra[0].warehouseName).toBe("Kho cứu trợ trung tâm");
+    expect(ra[0].items).toHaveLength(2);
+    expect(ra[0].totalUnits).toBe(130);
+    expect(ra[0].itemCount).toBe(2);
+    expect(ra[1].items).toHaveLength(1);
+  });
+
+  it("kho tổng luôn đứng đầu, các thôn xếp theo tên", () => {
+    const ra = communeStockByWarehouse([
+      lo({ warehouseId: "thon-z", warehouseName: "Kho thôn Xuân", warehouseKind: "HAMLET" }),
+      lo({ warehouseId: "thon-a", warehouseName: "Kho thôn Bình", warehouseKind: "HAMLET" }),
+      lo({ quantity: 5 }),
+    ]);
+
+    expect(ra.map((k) => k.warehouseName)).toEqual([
+      "Kho cứu trợ trung tâm",
+      "Kho thôn Bình",
+      "Kho thôn Xuân",
+    ]);
+  });
+
+  it("trong một kho, vật tư nhiều nhất lên trước", () => {
+    const ra = communeStockByWarehouse([
+      lo({ itemSku: "A", itemName: "Ít", quantity: 5 }),
+      lo({ itemSku: "B", itemName: "Nhiều", quantity: 500 }),
+    ]);
+
+    expect(ra[0].items.map((m) => m.itemName)).toEqual(["Nhiều", "Ít"]);
+  });
+
+  it("TRỪ phần đang cho mượn", () => {
+    const ra = communeStockByWarehouse([lo({ quantity: 100, onLoan: 40 })]);
+
+    expect(ra[0].totalUnits).toBe(60);
+    expect(ra[0].items[0].quantity).toBe(60);
+  });
+
+  it("kho đã cho mượn hết vẫn hiện, nhưng trống — 'thôn này trống' là một thông tin", () => {
+    const ra = communeStockByWarehouse([lo({ quantity: 50, onLoan: 50 })]);
+
+    expect(ra).toHaveLength(1);
+    expect(ra[0].totalUnits).toBe(0);
+    expect(ra[0].items).toEqual([]);
+    expect(ra[0].itemCount).toBe(0);
+  });
+
+  it("nhiều lô cùng mã trong một kho thì gộp", () => {
+    const ra = communeStockByWarehouse([lo({ quantity: 60 }), lo({ quantity: 40 })]);
+
+    expect(ra[0].items).toHaveLength(1);
+    expect(ra[0].items[0].quantity).toBe(100);
+  });
+
+  it("không có lô nào thì trả mảng rỗng", () => {
+    expect(communeStockByWarehouse([])).toEqual([]);
   });
 });

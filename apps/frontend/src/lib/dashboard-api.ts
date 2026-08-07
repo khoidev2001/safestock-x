@@ -565,7 +565,30 @@ export interface CommuneStockRow {
   byWarehouse: CommuneStockShare[];
 }
 
+export interface WarehouseStockItem {
+  itemSku: string;
+  itemName: string;
+  unit: string;
+  quantity: number;
+}
+
+export interface WarehouseStock {
+  warehouseId: string;
+  warehouseName: string;
+  kind: "CENTRAL" | "HAMLET";
+  totalUnits: number;
+  itemCount: number;
+  items: WarehouseStockItem[];
+}
+
+export interface CommuneStock {
+  /** Gom theo mã vật tư — trả lời "mặt hàng này cả xã còn bao nhiêu". */
+  byItem: CommuneStockRow[];
+  /** Gom theo kho — trả lời "thôn này đang có những gì". */
+  byWarehouse: WarehouseStock[];
+}
+
 /** Tồn kho toàn xã: kho tổng cộng với hàng đang nằm ở các kho thôn. */
-export function getCommuneStock(warehouseId: string): Promise<CommuneStockRow[]> {
-  return apiFetch<CommuneStockRow[]>(`/api/inventory/warehouses/${warehouseId}/commune-stock`);
+export function getCommuneStock(warehouseId: string): Promise<CommuneStock> {
+  return apiFetch<CommuneStock>(`/api/inventory/warehouses/${warehouseId}/commune-stock`);
 }

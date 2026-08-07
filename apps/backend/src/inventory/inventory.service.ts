@@ -11,7 +11,7 @@ import { TransactionType } from "@safestock/shared-types";
 import { PrismaService } from "../prisma/prisma.service";
 import { ReadinessService } from "../readiness/readiness.service";
 import { lockLoanBatch, lockLoanTableForApproval } from "../loan/loan-table-lock";
-import { communeStockRollup } from "./commune-stock-rollup";
+import { communeStockByWarehouse, communeStockRollup } from "./commune-stock-rollup";
 import { sumOutstanding } from "./loan-math";
 import { transferInventoryInTx } from "./inventory-transfer";
 import { mutationFingerprint, withMutationIdempotency } from "./mutation-idempotency";
@@ -242,7 +242,7 @@ export class InventoryService {
       },
     });
 
-    return communeStockRollup(
+    const duLieu =
       // Lô chưa xếp lên kệ thì chưa thuộc kho nào — bỏ ra thay vì đoán. Điều kiện
       // truy vấn đã lọc rồi, nhưng kiểu dữ liệu vẫn cho phép rỗng và một ngày nào
       // đó điều kiện ấy sẽ đổi.
@@ -261,8 +261,18 @@ export class InventoryService {
             onLoan: sumOutstanding(b.loans),
           },
         ];
-      }),
-    );
+      });
+
+    // Trả CẢ HAI cách gom từ cùng một lần đọc dữ liệu.
+    //
+    // Hai câu hỏi khác nhau trên cùng một nguồn: "mặt hàng này cả xã còn bao
+    // nhiêu" và "thôn này đang có những gì". Tách thành hai đường gọi là đọc lô
+    // hàng hai lần cho cùng một màn hình, và mở ra khả năng hai con số lệch nhau
+    // khi kho thay đổi giữa hai lượt gọi.
+    return {
+      byItem: communeStockRollup(duLieu),
+      byWarehouse: communeStockByWarehouse(duLieu),
+    };
   }
 
   async listBatchesPage(
