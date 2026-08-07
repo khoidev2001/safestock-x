@@ -152,13 +152,28 @@ function inlineRuns(text, base = {}) {
   return out.join("");
 }
 
-function para(content, { style, align, indent, hanging, spaceBefore, spaceAfter, shade, pageBreak, keepNext, border } = {}) {
+function para(
+  content,
+  {
+    style,
+    align,
+    indent,
+    hanging,
+    spaceBefore,
+    spaceAfter,
+    shade,
+    pageBreak,
+    keepNext,
+    border,
+  } = {},
+) {
   const props = [];
   if (pageBreak) props.push("<w:pageBreakBefore/>");
   if (style) props.push(`<w:pStyle w:val="${style}"/>`);
   if (keepNext) props.push("<w:keepNext/>");
   if (shade) props.push(`<w:shd w:val="clear" w:fill="${shade}"/>`);
-  if (border) props.push(`<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="C8C8C8"/></w:pBdr>`);
+  if (border)
+    props.push(`<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="C8C8C8"/></w:pBdr>`);
   if (indent !== undefined || hanging !== undefined) {
     props.push(`<w:ind w:left="${indent ?? 0}"${hanging ? ` w:hanging="${hanging}"` : ""}/>`);
   }
@@ -195,7 +210,9 @@ function table(rows, { widths, headerShade = "DFE7EC" }) {
           );
         })
         .join("");
-      const trPr = isHeader ? "<w:trPr><w:tblHeader/><w:cantSplit/></w:trPr>" : "<w:trPr><w:cantSplit/></w:trPr>";
+      const trPr = isHeader
+        ? "<w:trPr><w:tblHeader/><w:cantSplit/></w:trPr>"
+        : "<w:trPr><w:cantSplit/></w:trPr>";
       return `<w:tr>${trPr}${cells}</w:tr>`;
     })
     .join("");
@@ -273,14 +290,23 @@ if (coverTitle) {
   );
   if (coverSubtitle) {
     body.push(
-      para(run(coverSubtitle, { size: 28, color: "3A4A55" }), { align: "center", spaceAfter: 1400 }),
+      para(run(coverSubtitle, { size: 28, color: "3A4A55" }), {
+        align: "center",
+        spaceAfter: 1400,
+      }),
     );
   }
   body.push(
-    para(run("Hệ thống Ứng phó nhanh — quản lý kho và điều phối vật tư cứu hộ", { size: 23, color: "5A6B76" }), {
-      align: "center",
-      spaceAfter: 80,
-    }),
+    para(
+      run("Hệ thống Ứng phó nhanh — quản lý kho và điều phối vật tư cứu hộ", {
+        size: 23,
+        color: "5A6B76",
+      }),
+      {
+        align: "center",
+        spaceAfter: 80,
+      },
+    ),
     para(run("Xã Đồng Xuân · Cập nhật 07/08/2026", { size: 23, color: "5A6B76" }), {
       align: "center",
     }),

@@ -37,3 +37,7 @@ memory/
 # Skill AI cài cá nhân (mỗi người tự `npx skills add`) — không commit
 .agents/
 .claude/
+
+# Tài liệu nội bộ — kịch bản demo, ghi chú bàn giao, việc còn làm.
+# Không thuộc phần mềm, và không cần cho người đọc mã.
+docs/
