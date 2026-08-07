@@ -2,60 +2,71 @@
 
 Tài liệu duy nhất cho việc trình diễn: **vừa đọc vừa bấm**, dùng được cả khi quay video lẫn khi demo trực tiếp.
 
-**Toàn bộ: 28 phút.** Bảy phần, đi theo đúng thứ tự một ngày làm việc ở kho xã — sáng mở máy xem tình hình, có tin báo từ thôn, lập phương án, kho xuất hàng, đội đi lấy, thiếu thì mượn xã bên, cuối kỳ đối chiếu. Đi theo **luồng công việc** chứ không theo danh sách menu, để người xem hiểu *vì sao* có chức năng đó chứ không chỉ thấy nó tồn tại.
+**Quay LÀM HAI LƯỢT, ghép khi dựng.** Máy chỉ có một card 6 GB; bật máy ảo Android là trợ lý chậm hẳn đúng lúc quay cảnh đắt nhất. Nên bỏ máy ảo, dùng **một điện thoại thật đóng hai vai** ở hai lượt quay khác nhau.
 
-Mỗi thao tác có ba cột:
+| | Quay gì | Vai của điện thoại | Thời lượng |
+|---|---|---|---|
+| **LƯỢT 1** | Toàn bộ luồng — web + điện thoại báo tin | Trưởng thôn Long Châu | ~22 phút |
+| **LƯỢT 2** | Chỉ cảnh đội hiện trường ký nhận | Đội hiện trường | ~3 phút |
 
-| Cột | Nghĩa |
-|---|---|
-| **BẤM** | thao tác, ghi đúng tên nút trên màn hình |
-| **ĐỌC** | lời thuyết minh — đọc thẳng thành tiếng, hoặc dùng làm phụ đề |
-| — | phần in nghiêng dưới bảng là câu nói dài hơn, dùng để lấp lúc chờ máy |
+Khi dựng, chèn lượt 2 vào đúng chỗ đã đánh dấu **⟨CHÈN LƯỢT 2⟩** trong lượt 1.
 
-> Chữ trong cột **ĐỌC** đã viết sẵn thành câu nói được, không phải mô tả kỹ thuật. Cứ đọc y nguyên là xong, không phải tự dựng lời giữa lúc đang bấm.
-
-Ba mức thời lượng, chọn theo thời gian được cho:
-
-| Có bao nhiêu phút | Chạy phần |
-|---|---|
-| **28 phút** | Toàn bộ, phần 1 → 7 |
-| **15 phút** | Phần 2 → 3 → 5 → 6 (bỏ 1, 4, 7) |
-| **8 phút** | Mục 2.1 → 3.2 → 5.2 → 6.1 → 6.8 |
+Vì sao chia thế: cảnh ký nhận **không gọi AI**, nên quay riêng lúc nào cũng được. Mọi cảnh còn lại cần trợ lý chạy nhanh, mà muốn nhanh thì card phải thoáng.
 
 ---
 
-# Chuẩn bị trước khi bấm máy
-
-## 1. Khởi động
-
-Bấm **CHUAN BI DEMO.bat** trên Desktop, đợi báo xong.
-
-## 2. Dọn máy
-
-**Đóng Chrome thừa, VS Code, Docker Desktop.** Card đồ hoạ 6 GB dùng chung cho mô hình trả lời bằng chữ và mô hình nhận dạng giọng nói. Còn dưới 1 GB trống là trợ lý chậm hẳn — mục 3.2 sẽ dài lê thê trên video.
-
-## 3. Năm màn hình, năm vai
+# BỐN MÀN HÌNH — không còn máy ảo
 
 | | Màn hình | Tài khoản | Mật khẩu | Vai |
 |---|---|---|---|---|
 | **M1** | Chrome thường | `admin` | `admin123@` | Quản trị xã Đồng Xuân |
 | **M2** | Chrome ẩn danh | `staff@ungphonhanh.life` | `staff123` | Phụ trách kho trung tâm |
 | **M3** | BrowserOS | `admin.xuantho@ungphonhanh.life` | `admin123@` | Quản trị xã Xuân Thọ |
-| **Đ1** | Điện thoại ảo | `rescue@ungphonhanh.life` | `rescue123` | Đội hiện trường |
-| **Đ2** | Điện thoại thật | `longchau@ungphonhanh.life` | `truongthon123` | Trưởng thôn Long Châu |
+| **Đ** | **Điện thoại thật** | đổi vai giữa hai lượt — xem bảng trên | | |
 
-Tài khoản quản trị là **`admin`** trần, không phải email.
+Tài khoản điện thoại:
 
-## 4. Ghi số ra giấy
+- **Lượt 1:** `longchau@ungphonhanh.life` / `truongthon123`
+- **Lượt 2:** `rescue@ungphonhanh.life` / `rescue123`
 
-Mở tab **Vật tư** trên M1, ghi lại tồn của **Áo phao người lớn** và **Nước uống đóng chai**.
+---
 
-Cuối buổi sẽ đối chiếu — đó là bằng chứng mạnh nhất rằng hệ thống cộng trừ đúng, và không cần ai tin lời nói.
+# CHUẨN BỊ TRƯỚC KHI BẤM MÁY
 
-## 5. Kiểm nhanh
+## 1. Khởi động và dọn card
 
-- Tab **Mượn, trả** ở M1 và M3: nên **trống**. Còn dòng cũ thì xoá.
-- Tab **Nhiệm vụ** M1: ghi nhớ nhiệm vụ cũ để không nhầm với nhiệm vụ sắp tạo.
+1. Bấm **CHUAN BI DEMO.bat**, đợi báo xong.
+2. **Tắt máy ảo Android nếu đang mở.** Đây là thứ ăn VRAM nhiều nhất sau Ollama.
+3. Đóng thêm: **VS Code, Vysor, Microsoft Store, ShareX, Docker Desktop**, và mọi thẻ Chrome không dùng.
+4. Kiểm lại: mở PowerShell gõ `nvidia-smi --query-gpu=memory.free --format=csv`. **Dưới 800 MB thì đóng tiếp**, đừng bấm máy.
+
+## 2. Bốn màn hình
+
+Đăng nhập sẵn M1, M2, M3 theo bảng trên. Điện thoại đăng nhập **trưởng thôn Long Châu** cho lượt 1.
+
+## 3. Ghi số ra giấy
+
+Mở tab **Vật tư** trên M1, ghi lại tồn của **Áo phao người lớn** và **Nước uống đóng chai**. Cuối video sẽ đối chiếu.
+
+## 4. Dọn sổ
+
+Chạy một lệnh dọn sạch dấu vết lượt thử trước, giữ nguyên kho và tài khoản:
+
+```
+pnpm --filter @safestock/backend exec ts-node prisma/reset-demo-data.ts
+```
+
+Sau lệnh này: 0 nhiệm vụ, 0 sự cố, 0 thông báo, tồn kho về đúng số gốc.
+
+## 5. Đặt máy quay
+
+Điện thoại **quay riêng bằng máy khác** hoặc chiếu màn hình lên máy tính rồi thu bằng OBS. Đừng cầm tay quay màn hình — chữ sẽ nhoè và rung.
+
+---
+
+# ══ LƯỢT 1 ══ bắt đầu quay
+
+Điện thoại đang đăng nhập **trưởng thôn Long Châu**. Quay liền mạch từ đây tới hết Phần 7, chỉ dừng ở chỗ đánh dấu chèn.
 
 ---
 
@@ -105,7 +116,7 @@ Cuối buổi sẽ đối chiếu — đó là bằng chứng mạnh nhất rằ
 
 > **Mở đầu bằng điện thoại, không phải máy tính.** Người xem phải thấy hệ thống bắt đầu từ nơi sự việc xảy ra, không phải từ một bảng điều khiển.
 
-## 2.1 Báo bằng giọng nói — Đ2 (điện thoại thật)
+## 2.1 Báo bằng giọng nói — Đ (điện thoại thật, vai trưởng thôn)
 
 | BẤM | ĐỌC |
 |---|---|
@@ -115,7 +126,7 @@ Cuối buổi sẽ đối chiếu — đó là bằng chứng mạnh nhất rằ
 | Chờ chữ hiện ra | *"Nhận dạng tiếng Việt chạy ngay trên máy chủ của xã. Giọng nói không gửi đi đâu cả — mất mạng vẫn nghe được."* |
 | Đọc lại, sửa nếu sai, bấm **gửi** | *"Máy nghe xong, người đọc lại rồi mới gửi. Máy không tự quyết thay người."* |
 
-## 2.2 Các tab khác trên điện thoại — Đ2
+## 2.2 Các tab khác trên điện thoại — Đ
 
 | BẤM | ĐỌC |
 |---|---|
@@ -235,15 +246,21 @@ Cuối buổi sẽ đối chiếu — đó là bằng chứng mạnh nhất rằ
 
 ---
 
-# PHẦN 5 — Đội hiện trường lấy hàng · 3 phút
+# ⟨CHÈN LƯỢT 2⟩ — Đội hiện trường lấy hàng · 3 phút
 
+> **DỪNG QUAY LƯỢT 1 TẠI ĐÂY.** Phần này quay riêng ở lượt 2. Khi dựng, chèn vào đúng chỗ này.
+>
+> Trước khi quay lượt 2: trên điện thoại bấm **Đăng xuất**, đăng nhập lại bằng `rescue@ungphonhanh.life` / `rescue123`.
+>
 > **Cảnh quan trọng nhất cả buổi.** Cố ý làm sai trước để người xem thấy hệ thống chặn. Xem hệ thống *từ chối* thuyết phục hơn xem nó chạy trơn — ai cũng biết chạy trơn là đã chuẩn bị sẵn.
+>
+> Cảnh này **không gọi AI** nên quay lúc nào cũng được, không cần lo card.
 
-## 5.1 Nhận nhiệm vụ — Đ1 (điện thoại ảo)
+## 5.1 Nhận nhiệm vụ — Đ (điện thoại thật, vai đội hiện trường)
 
 | BẤM | ĐỌC |
 |---|---|
-| Mở app, đăng nhập `rescue@` | *"Đội hiện trường làm việc trên điện thoại, không ngồi máy tính."* |
+| Mở app, đã đăng nhập `rescue@` | *"Đội hiện trường làm việc trên điện thoại, không ngồi máy tính."* |
 | Tab **Lệnh**, mở nhiệm vụ | *"Kèm địa điểm, số người, danh sách vật tư, và lấy ở kho nào."* |
 
 ## 5.2 Ký nhận — làm sai trước
@@ -267,12 +284,14 @@ Cuối buổi sẽ đối chiếu — đó là bằng chứng mạnh nhất rằ
 | Chỉ thông báo góc phải dưới | *"Điều phối nhận ngay: lấy thiếu bao nhiêu, và vì sao."* |
 | Mở nhiệm vụ, chỉ dòng nền vàng | *"Ghi lại trong sổ nhiệm vụ, không mất đi."* |
 
-## 5.4 Hoàn tất giao hàng — Đ1
+## 5.4 Hoàn tất giao hàng — Đ
 
 | BẤM | ĐỌC |
 |---|---|
 | Bấm **xác nhận đã giao** | *"Đội giao xong thì báo về."* |
 | Chọn kết quả: đủ / một phần / không giao được | *"Ghi rõ kết quả, kèm lý do nếu không đủ."* |
+
+> **HẾT LƯỢT 2.** Quay lại lượt 1, tiếp tục từ Phần 6.
 
 ---
 
@@ -451,13 +470,71 @@ Cuối buổi sẽ đối chiếu — đó là bằng chứng mạnh nhất rằ
 - [ ] Gửi yêu cầu · [ ] Quyết trên thông báo · [ ] Nhận hàng
 - [ ] Trả một phần · [ ] Trả hết · [ ] Nhận lại · [ ] Từ chối · [ ] Ghi tay
 
-**Điện thoại — 7 tab**
+**Điện thoại (một máy, hai vai) — 7 tab**
 - [ ] Tổng quan · [ ] Sẵn sàng · [ ] Kho · [ ] Kiểm kê
 - [ ] Lệnh · [ ] Thông báo · [ ] Báo cáo (ghi âm)
 
 **AI — 5**
 - [ ] Nhận dạng giọng nói · [ ] Trợ lý trả nhanh · [ ] Trợ lý chạy chữ
 - [ ] Bóc tách địa điểm và số người · [ ] Từ chối câu ngoài phạm vi
+
+---
+
+# Quy trình quay hai lượt — làm đúng thứ tự này
+
+## Trước khi bấm máy
+
+1. Chạy `reset-demo-data.ts` để dọn sổ.
+2. Tắt máy ảo Android, VS Code, Vysor, Microsoft Store, ShareX, thẻ Chrome thừa.
+3. Kiểm VRAM: `nvidia-smi --query-gpu=memory.free --format=csv` — **phải trên 800 MB**.
+4. Đăng nhập M1, M2, M3. Điện thoại đăng nhập **trưởng thôn Long Châu**.
+5. Ghi tồn kho Áo phao và Nước uống ra giấy.
+
+## LƯỢT 1 — quay liền mạch
+
+Chạy **Phần 1 → Phần 4**, rồi **DỪNG** ở chỗ ⟨CHÈN LƯỢT 2⟩.
+
+Vẫn giữ nguyên máy quay, **chạy tiếp Phần 6 → Phần 7** ngay. Đừng tắt máy quay giữa chừng — cắt khi dựng dễ hơn ghép hai tệp.
+
+> **Lưu ý:** ở Phần 4 mục 4.4, kho đã bấm **Xác nhận xuất vật tư**. Trạng thái này là thứ lượt 2 cần — nên **đừng bấm gì thêm** trên nhiệm vụ đó cho tới khi quay xong lượt 2.
+
+## Giữa hai lượt
+
+Trên điện thoại: bấm **Đăng xuất**, đăng nhập `rescue@ungphonhanh.life` / `rescue123`.
+
+**Đừng đụng gì vào ba màn hình web.** Trạng thái đang đúng cho lượt 2.
+
+## LƯỢT 2 — chỉ quay điện thoại
+
+Chạy trọn mục ⟨CHÈN LƯỢT 2⟩ (5.1 → 5.4). Khoảng 3 phút.
+
+Cảnh 5.3 cần quay **màn hình M1** để thấy thông báo báo thiếu — quay xen vào, hoặc quay riêng rồi ghép.
+
+## Khi dựng
+
+| Thứ tự trên video | Lấy từ |
+|---|---|
+| Mở đầu (lời dẫn) | Video giới thiệu đã quay |
+| Phần 1 → Phần 4 | Lượt 1, đoạn đầu |
+| Phần 5 (ký nhận) | **Lượt 2** |
+| Phần 6 → Phần 7 | Lượt 1, đoạn sau |
+| Kết | Video giới thiệu đã quay |
+
+Chỗ nối giữa lượt 1 và lượt 2: cắt ở lúc màn hình đứng yên, đừng cắt giữa lúc chuột đang di chuyển.
+
+---
+
+# Ghi chú kỹ thuật khi quay
+
+**Card đồ hoạ.** Trợ lý chỉ chạy nhanh khi VRAM trống trên 800 MB. Đang quay mà thấy nó chậm dần thì dừng lại, đóng bớt cửa sổ, quay lại cảnh đó — đừng cố quay tiếp rồi cắt, vì cảnh sau cũng sẽ chậm theo.
+
+**Điện thoại.** Chiếu màn hình lên máy tính rồi thu bằng OBS. Cầm tay quay thì chữ nhoè và rung, không đọc được số.
+
+**Thông báo.** Hiện ở **góc phải dưới**, tự tắt sau 6 giây. Cảnh nào cần quay thông báo thì phải chuyển màn hình trong vòng 6 giây, hoặc để chuột lên thẻ cho nó dừng đếm.
+
+**Ba màn hình web.** Đặt cạnh nhau trên cùng màn hình nếu đủ chỗ, hoặc dùng ba cửa sổ và chuyển bằng Alt+Tab. Đừng thu nhỏ cửa sổ quá — chữ trên video phải đọc được.
+
+**Chuột.** Di chậm. Người xem cần thấy anh bấm vào đâu, mà chuột nhảy nhanh thì họ mất dấu.
 
 ---
 
