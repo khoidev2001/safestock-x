@@ -2,71 +2,77 @@
 
 Tài liệu duy nhất cho việc trình diễn: **vừa đọc vừa bấm**, dùng được cả khi quay video lẫn khi demo trực tiếp.
 
-**Quay LÀM HAI LƯỢT, ghép khi dựng.** Máy chỉ có một card 6 GB; bật máy ảo Android là trợ lý chậm hẳn đúng lúc quay cảnh đắt nhất. Nên bỏ máy ảo, dùng **một điện thoại thật đóng hai vai** ở hai lượt quay khác nhau.
+**Quay MỘT LƯỢT liền mạch, 25 phút.** Bảy phần, đi theo đúng thứ tự một ngày làm việc ở kho xã — sáng mở máy xem tình hình, có tin báo từ thôn, lập phương án, kho xuất hàng, đội đi lấy, thiếu thì mượn xã bên, cuối kỳ đối chiếu. Đi theo **luồng công việc** chứ không theo danh sách menu, để người xem hiểu *vì sao* có chức năng đó chứ không chỉ thấy nó tồn tại.
 
-| | Quay gì | Vai của điện thoại | Thời lượng |
-|---|---|---|---|
-| **LƯỢT 1** | Toàn bộ luồng — web + điện thoại báo tin | Trưởng thôn Long Châu | ~22 phút |
-| **LƯỢT 2** | Chỉ cảnh đội hiện trường ký nhận | Đội hiện trường | ~3 phút |
+Mỗi thao tác có ba cột:
 
-Khi dựng, chèn lượt 2 vào đúng chỗ đã đánh dấu **⟨CHÈN LƯỢT 2⟩** trong lượt 1.
+| Cột | Nghĩa |
+|---|---|
+| **BẤM** | thao tác, ghi đúng tên nút trên màn hình |
+| **ĐỌC** | lời thuyết minh — đọc thẳng thành tiếng, hoặc dùng làm phụ đề |
+| — | phần in nghiêng dưới bảng là câu nói dài hơn, dùng để lấp lúc chờ máy |
 
-Vì sao chia thế: cảnh ký nhận **không gọi AI**, nên quay riêng lúc nào cũng được. Mọi cảnh còn lại cần trợ lý chạy nhanh, mà muốn nhanh thì card phải thoáng.
+> Chữ trong cột **ĐỌC** đã viết sẵn thành câu nói được. Cứ đọc y nguyên là xong, không phải tự dựng lời giữa lúc đang bấm.
+
+Ba mức thời lượng:
+
+| Có bao nhiêu phút | Chạy phần |
+|---|---|
+| **25 phút** | Toàn bộ, phần 1 → 7 |
+| **15 phút** | Phần 2 → 3 → 5 → 6 (bỏ 1, 4, 7) |
+| **8 phút** | Mục 2.1 → 3.2 → 5.2 → 6.1 → 6.8 |
 
 ---
 
-# BỐN MÀN HÌNH — không còn máy ảo
+# NĂM MÀN HÌNH
 
 | | Màn hình | Tài khoản | Mật khẩu | Vai |
 |---|---|---|---|---|
 | **M1** | Chrome thường | `admin` | `admin123@` | Quản trị xã Đồng Xuân |
 | **M2** | Chrome ẩn danh | `staff@ungphonhanh.life` | `staff123` | Phụ trách kho trung tâm |
 | **M3** | BrowserOS | `admin.xuantho@ungphonhanh.life` | `admin123@` | Quản trị xã Xuân Thọ |
-| **Đ** | **Điện thoại thật** | đổi vai giữa hai lượt — xem bảng trên | | |
+| **Đ1** | Điện thoại ảo S23 | `rescue@ungphonhanh.life` | `rescue123` | Đội hiện trường |
+| **Đ2** | Điện thoại thật | `longchau@ungphonhanh.life` | `truongthon123` | Trưởng thôn Long Châu |
 
-Tài khoản điện thoại:
-
-- **Lượt 1:** `longchau@ungphonhanh.life` / `truongthon123`
-- **Lượt 2:** `rescue@ungphonhanh.life` / `rescue123`
+Tài khoản quản trị là **`admin`** trần, không phải email.
 
 ---
 
 # CHUẨN BỊ TRƯỚC KHI BẤM MÁY
 
-## 1. Khởi động và dọn card
+## 1. Khởi động
 
-1. Bấm **CHUAN BI DEMO.bat**, đợi báo xong.
-2. **Tắt máy ảo Android nếu đang mở.** Đây là thứ ăn VRAM nhiều nhất sau Ollama.
-3. Đóng thêm: **VS Code, Vysor, Microsoft Store, ShareX, Docker Desktop**, và mọi thẻ Chrome không dùng.
-4. Kiểm lại: mở PowerShell gõ `nvidia-smi --query-gpu=memory.free --format=csv`. **Dưới 800 MB thì đóng tiếp**, đừng bấm máy.
+Bấm **CHUAN BI DEMO.bat**, đợi báo xong.
 
-## 2. Bốn màn hình
+## 2. Dọn card — làm được tới đâu hay tới đó
 
-Đăng nhập sẵn M1, M2, M3 theo bảng trên. Điện thoại đăng nhập **trưởng thôn Long Châu** cho lượt 1.
+Máy ảo Android sẽ ăn VRAM, và đó là đánh đổi đã chấp nhận để có đủ năm màn hình. Nhưng vẫn nên đóng những thứ **không dùng tới trong lúc quay**:
 
-## 3. Ghi số ra giấy
+**VS Code · Vysor · Microsoft Store · ShareX · thẻ Chrome thừa**
 
-Mở tab **Vật tư** trên M1, ghi lại tồn của **Áo phao người lớn** và **Nước uống đóng chai**. Cuối video sẽ đối chiếu.
+Ba cái giữa tự chạy nền, không ai chủ động mở mà vẫn giữ card.
 
-## 4. Dọn sổ
+> **Trợ lý sẽ chậm hơn — chuyện bình thường, đã tính trước.** Chữ đầu có thể ra sau 20–40 giây thay vì 7 giây. Xem mục *Khi trợ lý chậm* ở cuối tài liệu để biết nói gì trong lúc chờ.
 
-Chạy một lệnh dọn sạch dấu vết lượt thử trước, giữ nguyên kho và tài khoản:
+## 3. Năm màn hình
+
+Đăng nhập sẵn theo bảng trên.
+
+## 4. Ghi số ra giấy
+
+Mở tab **Vật tư** trên M1, ghi lại tồn của **Áo phao người lớn** và **Nước uống đóng chai**. Cuối video sẽ đối chiếu — đó là bằng chứng mạnh nhất rằng hệ thống cộng trừ đúng.
+
+## 5. Dọn sổ
 
 ```
 pnpm --filter @safestock/backend exec ts-node prisma/reset-demo-data.ts
 ```
 
-Sau lệnh này: 0 nhiệm vụ, 0 sự cố, 0 thông báo, tồn kho về đúng số gốc.
+Sau lệnh này: 0 nhiệm vụ, 0 sự cố, 0 thông báo, tồn kho về đúng số gốc. Giữ nguyên kho, tài khoản, toạ độ thôn.
 
-## 5. Đặt máy quay
+## 6. Đặt máy quay
 
-Điện thoại **quay riêng bằng máy khác** hoặc chiếu màn hình lên máy tính rồi thu bằng OBS. Đừng cầm tay quay màn hình — chữ sẽ nhoè và rung.
-
----
-
-# ══ LƯỢT 1 ══ bắt đầu quay
-
-Điện thoại đang đăng nhập **trưởng thôn Long Châu**. Quay liền mạch từ đây tới hết Phần 7, chỉ dừng ở chỗ đánh dấu chèn.
+Điện thoại thật: **chiếu màn hình lên máy tính** rồi thu bằng OBS. Cầm tay quay thì chữ nhoè và rung, không đọc được số.
 
 ---
 
@@ -116,7 +122,7 @@ Sau lệnh này: 0 nhiệm vụ, 0 sự cố, 0 thông báo, tồn kho về đú
 
 > **Mở đầu bằng điện thoại, không phải máy tính.** Người xem phải thấy hệ thống bắt đầu từ nơi sự việc xảy ra, không phải từ một bảng điều khiển.
 
-## 2.1 Báo bằng giọng nói — Đ (điện thoại thật, vai trưởng thôn)
+## 2.1 Báo bằng giọng nói — Đ2 (điện thoại thật)
 
 | BẤM | ĐỌC |
 |---|---|
@@ -126,7 +132,7 @@ Sau lệnh này: 0 nhiệm vụ, 0 sự cố, 0 thông báo, tồn kho về đú
 | Chờ chữ hiện ra | *"Nhận dạng tiếng Việt chạy ngay trên máy chủ của xã. Giọng nói không gửi đi đâu cả — mất mạng vẫn nghe được."* |
 | Đọc lại, sửa nếu sai, bấm **gửi** | *"Máy nghe xong, người đọc lại rồi mới gửi. Máy không tự quyết thay người."* |
 
-## 2.2 Các tab khác trên điện thoại — Đ
+## 2.2 Các tab khác trên điện thoại — Đ2
 
 | BẤM | ĐỌC |
 |---|---|
@@ -246,17 +252,13 @@ Sau lệnh này: 0 nhiệm vụ, 0 sự cố, 0 thông báo, tồn kho về đú
 
 ---
 
-# ⟨CHÈN LƯỢT 2⟩ — Đội hiện trường lấy hàng · 3 phút
+# PHẦN 5 — Đội hiện trường lấy hàng · 3 phút
 
-> **DỪNG QUAY LƯỢT 1 TẠI ĐÂY.** Phần này quay riêng ở lượt 2. Khi dựng, chèn vào đúng chỗ này.
->
-> Trước khi quay lượt 2: trên điện thoại bấm **Đăng xuất**, đăng nhập lại bằng `rescue@ungphonhanh.life` / `rescue123`.
->
 > **Cảnh quan trọng nhất cả buổi.** Cố ý làm sai trước để người xem thấy hệ thống chặn. Xem hệ thống *từ chối* thuyết phục hơn xem nó chạy trơn — ai cũng biết chạy trơn là đã chuẩn bị sẵn.
 >
-> Cảnh này **không gọi AI** nên quay lúc nào cũng được, không cần lo card.
+> Cảnh này **không gọi AI** nên máy ảo chậm cũng không ảnh hưởng.
 
-## 5.1 Nhận nhiệm vụ — Đ (điện thoại thật, vai đội hiện trường)
+## 5.1 Nhận nhiệm vụ — Đ1 (điện thoại ảo)
 
 | BẤM | ĐỌC |
 |---|---|
@@ -284,14 +286,12 @@ Sau lệnh này: 0 nhiệm vụ, 0 sự cố, 0 thông báo, tồn kho về đú
 | Chỉ thông báo góc phải dưới | *"Điều phối nhận ngay: lấy thiếu bao nhiêu, và vì sao."* |
 | Mở nhiệm vụ, chỉ dòng nền vàng | *"Ghi lại trong sổ nhiệm vụ, không mất đi."* |
 
-## 5.4 Hoàn tất giao hàng — Đ
+## 5.4 Hoàn tất giao hàng — Đ1
 
 | BẤM | ĐỌC |
 |---|---|
 | Bấm **xác nhận đã giao** | *"Đội giao xong thì báo về."* |
 | Chọn kết quả: đủ / một phần / không giao được | *"Ghi rõ kết quả, kèm lý do nếu không đủ."* |
-
-> **HẾT LƯỢT 2.** Quay lại lượt 1, tiếp tục từ Phần 6.
 
 ---
 
@@ -470,7 +470,7 @@ Sau lệnh này: 0 nhiệm vụ, 0 sự cố, 0 thông báo, tồn kho về đú
 - [ ] Gửi yêu cầu · [ ] Quyết trên thông báo · [ ] Nhận hàng
 - [ ] Trả một phần · [ ] Trả hết · [ ] Nhận lại · [ ] Từ chối · [ ] Ghi tay
 
-**Điện thoại (một máy, hai vai) — 7 tab**
+**Điện thoại — 7 tab**
 - [ ] Tổng quan · [ ] Sẵn sàng · [ ] Kho · [ ] Kiểm kê
 - [ ] Lệnh · [ ] Thông báo · [ ] Báo cáo (ghi âm)
 
@@ -480,53 +480,21 @@ Sau lệnh này: 0 nhiệm vụ, 0 sự cố, 0 thông báo, tồn kho về đú
 
 ---
 
-# Quy trình quay hai lượt — làm đúng thứ tự này
-
-## Trước khi bấm máy
-
-1. Chạy `reset-demo-data.ts` để dọn sổ.
-2. Tắt máy ảo Android, VS Code, Vysor, Microsoft Store, ShareX, thẻ Chrome thừa.
-3. Kiểm VRAM: `nvidia-smi --query-gpu=memory.free --format=csv` — **phải trên 800 MB**.
-4. Đăng nhập M1, M2, M3. Điện thoại đăng nhập **trưởng thôn Long Châu**.
-5. Ghi tồn kho Áo phao và Nước uống ra giấy.
-
-## LƯỢT 1 — quay liền mạch
-
-Chạy **Phần 1 → Phần 4**, rồi **DỪNG** ở chỗ ⟨CHÈN LƯỢT 2⟩.
-
-Vẫn giữ nguyên máy quay, **chạy tiếp Phần 6 → Phần 7** ngay. Đừng tắt máy quay giữa chừng — cắt khi dựng dễ hơn ghép hai tệp.
-
-> **Lưu ý:** ở Phần 4 mục 4.4, kho đã bấm **Xác nhận xuất vật tư**. Trạng thái này là thứ lượt 2 cần — nên **đừng bấm gì thêm** trên nhiệm vụ đó cho tới khi quay xong lượt 2.
-
-## Giữa hai lượt
-
-Trên điện thoại: bấm **Đăng xuất**, đăng nhập `rescue@ungphonhanh.life` / `rescue123`.
-
-**Đừng đụng gì vào ba màn hình web.** Trạng thái đang đúng cho lượt 2.
-
-## LƯỢT 2 — chỉ quay điện thoại
-
-Chạy trọn mục ⟨CHÈN LƯỢT 2⟩ (5.1 → 5.4). Khoảng 3 phút.
-
-Cảnh 5.3 cần quay **màn hình M1** để thấy thông báo báo thiếu — quay xen vào, hoặc quay riêng rồi ghép.
-
-## Khi dựng
-
-| Thứ tự trên video | Lấy từ |
-|---|---|
-| Mở đầu (lời dẫn) | Video giới thiệu đã quay |
-| Phần 1 → Phần 4 | Lượt 1, đoạn đầu |
-| Phần 5 (ký nhận) | **Lượt 2** |
-| Phần 6 → Phần 7 | Lượt 1, đoạn sau |
-| Kết | Video giới thiệu đã quay |
-
-Chỗ nối giữa lượt 1 và lượt 2: cắt ở lúc màn hình đứng yên, đừng cắt giữa lúc chuột đang di chuyển.
-
----
-
 # Ghi chú kỹ thuật khi quay
 
-**Card đồ hoạ.** Trợ lý chỉ chạy nhanh khi VRAM trống trên 800 MB. Đang quay mà thấy nó chậm dần thì dừng lại, đóng bớt cửa sổ, quay lại cảnh đó — đừng cố quay tiếp rồi cắt, vì cảnh sau cũng sẽ chậm theo.
+**Card đồ hoạ — trợ lý sẽ chậm, đã tính trước.** Máy ảo Android chiếm khoảng 300 MB VRAM, nên chữ đầu của trợ lý có thể ra sau 20–40 giây thay vì 7 giây. Đây là đánh đổi có chủ ý để có đủ năm màn hình thật.
+
+### Khi trợ lý chậm — nói gì trong lúc chờ
+
+Đừng ngồi im. Có ba câu lấp được cả phút, và cả ba đều là nội dung thật chứ không phải câu độn:
+
+> *"Trong lúc mô hình đang chạy, có một điểm em muốn nói: nó chạy ngay trên máy tính này, không gọi dịch vụ ngoài. Chậm hơn dịch vụ đám mây, nhưng đổi lại là mất internet vẫn dùng được — mà lúc bão thì internet là thứ đứt đầu tiên."*
+
+> *"Máy đang chạy đồng thời mô hình trả lời bằng chữ và mô hình nhận dạng giọng nói trên một card sáu gi-ga, cộng thêm một máy ảo Android. Ở máy chủ thật đặt tại xã thì chỉ có mô hình, nên nhanh hơn nhiều."*
+
+> *"Chữ chạy dần thế này là có chủ ý. Trước đây màn hình đứng im cho tới khi có câu trả lời đầy đủ, và người trực tưởng máy treo nên bấm lại — mỗi lần bấm lại là mô hình chạy thêm một lượt."*
+
+**Nếu quá 60 giây mà chưa ra chữ:** dừng, đóng bớt cửa sổ, hỏi lại câu đó. Đừng cố chờ tiếp — trên video một phút im lặng dài hơn anh tưởng rất nhiều.
 
 **Điện thoại.** Chiếu màn hình lên máy tính rồi thu bằng OBS. Cầm tay quay thì chữ nhoè và rung, không đọc được số.
 
