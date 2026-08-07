@@ -364,8 +364,10 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
       recipientRole: UserRole.ADMIN,
       kind: NotificationKind.INTER_WAREHOUSE_REQUEST,
       title: `${tenXaGui} xin mượn ${input.quantity} ${input.unit} ${input.itemName}`,
-      body: input.note?.trim() || "Mở tab Mượn trả để đồng ý hoặc từ chối.",
+      body: input.note?.trim() || "Đồng ý hay từ chối ngay trên thông báo này.",
       warehouseId: input.warehouseId,
+      // Gắn khoản mượn để màn hình dựng được hai nút ngay trên thẻ thông báo.
+      loanId: loan.id,
     });
     return loan;
   }

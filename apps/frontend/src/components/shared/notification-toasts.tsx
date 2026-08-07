@@ -10,6 +10,8 @@ export interface ToastItem {
   title: string;
   body: string;
   missionId?: string | null;
+  /** Khoản mượn liên xã — có nó thì thẻ dựng hai nút Đồng ý / Từ chối. */
+  loanId?: string | null;
 }
 
 const GIAY_TU_TAT = 6;
@@ -33,10 +35,13 @@ export function NotificationToasts({
   items,
   onOpen,
   onDismiss,
+  onDecideLoan,
 }: {
   items: ToastItem[];
   onOpen?: (item: ToastItem) => void;
   onDismiss?: (id: string) => void;
+  /** Trả lời yêu cầu mượn ngay trên thẻ. Không truyền thì thẻ chỉ để đọc. */
+  onDecideLoan?: (loanId: string, dongY: boolean) => Promise<void> | void;
 }) {
   if (items.length === 0) return null;
   return (
@@ -51,7 +56,13 @@ export function NotificationToasts({
       className="pointer-events-none fixed bottom-4 right-4 z-[1200] flex max-h-[min(70vh,32rem)] w-[min(22rem,calc(100vw-2rem))] flex-col-reverse gap-2 overflow-y-auto"
     >
       {items.map((item) => (
-        <Toast key={item.id} item={item} onOpen={onOpen} onDismiss={onDismiss} />
+        <Toast
+          item={item}
+          key={item.id}
+          onDecideLoan={onDecideLoan}
+          onDismiss={onDismiss}
+          onOpen={onOpen}
+        />
       ))}
     </div>
   );
@@ -61,12 +72,18 @@ function Toast({
   item,
   onOpen,
   onDismiss,
+  onDecideLoan,
 }: {
   item: ToastItem;
   onOpen?: (item: ToastItem) => void;
   onDismiss?: (id: string) => void;
+  onDecideLoan?: (loanId: string, dongY: boolean) => Promise<void> | void;
 }) {
-  const sticky = isStickyNotification(item.kind);
+  // Thẻ có hành động thì KHÔNG tự tắt. Tự tắt một thẻ đang chờ người quyết là
+  // vứt mất chính cái việc phải làm — người dùng ngoảnh đi ba giây là mất.
+  const coHanhDong = Boolean(item.loanId && onDecideLoan);
+  const [dangGui, setDangGui] = useState<"yes" | "no" | null>(null);
+  const sticky = isStickyNotification(item.kind) || coHanhDong;
   const [conLai, setConLai] = useState(GIAY_TU_TAT);
   // Giữ trong ref để đồng hồ đếm không phải dựng lại mỗi khi component vẽ lại —
   // dựng lại là đồng hồ nhảy về đầu và thẻ không bao giờ tự tắt.
@@ -109,6 +126,44 @@ function Toast({
           <p className="mt-0.5 line-clamp-6 whitespace-pre-line text-xs leading-relaxed text-[var(--text-muted)]">
             {item.body}
           </p>
+          {coHanhDong ? (
+            <div className="mt-2.5 flex gap-2">
+              <button
+                className="rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                disabled={dangGui !== null}
+                onClick={async () => {
+                  setDangGui("yes");
+                  try {
+                    await onDecideLoan?.(item.loanId as string, true);
+                    onDismiss?.(item.id);
+                  } finally {
+                    setDangGui(null);
+                  }
+                }}
+                style={{ background: "var(--color-ready)" }}
+                type="button"
+              >
+                {dangGui === "yes" ? "Đang gửi…" : "Đồng ý"}
+              </button>
+              <button
+                className="rounded-md border px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
+                disabled={dangGui !== null}
+                onClick={async () => {
+                  setDangGui("no");
+                  try {
+                    await onDecideLoan?.(item.loanId as string, false);
+                    onDismiss?.(item.id);
+                  } finally {
+                    setDangGui(null);
+                  }
+                }}
+                style={{ borderColor: "var(--color-critical)", color: "var(--color-critical)" }}
+                type="button"
+              >
+                {dangGui === "no" ? "Đang gửi…" : "Từ chối"}
+              </button>
+            </div>
+          ) : null}
           {onOpen && item.missionId ? (
             <button
               type="button"

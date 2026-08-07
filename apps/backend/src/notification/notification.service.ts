@@ -11,6 +11,8 @@ export interface CreateNotification {
   body: string;
   missionId?: string;
   warehouseId?: string;
+  /** Khoản mượn liên xã mà thông báo nói tới — cho phép dựng nút hành động. */
+  loanId?: string;
   fieldUpdateId?: string;
 }
 

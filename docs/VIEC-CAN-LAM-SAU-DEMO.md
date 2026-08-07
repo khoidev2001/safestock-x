@@ -36,7 +36,7 @@ Ghi từ nhận xét trực tiếp khi xem demo. Đánh dấu `[x]` khi xong và
       - Xã bên kia: đổi ô gõ tay thành **dropdown** các xã lân cận.
       - Vật tư: nhập **TÊN vật tư**, không phải mã lô.
       - Kiểm lại toàn bộ luồng sau khi sửa.
-- [ ] **C2. Tab Mượn trả — nút gửi yêu cầu mượn**: một nút mở form gồm tên vật phẩm,
+- [x] **C2. Tab Mượn trả — nút gửi yêu cầu mượn**: một nút mở form gồm tên vật phẩm,
       số lượng, **dropdown xã lân cận**, ghi chú. Bấm gửi → xã được chọn nhận
       **thông báo đẩy kiểu Zalo** có sẵn hai nút **Từ chối** / **Chấp nhận**.
       Từ đó trở đi dùng luồng đã có.

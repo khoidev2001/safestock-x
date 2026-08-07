@@ -8,7 +8,7 @@ import { BASE } from "@/lib/api";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { FloatingAssistant } from "@/components/assistant/floating-assistant";
 import { useIncidentAlertsBridge } from "@/components/assistant/use-incident-alerts";
-import { getOpenIncidents } from "@/lib/dashboard-api";
+import { advanceInterCommuneLoan, getOpenIncidents } from "@/lib/dashboard-api";
 import { useAuth } from "@/lib/auth-store";
 import { useWarehouse } from "@/lib/use-warehouse";
 import { NotificationToasts, type ToastItem } from "@/components/shared/notification-toasts";
@@ -64,6 +64,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // vào trang lại tốn một kết nối chết yểu. Thông báo vẫn tới nhờ socket mở lại
   // và nhờ lượt hỏi định kỳ, nên không ai để ý là có gì đó sai.
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+  /**
+   * Trả lời yêu cầu mượn NGAY TRÊN THẺ thông báo.
+   *
+   * Trước đây thẻ chỉ báo "có xã xin mượn", người trực phải tự nhớ sang tab Mượn
+   * trả rồi tìm lại đúng dòng. Lúc đang bão, mỗi bước phải đi tìm là một bước bị
+   * bỏ — và bên xin mượn ngồi chờ mà không biết chờ ai.
+   *
+   * Chỉ ĐỒNG Ý mới cần chọn lô, nên nút Đồng ý ở đây đưa khoản mượn sang trạng
+   * thái đã duyệt và để người dùng chọn lô ở tab Mượn trả. Cho chọn lô ngay trên
+   * một thẻ thông báo nhỏ xíu là ép quyết định về lô trong ba giây, mà chọn nhầm
+   * lô thì trừ nhầm hàng thật.
+   */
+  const traLoiYeuCauMuon = useCallback(
+    async (loanId: string, dongY: boolean) => {
+      await advanceInterCommuneLoan(loanId, {
+        to: dongY ? "APPROVED" : "REJECTED",
+        reason: dongY ? undefined : "Từ chối từ thông báo",
+      });
+      queryClient.invalidateQueries({ queryKey: ["inter-commune-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      if (dongY) router.push("/loan");
+    },
+    [queryClient, router],
+  );
   const boToast = useCallback((id: string) => {
     setToasts((current) => current.filter((item) => item.id !== id));
   }, []);
@@ -100,6 +125,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 title: payload.title as string,
                 body: payload.body ?? "",
                 missionId: payload.missionId ?? null,
+                loanId: payload.loanId ?? null,
               },
             ],
       );
@@ -122,7 +148,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <DashboardShell warehouseName={warehouseQuery.data?.name}>
       {children}
       {warehouseId ? <FloatingAssistant warehouseId={warehouseId} /> : null}
-      <NotificationToasts items={toasts} onOpen={moNhiemVu} onDismiss={boToast} />
+      <NotificationToasts
+        items={toasts}
+        onDecideLoan={traLoiYeuCauMuon}
+        onDismiss={boToast}
+        onOpen={moNhiemVu}
+      />
     </DashboardShell>
   );
 }

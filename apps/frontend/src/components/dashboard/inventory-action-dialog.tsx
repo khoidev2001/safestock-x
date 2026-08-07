@@ -148,10 +148,13 @@ export function InventoryActionDialog({ action, batch, shelves, onClose, onSucce
               Tồn vật lý hiện tại: {batch.quantity}
             </p>
           </div>
-          <button aria-label="Đóng"
+          <button
+            aria-label="Đóng"
             // Vùng bấm 44px: nút cũ chỉ cao 30px, trên màn hình cảm ứng và
             // laptop nhỏ phải nhắm mới trúng.
-            className="flex h-11 w-11 items-center justify-center rounded-md border text-xl leading-none transition hover:bg-[var(--surface-2)]" onClick={onClose}>
+            className="flex h-11 w-11 items-center justify-center rounded-md border text-xl leading-none transition hover:bg-[var(--surface-2)]"
+            onClick={onClose}
+          >
             ×
           </button>
         </header>

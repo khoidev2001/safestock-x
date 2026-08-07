@@ -9,6 +9,7 @@ import {
   getInterCommuneLoans,
   getPeerCommunes,
   recordManualInterCommuneLoan,
+  requestInterCommuneLoan,
   type InterCommuneLoan,
 } from "@/lib/dashboard-api";
 import {
@@ -41,6 +42,13 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
     refetchInterval: 20_000,
   });
 
+  const [moXinMuon, setMoXinMuon] = useState(false);
+  const [xinMuon, setXinMuon] = useState({
+    peerCommuneName: "",
+    itemName: "",
+    quantity: "",
+    note: "",
+  });
   const [moGhiTay, setMoGhiTay] = useState(false);
   const [ghiTay, setGhiTay] = useState({
     direction: "OUTGOING" as "OUTGOING" | "INCOMING",
@@ -56,13 +64,13 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
   const xaLanCan = useQuery({
     queryKey: ["peer-communes"],
     queryFn: getPeerCommunes,
-    enabled: moGhiTay,
+    enabled: moGhiTay || moXinMuon,
     staleTime: 5 * 60_000,
   });
   const vatTuCoSan = useQuery({
     queryKey: ["available-items-for-loan"],
     queryFn: getAvailableItemsForLoan,
-    enabled: moGhiTay,
+    enabled: moGhiTay || moXinMuon,
     staleTime: 60_000,
   });
 
@@ -110,6 +118,44 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
     onError: (e) => setError(e instanceof Error ? e.message : "Không ghi được khoản mượn"),
   });
 
+  /**
+   * Gửi yêu cầu mượn sang xã lân cận.
+   *
+   * KHÔNG đụng kho: chưa ai đồng ý, chưa có hàng nào rời chỗ. Trừ kho ngay lúc
+   * gửi là trừ cho một thứ có thể bị từ chối năm phút sau.
+   *
+   * Chọn vật tư từ danh sách của CHÍNH KHO MÌNH — nghe ngược nhưng đúng: hai xã
+   * dùng chung danh mục vật tư, và mã phải khớp thì bên kia mới đối chiếu được
+   * với kho họ. Gõ tay tên vật tư là hai bên nói về hai thứ khác nhau.
+   */
+  const xinMuonMutation = useMutation({
+    mutationFn: () => {
+      const soLuong = Number(xinMuon.quantity);
+      if (!xinMuon.peerCommuneName.trim()) throw new Error("Cần chọn xã để hỏi mượn.");
+      if (!xinMuon.itemName.trim()) throw new Error("Cần chọn vật tư cần mượn.");
+      if (!Number.isInteger(soLuong) || soLuong < 1) {
+        throw new Error("Số lượng phải là số nguyên dương.");
+      }
+      const mon = (vatTuCoSan.data ?? []).find((m) => m.itemSku === xinMuon.itemName);
+      if (!mon) throw new Error("Không nhận ra vật tư đã chọn.");
+      return requestInterCommuneLoan({
+        peerCommuneName: xinMuon.peerCommuneName.trim(),
+        itemSku: mon.itemSku,
+        itemName: mon.itemName,
+        unit: mon.unit,
+        quantity: soLuong,
+        note: xinMuon.note.trim() || undefined,
+      });
+    },
+    onMutate: () => setError(null),
+    onSuccess: () => {
+      setXinMuon({ peerCommuneName: "", itemName: "", quantity: "", note: "" });
+      setMoXinMuon(false);
+      queryClient.invalidateQueries({ queryKey: ["inter-commune-loans"] });
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Không gửi được yêu cầu"),
+  });
+
   const advance = useMutation({
     mutationFn: (input: { loan: InterCommuneLoan; action: LoanAction }) =>
       advanceInterCommuneLoan(input.loan.id, {
@@ -138,15 +184,126 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
         Mỗi xã giữ sổ riêng. Khoản ghi tay là khoản đã thoả thuận qua điện thoại lúc mất mạng.
       </p>
 
-      <div className="mt-3">
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          className="rounded-md px-3 py-2 text-xs font-semibold text-white"
+          onClick={() => {
+            setMoXinMuon((truoc) => !truoc);
+            setMoGhiTay(false);
+          }}
+          style={{ background: "var(--color-accent)" }}
+          type="button"
+        >
+          {moXinMuon ? "Đóng" : "Gửi yêu cầu mượn xã khác"}
+        </button>
         <button
           className="rounded-md border px-3 py-2 text-xs font-semibold"
-          onClick={() => setMoGhiTay((truoc) => !truoc)}
+          onClick={() => {
+            setMoGhiTay((truoc) => !truoc);
+            setMoXinMuon(false);
+          }}
           type="button"
         >
           {moGhiTay ? "Đóng" : "Ghi tay khoản đã thoả thuận qua điện thoại"}
         </button>
       </div>
+
+      {moXinMuon ? (
+        <form
+          className="mt-3 space-y-3 rounded-md border p-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            xinMuonMutation.mutate();
+          }}
+        >
+          <p className="text-xs text-[var(--text-muted)]">
+            Yêu cầu bay sang xã được chọn dưới dạng thông báo, kèm sẵn hai nút Đồng ý và Từ chối.
+            Kho mình CHƯA đổi gì — chưa ai đồng ý thì chưa có hàng nào rời chỗ.
+          </p>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="block text-xs font-medium" htmlFor="xin-muon-xa">
+                Hỏi mượn xã
+              </label>
+              <select
+                className="mt-1 w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+                id="xin-muon-xa"
+                onChange={(event) =>
+                  setXinMuon((truoc) => ({ ...truoc, peerCommuneName: event.target.value }))
+                }
+                value={xinMuon.peerCommuneName}
+              >
+                <option value="">— chọn xã —</option>
+                {(xaLanCan.data ?? []).map((ten) => (
+                  <option key={ten} value={ten}>
+                    {ten}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium" htmlFor="xin-muon-vattu">
+                Vật tư cần mượn
+              </label>
+              <select
+                className="mt-1 w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+                id="xin-muon-vattu"
+                onChange={(event) =>
+                  setXinMuon((truoc) => ({ ...truoc, itemName: event.target.value }))
+                }
+                value={xinMuon.itemName}
+              >
+                <option value="">— chọn vật tư —</option>
+                {(vatTuCoSan.data ?? []).map((mon) => (
+                  <option key={mon.itemSku} value={mon.itemSku}>
+                    {mon.itemName}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium" htmlFor="xin-muon-so">
+                Số lượng
+              </label>
+              <input
+                className="mt-1 w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+                id="xin-muon-so"
+                min={1}
+                onChange={(event) =>
+                  setXinMuon((truoc) => ({ ...truoc, quantity: event.target.value }))
+                }
+                type="number"
+                value={xinMuon.quantity}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium" htmlFor="xin-muon-ghichu">
+                Ghi chú
+              </label>
+              <input
+                className="mt-1 w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+                id="xin-muon-ghichu"
+                maxLength={500}
+                onChange={(event) =>
+                  setXinMuon((truoc) => ({ ...truoc, note: event.target.value }))
+                }
+                placeholder="Ngập thôn Tân Bình, cần gấp trong hôm nay"
+                value={xinMuon.note}
+              />
+            </div>
+          </div>
+
+          <button
+            className="rounded-md px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+            disabled={xinMuonMutation.isPending}
+            style={{ background: "var(--color-accent)" }}
+            type="submit"
+          >
+            {xinMuonMutation.isPending ? "Đang gửi…" : "Gửi yêu cầu"}
+          </button>
+        </form>
+      ) : null}
 
       {moGhiTay ? (
         <form

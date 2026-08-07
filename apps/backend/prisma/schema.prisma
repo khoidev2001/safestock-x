@@ -826,6 +826,12 @@ model Notification {
   read           Boolean          @default(false)
   // Deep-link target for ADMIN evidence review. It is a scalar by design so
   // notification retention never owns or deletes the immutable evidence.
+  // Khoản mượn liên xã mà thông báo này nói tới.
+  //
+  // Có nó thì thông báo MANG THEO HÀNH ĐỘNG: màn hình dựng được hai nút Đồng ý /
+  // Từ chối ngay trên thẻ thông báo, người trực không phải mở tab Mượn trả rồi
+  // tìm lại đúng dòng. Lúc đang bão, mỗi bước phải đi tìm là một bước bị bỏ.
+  loanId         String?
   fieldUpdateId  String?          @unique
   createdAt      DateTime         @default(now())
 
