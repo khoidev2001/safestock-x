@@ -25,7 +25,17 @@ class LocationDto {
 export class AdminWarehouseController {
   constructor(private warehouses: AdminWarehouseService) {}
 
-  /** Toàn bộ kho trong xã (kể cả chưa có toạ độ) — cho MapView dev mode. */
+  /**
+   * Toàn bộ kho trong xã, kể cả kho chưa có toạ độ.
+   *
+   * ĐỌC thì mọi vai xem được kho, SỬA thì vẫn chỉ quản trị. Bản đồ kho là màn
+   * hình phụ trách kho dùng để biết kho thôn nằm ở đâu mà chuyển hàng tới — chặn
+   * họ ở đây thì bản đồ hiện ra trống trơn, không có điểm nào, mà cũng không báo
+   * lỗi gì. Nhìn như bản đồ hỏng chứ không như thiếu quyền.
+   *
+   * `listAll` đã lọc theo đơn vị của người gọi, nên không ai thấy kho của xã khác.
+   */
+  @RequirePermission(Permission.WAREHOUSE_MANAGE)
   @Get()
   list(@Request() req: AuthenticatedRequest) {
     return this.warehouses.listAll(req.user.userId);

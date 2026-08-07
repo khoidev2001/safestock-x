@@ -263,7 +263,15 @@ lỗi *"Không thể chuyển X → Y"*.
 
 ### 5.1. Bước ① — Báo tình huống
 
-**Ai:** ADMIN, WAREHOUSE (kho thôn báo cho thôn mình), RESCUE · 🖥️ *Điều phối cứu hộ* · 📱 tab *Báo cáo*
+**Ai:** ADMIN, WAREHOUSE (kho thôn báo cho thôn mình), RESCUE
+**Ở đâu:** 📱 tab *Báo cáo* — cho cả ba vai · 🖥️ *Điều phối cứu hộ* — **chỉ ADMIN**
+
+> Trên web, tab *Điều phối cứu hộ* lọc theo quyền `mission:create` chứ không phải
+> `mission:view`. Trang đó chỉ chứa form khai tình huống, mà form ấy chỉ dựng cho
+> người lập được phương án. Vai kho có `mission:view` nên trước đây vẫn thấy tab,
+> bấm vào lại ra một trang trắng chỉ có tiêu đề — tệ hơn hẳn việc không có tab.
+> Quyền gọi API `incident:report_submit` thì **cả ba vai vẫn có**: kho thôn và lực
+> lượng hiện trường báo tình huống từ điện thoại.
 
 Ba cách nhập, cùng đi vào một chỗ:
 
