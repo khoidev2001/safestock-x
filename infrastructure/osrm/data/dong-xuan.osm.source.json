@@ -1,0 +1,13 @@
+{
+  "name": "dong-xuan.osm",
+  "url": "https://overpass-api.de/api/interpreter",
+  "bbox": [
+    108.6,
+    13.1,
+    109.3,
+    13.7
+  ],
+  "query": "[out:xml][timeout:300];\n(\n  way[\"highway\"](13.1,108.6,13.7,109.3);\n  relation[\"type\"=\"restriction\"](13.1,108.6,13.7,109.3);\n);\n(._;>;);\nout meta;",
+  "generatedAt": "2026-07-27T03:47:30.719Z",
+  "sha256": "7917fc58b5dc67f0aea0cf2da13c5cd7e4d5f75664d5c34e4d880b3e81bb85e0"
+}

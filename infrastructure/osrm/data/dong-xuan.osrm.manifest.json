@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "graphVersion": "dong-xuan-2026-07-27",
+  "algorithm": "mld",
+  "image": "ghcr.io/project-osrm/osrm-backend:v5.27.1@sha256:855614a38f464b0558a2ad6eaa7cb8c139f39887da9b38b485ce453c6e6e6124",
+  "bbox": [
+    108.6,
+    13.1,
+    109.3,
+    13.7
+  ],
+  "source": {
+    "name": "dong-xuan.osm",
+    "url": "https://overpass-api.de/api/interpreter",
+    "bbox": [
+      108.6,
+      13.1,
+      109.3,
+      13.7
+    ],
+    "query": "[out:xml][timeout:300];\n(\n  way[\"highway\"](13.1,108.6,13.7,109.3);\n  relation[\"type\"=\"restriction\"](13.1,108.6,13.7,109.3);\n);\n(._;>;);\nout meta;",
+    "generatedAt": "2026-07-27T03:47:30.719Z",
+    "sha256": "7917fc58b5dc67f0aea0cf2da13c5cd7e4d5f75664d5c34e4d880b3e81bb85e0"
+  },
+  "generatedAt": "2026-07-27T03:47:47.150Z",
+  "files": [
+    {
+      "name": "dong-xuan.osrm.cell_metrics",
+      "size": 1115136,
+      "sha256": "b192234759d9e6e44fd7a73d3db9796b8d5c406f7333b920aa27359125c1e0da"
+    },
+    {
+      "name": "dong-xuan.osrm.cells",
+      "size": 32256,
+      "sha256": "018257cf3f0d7c2f3ead4c5397596c9a6c832a9abaf3533e773ce74110e3306a"
+    },
+    {
+      "name": "dong-xuan.osrm.cnbg",
+      "size": 333312,
+      "sha256": "e7c5eddff120df8f344ad81295a41824dd4ba702e8ba798a2d8449a9021b43f6"
+    },
+    {
+      "name": "dong-xuan.osrm.cnbg_to_ebg",
+      "size": 333312,
+      "sha256": "c02c5ce87bd5e132503ca7f06488357dc169ab2d155e9de6d003b65dc29b14f6"
+    },
+    {
+      "name": "dong-xuan.osrm.datasource_names",
+      "size": 69632,
+      "sha256": "606a97b7f74a427d7a795ccbda49ac52b82268dabe522ee53671eb25a5baabde"
+    },
+    {
+      "name": "dong-xuan.osrm.ebg",
+      "size": 1835520,
+      "sha256": "e6b7fb576998adcfac57061f4914d25b01640eae5217d745c13ac2a27b43880c"
+    },
+    {
+      "name": "dong-xuan.osrm.ebg_nodes",
+      "size": 486912,
+      "sha256": "185314396d6eaa62f5a88cca6f5c7f5491bed65c52c004de8dd1d2aa7d6d5c1f"
+    },
+    {
+      "name": "dong-xuan.osrm.edges",
+      "size": 545792,
+      "sha256": "fcbe571c3b084c5c3ce405f8306416551770095cdaddbeb063032c74128fffba"
+    },
+    {
+      "name": "dong-xuan.osrm.enw",
+      "size": 487424,
+      "sha256": "5f0afbe1ac32209ef6ef4b6a0aad83f3cac59b5cdcc6a681fa58072da63ba454"
+    },
+    {
+      "name": "dong-xuan.osrm.fileIndex",
+      "size": 2293340,
+      "sha256": "6ee4f8fbe11e10f9747762bef5c9ddf58109dea723f707dd53dd4d535f408e1b"
+    },
+    {
+      "name": "dong-xuan.osrm.geometry",
+      "size": 2402304,
+      "sha256": "242a54bfbb654f1717156bcfd25e1c287208c8ccb6b0bd850cc834fb6b8edb58"
+    },
+    {
+      "name": "dong-xuan.osrm.icd",
+      "size": 467968,
+      "sha256": "0b2ff4bf0754488141d90dd21d6dd6e07017d562d6dc1aa6eb67453db6ab9829"
+    },
+    {
+      "name": "dong-xuan.osrm.maneuver_overrides",
+      "size": 5120,
+      "sha256": "ce01cf98b2c75491b05b4d6a246df759375114f88d3749ee83fdce07acb7d5f4"
+    },
+    {
+      "name": "dong-xuan.osrm.mldgr",
+      "size": 1925632,
+      "sha256": "9473653ff603e7c86be6b4aec34f5563f404f5a1f3584c7ecf38f2ee8ac8aed2"
+    },
+    {
+      "name": "dong-xuan.osrm.names",
+      "size": 9216,
+      "sha256": "0596c26dd14061c38d6ad9243a4300784490d5725489e7af636bd66d562c1d50"
+    },
+    {
+      "name": "dong-xuan.osrm.nbg_nodes",
+      "size": 1375232,
+      "sha256": "6a4077c1386d8241df481567b2972c92e1375dcc5a8cabf64b4900bdacdb22c3"
+    },
+    {
+      "name": "dong-xuan.osrm.partition",
+      "size": 328192,
+      "sha256": "0650a000d93ab56341dd195eb515f1dd004b3680625460a63b5b214deba751bb"
+    },
+    {
+      "name": "dong-xuan.osrm.properties",
+      "size": 6144,
+      "sha256": "aeb4dbc5c340c3174ec711e490003ffed98f8dc6be61c9468916fa4324bb9c9f"
+    },
+    {
+      "name": "dong-xuan.osrm.ramIndex",
+      "size": 14848,
+      "sha256": "757a7d6559201c99223445e7810634c8cde60eae82f528c089bc80e7fdddebfa"
+    },
+    {
+      "name": "dong-xuan.osrm.restrictions",
+      "size": 4096,
+      "sha256": "6a4ec500bf8efe04b338a895d3f23b81998480ea972462453f494ecc36bc4ee9"
+    },
+    {
+      "name": "dong-xuan.osrm.timestamp",
+      "size": 3584,
+      "sha256": "5ff1041daa89e98fef75bd3999c6ada0bedaa24fc2e89334f0f5a16d75d5c5e3"
+    },
+    {
+      "name": "dong-xuan.osrm.tld",
+      "size": 3584,
+      "sha256": "76e3511ede7695dc159f6d9de75392013497db18a9e5665ee9ecba661997420d"
+    },
+    {
+      "name": "dong-xuan.osrm.tls",
+      "size": 5632,
+      "sha256": "f688100ccb09ffbfa1c05f1d40119b5fb753fb7b54d8add57f8df8b73048922f"
+    },
+    {
+      "name": "dong-xuan.osrm.turn_duration_penalties",
+      "size": 156160,
+      "sha256": "4ba4d93c592ea0b1ddaf1773210a6ed4ce328360336a738227aa2f8598493e7c"
+    },
+    {
+      "name": "dong-xuan.osrm.turn_penalties_index",
+      "size": 917504,
+      "sha256": "f5377f53ce3d151f8ad31ab4e364ace49621497c388e7da32bc1dd69972f9e7b"
+    },
+    {
+      "name": "dong-xuan.osrm.turn_weight_penalties",
+      "size": 156160,
+      "sha256": "6e247947ae2e4f9ac58d80fa550979c926f727b9042b1b73270590116e48ce0b"
+    }
+  ]
+}

@@ -4,9 +4,19 @@ Nền tảng đánh giá mức sẵn sàng kho và điều phối vật tư cứ
 
 > Trạng thái đối chiếu mới nhất (2026-07-28): P09 routing offline, workflow kho ngày thường web/mobile, APK Android `0.5.0` có voice native → PhoWhisper, dashboard/readiness/QR, AI điều phối/What-if/trợ lý hiện trường và quality gate CI đã có code/test. Audit dependency production hiện 0 advisory; web session HttpOnly đã qua browser acceptance. Gate còn lại là biên bản rehearsal hai lượt: fresh-install S23 Ultra, private-LAN/public-Internet-off, mission bốn role và desktop simulator → alert/email. Xem [báo cáo đánh giá dự thi](docs/bao-cao-danh-gia-san-sang-du-thi.md) và [runbook rehearsal](docs/COMPETITION-REHEARSAL.md).
 
+## Vừa clone repo về?
+
+Đọc **[CAI-DAT.md](CAI-DAT.md)** trước — repo không chứa `node_modules/` và
+`apps/ai-service/.venv/`, tài liệu đó hướng dẫn dựng lại đầy đủ trên máy mới.
+
 ## Nguồn sự thật
 
-- [PRD + checklist + kế hoạch cuối](docs/PRD.md): phạm vi, trạng thái thật, backlog và Definition of Done.
+- ⭐ [Cài đặt từ mã nguồn](CAI-DAT.md): dựng lại `node_modules`, `.venv`, cấu hình và
+  cơ sở dữ liệu trên máy mới sau khi clone.
+- [Rà soát hệ thống và kế hoạch tối ưu](docs/RA-SOAT-HE-THONG-VA-KE-HOACH-TOI-UU.md):
+  hiện trạng đo được, phát hiện về hiệu năng, kiến trúc, bảo mật và backlog ưu tiên.
+- [Bộ thiết kế UI/UX ứng dụng điện thoại](docs/thiet-ke-ui-mobile/README.md):
+  hệ thống thiết kế, thư viện thành phần và bản thiết kế từng màn.
 - [PM re-review quản lý kho ngày thường](docs/PM-REVIEW-QUAN-LY-KHO-NGAY-THUONG.md):
   điểm trước/sau, finding đã khắc phục và release gate còn chờ.
 - [Bàn giao chênh lệch so với GitHub](docs/BAN-GIAO-CHENH-LECH-SO-VOI-GITHUB.md):
@@ -20,11 +30,7 @@ Nền tảng đánh giá mức sẵn sàng kho và điều phối vật tư cứ
 - ⭐ [Hướng dẫn test toàn diện (cho giám khảo)](docs/HUONG-DAN-TEST-TOAN-DIEN.md):
   một file tất-tần-tật từ clone → chạy → test mọi thành phần (backend, web, AI, mobile,
   desktop simulator, email cảnh báo, test tự động).
-- [Hướng dẫn cài đặt và chạy](docs/HUONG-DAN-CAI-DAT-VA-CHAY.md)
 - [Runbook hybrid cùng domain](docs/HYBRID-DOMAIN-RUNBOOK.md)
-- [Hướng dẫn kiểm thử](docs/HUONG-DAN-TEST.md)
-- [Bộ dữ liệu seed](docs/SEED-DATASET.md)
-- [Quy tắc đóng góp](docs/CONTRIBUTING.md)
 - [Coding standards](skills/CODING-STANDARDS.md)
 
 Các plan, work-log và báo cáo lịch sử đã được loại khỏi gói source dự thi; Git history không phải nguồn trạng thái. Báo cáo đánh giá và source/test hiện tại là bằng chứng đối chiếu.
@@ -146,4 +152,4 @@ vận hành vì bước seed sẽ reset dữ liệu.
 - Không commit `.env`, token, key, backup hoặc dữ liệu cá nhân.
 - Không public PostgreSQL, Redis, AI Service hoặc Ollama.
 - Simulator hiện chưa được coi là an toàn cho dữ liệu production.
-- Chỉ tick hoàn thành trong [docs/PRD.md](docs/PRD.md) sau khi có bằng chứng test/nghiệm thu.
+- Chỉ đánh dấu hoàn thành sau khi có bằng chứng test hoặc nghiệm thu.

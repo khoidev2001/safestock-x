@@ -1,12 +1,6 @@
-node_modules/
-dist/
-build/
-.next/
-# Thư mục build tách biệt cho instance frontend chạy song song (demo/preflight)
-# qua NEXT_DIST_DIR — là artifact sinh ra, không commit.
-.next-*/
-.expo/
-*.log
+# ============================================================
+# BÍ MẬT — không bao giờ commit
+# ============================================================
 .env
 .env.demo
 .env.local
@@ -14,30 +8,51 @@ build/
 **/.env
 !.env.example
 !.env.demo.example
-coverage/
-.turbo/
-__pycache__/
-*.pyc
+
+# Khóa ký APK. Lộ ra là KHÔNG thu hồi được: Android không cho đổi
+# khóa ký mà vẫn giữ được đường cập nhật cho máy đã cài.
+*.keystore
+keystore.properties
+
+# ============================================================
+# PHỤ THUỘC — dựng lại theo CAI-DAT.md
+# ============================================================
+# node_modules: `pnpm install`, khóa phiên bản trong pnpm-lock.yaml
+node_modules/
+
+# .venv: `pip install -r requirements.txt`.
+# Bản PyTorch CUDA nặng hơn 3 GB, có tệp vượt giới hạn 100 MB của GitHub.
 .venv/
 venv/
+
+# ============================================================
+# KẾT QUẢ BIÊN DỊCH — dựng lại bằng các lệnh build
+# ============================================================
+dist/
+build/
+.next/
+# Thư mục build tách biệt cho instance frontend chạy song song (demo/preflight)
+# qua NEXT_DIST_DIR — là artifact sinh ra, không commit.
+.next-*/
+out/
+release/
+.expo/
+.gradle/
+.cxx/
+.test-out*/
+*.tsbuildinfo
+__pycache__/
+*.pyc
+.pytest_cache/
+coverage/
+.turbo/
+
+# ============================================================
+# KHÁC
+# ============================================================
+*.log
 .DS_Store
 prisma/*.db
-*.tsbuildinfo
-
-# OSRM source/graph được build và kiểm checksum riêng; không đưa artifact lớn vào Git.
-/infrastructure/osrm/data/*
-!/infrastructure/osrm/data/README.md
 
 # Báo cáo xuất cục bộ; dữ liệu có thể chứa thông tin vận hành và được sinh lại khi cần
 /apps/backend/baocao-*.xlsx
-
-# Ghi chú làm việc nội bộ (AI memory) — không đẩy lên repo chung
-memory/
-
-# Skill AI cài cá nhân (mỗi người tự `npx skills add`) — không commit
-.agents/
-.claude/
-
-# Tài liệu nội bộ — kịch bản demo, ghi chú bàn giao, việc còn làm.
-# Không thuộc phần mềm, và không cần cho người đọc mã.
-docs/
