@@ -78,6 +78,8 @@ export interface MissionReadinessAssessment {
   items: {
     sku: string;
     itemName: string;
+    /** Đơn vị kho đếm. Bản ghi cũ (trước khi thêm trường) không có. */
+    unit?: string;
     required: number;
     allocated: number;
     shortage: number;

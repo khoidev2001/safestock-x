@@ -5,6 +5,12 @@ import { CollapsiblePanel } from "@/components/shared/collapsible-panel";
 import { ColorIcon } from "@/components/shared/color-icon";
 import type { ActionPlan } from "@/lib/mission-api";
 import type { LatLng } from "@/lib/geo";
+import {
+  LIT_MOI_CHAI_NUOC,
+  litTuChai,
+  moTaSoLuongVatTu,
+  WATER_BOTTLE_SKU,
+} from "@safestock/shared-types";
 
 const IncidentMap = dynamic(() => import("./incident-map").then((m) => m.IncidentMap), {
   ssr: false,
@@ -36,7 +42,9 @@ function describeDispatchOrder(warehouses: ActionPlan["warehouses"]): DispatchSt
   const unrouted = warehouses.filter((w) => w.routeStatus !== "ROUTED" || w.distanceKm == null);
 
   const listItems = (w: ActionPlan["warehouses"][number]) =>
-    w.contributions.map((item) => `${item.itemName} ${item.quantity} ${item.unit}`).join(" · ");
+    w.contributions
+      .map((item) => `${item.itemName} ${moTaSoLuongVatTu(item.sku, item.quantity, item.unit)}`)
+      .join(" · ");
 
   const stops: DispatchStop[] = routed.map((w, index) => ({
     id: w.id,
@@ -145,7 +153,19 @@ export function ActionPlanView({
             <tbody>
               {plan.allocations.map((a) => (
                 <tr key={a.sku} className="border-b last:border-0">
-                  <td className="py-2 pr-3 font-medium">{a.itemName}</td>
+                  <td className="py-2 pr-3 font-medium">
+                    {a.itemName}
+                    {a.sku === WATER_BOTTLE_SKU && (
+                      // Cỡ chai lấy từ hằng số dùng chung. Ghi tay "350 ml" ở đây từng
+                      // là chỗ duy nhất nói cỡ chai, nên đổi cỡ chai một nơi là màn hình
+                      // này nói một đằng còn phép tính chạy một nẻo.
+                      <span className="block text-xs font-normal text-[var(--text-muted)]">
+                        Cột Cần/Cấp/Thiếu tính theo CHAI {LIT_MOI_CHAI_NUOC.toLocaleString("vi")}{" "}
+                        lít · quy ra LÍT: cần {litTuChai(a.required).toLocaleString("vi")}, cấp được{" "}
+                        {litTuChai(a.allocated).toLocaleString("vi")}
+                      </span>
+                    )}
+                  </td>
                   <td className="tabular py-2 pr-3 text-right">{a.required}</td>
                   <td className="tabular py-2 pr-3 text-right">{a.allocated}</td>
                   <td
@@ -220,7 +240,10 @@ export function ActionPlanView({
                     <ul className="mt-2 space-y-1 text-xs text-[var(--text-muted)]">
                       {w.contributions.map((item) => (
                         <li key={item.sku}>
-                          {item.itemName}: <b>{item.quantity}</b> {item.unit}
+                          {item.itemName}: <b>{item.quantity.toLocaleString("vi")}</b> {item.unit}
+                          {item.sku === WATER_BOTTLE_SKU && (
+                            <span> ({litTuChai(item.quantity).toLocaleString("vi")} lít)</span>
+                          )}
                         </li>
                       ))}
                     </ul>

@@ -1,3 +1,4 @@
+import { LIT_MOI_CHAI_NUOC, litTuChai, WATER_BOTTLE_SKU } from "@safestock/shared-types";
 import { CollapsiblePanel } from "@/components/shared/collapsible-panel";
 import { ColorIcon } from "@/components/shared/color-icon";
 import type { MissionReadinessAssessment, MissionReadinessStatus } from "@/lib/mission-api";
@@ -38,9 +39,22 @@ export function MissionReadinessPanel({ assessment }: { assessment: MissionReadi
           <div className="grid grid-cols-[1fr_auto] gap-3 px-4 py-3" key={item.sku}>
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{item.itemName}</p>
+              {/* Có đơn vị thì "760/760" mới đọc được là chai hay bộ. Thiếu 0 thì
+                  không nhắc: dòng nào cũng kết bằng "thiếu 0" là dạy mắt bỏ qua
+                  đúng chữ "thiếu". */}
               <p className="mt-0.5 text-xs text-[var(--text-muted)]">
-                Đáp ứng {item.allocated}/{item.required}, thiếu {item.shortage}
+                Đáp ứng {item.allocated.toLocaleString("vi")}/{item.required.toLocaleString("vi")}
+                {item.unit ? ` ${item.unit}` : ""}
+                {item.shortage > 0
+                  ? `, thiếu ${item.shortage.toLocaleString("vi")}${item.unit ? ` ${item.unit}` : ""}`
+                  : ""}
               </p>
+              {item.sku === WATER_BOTTLE_SKU && (
+                <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+                  Chai {LIT_MOI_CHAI_NUOC.toLocaleString("vi")} lít · quy ra{" "}
+                  {litTuChai(item.required).toLocaleString("vi")} lít nước uống
+                </p>
+              )}
             </div>
             <span
               className="self-center text-xs font-semibold"
