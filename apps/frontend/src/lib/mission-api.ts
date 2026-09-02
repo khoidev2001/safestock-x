@@ -104,6 +104,17 @@ export interface Mission {
   fulfillment: number;
   // Mô tả thô của trưởng thôn (mobile) khi mission là "hộp thư" báo cáo — web tự điền + phân tích.
   reportText?: string | null;
+  /**
+   * Tình huống đã chốt của nhiệm vụ (nguồn để tính nhu cầu vật tư).
+   *
+   * Ba nhóm dễ tổn thương chỉ nằm ở đây chứ không có cột riêng, nên muốn biết form
+   * đang mở đã lệch khỏi nhiệm vụ hay chưa thì phải đọc trường này.
+   */
+  parsedInput?: {
+    children?: number;
+    elderly?: number;
+    medicalSupportCases?: number;
+  } | null;
   incidentLat: number | null;
   incidentLng: number | null;
   actionPlan: ActionPlan | null;
