@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { MAX_RECORDING_MS, selectRecordingBackend } from "../audio-platform-state";
 import { parseOfflineEnvelope, serializeOfflineEnvelope } from "../offline-cache-state";
-import { buildInventorySummary, initialTabForRole, tabsForRole } from "../dashboard-state";
+import {
+  buildInventorySummary,
+  initialTabForRole,
+  tabsForRole,
+  warehouseSectionsForRole,
+} from "../dashboard-state";
 import {
   canPerformInventoryAction,
   parseScannedInventoryCode,
@@ -10,11 +15,21 @@ import {
   validateLoanReturn,
 } from "../inventory-state";
 import { fieldForceActionsFor, sortMissionsForFieldForce } from "../mission-state";
+import {
+  MAX_VISIBLE_TOASTS,
+  TOAST_VISIBLE_MS,
+  dismissToast,
+  mergeNotification,
+  pushToast,
+  type ToastEntry,
+} from "../notification-feed-state";
 import { parseStoredSession, serializeSession } from "../session-state";
 import {
+  blockingMonthlyReport,
   buildMonthlyReportDraft,
   buildMonthlyReportRows,
   finalizeMonthlyReportDraft,
+  isValidReportPeriod,
 } from "../monthly-report-state";
 import { mobileRoleLabel } from "../role-labels";
 
@@ -81,21 +96,33 @@ test("offline envelope is account-scoped and exposes cache age", () => {
 test("app điện thoại chỉ có hai giao diện, chia theo vai lúc đăng nhập", () => {
   // Lực lượng hiện trường KHÔNG có nghiệp vụ kho: họ xem xét tình hình thực tế
   // rồi gửi yêu cầu, việc đối chiếu tồn và cho mượn là của người giữ kho.
-  assert.deepEqual(tabsForRole("RESCUE"), ["missions", "report", "alerts"]);
+  assert.deepEqual(tabsForRole("RESCUE"), ["missions", "report", "alerts", "account"]);
 
   // Quản lý kho tại chỗ kiêm luôn trưởng thôn, nên có cả kho lẫn màn báo cáo.
+  // Sẵn sàng, Kho và Kiểm kê cùng nói về một cái kho nên nằm chung một tab.
   assert.deepEqual(tabsForRole("WAREHOUSE"), [
     "home",
-    "readiness",
-    "inventory",
-    "monthly-report",
     "report",
+    "warehouse",
     "alerts",
+    "account",
   ]);
 });
 
+test("ba mục kho nằm sau tab Quản lý kho, không bày thành ba tab riêng", () => {
+  assert.deepEqual(warehouseSectionsForRole("WAREHOUSE"), [
+    "inventory",
+    "readiness",
+    "monthly-report",
+  ]);
+
+  // ADMIN chỉ quét QR tại kệ, nên vào tab kho là thấy thẳng màn Kho — không kèm
+  // mức sẵn sàng và báo cáo kiểm kê tháng của người giữ kho tại chỗ.
+  assert.deepEqual(warehouseSectionsForRole("ADMIN"), ["inventory"]);
+});
+
 test("ADMIN trên điện thoại chỉ để quét QR nhập xuất, không mang cả bảng điều hành", () => {
-  assert.deepEqual(tabsForRole("ADMIN"), ["inventory"]);
+  assert.deepEqual(tabsForRole("ADMIN"), ["warehouse", "account"]);
 });
 
 test("không vai nào trên điện thoại còn thấy màn của trưởng thôn cũ", () => {
@@ -103,10 +130,18 @@ test("không vai nào trên điện thoại còn thấy màn của trưởng th�
   assert.deepEqual(tabsForRole("REPORTER"), tabsForRole("WAREHOUSE"));
 });
 
+test("mọi vai đều có tab Tài khoản để đăng xuất", () => {
+  // Nút đăng xuất phải có MỘT chỗ chắc chắn tìm thấy ở mọi vai. Vai nào thiếu
+  // tab này thì người dùng kẹt lại trong phiên đang mở trên máy dùng chung.
+  for (const role of ["WAREHOUSE", "RESCUE", "ADMIN", "REPORTER"]) {
+    assert.ok(tabsForRole(role).includes("account"), `vai ${role} thiếu tab Tài khoản`);
+  }
+});
+
 test("mở app vào thẳng việc chính của từng vai", () => {
   assert.equal(initialTabForRole("RESCUE"), "missions");
   assert.equal(initialTabForRole("WAREHOUSE"), "home");
-  assert.equal(initialTabForRole("ADMIN"), "inventory");
+  assert.equal(initialTabForRole("ADMIN"), "warehouse");
 });
 
 test("lực lượng hiện trường chỉ thấy nút khi thao tác thực sự đi được", () => {
@@ -307,4 +342,102 @@ test("voice recording selects an explicit platform backend", () => {
 
 test("voice clips are capped before the API payload can grow without bound", () => {
   assert.equal(MAX_RECORDING_MS, 60_000);
+});
+
+function toast(key: string, missionId: string | null = null): ToastEntry {
+  return { key, id: key.split("#")[0]!, kind: "INCIDENT_DETECTED", title: key, body: "", missionId };
+}
+
+test("thông báo mới nhất luôn nằm trên, đẩy thông báo cũ xuống", () => {
+  // Truyền thẳng giới hạn để bài này chỉ nói về THỨ TỰ; phần cắt bớt khi dồn dập
+  // do bài kế tiếp giữ.
+  let stack: ToastEntry[] = [];
+  stack = pushToast(stack, toast("a#1"), 3);
+  stack = pushToast(stack, toast("b#2"), 3);
+  stack = pushToast(stack, toast("c#3"), 3);
+
+  assert.deepEqual(
+    stack.map((item) => item.key),
+    ["c#3", "b#2", "a#1"],
+  );
+});
+
+test("thông báo dồn dập không lấp kín màn hình", () => {
+  // Lúc bão về thì thông báo tới liên tục. Không chặn thì chúng phủ hết màn hình
+  // và che mất chính việc người dùng đang làm — cái cũ nhất phải rơi ra, nhưng
+  // vẫn còn nguyên trong tab Thông báo.
+  const keys = ["a#1", "b#2", "c#3", "d#4", "e#5"];
+  let stack: ToastEntry[] = [];
+  for (const key of keys) {
+    stack = pushToast(stack, toast(key));
+  }
+
+  assert.equal(stack.length, MAX_VISIBLE_TOASTS);
+  // Giữ đúng những cái MỚI NHẤT, xếp mới trước cũ sau.
+  assert.deepEqual(
+    stack.map((item) => item.key),
+    keys.slice(-MAX_VISIBLE_TOASTS).reverse(),
+  );
+});
+
+test("mỗi thông báo nổi 5 giây", () => {
+  assert.equal(TOAST_VISIBLE_MS, 5000);
+});
+
+test("hết giờ hoặc bấm đóng thì chỉ tắt đúng cái đó", () => {
+  const stack = [toast("c#3"), toast("b#2"), toast("a#1")];
+
+  assert.deepEqual(
+    dismissToast(stack, "b#2").map((item) => item.key),
+    ["c#3", "a#1"],
+  );
+  // Khoá không còn trong chồng (bấm đóng đúng lúc hết giờ) thì không làm gì cả.
+  assert.deepEqual(dismissToast(stack, "z#9"), stack);
+});
+
+test("máy chủ gửi lại cùng một thông báo thì nó nổi lại, không nhân đôi trong danh sách", () => {
+  // Backend cập nhật rồi đẩy lại (updateAndPush) vẫn giữ nguyên id.
+  const list = [{ id: "n-2", title: "sau" }, { id: "n-1", title: "trước" }];
+  const merged = mergeNotification(list, { id: "n-1", title: "trước · đã cập nhật" });
+
+  assert.deepEqual(merged, [
+    { id: "n-1", title: "trước · đã cập nhật" },
+    { id: "n-2", title: "sau" },
+  ]);
+
+  // Còn ở chồng thông báo nổi thì đó là HAI lượt hiện khác nhau, nên khoá khác
+  // nhau — nếu dùng chung id làm khoá, lượt mới sẽ thừa hưởng bộ đếm 5 giây của
+  // lượt cũ và có khi tắt ngay khi vừa hiện.
+  const stack = pushToast(pushToast([], toast("n-1#1")), toast("n-1#2"));
+  assert.deepEqual(
+    stack.map((item) => item.key),
+    ["n-1#2", "n-1#1"],
+  );
+});
+
+test("kỳ đã có báo cáo chờ duyệt hoặc đã duyệt thì chặn gửi lại", () => {
+  const reports = [
+    { warehouseId: "kho-1", period: "2026-09", status: "PENDING" },
+    { warehouseId: "kho-1", period: "2026-08", status: "APPROVED" },
+    { warehouseId: "kho-1", period: "2026-07", status: "REJECTED" },
+    { warehouseId: "kho-2", period: "2026-09", status: "APPROVED" },
+  ];
+
+  assert.equal(blockingMonthlyReport(reports, "kho-1", "2026-09")?.status, "PENDING");
+  assert.equal(blockingMonthlyReport(reports, "kho-1", "2026-08")?.status, "APPROVED");
+  // Bị từ chối thì PHẢI gửi lại được — đó là mục đích của việc từ chối.
+  assert.equal(blockingMonthlyReport(reports, "kho-1", "2026-07"), null);
+  // Kho khác nộp rồi không liên quan đến kho mình.
+  assert.equal(blockingMonthlyReport(reports, "kho-1", "2026-10"), null);
+  assert.equal(blockingMonthlyReport(reports, "", "2026-09"), null);
+});
+
+test("kỳ báo cáo chỉ hợp lệ khi đúng dạng YYYY-MM và tháng 01–12", () => {
+  assert.equal(isValidReportPeriod("2026-09"), true);
+  assert.equal(isValidReportPeriod(" 2026-01 "), true);
+  assert.equal(isValidReportPeriod("2026-13"), false);
+  assert.equal(isValidReportPeriod("2026-00"), false);
+  assert.equal(isValidReportPeriod("2026-9"), false);
+  assert.equal(isValidReportPeriod("09-2026"), false);
+  assert.equal(isValidReportPeriod(""), false);
 });

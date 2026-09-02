@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import {
-  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -21,8 +21,10 @@ import {
   type StockReport,
 } from "./api";
 import {
+  blockingMonthlyReport,
   buildMonthlyReportDraft,
   finalizeMonthlyReportDraft,
+  isValidReportPeriod,
   type MonthlyReportDraftRow,
 } from "./monthly-report-state";
 import { c } from "./styles";
@@ -37,7 +39,22 @@ export function MonthlyReportScreen({ token, user }: { token: string; user: Auth
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<MonthlyReportDraftRow[]>([]);
   const [draftWarehouse, setDraftWarehouse] = useState<{ id: string; name: string } | null>(null);
+  /**
+   * Đang chờ xác nhận gửi.
+   *
+   * Bước xác nhận nằm NGAY TRONG màn hình, không dùng hộp thoại của hệ điều hành.
+   * Hộp thoại đó đã một lần làm treo đúng màn này: `Alert` của react-native-web là
+   * hàm rỗng nên callback không bao giờ được gọi, nút kẹt ở "Đang gửi…" và không
+   * một request nào được phát đi. Cùng một đoạn mã chạy trên ba nền (Expo Go, APK,
+   * bản web) mà lại giao bước quan trọng nhất cho thứ hành xử khác nhau ở cả ba là
+   * tự đặt bẫy. Hai nút vẽ bằng React thì nền nào cũng vẽ được như nhau.
+   */
+  const [pendingConfirm, setPendingConfirm] = useState(false);
   const isAdmin = user.role === "ADMIN";
+  const periodValid = isValidReportPeriod(period);
+  // Kỳ này đã có báo cáo đang chờ duyệt hoặc đã duyệt → máy chủ sẽ từ chối.
+  const blocking = blockingMonthlyReport(reports, user.warehouseId ?? "", period.trim());
+  const locked = Boolean(blocking);
 
   const load = useCallback(async () => {
     setError(null);
@@ -54,6 +71,68 @@ export function MonthlyReportScreen({ token, user }: { token: string; user: Auth
     void load();
   }, [load]);
 
+  /**
+   * Tự làm mới trạng thái báo cáo trong lúc màn hình đang mở.
+   *
+   * Việc duyệt xảy ra ở MÁY KHÁC — cán bộ xã bấm duyệt trên web, không có gì đi
+   * qua điện thoại này để nó biết. Trước đây màn hình chỉ đọc dữ liệu đúng một
+   * lần lúc mở, nên người giữ kho ngồi nhìn chữ "Chờ duyệt" trong khi báo cáo đã
+   * được duyệt từ lâu; phải rời sang tab khác rồi quay lại (buộc dựng lại màn
+   * hình) thì mới thấy. Với người dùng thì đó là "app hiện sai".
+   *
+   * Làm mới IM LẶNG: không đụng vào `loading`, `busy` hay `error`. Vòng quay này
+   * chạy nền, nên nó không được phép làm nhấp nháy con quay hay xoá mất câu lỗi
+   * người dùng đang đọc — và nhất là không được khoá nút giữa lúc đang bấm.
+   *
+   * Mười giây một lượt: trạng thái này đổi vài lần một tháng, hỏi dày hơn chỉ tốn
+   * pin và sóng của một chiếc điện thoại đang ở vùng bão.
+   */
+  useEffect(() => {
+    let huy = false;
+    const lamMoi = async () => {
+      try {
+        const moi = await fetchStockReports(token);
+        if (!huy) setReports(moi);
+      } catch {
+        // Mất sóng thì giữ nguyên số liệu đang hiện; lượt sau tự thử lại.
+      }
+    };
+    const dongHo = setInterval(() => void lamMoi(), 10_000);
+    return () => {
+      huy = true;
+      clearInterval(dongHo);
+    };
+  }, [token]);
+
+  /**
+   * Báo cáo đang mở cũng phải theo kịp.
+   *
+   * Danh sách làm mới rồi mà bản đang xem vẫn đứng yên thì người dùng đọc được
+   * hai trạng thái khác nhau cho cùng một báo cáo, tuỳ họ đang nhìn màn hình nào.
+   * Lấy trạng thái mới từ chính danh sách vừa tải, không gọi thêm một lượt mạng.
+   */
+  useEffect(() => {
+    if (!selected) return;
+    const moi = reports.find((report) => report.id === selected.id);
+    if (moi && moi.status !== selected.status) {
+      setSelected((hienTai) => (hienTai ? { ...hienTai, status: moi.status } : hienTai));
+    }
+  }, [reports, selected]);
+
+  /**
+   * Đổi tháng/năm là bắt đầu lại từ đầu.
+   *
+   * Phiếu đang mở là ảnh chụp tồn kho của KỲ CŨ: giữ nguyên số đếm rồi gửi sang
+   * kỳ mới là nộp số của tháng trước dưới tên tháng này — sai lệch không ai nhìn
+   * ra khi duyệt, vì mọi con số đều hợp lệ.
+   */
+  useEffect(() => {
+    setDraft([]);
+    setDraftWarehouse(null);
+    setPendingConfirm(false);
+    setError(null);
+  }, [period]);
+
   const openReport = async (id: string) => {
     setBusy(true);
     setError(null);
@@ -68,8 +147,14 @@ export function MonthlyReportScreen({ token, user }: { token: string; user: Auth
   };
 
   const prepareCount = async () => {
-    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
+    if (!periodValid) {
       setError("Kỳ báo cáo phải là tháng hợp lệ dạng YYYY-MM.");
+      return;
+    }
+    // Chặn ở đây nữa, không chỉ ở nút: danh sách báo cáo có thể vừa được tải lại
+    // trong lúc người dùng đang đứng trên màn hình.
+    if (blocking) {
+      setError(`Kỳ ${period} đã có báo cáo ${statusLabel(blocking.status)}. Không gửi lại được.`);
       return;
     }
     setBusy(true);
@@ -96,49 +181,50 @@ export function MonthlyReportScreen({ token, user }: { token: string; user: Auth
     }
   };
 
-  const confirmSubmit = () => {
+  /** Bấm "Kiểm tra & gửi": soát số đếm rồi mở bước xác nhận ngay trong màn hình. */
+  const reviewBeforeSubmit = () => {
+    if (!draftWarehouse) return;
+    try {
+      finalizeMonthlyReportDraft(draft);
+    } catch (validationError) {
+      setError(validationError instanceof Error ? validationError.message : "Số đếm không hợp lệ.");
+      setPendingConfirm(false);
+      return;
+    }
+    setError(null);
+    setPendingConfirm(true);
+  };
+
+  const submitCount = async () => {
     if (!draftWarehouse) return;
     let rows: ReturnType<typeof finalizeMonthlyReportDraft>;
     try {
       rows = finalizeMonthlyReportDraft(draft);
     } catch (validationError) {
       setError(validationError instanceof Error ? validationError.message : "Số đếm không hợp lệ.");
+      setPendingConfirm(false);
       return;
     }
     setBusy(true);
     setError(null);
-    Alert.alert(
-      "Xác nhận gửi báo cáo",
-      `${draftWarehouse.name} · kỳ ${period}\n${rows.length} lô đã nhập số đếm thực tế.`,
-      [
-        { text: "Hủy", style: "cancel", onPress: () => setBusy(false) },
-        {
-          text: "Gửi",
-          onPress: () => {
-            void (async () => {
-              try {
-                await submitStockReport(token, {
-                  warehouseId: draftWarehouse.id,
-                  period,
-                  rows,
-                  requestId: createMutationRequestId("stock-report"),
-                });
-                setDraft([]);
-                setDraftWarehouse(null);
-                await load();
-              } catch (submitError) {
-                setError(
-                  submitError instanceof Error ? submitError.message : "Không gửi được báo cáo.",
-                );
-              } finally {
-                setBusy(false);
-              }
-            })();
-          },
-        },
-      ],
-      { cancelable: false },
-    );
+    try {
+      await submitStockReport(token, {
+        warehouseId: draftWarehouse.id,
+        period,
+        rows,
+        requestId: createMutationRequestId("stock-report"),
+      });
+      setDraft([]);
+      setDraftWarehouse(null);
+      setPendingConfirm(false);
+      await load();
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Không gửi được báo cáo.");
+    } finally {
+      // Luôn tắt cờ bận, kể cả khi `load()` phía trên ném lỗi: nút kẹt ở "Đang
+      // gửi…" là người dùng ngồi chờ một việc đã xong từ lâu.
+      setBusy(false);
+    }
   };
 
   const processReport = async (kind: "APPROVE" | "REJECT") => {
@@ -167,8 +253,17 @@ export function MonthlyReportScreen({ token, user }: { token: string; user: Auth
   if (selected) {
     return (
       <ScrollView style={screenStyles.screen} contentContainerStyle={screenStyles.content}>
-        <Pressable onPress={() => setSelected(null)} disabled={busy}>
-          <Text style={screenStyles.link}>‹ Danh sách báo cáo</Text>
+        {/* Mũi tên vẽ bằng bộ icon vector, không dùng ký tự "‹".
+            "‹" là dấu ngoặc kép nhọn của tiếng Pháp, không phải mũi tên: cỡ của nó
+            do phông chữ quyết định nên luôn nhỏ hơn chữ bên cạnh, và máy thiếu
+            phông thì ra ô vuông rỗng. Icon vector thì đặt bao nhiêu ra bấy nhiêu. */}
+        <Pressable
+          onPress={() => setSelected(null)}
+          disabled={busy}
+          style={screenStyles.backRow}
+        >
+          <MaterialCommunityIcons name="chevron-left" size={13} color={c.amber} />
+          <Text style={screenStyles.link}>Danh sách báo cáo</Text>
         </Pressable>
         <Text style={screenStyles.title}>Kiểm tra số liệu</Text>
         <Text style={screenStyles.subtitle}>
@@ -249,7 +344,28 @@ export function MonthlyReportScreen({ token, user }: { token: string; user: Auth
             style={screenStyles.input}
             value={period}
           />
-          {draft.length === 0 ? (
+          {/* Kỳ đã có báo cáo: nói NGAY tại đây, và khoá luôn nút mở phiếu.
+              Trước đây màn hình vẫn mời người dùng bắt đầu, đếm hết vài chục lô,
+              gõ từng con số, rồi mới nhận lỗi 409 từ máy chủ lúc bấm gửi. Cả buổi
+              công việc đó không cứu được gì — và người dùng cũng không hiểu vì sao
+              đến giờ mới bị chặn. */}
+          {locked ? (
+            <View style={screenStyles.lockedBox}>
+              <Text style={screenStyles.lockedTitle}>
+                Kỳ {period} đã có báo cáo · {statusLabel(blocking!.status)}
+              </Text>
+              <Text style={screenStyles.muted}>
+                {blocking!.status === "APPROVED"
+                  ? "Báo cáo đã được xã duyệt và áp vào tồn kho, không gửi lại được."
+                  : "Báo cáo đang chờ xã duyệt. Chờ xã duyệt hoặc từ chối; bị từ chối thì mới gửi lại được."}
+              </Text>
+              <Text style={screenStyles.muted}>
+                Đổi ô kỳ báo cáo phía trên sang tháng khác để lập phiếu mới.
+              </Text>
+            </View>
+          ) : !periodValid ? (
+            <Text style={screenStyles.muted}>Nhập kỳ dạng YYYY-MM, ví dụ 2026-09.</Text>
+          ) : draft.length === 0 ? (
             <ActionButton
               disabled={busy}
               label={busy ? "Đang lập phiếu…" : "Bắt đầu kiểm kê"}
@@ -272,6 +388,7 @@ export function MonthlyReportScreen({ token, user }: { token: string; user: Auth
                     </Text>
                   </View>
                   <TextInput
+                    editable={!busy && !locked}
                     keyboardType="number-pad"
                     onChangeText={(countedQuantity) =>
                       setDraft((current) =>
@@ -287,22 +404,49 @@ export function MonthlyReportScreen({ token, user }: { token: string; user: Auth
                   />
                 </View>
               ))}
-              <View style={screenStyles.actionRow}>
-                <ActionButton
-                  danger
-                  disabled={busy}
-                  label="Hủy phiếu"
-                  onPress={() => {
-                    setDraft([]);
-                    setDraftWarehouse(null);
-                  }}
-                />
-                <ActionButton
-                  disabled={busy}
-                  label={busy ? "Đang gửi…" : "Kiểm tra & gửi"}
-                  onPress={confirmSubmit}
-                />
-              </View>
+              {pendingConfirm ? (
+                <View style={screenStyles.confirmBox}>
+                  <Text style={screenStyles.lockedTitle}>Xác nhận gửi báo cáo</Text>
+                  <Text style={screenStyles.muted}>
+                    {draftWarehouse?.name} · kỳ {period}
+                  </Text>
+                  <Text style={screenStyles.muted}>
+                    {draft.length} lô đã nhập số đếm thực tế. Gửi rồi thì phải chờ xã duyệt hoặc
+                    từ chối mới sửa lại được.
+                  </Text>
+                  <View style={screenStyles.actionRow}>
+                    <ActionButton
+                      danger
+                      disabled={busy}
+                      label="Quay lại sửa"
+                      onPress={() => setPendingConfirm(false)}
+                    />
+                    <ActionButton
+                      disabled={busy}
+                      label={busy ? "Đang gửi…" : "Gửi báo cáo"}
+                      onPress={() => void submitCount()}
+                    />
+                  </View>
+                </View>
+              ) : (
+                <View style={screenStyles.actionRow}>
+                  <ActionButton
+                    danger
+                    disabled={busy}
+                    label="Hủy phiếu"
+                    onPress={() => {
+                      setDraft([]);
+                      setDraftWarehouse(null);
+                      setPendingConfirm(false);
+                    }}
+                  />
+                  <ActionButton
+                    disabled={busy}
+                    label="Kiểm tra & gửi"
+                    onPress={reviewBeforeSubmit}
+                  />
+                </View>
+              )}
             </>
           )}
         </View>
@@ -380,7 +524,8 @@ const screenStyles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 32, gap: 12 },
   title: { color: c.text, fontSize: 22, fontWeight: "800" },
   subtitle: { color: c.muted, fontSize: 13, lineHeight: 19 },
-  link: { color: c.amber, fontSize: 13, fontWeight: "700", marginBottom: 4 },
+  link: { color: c.amber, fontSize: 13, fontWeight: "700" },
+  backRow: { flexDirection: "row", alignItems: "center", gap: 2, marginBottom: 4 },
   submitCard: {
     backgroundColor: c.surface,
     borderColor: c.border,
@@ -388,6 +533,27 @@ const screenStyles = StyleSheet.create({
     borderRadius: 12,
     padding: 14,
     gap: 10,
+  },
+  // Khối "kỳ này đã có báo cáo": viền hổ phách, cùng màu với trạng thái chờ duyệt
+  // trong danh sách bên dưới để hai chỗ nói về một thứ trông như một thứ.
+  lockedBox: {
+    borderColor: c.amber,
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    gap: 6,
+  },
+  confirmBox: {
+    borderColor: c.border,
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    gap: 8,
+  },
+  lockedTitle: {
+    color: c.text,
+    fontSize: 15,
+    fontWeight: "700",
   },
   reportCard: {
     flexDirection: "row",
