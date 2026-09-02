@@ -159,6 +159,26 @@ export class NotificationService {
     return { count: updated.count };
   }
 
+  /**
+   * Đánh dấu đã đọc một lô thông báo — không kêu khi có id không khớp.
+   *
+   * Khác `markRead` một cái có chủ ý: ở đó người dùng chỉ vào ĐÚNG MỘT thông
+   * báo, nên không tìm thấy là chuyện đáng báo. Ở đây danh sách id do trình
+   * duyệt gom từ bản chụp cách đó vài giây, nên vài id đã được người khác cùng
+   * vai đọc mất là chuyện bình thường. Ném lỗi vì chuyện bình thường đó sẽ làm
+   * hỏng cả lượt xoá số trên tab — số nằm nguyên tại chỗ dù đã bấm vào.
+   *
+   * `organizationId` + `recipientRole` vẫn nằm trong điều kiện, nên id của tổ
+   * chức khác lọt vào cũng chỉ được đếm là 0, không đọc và không sửa gì.
+   */
+  async markManyRead(actorId: string, role: UserRole, ids: string[]) {
+    const organizationId = await this.actorOrganizationId(actorId);
+    return this.db.notification.updateMany({
+      where: { id: { in: ids }, organizationId, recipientRole: role, read: false },
+      data: { read: true },
+    });
+  }
+
   async markAllRead(actorId: string, role: UserRole) {
     const organizationId = await this.actorOrganizationId(actorId);
     return this.db.notification.updateMany({

@@ -97,6 +97,39 @@ describe("NotificationService organization scope", () => {
     });
   });
 
+  it("bulk-marks only unread notifications inside the caller's organization and role", async () => {
+    const { prisma, service } = makeService();
+    prisma.notification.updateMany.mockResolvedValue({ count: 2 });
+
+    const result = await service.markManyRead("admin-a", "ADMIN" as never, [
+      "n-1",
+      "n-2",
+      "n-org-b",
+    ]);
+
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: ["n-1", "n-2", "n-org-b"] },
+        organizationId: "org-a",
+        recipientRole: "ADMIN",
+        read: false,
+      },
+      data: { read: true },
+    });
+    expect(result).toEqual({ count: 2 });
+  });
+
+  it("does not throw when some ids were already read by a colleague", async () => {
+    // Bấm vào tab phải xoá được số kể cả khi danh sách id đã cũ vài giây; ném lỗi
+    // ở đây thì con số nằm nguyên tại chỗ dù người dùng đã bấm.
+    const { prisma, service } = makeService();
+    prisma.notification.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(service.markManyRead("admin-a", "ADMIN" as never, ["n-da-doc"])).resolves.toEqual({
+      count: 0,
+    });
+  });
+
   it("marks unread notifications only in the current organization and role", async () => {
     const { prisma, service } = makeService();
 

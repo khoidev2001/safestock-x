@@ -403,3 +403,9 @@ export const getNotifications = (unread = false) =>
   apiFetch<AppNotification[]>(`/api/notifications${unread ? "?unread=true" : ""}`);
 export const markAllRead = () =>
   apiFetch<{ count: number }>("/api/notifications/read-all", { method: "POST" });
+/** Đánh dấu đã đọc đúng một lô thông báo (dùng khi bấm vào tab đang có số việc). */
+export const markNotificationsRead = (ids: string[]) =>
+  apiFetch<{ count: number }>("/api/notifications/read", {
+    method: "POST",
+    body: JSON.stringify({ ids }),
+  });

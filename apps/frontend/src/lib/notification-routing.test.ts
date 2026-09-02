@@ -5,6 +5,7 @@ import {
   isStickyNotification,
   navPathForNotification,
   unreadByNavPath,
+  unreadIdsForNavPath,
 } from "./notification-routing";
 
 test("sự cố cảm biến về tab Sự cố, việc nhiệm vụ về tab Nhiệm vụ", () => {
@@ -43,4 +44,27 @@ test("đếm theo tab, bỏ qua thông báo đã đọc", () => {
 test("không có gì chưa đọc thì trả object rỗng", () => {
   assert.deepEqual(unreadByNavPath([{ kind: "MISSION_ASSIGNED", read: true }]), {});
   assert.deepEqual(unreadByNavPath([]), {});
+});
+
+test("bấm vào tab chỉ xoá việc của ĐÚNG tab đó", () => {
+  // Lấy nhầm sang tab khác là xoá mất một việc chưa ai xem — tệ hơn hẳn việc để
+  // sót một con số.
+  const items = [
+    { id: "a", kind: "MISSION_ASSIGNED", read: false },
+    { id: "b", kind: "WAREHOUSE_READY", read: false },
+    { id: "c", kind: "MISSION_ASSIGNED", read: true },
+    { id: "d", kind: "INCIDENT_DETECTED", read: false },
+    { id: "e", kind: "KHONG_BIET", read: false },
+  ];
+
+  assert.deepEqual(unreadIdsForNavPath(items, "/missions"), ["a", "b"]);
+  assert.deepEqual(unreadIdsForNavPath(items, "/incident"), ["d"]);
+});
+
+test("tab không có việc nào chưa xem thì không có gì để đánh dấu", () => {
+  assert.deepEqual(
+    unreadIdsForNavPath([{ id: "a", kind: "MISSION_ASSIGNED", read: true }], "/missions"),
+    [],
+  );
+  assert.deepEqual(unreadIdsForNavPath([], "/missions"), []);
 });
