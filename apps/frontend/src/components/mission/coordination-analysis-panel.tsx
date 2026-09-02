@@ -1,29 +1,15 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
-import {
-  incidentTypeLabel,
-  type CoordinationAnalysis,
-  type CoordinationFact,
-  type WhatIfSimulationResult,
-} from "@safestock/shared-types";
-import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { moTaSoLuongVatTu, type CoordinationAnalysis } from "@safestock/shared-types";
 import { CollapsiblePanel } from "@/components/shared/collapsible-panel";
 import { FieldUpdateTimeline } from "./field-update-timeline";
 import { ColorIcon } from "@/components/shared/color-icon";
 import { ApiError } from "@/lib/api";
 import {
   getLatestCoordinationAnalysis,
-  simulateMission,
   type CoordinationAnalysisSnapshot,
 } from "@/lib/mission-api";
-
-const FACT_TONE: Record<CoordinationFact["provenance"], string> = {
-  REPORTED: "bg-sky-500/10 text-sky-700 dark:text-sky-300",
-  VERIFIED: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-  AI_INFERENCE: "bg-amber-500/10 text-amber-800 dark:text-amber-200",
-  MISSING: "bg-rose-500/10 text-rose-700 dark:text-rose-300",
-};
 
 export function CoordinationAnalysisPanel({
   missionId,
@@ -46,7 +32,6 @@ export function CoordinationAnalysisPanel({
   running?: boolean;
   error?: string | null;
 }) {
-  const [assumptionText, setAssumptionText] = useState("");
   const latest = useQuery({
     queryKey: ["mission", missionId, "coordination-analysis"],
     queryFn: () => getLatestCoordinationAnalysis(missionId),
@@ -54,16 +39,6 @@ export function CoordinationAnalysisPanel({
   });
   const snapshot = latest.data;
   const analysis = snapshot?.result;
-  const simulate = useMutation({
-    mutationFn: () => {
-      if (!snapshot) throw new Error("Chưa có bản tham mưu gốc để mô phỏng");
-      return simulateMission(missionId, {
-        requestId: requestId("what-if"),
-        baselineSnapshotId: snapshot.id,
-        assumptionText,
-      });
-    },
-  });
   return (
     <CollapsiblePanel
       headingId="coordination-analysis-title"
@@ -110,21 +85,9 @@ export function CoordinationAnalysisPanel({
       ) : (
         <AnalysisBody analysis={analysis} snapshot={snapshot} />
       )}
-      {snapshot && (
-        <WhatIfPanel
-          value={assumptionText}
-          onChange={setAssumptionText}
-          onRun={() => simulate.mutate()}
-          disabled={simulate.isPending || assumptionText.trim().length < 2}
-          pending={simulate.isPending}
-          error={simulate.error}
-          result={simulate.data?.simulation ?? null}
-        />
-      )}
-
-      <div className="mt-4 border-t pt-4">
-        <FieldUpdateTimeline missionId={missionId} focusUpdateId={fieldUpdateId ?? null} />
-      </div>
+      {/* Không bọc trong div có viền: chưa có bằng chứng thì khối này trả về null,
+          mà cái viền vẫn ở lại thành một vạch kẻ cụt không thuộc về gì cả. */}
+      <FieldUpdateTimeline missionId={missionId} focusUpdateId={fieldUpdateId ?? null} />
     </CollapsiblePanel>
   );
 }
@@ -140,6 +103,9 @@ function AnalysisBody({
   const itemBySku = new Map(
     analysis.requirements.items.map((item) => [item.sku, { name: item.name, unit: item.unit }]),
   );
+  const hasOpenQuestions =
+    analysis.missingData.length + analysis.conflicts.length > 0 ||
+    analysis.priorityQuestion != null;
   return (
     <div className="mt-4 space-y-4">
       <div className="grid gap-3 sm:grid-cols-3">
@@ -158,54 +124,49 @@ function AnalysisBody({
         />
       </div>
 
-      <Section title="Dữ kiện và nguồn">
-        <ul className="space-y-2" role="list">
-          {analysis.facts.map((fact) => (
-            <FactRow key={fact.id} fact={fact} />
-          ))}
-        </ul>
-      </Section>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Section title="Cần xác minh / mâu thuẫn">
-          {analysis.missingData.length + analysis.conflicts.length === 0 ? (
-            <p className="text-sm text-[var(--text-muted)]">
-              Chưa phát hiện dữ kiện còn thiếu hoặc mâu thuẫn.
-            </p>
-          ) : (
-            <ul className="space-y-2 text-sm" role="list">
-              {analysis.missingData.map((item) => (
-                <li key={`${item.key}-${item.question}`}>
-                  • {item.question}
-                  <span className="block pl-3 text-xs text-[var(--text-muted)]">{item.impact}</span>
-                </li>
-              ))}
-              {analysis.conflicts.map((item) => (
-                <li key={`${item.key}-${item.factIds.join("-")}`}>• {item.question}</li>
-              ))}
-            </ul>
+      {/* Không thiếu gì thì không có khối nào cả.
+          Một ô ghi "Chưa phát hiện dữ kiện còn thiếu" vẫn chiếm đúng chỗ và đúng
+          lượt đọc như một cảnh báo thật, nên khi có cảnh báo thật thì mắt đã quen
+          lướt qua vùng đó rồi. Khối này chỉ nên xuất hiện khi có việc phải làm. */}
+      {hasOpenQuestions && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {analysis.missingData.length + analysis.conflicts.length > 0 && (
+            <Section title="Cần xác minh / mâu thuẫn">
+              <ul className="space-y-2 text-sm" role="list">
+                {analysis.missingData.map((item) => (
+                  <li key={`${item.key}-${item.question}`}>
+                    • {item.question}
+                    <span className="block pl-3 text-xs text-[var(--text-muted)]">
+                      {item.impact}
+                    </span>
+                  </li>
+                ))}
+                {analysis.conflicts.map((item) => (
+                  <li key={`${item.key}-${item.factIds.join("-")}`}>• {item.question}</li>
+                ))}
+              </ul>
+            </Section>
           )}
-        </Section>
-        <Section title="Câu hỏi ưu tiên">
-          {analysis.priorityQuestion ? (
-            <p className="text-sm">
-              {analysis.priorityQuestion.question}
-              <span className="mt-1 block text-xs text-[var(--text-muted)]">
-                {analysis.priorityQuestion.expectedImpact}
-              </span>
-            </p>
-          ) : (
-            <p className="text-sm text-[var(--text-muted)]">Chưa có câu hỏi ưu tiên.</p>
+          {analysis.priorityQuestion && (
+            <Section title="Câu hỏi ưu tiên">
+              <p className="text-sm">
+                {analysis.priorityQuestion.question}
+                <span className="mt-1 block text-xs text-[var(--text-muted)]">
+                  {analysis.priorityQuestion.expectedImpact}
+                </span>
+              </p>
+            </Section>
           )}
-        </Section>
-      </div>
+        </div>
+      )}
 
       <Section title="Nhu cầu theo định mức của hệ thống">
         <DataTable
           headers={["Vật tư", "Nhu cầu", "Cơ sở"]}
           rows={analysis.requirements.items.map((item) => [
             item.name,
-            `${item.totalQuantity} ${item.unit}`,
+            // Nước hiện cả hai con số: kho bốc theo CHAI, định mức đối chiếu theo LÍT.
+            moTaSoLuongVatTu(item.sku, item.totalQuantity, item.unit),
             item.basis,
           ])}
           empty={analysis.requirements.reason ?? "Chưa có nhu cầu để hiển thị."}
@@ -223,16 +184,26 @@ function AnalysisBody({
       </Section>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Section title="Mưa và dự báo">
-          <ul className="space-y-2 text-sm" role="list">
-            {analysis.forecasts.map((forecast) => (
-              <li key={forecast.horizonHours}>
-                <span className="font-medium">{forecast.horizonHours} giờ:</span>{" "}
-                {forecast.explanation}
-              </li>
-            ))}
-          </ul>
-        </Section>
+        {/* Dự báo là thông tin nền, không phải việc phải làm ngay: gấp lại để
+            phần điều phối lên trên màn hình, ai cần thì mở ra đọc. */}
+        <details className="self-start rounded-md border bg-[var(--surface-2)] px-3 py-2">
+          <summary className="cursor-pointer text-sm font-semibold">
+            Mưa và dự báo
+            {analysis.forecasts.length > 0 ? ` (${analysis.forecasts.length} mốc)` : ""}
+          </summary>
+          {analysis.forecasts.length === 0 ? (
+            <p className="mt-2 text-sm text-[var(--text-muted)]">Chưa có số liệu dự báo.</p>
+          ) : (
+            <ul className="mt-2 space-y-2 text-sm" role="list">
+              {analysis.forecasts.map((forecast) => (
+                <li key={forecast.horizonHours}>
+                  <span className="font-medium">{forecast.horizonHours} giờ:</span>{" "}
+                  {forecast.explanation}
+                </li>
+              ))}
+            </ul>
+          )}
+        </details>
         <Section title="Liên xã khi thiếu nội xã">
           {analysis.coordination.externalContacts.length === 0 ? (
             <p className="text-sm text-[var(--text-muted)]">
@@ -264,22 +235,6 @@ function AnalysisBody({
         <p className="mt-1">Tính lúc {formatDate(snapshot.computedAt)}</p>
       </div>
     </div>
-  );
-}
-
-function FactRow({ fact }: { fact: CoordinationFact }) {
-  const detail =
-    fact.provenance === "MISSING" ? fact.question : stringifyValue(fact.value, fact.key);
-  return (
-    <li className="rounded-md border bg-[var(--surface)] p-2 text-sm">
-      <span
-        className={`mr-2 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${FACT_TONE[fact.provenance]}`}
-      >
-        {provenanceLabel(fact.provenance)}
-      </span>
-      <span className="font-medium">{factKeyLabel(fact.key)}</span>
-      <span className="ml-2">{detail}</span>
-    </li>
   );
 }
 
@@ -411,15 +366,6 @@ function statusLabel(status: CoordinationAnalysis["status"]) {
       ? "Cần xác minh"
       : "Sơ bộ";
 }
-function provenanceLabel(provenance: CoordinationFact["provenance"]) {
-  return provenance === "REPORTED"
-    ? "Báo cáo"
-    : provenance === "VERIFIED"
-      ? "Đã xác minh"
-      : provenance === "AI_INFERENCE"
-        ? "AI suy luận"
-        : "Chưa xác minh";
-}
 function routeLabel(status: string, distanceKm: number | null, etaMinutes: number | null) {
   return status === "AVAILABLE"
     ? `${distanceKm ?? "?"} km · ${etaMinutes ?? "?"} phút`
@@ -427,205 +373,13 @@ function routeLabel(status: string, distanceKm: number | null, etaMinutes: numbe
       ? "Chưa có tuyến"
       : "Không có tuyến";
 }
-/** Tên khoá dữ kiện đọc được, thay cho mã hằng của backend. */
-const FACT_KEY_LABEL: Record<string, string> = {
-  LOCATION: "Địa điểm",
-  AFFECTED_PEOPLE: "Số người ảnh hưởng",
-  HOUSEHOLDS: "Số hộ",
-  INCIDENT_TYPE: "Loại tình huống",
-  WEATHER: "Thời tiết",
-  ISOLATION_RISK: "Nguy cơ cô lập",
-  PEOPLE_STRANDED: "Người mắc kẹt",
-  VULNERABLE_GROUP: "Nhóm dễ tổn thương",
-  ACCESS_CONDITION: "Khả năng tiếp cận",
-  DURATION_HOURS: "Thời gian dự kiến",
-  OTHER: "Thông tin khác",
-};
-
-function factKeyLabel(key: string) {
-  return FACT_KEY_LABEL[key] ?? key;
-}
-
-/**
- * Đổi giá trị dữ kiện sang câu tiếng Việt đọc được.
- *
- * Trước đây chỗ này in thẳng giá trị thô, nên màn hình hiện `FLOOD` và cả khối
- * JSON `{"alert":false,"periodHours":72,...}` — dữ liệu đúng nhưng không ai ngoài
- * lập trình viên đọc được, mà đây là màn hình cán bộ xã nhìn để ra quyết định.
- */
-function stringifyValue(value: unknown, key?: string) {
-  if (typeof value === "boolean") return value ? "Có" : "Không";
-  if (typeof value === "number") return String(value);
-  if (typeof value === "string") {
-    return key === "INCIDENT_TYPE" ? incidentTypeLabel(value) : value;
-  }
-  if (Array.isArray(value)) return value.join(", ");
-  if (value && typeof value === "object")
-    return describeObjectValue(value as Record<string, unknown>);
-  return String(value ?? "—");
-}
-
-/** Nhãn tiếng Việt cho các trường hay gặp trong giá trị dạng đối tượng (thời tiết…). */
-const VALUE_FIELD_LABEL: Record<string, string> = {
-  alert: "Cảnh báo",
-  periodHours: "Khoảng thời gian",
-  totalRainMm: "Tổng lượng mưa",
-};
-
-const VALUE_FIELD_UNIT: Record<string, string> = {
-  periodHours: "giờ",
-  totalRainMm: "mm",
-};
-
-function describeObjectValue(value: Record<string, unknown>) {
-  return Object.entries(value)
-    .map(([field, raw]) => {
-      const label = VALUE_FIELD_LABEL[field] ?? field;
-      const unit = VALUE_FIELD_UNIT[field];
-      const text = typeof raw === "boolean" ? (raw ? "có" : "không") : String(raw ?? "—");
-      return unit ? `${label}: ${text} ${unit}` : `${label}: ${text}`;
-    })
-    .join(" · ");
-}
-function displayMetricValue(value: number | null) {
-  return value === null ? "?" : String(value);
-}
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyle: "short" }).format(
     new Date(value),
   );
 }
 /** Các mẫu giả định hệ thống bóc tách được — bấm vào là điền sẵn vào ô. */
-const WHAT_IF_EXAMPLES = [
-  "nếu có 200 người cần hỗ trợ",
-  "nếu kéo dài 72 giờ",
-  "dự trữ thêm 20%",
-  "bỏ kho thôn Long Châu",
-];
 
-const METRIC_LABEL: Record<string, string> = {
-  requiredQuantity: "Tổng nhu cầu",
-  allocatedQuantity: "Kho cấp được",
-  fulfillmentPercent: "Độ đáp ứng",
-};
-
-function metricUnit(unit: string) {
-  // "units" là đơn vị kỹ thuật của backend, không phải chữ để người dùng đọc.
-  return unit === "%" ? "%" : "";
-}
-
-function directionLabel(direction: string) {
-  if (direction === "INCREASED") return "(tăng)";
-  if (direction === "DECREASED") return "(giảm)";
-  return "(không đổi)";
-}
-
-function metricTone(direction: string) {
-  if (direction === "DECREASED") return "var(--color-critical)";
-  if (direction === "INCREASED") return "var(--color-attention)";
-  return "var(--text)";
-}
-
-function WhatIfPanel({
-  value,
-  onChange,
-  onRun,
-  disabled,
-  pending,
-  error,
-  result,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  onRun: () => void;
-  disabled: boolean;
-  pending: boolean;
-  error: unknown;
-  result: WhatIfSimulationResult | null;
-}) {
-  return (
-    <div className="mt-4 border-t pt-4">
-      <Section title="Thử giả định an toàn">
-        <p className="text-sm text-[var(--text-muted)]">
-          Hỏi &quot;nếu tình huống xấu hơn thì kho có đủ không?&quot; mà{" "}
-          <b className="text-[var(--text)]">không đụng tới phương án đang chạy</b>. Kết quả là một
-          bản mô phỏng riêng, đặt cạnh bản gốc để so.
-        </p>
-        <label className="mt-3 block text-sm font-medium" htmlFor="what-if-input">
-          Giả định bằng lời
-        </label>
-        <textarea
-          id="what-if-input"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          rows={2}
-          placeholder="Ví dụ: nếu có 150 người cần hỗ trợ"
-          className="mt-2 w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
-        />
-        {/* Nói thẳng hệ thống hiểu được gì. Đây là bộ luật cố định, KHÔNG phải AI
-            đoán ý — không liệt kê ra thì người dùng gõ "nếu mưa to hơn" rồi thấy
-            mọi con số y nguyên và kết luận là tính năng hỏng. */}
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {WHAT_IF_EXAMPLES.map((example) => (
-            <button
-              key={example}
-              type="button"
-              onClick={() => onChange(example)}
-              className="rounded-full border bg-[var(--surface-2)] px-2.5 py-1 text-xs transition hover:bg-[var(--surface)]"
-            >
-              {example}
-            </button>
-          ))}
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={onRun}
-            disabled={disabled}
-            className="rounded-md border bg-[var(--surface-2)] px-3 py-2 text-sm font-semibold transition hover:bg-[var(--surface)] disabled:opacity-60"
-          >
-            {pending ? "Đang mô phỏng…" : "Chạy thử giả định"}
-          </button>
-          <span className="text-xs text-[var(--text-muted)]">
-            Chỉ tạo snapshot mô phỏng, không áp dụng vào phương án thật.
-          </span>
-        </div>
-        {error ? <ErrorState error={error} /> : null}
-        {result ? (
-          <div className="mt-3 rounded-md border bg-[var(--surface-2)] p-3 text-sm">
-            <p className="font-semibold">Kết quả mô phỏng (không áp dụng vào phương án thật)</p>
-            <ul className="mt-2 space-y-1" role="list">
-              {result.delta.metrics.map((metric) => (
-                <li key={metric.key} className="flex flex-wrap items-baseline gap-1.5">
-                  <span>{METRIC_LABEL[metric.key] ?? metric.key}:</span>
-                  <span className="tabular text-[var(--text-muted)]">
-                    {displayMetricValue(metric.baseline)}
-                    {metricUnit(metric.unit)}
-                  </span>
-                  <span aria-hidden="true">→</span>
-                  <b className="tabular" style={{ color: metricTone(metric.direction) }}>
-                    {displayMetricValue(metric.simulated)}
-                    {metricUnit(metric.unit)}
-                  </b>
-                  <span className="text-xs text-[var(--text-muted)]">
-                    {directionLabel(metric.direction)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            {result.unresolvedAssumptions.length > 0 ? (
-              <p className="mt-2 rounded-md border border-dashed px-2.5 py-2 text-xs text-[var(--color-attention)]">
-                Chưa hiểu được giả định “
-                {result.unresolvedAssumptions.map((item) => item.sourceText).join("; ")}” nên các
-                con số bên trên giữ nguyên. Hãy diễn đạt theo một trong các mẫu gợi ý phía trên.
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-      </Section>
-    </div>
-  );
-}
 /** Khoá idempotency cho mỗi lượt bấm. Dùng chung với nút ở khối tình huống. */
 export function requestId(prefix = "analysis") {
   return typeof crypto !== "undefined" && "randomUUID" in crypto

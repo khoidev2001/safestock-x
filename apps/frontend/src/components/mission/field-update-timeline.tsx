@@ -49,8 +49,21 @@ export function FieldUpdateTimeline({
   // Không còn khối riêng: nằm gọn trong khối tham mưu, vì bằng chứng hiện trường
   // chính là nguồn làm bản tham mưu thay đổi — để tách ra thì phải cuộn qua lại
   // giữa hai khối mới đối chiếu được.
+  //
+  // CHƯA CÓ BẰNG CHỨNG THÌ KHÔNG CÓ KHỐI NÀO CẢ.
+  //
+  // Một tiêu đề "Bằng chứng từ Lực lượng hiện trường" kèm ô "chưa có gì" vẫn
+  // chiếm đúng chỗ và đúng lượt đọc như khi có bằng chứng thật. Phần lớn nhiệm vụ
+  // ở trạng thái đó suốt chặng đầu, nên người trực quen mắt lướt qua vùng này —
+  // rồi khi có bằng chứng thật thì cũng lướt qua nốt.
+  //
+  // Lúc đang tải cũng ẩn: hiện "đang tải…" rồi biến mất làm nội dung bên dưới
+  // nhảy lên, mà tin nhắn đó chẳng nói được gì cho người đọc.
+  if (query.isLoading) return null;
+  if (!query.error && (query.data?.length ?? 0) === 0) return null;
+
   return (
-    <section aria-labelledby="field-update-timeline-title">
+    <section className="mt-4 border-t pt-4" aria-labelledby="field-update-timeline-title">
       <h4
         id="field-update-timeline-title"
         className="flex items-center gap-2 text-sm font-semibold"
@@ -59,19 +72,11 @@ export function FieldUpdateTimeline({
         Bằng chứng từ Lực lượng hiện trường
       </h4>
       <div className="mt-2">
-        {query.isLoading && (
-          <p className="text-sm text-[var(--text-muted)]">Đang tải cập nhật hiện trường…</p>
-        )}
         {query.error && (
           <p className="mt-4 text-sm text-[var(--color-critical)]">
             {query.error instanceof ApiError
               ? query.error.message
               : "Không tải được cập nhật hiện trường."}
-          </p>
-        )}
-        {!query.isLoading && !query.error && query.data?.length === 0 && (
-          <p className="mt-4 rounded-md border border-dashed p-3 text-sm text-[var(--text-muted)]">
-            Chưa có cập nhật được Lực lượng hiện trường xác nhận.
           </p>
         )}
         <ol className="space-y-3" aria-live="polite">
