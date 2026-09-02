@@ -5,6 +5,8 @@
 .env.demo
 .env.local
 .env.*.local
+.env.bak-cors
+.env.bak-routing
 **/.env
 !.env.example
 !.env.demo.example
