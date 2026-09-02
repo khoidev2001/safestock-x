@@ -1,3 +1,5 @@
+import { LIT_MOI_CHAI_NUOC } from "@safestock/shared-types";
+
 /**
  * Số chai trong một lốc. Quy ước CHUNG cho mọi loại nước, không riêng từng loại.
  *
@@ -6,8 +8,15 @@
  */
 export const CHAI_MOI_LOC = 12;
 
-/** Dung tích mặc định của một chai nước, tính bằng lít. */
-export const LIT_MOI_CHAI_MAC_DINH = 5;
+/**
+ * Dung tích mặc định của một chai nước, tính bằng lít.
+ *
+ * Lấy thẳng `LIT_MOI_CHAI_NUOC` của gói dùng chung — 1,5 lít, đúng cỡ chai nước
+ * cứu trợ phát cho hộ dân. Một bên tính định mức cần bao nhiêu chai, một bên đổi
+ * số chai đã có ra lít; mỗi bên giữ một hằng số riêng là hai màn hình nói hai con
+ * số cho cùng một đống hàng.
+ */
+export const LIT_MOI_CHAI_MAC_DINH = LIT_MOI_CHAI_NUOC;
 
 export interface QuyDoiChai {
   /** Số chai — đây mới là con số kho đếm và xuất. */
@@ -37,7 +46,10 @@ export function quyDoiChai(bottles: number, litMoiChai = LIT_MOI_CHAI_MAC_DINH):
     bottles: soChai,
     packs: Math.floor(soChai / CHAI_MOI_LOC),
     looseBottles: soChai % CHAI_MOI_LOC,
-    liters: soChai * litMoiChai,
+    // Làm tròn 2 chữ số: cỡ chai lẻ sinh sai số nhị phân (12 * 0,35 ra
+    // 4,199999999999999). Để nguyên thì con số đó rò ra tận màn hình và mọi phép
+    // so sánh bằng đều trượt.
+    liters: Math.round(soChai * litMoiChai * 100) / 100,
   };
 }
 

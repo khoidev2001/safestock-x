@@ -249,3 +249,4 @@ export interface SensorEvent {
 export * from "./briefing";
 export * from "./inventory-qr";
 export * from "./coordination";
+export * from "./water-bottle";

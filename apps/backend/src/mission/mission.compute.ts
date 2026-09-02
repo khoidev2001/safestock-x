@@ -53,17 +53,24 @@ export interface Allocation {
 /**
  * Tính nhu cầu vật tư từ tình huống + định mức — hàm THUẦN.
  * Làm tròn LÊN (ceil) để chuẩn bị dư an toàn, không thiếu.
+ *
+ * Định mức nào ra 0 thì BỎ HẲN khỏi danh sách, không giữ dòng rỗng. Không có ca
+ * cần y tế thì bộ sơ cứu vẫn hiện "đáp ứng 0/0, thiếu 0" ở mọi bảng — một dòng
+ * không nói gì nhưng vẫn bắt người trực đọc qua, và giữa lúc gấp thì mỗi dòng
+ * thừa là một chỗ để mắt trượt qua dòng thật sự thiếu.
  */
 export function computeRequirements(incident: IncidentInput): Requirement[] {
   const norms = MISSION_NORMS[incident.incidentType] ?? MISSION_NORMS[IncidentType.OTHER];
   const days = Math.max(1, Math.ceil(incident.durationHours / 24));
 
-  return norms.map((norm) => ({
-    sku: norm.sku,
-    itemName: norm.itemName,
-    unit: norm.unit,
-    required: Math.ceil(norm.perUnit * basisValue(norm, incident, days)),
-  }));
+  return norms
+    .map((norm) => ({
+      sku: norm.sku,
+      itemName: norm.itemName,
+      unit: norm.unit,
+      required: Math.ceil(norm.perUnit * basisValue(norm, incident, days)),
+    }))
+    .filter((requirement) => requirement.required > 0);
 }
 
 /**
@@ -121,6 +128,10 @@ function basisValue(norm: NormRule, incident: IncidentInput, days: number): numb
   switch (norm.basis) {
     case "PER_PERSON":
       return incident.affectedPeople;
+    case "PER_ADULT":
+      // Trẻ em đã được đếm riêng và có định mức riêng. Không kẹp sàn 0 thì một
+      // báo cáo ghi nhầm trẻ em nhiều hơn tổng số người sẽ cho ra định mức âm.
+      return Math.max(0, incident.affectedPeople - incident.children);
     case "PER_CHILD":
       return incident.children;
     case "PER_PERSON_PER_DAY":

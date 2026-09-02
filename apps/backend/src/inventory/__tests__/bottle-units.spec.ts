@@ -1,3 +1,4 @@
+// Cỡ chai mặc định là 1,5 lít — chai nước cứu trợ phát cho hộ dân (LIT_MOI_CHAI_NUOC).
 import { chaiCanCho, CHAI_MOI_LOC, moTaQuyDoi, quyDoiChai } from "../bottle-units";
 
 describe("quy đổi chai — lốc — lít", () => {
@@ -6,7 +7,7 @@ describe("quy đổi chai — lốc — lít", () => {
 
     expect(ra.packs).toBe(1);
     expect(ra.looseBottles).toBe(0);
-    expect(ra.liters).toBe(60);
+    expect(ra.liters).toBe(18);
   });
 
   it("chai lẻ ngoài lốc được đếm riêng, không làm tròn mất", () => {
@@ -20,12 +21,12 @@ describe("quy đổi chai — lốc — lít", () => {
   it("số chai gốc không bao giờ bị đổi", () => {
     // Chai là con số kho đếm. Mọi thứ khác suy ra từ nó, không được ngược lại.
     expect(quyDoiChai(6990).bottles).toBe(6990);
-    expect(quyDoiChai(6990).liters).toBe(34_950);
+    expect(quyDoiChai(6990).liters).toBe(10485);
   });
 
   it("dung tích khác thì lít đổi theo, số chai giữ nguyên", () => {
-    expect(quyDoiChai(10, 1.5).liters).toBe(15);
-    expect(quyDoiChai(10, 1.5).bottles).toBe(10);
+    expect(quyDoiChai(10, 0.5).liters).toBe(5);
+    expect(quyDoiChai(10, 0.5).bottles).toBe(10);
   });
 
   it("số âm hoặc số lẻ không sinh ra chai ma", () => {
@@ -40,25 +41,25 @@ describe("quy đổi chai — lốc — lít", () => {
 
 describe("câu mô tả cho màn hình", () => {
   it("có lốc lẻ thì nói rõ lẻ mấy chai", () => {
-    expect(moTaQuyDoi(100)).toBe("100 chai (8 lốc lẻ 4) · 500 lít");
+    expect(moTaQuyDoi(100)).toBe("100 chai (8 lốc lẻ 4) · 150 lít");
   });
 
   it("chẵn lốc thì không nói phần lẻ", () => {
-    expect(moTaQuyDoi(24)).toBe("24 chai (2 lốc) · 120 lít");
+    expect(moTaQuyDoi(24)).toBe("24 chai (2 lốc) · 36 lít");
   });
 
   it("chưa đủ một lốc thì bỏ hẳn phần lốc, không ghi '0 lốc'", () => {
-    expect(moTaQuyDoi(5)).toBe("5 chai · 25 lít");
+    expect(moTaQuyDoi(5)).toBe("5 chai · 7,5 lít");
   });
 });
 
 describe("tính số chai cần cho một lượng lít", () => {
   it("chia chẵn thì lấy đúng số đó", () => {
-    expect(chaiCanCho(100)).toBe(20);
+    expect(chaiCanCho(150)).toBe(100);
   });
 
   it("chia lẻ thì làm tròn LÊN — thiếu nửa chai là có người không được uống", () => {
-    expect(chaiCanCho(101)).toBe(21);
+    expect(chaiCanCho(151)).toBe(101);
     expect(chaiCanCho(1)).toBe(1);
   });
 
