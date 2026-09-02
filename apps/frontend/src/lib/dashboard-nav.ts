@@ -1,4 +1,5 @@
 import type { ColorIconName, ColorIconTone } from "@/components/shared/color-icon";
+import { matchNavRoute } from "./nav-route-match";
 import { FIELD_FORCE_ROLE_LABEL, Permission } from "@safestock/shared-types";
 
 export type NavGroup = "Điều hành" | "Nghiệp vụ kho" | "Quản trị";
@@ -6,6 +7,11 @@ export type NavGroup = "Điều hành" | "Nghiệp vụ kho" | "Quản trị";
 export interface NavItem {
   /** Đường dẫn thật của trang (dùng cho Link + so khớp active). */
   path: string;
+  /**
+   * Đường dẫn con thuộc tab này nhưng không nằm dưới `path`. Xem
+   * `nav-route-match.ts` để biết vì sao cần khai báo tay.
+   */
+  subPaths?: string[];
   /** Nhãn ngắn trên thanh điều hướng. */
   label: string;
   icon: ColorIconName;
@@ -57,6 +63,9 @@ export const navItems: NavItem[] = [
     icon: "packageCheck",
     tone: "blue",
     group: "Điều hành",
+    // Trang riêng của từng nhiệm vụ (`/mission/<id>`) thuộc về tab này, dù đường
+    // dẫn của nó trông như con của tab Điều phối ở ngay trên.
+    subPaths: ["/mission/"],
     requiredPermission: Permission.MISSION_VIEW,
     title: "Nhiệm vụ",
     subtitle: "Theo dõi các nhiệm vụ đang chạy và mở trang chi tiết của từng nhiệm vụ.",
@@ -166,13 +175,11 @@ export const navItems: NavItem[] = [
 
 export const navGroups: NavGroup[] = ["Điều hành", "Nghiệp vụ kho", "Quản trị"];
 
-/** Lấy metadata của trang theo path (dùng cho tiêu đề đầu trang). */
+/**
+ * Tab sở hữu một đường dẫn — dùng cho tiêu đề đầu trang, tô sáng tab, kiểm quyền
+ * và xoá số việc chưa xem. Bốn chỗ đó PHẢI cùng một câu trả lời, nếu không sẽ có
+ * cảnh tab này sáng mà tiêu đề ghi việc của tab kia.
+ */
 export function getNavItem(path: string): NavItem | undefined {
-  const exact = navItems.find((item) => item.path === path);
-  if (exact) return exact;
-  // Trang con (vd /mission/<id>) mượn tiêu đề của mục cha, nếu không thì tiêu đề
-  // trang trống trơn. Lấy tiền tố DÀI NHẤT để mục cha đúng nhất thắng.
-  return navItems
-    .filter((item) => path.startsWith(`${item.path}/`))
-    .sort((a, b) => b.path.length - a.path.length)[0];
+  return matchNavRoute(navItems, path);
 }
