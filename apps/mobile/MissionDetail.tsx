@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import {
   acceptWarehouseMaterialRequest,
@@ -207,8 +208,15 @@ export function MissionDetailScreen({
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Pressable onPress={onBack} accessibilityRole="button">
-          <Text style={styles.backLink}>‹ Quay lại</Text>
+        {/* Mũi tên vector thay cho ký tự "‹": ký tự đó là dấu ngoặc nhọn tiếng
+            Pháp, cỡ do phông quyết định nên luôn nhỏ hơn chữ đứng cạnh. */}
+        <Pressable
+          onPress={onBack}
+          accessibilityRole="button"
+          style={{ flexDirection: "row", alignItems: "center", gap: 2 }}
+        >
+          <MaterialCommunityIcons name="chevron-left" size={20} color={c.amber} />
+          <Text style={styles.backLink}>Quay lại</Text>
         </Pressable>
         <Text style={styles.title}>Chi tiết nhiệm vụ</Text>
         <View style={{ width: 60 }} />

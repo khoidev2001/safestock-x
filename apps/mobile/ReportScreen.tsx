@@ -22,15 +22,7 @@ type MicStatus = "idle" | "recording" | "transcribing";
  * cơ quan điều phối. Backend tạo DRAFT + báo ADMIN; admin mở tin trên web sẽ tự
  * phân tích AI. Android APK dùng AudioRecord native; Expo Web dùng Web Audio.
  */
-export function ReportScreen({
-  token,
-  user,
-  onLogout,
-}: {
-  token: string;
-  user: AuthUser;
-  onLogout: () => void;
-}) {
+export function ReportScreen({ token, user }: { token: string; user: AuthUser }) {
   const [description, setDescription] = useState("");
   const [micStatus, setMicStatus] = useState<MicStatus>("idle");
   const [voiceError, setVoiceError] = useState<string | null>(null);
@@ -183,7 +175,6 @@ export function ReportScreen({
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        {/* Co lại được để không đè lên nút bên phải — xem ghi chú ở App.tsx. */}
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text numberOfLines={1} style={styles.title}>
             Báo cáo tình huống
@@ -192,13 +183,6 @@ export function ReportScreen({
             {user.fullName ?? user.email} · Trưởng thôn
           </Text>
         </View>
-        <Pressable
-          accessibilityRole="button"
-          onPress={onLogout}
-          style={{ flexShrink: 0, marginLeft: 12 }}
-        >
-          <Text style={[styles.pillText, { color: c.amber }]}>Đăng xuất</Text>
-        </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.reportScroll} keyboardShouldPersistTaps="handled">
