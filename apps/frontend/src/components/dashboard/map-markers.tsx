@@ -1,4 +1,4 @@
-import { BuildingFour, ChurchOne, Home, Hospital, School, Shop, Strongbox } from "@icon-park/react";
+import { BuildingFour, ChurchOne, Home, Homestay, Hospital, School, Shop } from "@icon-park/react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 export type MapMarkerKind =
@@ -17,22 +17,24 @@ const MARKER_STYLES: Record<
   {
     color: string;
     background: string;
-    icon: typeof Strongbox;
+    icon: typeof Home;
     label: string;
     size: number;
   }
 > = {
   "central-warehouse": {
+    // Nhà lớn, cùng ngôn ngữ hình với dấu kho trên bản đồ: két sắt tả CÁI TỦ bên
+    // trong kho, không tả cái kho — mà thứ cán bộ tìm trên bản đồ là toà nhà.
     color: "#166534",
     background: "#dcfce7",
-    icon: Strongbox,
+    icon: Homestay,
     label: "Kho tổng xã",
     size: 34,
   },
   "hamlet-warehouse": {
     color: "#475569",
     background: "#f1f5f9",
-    icon: Strongbox,
+    icon: Home,
     label: "Kho thôn",
     size: 30,
   },

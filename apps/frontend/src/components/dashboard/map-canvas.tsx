@@ -11,6 +11,7 @@ import {
   type ScreenLabelCandidate,
 } from "./map-labels";
 import { CommuneBoundaries, useCommuneGeo } from "./commune-boundaries";
+import { houseIcon, villaIcon } from "./map-house-icons";
 import { markerIconHtml } from "./map-markers";
 import {
   BLANK_TILE,
@@ -24,17 +25,6 @@ import {
   OFFLINE_TILE_URL,
   PROVINCE_BOUNDS,
 } from "./map-tiles";
-
-function pinIcon(color: string, size = 30): L.DivIcon {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="${color}" stroke="white" stroke-width="1.5"><path d="M12 21s-7-6.5-7-11.5A7 7 0 0 1 19 9.5C19 14.5 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5" fill="white"/></svg>`;
-  return L.divIcon({
-    html: svg,
-    className: "",
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size],
-    popupAnchor: [0, -size],
-  });
-}
 
 interface PlacesData {
   type: "FeatureCollection";
@@ -63,8 +53,10 @@ export function MapCanvas({
 }: MapCanvasProps) {
   const geo = useCommuneGeo();
   const [places, setPlaces] = useState<PlacesData | null>(null);
-  const centralIcon = useMemo(() => pinIcon("var(--color-accent, #2f9e6e)"), []);
-  const warehouseHamletIcon = useMemo(() => pinIcon("var(--text-muted, #8a8f98)", 26), []);
+  // Cùng bộ hình với bản đồ điều phối cứu hộ: kho là công trình, nên vẽ ngôi nhà
+  // chứ không phải dấu ghim. Kho tổng dùng nhà lớn để nổi hẳn lên giữa 17 kho thôn.
+  const centralIcon = useMemo(() => villaIcon("var(--color-accent, #2f9e6e)", 36), []);
+  const warehouseHamletIcon = useMemo(() => houseIcon("var(--text-muted, #8a8f98)", 26), []);
 
   useEffect(() => {
     // Địa danh tự vẽ (đã bỏ "huyện"). Không có file cũng không sao — chỉ là lớp phủ.
@@ -78,7 +70,9 @@ export function MapCanvas({
   const boundsPoints = located.map((w) => ({ lat: w.lat as number, lng: w.lng as number }));
 
   return (
-    <div className="h-[calc(100dvh-190px)] min-h-[520px] overflow-hidden rounded-md border">
+    // `isolate` vì cùng lý do với incident-map: lớp control của Leaflet đặt ở
+    // z-index 1000 và nếu không giam lại thì nó vẽ đè lên các lớp nổi của app.
+    <div className="isolate h-[calc(100dvh-190px)] min-h-[520px] overflow-hidden rounded-md border">
       <MapContainer
         center={DEFAULT_CENTER}
         zoom={12}
