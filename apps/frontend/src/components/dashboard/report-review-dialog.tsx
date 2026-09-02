@@ -2,7 +2,18 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { itemConditionLabel } from "@safestock/shared-types";
 import { approveReport, getReport, rejectReport, type ReportRow } from "@/lib/report-api";
+import { CloseGlyph } from "@/components/shared/close-glyph";
+
+/**
+ * Chữ điền vào ô không có dữ liệu.
+ *
+ * Gạch ngang "—" là ký hiệu của người làm bảng biểu, không phải của người đọc:
+ * nó có thể là "không có", "chưa nhập", hay "không áp dụng" — mà đây là bảng ADMIN
+ * đọc để quyết định duyệt hay không. Viết thẳng ra chữ thì không phải đoán.
+ */
+const CHUA_CO = "Chưa có";
 
 export function ReportReviewDialog({
   id,
@@ -63,11 +74,11 @@ export function ReportReviewDialog({
           </div>
           <button
             aria-label="Đóng"
-            className="rounded border px-3 py-1.5"
+            className="flex h-10 w-10 items-center justify-center rounded-md border transition hover:bg-[var(--surface-2)]"
             disabled={action.isPending}
             onClick={onClose}
           >
-            ×
+            <CloseGlyph />
           </button>
         </header>
 
@@ -97,7 +108,7 @@ export function ReportReviewDialog({
                 <b>Kỳ:</b> {report.data.period}
               </p>
               <p>
-                <b>Người gửi:</b> {report.data.submittedBy?.fullName ?? "—"}
+                <b>Người gửi:</b> {report.data.submittedBy?.fullName ?? CHUA_CO}
               </p>
             </div>
             <ReportRows rows={report.data.rows ?? []} />
@@ -109,7 +120,7 @@ export function ReportReviewDialog({
                   <textarea
                     className="min-h-20 w-full rounded-md border bg-transparent px-3 py-2"
                     onChange={(event) => setRejectNote(event.target.value)}
-                    placeholder="Ví dụ: Số lượng SKU NUOC-01 chưa khớp biên bản kiểm kê"
+                    placeholder="Ví dụ: Số lượng áo phao người lớn chưa khớp biên bản kiểm kê"
                     value={rejectNote}
                   />
                 </label>
@@ -119,12 +130,16 @@ export function ReportReviewDialog({
                   </p>
                 ) : null}
                 <div className="mt-4 flex flex-wrap justify-end gap-2">
+                  {/* Nền đỏ: từ chối là hành động huỷ công của cả một kho đếm tay
+                      trong nửa ngày. Nút viền nhạt đặt cạnh nút xanh đọc như một
+                      lựa chọn phụ ngang hàng "Huỷ", dễ bấm nhầm. */}
                   <button
-                    className="rounded-md border px-4 py-2 font-semibold disabled:opacity-50"
+                    className="rounded-md px-4 py-2 font-semibold text-white disabled:opacity-50"
+                    style={{ background: "var(--color-critical)" }}
                     disabled={action.isPending}
                     onClick={() => submit("REJECT")}
                   >
-                    Từ chối có lý do
+                    Từ chối
                   </button>
                   <button
                     className="rounded-md bg-[var(--color-accent)] px-4 py-2 font-semibold text-[var(--color-accent-fg)] disabled:opacity-50"
@@ -177,13 +192,17 @@ function ReportRows({ rows }: { rows: ReportRow[] }) {
               </td>
               <td className="px-3 py-2">
                 <b className="block">{row.batchCode || "Chưa định danh lô"}</b>
-                <span className="text-xs text-[var(--text-muted)]">Kệ {row.shelfCode || "—"}</span>
+                <span className="text-xs text-[var(--text-muted)]">
+                  Kệ {row.shelfCode || CHUA_CO}
+                </span>
               </td>
               <td className="px-3 py-2 text-right font-semibold">{row.quantity}</td>
-              <td className="px-3 py-2">{row.unit || "—"}</td>
-              <td className="px-3 py-2">{row.expiryDate || "—"}</td>
-              <td className="px-3 py-2">{row.condition || "—"}</td>
-              <td className="px-3 py-2">{row.note || "—"}</td>
+              <td className="px-3 py-2">{row.unit || CHUA_CO}</td>
+              <td className="px-3 py-2">{row.expiryDate || CHUA_CO}</td>
+              <td className="px-3 py-2">
+                {row.condition ? itemConditionLabel(row.condition) : CHUA_CO}
+              </td>
+              <td className="px-3 py-2">{row.note || CHUA_CO}</td>
             </tr>
           ))}
         </tbody>
