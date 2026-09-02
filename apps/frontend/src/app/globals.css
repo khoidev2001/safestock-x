@@ -346,3 +346,154 @@ button:disabled {
   border-radius: 999px;
   box-shadow: 0 1px 3px rgb(0 0 0 / 30%);
 }
+
+/* ── Trạng thái "đang tải" mang dấu hiệu thương hiệu ─────────────────────────
+   Nhịp thở 1,6s: đủ chậm để đọc ra là "đang chạy", không giục người ta bấm lại.
+   Chỉ chạy `transform` và `opacity` — hai thuộc tính trình duyệt hợp thành ở
+   luồng riêng, nên vòng lặp vẫn mượt kể cả khi trang bên dưới đang dựng lại. */
+.brand-loader-stage {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.brand-loader-mark {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transform-origin: center;
+  animation: brand-loader-breathe 1.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+.brand-loader-halo {
+  position: absolute;
+  inset: -18%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklch, var(--color-accent) 26%, transparent) 0%,
+    transparent 68%
+  );
+  animation: brand-loader-halo 1.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+.brand-loader-label {
+  /* Không đặt font ở đây: kế thừa đúng font của trang là điều kiện để khối chờ
+     trông như một phần của ứng dụng chứ không phải một trang lỗi chen vào. */
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  animation: brand-loader-label 1.6s ease-in-out infinite;
+}
+
+@keyframes brand-loader-breathe {
+  0%,
+  100% {
+    transform: scale(0.86);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+@keyframes brand-loader-halo {
+  0%,
+  100% {
+    transform: scale(0.72);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 0.06;
+  }
+}
+
+@keyframes brand-loader-label {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ── Chuyển tab: chặn chuột trong lúc trang đích còn đang dựng ───────────────
+   Trong suốt và phủ toàn màn hình. Bấm tiếp lúc này chỉ xếp thêm một lượt
+   chuyển nữa vào hàng đợi, và người dùng nhận về một trang không phải trang họ
+   bấm cuối cùng.
+
+   `not-allowed` (vòng tròn gạch chéo) chứ không phải `progress`: đồng hồ cát
+   chỉ nói "đang bận", còn vòng cấm nói thẳng "bấm bây giờ không ăn" — đó mới là
+   điều người dùng cần biết để thôi bấm thêm. */
+.tab-transition-block {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  cursor: not-allowed;
+  background: transparent;
+}
+
+/* Khối chờ phủ lên Ô NỘI DUNG — một khung cố định trên màn hình, không phải một
+   khối ăn theo chiều cao trang.
+
+   `position: fixed` là điểm mấu chốt. Đặt lớp phủ bên trong vùng nội dung thì
+   chiều cao của nó bằng chiều cao TRANG: trang ngắn, dấu hiệu dồn lên sát trên;
+   trang dài mấy màn hình, dấu hiệu tụt xuống giữa trang tức là ngoài tầm nhìn.
+   Người dùng thấy nó nhảy lung tung theo từng tab. Neo vào khung màn hình thì nó
+   nằm đúng một chỗ, mọi trang như nhau.
+
+   Khung đó = bên phải cột chức năng (`--nav-w`, chỉ tính từ mốc lg trở lên vì
+   dưới mốc đó cột này ẩn) và bên dưới thanh tiêu đề (`--header-h`, đo thật ở
+   `DashboardShell` vì thanh này cao khác nhau theo bề ngang màn hình).
+
+   Đục hẳn chứ không mờ: để hé nội dung bên dưới thì chữ xám nhạt lởn vởn sau
+   khối chờ, đọc ra như trang bị lỗi kết xuất chứ không ra "đang tải". */
+.tab-transition-veil {
+  position: fixed;
+  top: var(--header-h, 0px);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+
+@media (min-width: 1024px) {
+  .tab-transition-veil {
+    left: var(--nav-w, 0px);
+  }
+}
+
+/* Người đã tắt hiệu ứng trong hệ điều hành thường tắt vì chuyển động làm họ chóng
+   mặt hoặc buồn nôn. Giữ nguyên MỌI THÔNG TIN — dấu hiệu, dòng chữ, vạch tiến
+   trình vẫn hiện — chỉ bỏ phần nhấp nháy và trượt. */
+@media (prefers-reduced-motion: reduce) {
+  .brand-loader-mark,
+  .brand-loader-halo,
+  .brand-loader-label,
+  .login-hero-enter,
+  .login-panel-enter,
+  .login-busy-veil,
+  .login-success-mark,
+  .login-progress::after {
+    animation: none;
+  }
+
+  .brand-loader-halo {
+    opacity: 0.3;
+  }
+
+  .login-progress::after {
+    width: 100%;
+    opacity: 0.7;
+  }
+}
