@@ -4,10 +4,25 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { BrandLoader } from "@/components/shared/brand-loader";
 import { ColorIcon } from "@/components/shared/color-icon";
 import { BASE } from "@/lib/api";
 import { useAuth } from "@/lib/auth-store";
 import { danhDauCoPhien } from "@/lib/session-marker";
+
+/**
+ * Đăng nhập xong thì dừng lại chừng này ở màn hình "đã vào được" trước khi
+ * chuyển sang bảng điều khiển.
+ *
+ * Không phải để làm cảnh: bảng điều khiển còn phải hỏi kho, hỏi thông báo, mở
+ * socket — trong khoảng đó màn hình gần như trống. Chuyển thẳng sang một trang
+ * trống làm người dùng tưởng đăng nhập hỏng và bấm quay lại. Một dấu tích rõ
+ * ràng cắt hẳn cái ngờ đó, và phần lớn thời gian chờ này trùng luôn với thời
+ * gian trang kia đang dựng.
+ */
+const NHIP_THANH_CONG_MS = 700;
+
+type TrangThai = "nhap" | "dang-gui" | "thanh-cong";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -16,12 +31,13 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [trangThai, setTrangThai] = useState<TrangThai>("nhap");
+  const dangBan = trangThai !== "nhap";
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setError("");
-    setIsLoading(true);
+    setTrangThai("dang-gui");
     try {
       const response = await fetch(`${BASE}/api/auth/login`, {
         method: "POST",
@@ -58,32 +74,47 @@ export default function LoginPage() {
       setAuth(data.accessToken, data.user);
       // Từ giờ máy này mới có cái để khôi phục ở những lần mở trang sau.
       danhDauCoPhien();
-      router.push("/readiness");
+      // KHÔNG trả về trạng thái "nhap" ở đây: từ lúc này tấm thẻ chỉ còn việc
+      // báo đã vào được rồi nhường chỗ cho bảng điều khiển. Mở khoá lại các ô
+      // nhập giữa chừng chỉ mời người dùng bấm Đăng nhập lần thứ hai.
+      setTrangThai("thanh-cong");
+      setTimeout(() => router.push("/readiness"), NHIP_THANH_CONG_MS);
     } catch (err) {
       setError(
         err instanceof TypeError
           ? "Không thể kết nối đến hệ thống. Vui lòng kiểm tra máy chủ và thử lại."
           : (err as Error).message,
       );
-    } finally {
-      setIsLoading(false);
+      setTrangThai("nhap");
     }
   }
 
   return (
-    <main className="login-page-background min-h-[100dvh] p-5 md:p-8 lg:p-12">
-      <div className="mx-auto grid min-h-[calc(100dvh-2.5rem)] w-full max-w-7xl items-center gap-10 md:min-h-[calc(100dvh-4rem)] lg:min-h-[calc(100dvh-6rem)] lg:grid-cols-[minmax(0,1fr)_minmax(420px,520px)] lg:gap-16">
-        <section className="max-w-2xl justify-self-center text-center text-white">
-          <h1 className="text-5xl font-semibold leading-none tracking-[-0.04em] md:text-6xl lg:text-7xl">
+    <main className="login-page-background min-h-[100dvh] px-4 py-8 md:p-8 lg:p-12">
+      <div className="mx-auto grid min-h-[calc(100dvh-4rem)] w-full max-w-7xl items-center gap-10 md:min-h-[calc(100dvh-4rem)] lg:min-h-[calc(100dvh-6rem)] lg:grid-cols-[minmax(0,1fr)_minmax(400px,520px)] lg:gap-16">
+        <section className="login-hero-enter max-w-2xl justify-self-center text-center text-white">
+          {/* `leading-none` cắt cụt dấu của chữ Việt: "Ứ" chồng hai dấu lên đầu
+              chữ hoa, mà hộp dòng cao đúng bằng cỡ chữ thì phần chồng đó bị xén.
+              Cỡ chữ cũng phải bắt đầu nhỏ hơn — ở 3rem thì "Ứng phó nhanh" rộng
+              hơn màn hình 320px và tràn ra ngoài. */}
+          <h1 className="text-[2rem] font-semibold leading-[1.15] tracking-[-0.03em] [text-wrap:balance] sm:text-5xl md:text-6xl lg:text-7xl">
             Ứng phó nhanh
           </h1>
-          <p className="mt-5 text-base font-medium leading-7 text-white md:text-lg lg:whitespace-nowrap lg:text-xl">
+          {/* Bỏ `lg:whitespace-nowrap`: đúng ở mốc 1024px, cột này chỉ còn hơn
+              440px trong khi dòng chữ cần khoảng 570px — cấm xuống dòng ở đó
+              nghĩa là cắt mất đuôi câu. */}
+          <p className="mx-auto mt-5 max-w-xl text-base font-medium leading-7 text-white [text-wrap:pretty] md:text-lg lg:text-xl">
             Giải pháp cứu hộ cứu nạn và hậu cần thông minh
           </p>
         </section>
 
-        <section className="w-full max-w-lg lg:justify-self-end">
-          <form className="app-panel login-panel w-full max-w-lg p-7 md:p-9" onSubmit={submit}>
+        <section className="w-full max-w-lg justify-self-center lg:justify-self-end">
+          <form
+            className="app-panel login-panel login-panel-enter w-full max-w-lg p-6 sm:p-7 md:p-9"
+            onSubmit={submit}
+          >
+            {trangThai === "dang-gui" ? <span aria-hidden className="login-progress" /> : null}
+
             <div className="mb-7 flex justify-center">
               <Image
                 alt="Ứng phó nhanh"
@@ -105,7 +136,8 @@ export default function LoginPage() {
               </label>
               <input
                 autoComplete="username"
-                className="login-field h-11 rounded-md border px-3 outline-none transition focus:border-[var(--color-accent)]"
+                className="login-field h-11 rounded-md border px-3 outline-none transition focus:border-[var(--color-accent)] disabled:opacity-70"
+                disabled={dangBan}
                 id="email"
                 onChange={(event) => setEmail(event.target.value)}
                 value={email}
@@ -119,7 +151,8 @@ export default function LoginPage() {
               <div className="relative">
                 <input
                   autoComplete="current-password"
-                  className="login-field h-11 w-full rounded-md border px-3 pr-11 outline-none transition focus:border-[var(--color-accent)]"
+                  className="login-field h-11 w-full rounded-md border px-3 pr-11 outline-none transition focus:border-[var(--color-accent)] disabled:opacity-70"
+                  disabled={dangBan}
                   id="password"
                   onChange={(event) => setPassword(event.target.value)}
                   type={showPassword ? "text" : "password"}
@@ -129,6 +162,7 @@ export default function LoginPage() {
                   aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
                   aria-pressed={showPassword}
                   className="login-password-toggle absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center transition"
+                  disabled={dangBan}
                   onClick={() => setShowPassword((current) => !current)}
                   type="button"
                 >
@@ -149,13 +183,17 @@ export default function LoginPage() {
 
             <button
               className="mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[var(--color-accent)] px-4 font-semibold text-[var(--color-accent-fg)] transition hover:brightness-95 active:translate-y-px disabled:opacity-60"
-              disabled={isLoading}
+              disabled={dangBan}
               type="submit"
             >
-              {isLoading ? (
+              {dangBan ? (
                 <ColorIcon className="animate-spin" name="loading" size={18} tone="green" />
               ) : null}
-              {isLoading ? "Đang đăng nhập" : "Đăng nhập"}
+              {trangThai === "thanh-cong"
+                ? "Đã đăng nhập"
+                : trangThai === "dang-gui"
+                  ? "Đang đăng nhập"
+                  : "Đăng nhập"}
             </button>
 
             <div className="mt-6 border-t pt-5 text-center">
@@ -167,6 +205,27 @@ export default function LoginPage() {
                 Xem số liên hệ UBND các xã
               </Link>
             </div>
+
+            {/* Lớp phủ nằm TRONG tấm thẻ chứ không phủ cả trang: nó che đúng phần
+                đang bị khoá và để nguyên phần còn lại của màn hình, nên người
+                dùng vẫn thấy mình đang ở đâu. */}
+            {dangBan ? (
+              <div className="login-busy-veil">
+                {trangThai === "thanh-cong" ? (
+                  <>
+                    <span className="login-success-mark">
+                      <ColorIcon name="success" size={34} tone="green" />
+                    </span>
+                    <p className="mt-4 text-base font-semibold">Đăng nhập thành công</p>
+                    <p className="mt-1 text-sm text-[var(--text-muted)]">
+                      Đang mở bảng điều khiển…
+                    </p>
+                  </>
+                ) : (
+                  <BrandLoader label="Đang đăng nhập…" size={72} />
+                )}
+              </div>
+            ) : null}
           </form>
         </section>
       </div>
