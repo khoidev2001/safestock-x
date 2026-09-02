@@ -13,7 +13,7 @@ import {
   Prisma,
   UserRole,
 } from "@prisma/client";
-import { FIELD_FORCE_ROLE_LABEL, IncidentType } from "@safestock/shared-types";
+import { FIELD_FORCE_ROLE_LABEL, IncidentType, incidentTypeLabel } from "@safestock/shared-types";
 import { AiClientService } from "../ai/ai-client.service";
 import { LatLng } from "../geo/haversine";
 import { LocalRoutingService } from "../geo/local-routing.service";
@@ -42,6 +42,7 @@ import {
 import { assessMissionReadiness, MissionReadinessAssessment } from "./mission-readiness";
 import { normalizeHamletName } from "../admin/hamlet-normalization";
 import { findHamletInReport } from "./hamlet-in-report";
+import { readReportSignal } from "./report-signal";
 import { buildWarehouseRequestCreates } from "./mission-warehouse-request";
 
 /** Gợi ý mượn kho lân cận cho 1 SKU thiếu. */
@@ -281,6 +282,15 @@ export class MissionService {
     };
     const excerpt =
       input.description.length > 140 ? `${input.description.slice(0, 140)}…` : input.description;
+    // Đọc thẳng lời kể để thẻ thông báo của ADMIN có biểu tượng đúng loại thiên
+    // tai, số người và tên thôn NGAY lúc nhận. Bản ghi nhiệm vụ lúc này vẫn là
+    // chỗ trống (OTHER, 0 người) và cố ý giữ nguyên như vậy: ADMIN vẫn phải bấm
+    // phân tích rồi xác nhận. Đây chỉ là nhãn cho một thẻ báo, không phải số
+    // liệu để tính vật tư.
+    const hamlets = await (this.prisma as unknown as MissionHamletPrisma).hamlet.findMany({
+      where: { organizationId: warehouse.organizationId, communeId: warehouse.communeId },
+    });
+    const tinHieu = readReportSignal(input.description, hamlets);
 
     try {
       const result = await this.prisma.$transaction(async (tx) => {
@@ -309,6 +319,7 @@ export class MissionService {
             missionId: mission.id,
             warehouseId: input.warehouseId,
             organizationId: warehouse.organizationId,
+            ...tinHieu,
           },
         });
         return { mission, notification };
@@ -575,14 +586,24 @@ export class MissionService {
           skipDuplicates: true,
         });
       }
+      // Chép tình huống vào thông báo: thẻ trên web dựa vào đây để chọn biểu
+      // tượng đúng loại thiên tai và in đậm số người, tên thôn. Hai lệnh tạo này
+      // nằm trong transaction nên không đi qua NotificationService — phần tự chép
+      // ở đó không chạm tới, phải truyền tay.
+      const boiCanh = {
+        incidentType: mission.incidentType,
+        affectedPeople: mission.affectedPeople,
+        locationName: mission.hamletName ?? mission.location ?? null,
+      };
       const warehouseNotification = await tx.notification.create({
         data: {
           recipientRole: UserRole.WAREHOUSE,
           kind: NotificationKind.MISSION_ASSIGNED,
           title: "Phương án vật tư mới cần chuẩn bị",
-          body: `${mission.incidentType} — ${mission.affectedPeople} người. Chuẩn bị phần vật tư được phân bổ cho kho.`,
+          body: `${incidentTypeLabel(mission.incidentType)} — ${mission.affectedPeople} người. Chuẩn bị phần vật tư được phân bổ cho kho.`,
           missionId: id,
           organizationId: mission.warehouse.organizationId,
+          ...boiCanh,
         },
       });
       const fieldForceNotification = await tx.notification.create({
@@ -590,9 +611,10 @@ export class MissionService {
           recipientRole: UserRole.RESCUE,
           kind: NotificationKind.MISSION_ASSIGNED,
           title: "Phương án ứng phó mới",
-          body: `${mission.incidentType} — ${mission.affectedPeople} người. Xem tuyến và các điểm lấy vật tư trong phương án.`,
+          body: `${incidentTypeLabel(mission.incidentType)} — ${mission.affectedPeople} người. Xem tuyến và các điểm lấy vật tư trong phương án.`,
           missionId: id,
           organizationId: mission.warehouse.organizationId,
+          ...boiCanh,
         },
       });
       const updated = await tx.mission.findUniqueOrThrow({
@@ -788,7 +810,7 @@ export class MissionService {
       recipientRole: UserRole.RESCUE,
       kind: NotificationKind.MISSION_ASSIGNED,
       title: "Nhiệm vụ đã cập nhật — mời xác nhận lại",
-      body: `${mission.incidentType} — ${mission.affectedPeople} người.${note ? ` Phản hồi: ${note}` : ""}`,
+      body: `${incidentTypeLabel(mission.incidentType)} — ${mission.affectedPeople} người.${note ? ` Phản hồi: ${note}` : ""}`,
       missionId: id,
     });
     return updated;

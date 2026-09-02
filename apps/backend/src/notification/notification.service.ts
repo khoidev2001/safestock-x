@@ -14,6 +14,15 @@ export interface CreateNotification {
   /** Khoản mượn liên xã mà thông báo nói tới — cho phép dựng nút hành động. */
   loanId?: string;
   fieldUpdateId?: string;
+  /**
+   * Tình huống của nhiệm vụ. Bỏ trống thì service tự chép từ chính nhiệm vụ đó.
+   *
+   * Người gửi chỉ nên truyền tay khi bản ghi nhiệm vụ chưa có số đúng ở thời
+   * điểm gửi (ví dụ báo cáo thô của trưởng thôn, chưa phân tích).
+   */
+  incidentType?: string | null;
+  affectedPeople?: number | null;
+  locationName?: string | null;
 }
 
 /** Gateway is injected at runtime; the service does not depend on Socket.IO. */
@@ -53,9 +62,13 @@ interface NotificationPersistence {
     }): Promise<{ organizationId: string } | null>;
   };
   mission: {
-    findUnique(
-      args: Record<string, unknown>,
-    ): Promise<{ warehouse: { organizationId: string } } | null>;
+    findUnique(args: Record<string, unknown>): Promise<{
+      warehouse: { organizationId: string };
+      incidentType?: string;
+      affectedPeople?: number;
+      location?: string | null;
+      hamletName?: string | null;
+    } | null>;
   };
 }
 
@@ -77,7 +90,8 @@ export class NotificationService {
   /** Persist then publish only to the exact organization + role room. */
   async create(input: CreateNotification) {
     const organizationId = await this.resolveOrganizationId(input);
-    const { organizationId: _providedOrganizationId, ...data } = input;
+    const { organizationId: _providedOrganizationId, ...rest } = input;
+    const data = { ...rest, ...(await this.resolveIncidentContext(input)) };
     if (input.fieldUpdateId) {
       const existing = await this.db.notification.findUnique({
         where: { fieldUpdateId: input.fieldUpdateId },
@@ -160,6 +174,43 @@ export class NotificationService {
     });
     if (!actor) throw new NotFoundException("Không tìm thấy người dùng");
     return actor.organizationId;
+  }
+
+  /**
+   * Chép tình huống của nhiệm vụ vào chính thông báo.
+   *
+   * Thẻ thông báo cần biểu tượng đúng loại thiên tai và cần in đậm số người,
+   * tên thôn — ba thứ đó nằm ở nhiệm vụ. Để màn hình tự đi hỏi thì mỗi thẻ là
+   * một lượt gọi mạng lúc đang có việc, mà thẻ hiện trước khi câu trả lời về
+   * thì người trực đọc được đúng một dòng chữ chung chung.
+   *
+   * Chép chứ không tham chiếu: nhiệm vụ sửa số về sau không được phép viết lại
+   * nội dung một thông báo đã gửi đi.
+   */
+  private async resolveIncidentContext(input: CreateNotification) {
+    // Xét CÓ NHẮC TỚI hay không, chứ không xét giá trị khác null: người gửi
+    // truyền thẳng `incidentType: null` là đang nói "thông báo này không gắn
+    // tình huống nào" — như báo cáo thô của trưởng thôn, nơi nhiệm vụ mới chỉ là
+    // chỗ trống (OTHER, 0 người). Đọc đè bằng số của nhiệm vụ lúc đó là dựng ra
+    // một con số không ai báo.
+    const daNoi = "incidentType" in input || "affectedPeople" in input || "locationName" in input;
+    if (daNoi || !input.missionId) return {};
+    const mission = await this.db.mission.findUnique({
+      where: { id: input.missionId },
+      select: {
+        incidentType: true,
+        affectedPeople: true,
+        location: true,
+        hamletName: true,
+        warehouse: { select: { organizationId: true } },
+      },
+    });
+    if (!mission) return {};
+    return {
+      incidentType: mission.incidentType ?? null,
+      affectedPeople: mission.affectedPeople ?? null,
+      locationName: mission.hamletName ?? mission.location ?? null,
+    };
   }
 
   private async resolveOrganizationId(input: CreateNotification): Promise<string> {

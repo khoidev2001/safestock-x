@@ -20,11 +20,57 @@ describe("NotificationService organization scope", () => {
       mission: {
         findUnique: jest.fn().mockResolvedValue({
           warehouse: { organizationId: "org-a" },
+          incidentType: "FLOOD",
+          affectedPeople: 190,
+          location: "Long Bình",
+          hamletName: "Long Bình",
         }),
       },
     };
     return { prisma, service: new NotificationService(prisma as never) };
   }
+
+  it("chép tình huống của nhiệm vụ vào thông báo để thẻ hiện được biểu tượng và số người", async () => {
+    const { prisma, service } = makeService();
+
+    await service.create({
+      recipientRole: "RESCUE" as never,
+      kind: "MISSION_ASSIGNED" as never,
+      title: "Phương án ứng phó mới",
+      body: "Lũ lụt — 190 người.",
+      missionId: "mission-1",
+    });
+
+    expect(prisma.notification.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        incidentType: "FLOOD",
+        affectedPeople: 190,
+        locationName: "Long Bình",
+      }),
+    });
+  });
+
+  it("người gửi đã nói rõ tình huống thì không đọc đè bằng số của nhiệm vụ", async () => {
+    // Báo cáo thô của trưởng thôn: nhiệm vụ còn là chỗ trống (OTHER, 0 người),
+    // chép vào là thẻ khoe một con số không ai báo.
+    const { prisma, service } = makeService();
+
+    await service.create({
+      recipientRole: "ADMIN" as never,
+      kind: "INCIDENT_REPORTED" as never,
+      title: "Báo cáo mới từ trưởng thôn",
+      body: "Ngập ngang gối ở đầu thôn",
+      missionId: "mission-1",
+      incidentType: null,
+    });
+
+    expect(prisma.mission.findUnique).not.toHaveBeenCalledWith(
+      expect.objectContaining({ select: expect.objectContaining({ affectedPeople: true }) }),
+    );
+    const data = prisma.notification.create.mock.calls[0][0].data;
+    expect(data.affectedPeople).toBeUndefined();
+    expect(data.locationName).toBeUndefined();
+  });
 
   it("lists only notifications for the authenticated user's organization and role", async () => {
     const { prisma, service } = makeService();

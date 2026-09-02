@@ -230,6 +230,10 @@ export interface AppNotification {
   read: boolean;
   missionId: string | null;
   fieldUpdateId?: string | null;
+  /** Tình huống chép lại lúc gửi — thẻ và chuông dùng để chọn biểu tượng, in đậm. */
+  incidentType?: string | null;
+  affectedPeople?: number | null;
+  locationName?: string | null;
   createdAt: string;
 }
 

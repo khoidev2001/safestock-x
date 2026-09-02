@@ -72,13 +72,13 @@ enum LoanStatus {
 }
 
 model Organization {
-  id            String         @id @default(cuid())
-  name          String
-  createdAt     DateTime       @default(now())
-  users         User[]
-  warehouses    Warehouse[]
-  hamlets       Hamlet[]
-  notifications Notification[]
+  id                String             @id @default(cuid())
+  name              String
+  createdAt         DateTime           @default(now())
+  users             User[]
+  warehouses        Warehouse[]
+  hamlets           Hamlet[]
+  notifications     Notification[]
   interCommuneLoans InterCommuneLoan[]
 }
 
@@ -833,6 +833,16 @@ model Notification {
   // tìm lại đúng dòng. Lúc đang bão, mỗi bước phải đi tìm là một bước bị bỏ.
   loanId         String?
   fieldUpdateId  String?          @unique
+  // Tình huống mà thông báo nói tới, chép lại tại thời điểm gửi.
+  //
+  // Thẻ thông báo phải nhận ra ĐƯỢC NGAY là bão hay sạt lở, bao nhiêu người, ở
+  // thôn nào — để chọn biểu tượng và in đậm đúng phần người trực cần thấy trước.
+  // Đọc ngược sang Mission lúc hiện thẻ thì mỗi thẻ là một lượt gọi mạng, và
+  // nhiệm vụ sửa số về sau sẽ làm thông báo cũ kể lại một câu chuyện khác với
+  // lúc nó được gửi.
+  incidentType   String?
+  affectedPeople Int?
+  locationName   String?
   createdAt      DateTime         @default(now())
 
   @@index([organizationId, recipientRole, read])
@@ -892,18 +902,18 @@ model InterCommuneLoan {
   /// cách này cho lô số liệu cảm biến và cho thao tác kho.
   inboundKey String? @unique
 
-  itemSku  String
-  itemName String
+  itemSku          String
+  itemName         String
   /// Số lượng mượn theo thoả thuận.
-  quantity Int
+  quantity         Int
   /// Đã trả được bao nhiêu (cộng dồn).
   ///
   /// Trả TỪNG PHẦN là chuyện bình thường: mượn 200 chai, trả 180, hỏng mất 20.
   /// Mô hình mượn trong xã của chính dự án này đã có returnedOk/returnedDamaged/
   /// lost từ đầu; ghi nhận liên xã kiểu được-ăn-cả-ngã-về-không thì hoặc phải
   /// khai khống là đã trả đủ, hoặc để khoản nợ mở mãi mãi.
-  returnedQuantity Int @default(0)
-  unit     String
+  returnedQuantity Int    @default(0)
+  unit             String
 
   /// Kho của xã mình chịu trách nhiệm cho khoản này (xuất ra hoặc nhận về).
   warehouseId String?
