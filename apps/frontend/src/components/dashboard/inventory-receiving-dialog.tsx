@@ -8,6 +8,7 @@ import {
   type InventoryCatalogItem,
   type ShelfSummary,
 } from "@/lib/dashboard-api";
+import { CloseGlyph } from "@/components/shared/close-glyph";
 
 type ShelfOption = ShelfSummary & { zoneLabel: string };
 
@@ -109,10 +110,10 @@ export function InventoryReceivingDialog({
             aria-label="Đóng"
             // Vùng bấm 44px: nút cũ chỉ cao 30px, trên màn hình cảm ứng và
             // laptop nhỏ phải nhắm mới trúng.
-            className="flex h-11 w-11 items-center justify-center rounded-md border text-xl leading-none transition hover:bg-[var(--surface-2)]"
+            className="flex h-10 w-10 items-center justify-center rounded-md border transition hover:bg-[var(--surface-2)]"
             onClick={onClose}
           >
-            ×
+            <CloseGlyph />
           </button>
         </header>
 

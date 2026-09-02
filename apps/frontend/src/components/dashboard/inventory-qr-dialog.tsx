@@ -5,6 +5,7 @@ import QRCode from "qrcode";
 import { useEffect, useState } from "react";
 import { inventoryQrPayload } from "@safestock/shared-types";
 import type { InventoryBatch } from "@/lib/dashboard-api";
+import { CloseGlyph } from "@/components/shared/close-glyph";
 
 export function InventoryQrDialog({
   batch,
@@ -70,10 +71,10 @@ export function InventoryQrDialog({
             aria-label="Đóng"
             // Vùng bấm 44px: nút cũ chỉ cao 30px, trên màn hình cảm ứng và
             // laptop nhỏ phải nhắm mới trúng.
-            className="flex h-11 w-11 items-center justify-center rounded-md border text-xl leading-none transition hover:bg-[var(--surface-2)]"
+            className="flex h-10 w-10 items-center justify-center rounded-md border transition hover:bg-[var(--surface-2)]"
             onClick={onClose}
           >
-            ×
+            <CloseGlyph />
           </button>
         </header>
         <div className="mt-5 grid place-items-center rounded-md bg-white p-4">
