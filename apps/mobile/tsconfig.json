@@ -1,7 +1,19 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "strict": true
+    "strict": true,
+    "baseUrl": ".",
+    // Ghim `react` về đúng @types/react 18 của app điện thoại.
+    //
+    // pnpm đặt @expo/vector-icons ở kho chung ngoài node_modules/.pnpm; khi
+    // TypeScript đọc file .d.ts của nó, nó đi ngược lên và nhặt phải
+    // @types/react 19 mà apps/frontend kéo về ở gốc workspace. Hai bản khai báo
+    // React khác nhau thì `React.Component` của thư viện không khớp
+    // `React.Component` của app, và tsc báo icon "không dùng được như JSX
+    // component" — dù chạy thật thì hoàn toàn bình thường.
+    "paths": {
+      "react": ["./node_modules/@types/react"]
+    }
   },
   "include": ["**/*.ts", "**/*.tsx"]
 }
