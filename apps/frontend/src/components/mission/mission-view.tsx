@@ -51,43 +51,6 @@ const IncidentMap = dynamic(() => import("./incident-map").then((m) => m.Inciden
   loading: () => <div className="h-[320px] animate-pulse rounded-md border bg-[var(--surface)]" />,
 });
 
-/** Tình huống mẫu — bấm nhanh, phòng khi cán bộ chưa quen nhập tay. */
-const SAMPLES: { label: string; input: GenerateInput["incident"] }[] = [
-  {
-    label: "Lũ lụt 100 người",
-    input: {
-      incidentType: "FLOOD",
-      affectedPeople: 100,
-      durationHours: 24,
-      children: 10,
-      elderly: 5,
-      medicalSupportCases: 3,
-    },
-  },
-  {
-    label: "Bão 50 người",
-    input: {
-      incidentType: "STORM",
-      affectedPeople: 50,
-      durationHours: 12,
-      children: 5,
-      elderly: 3,
-      medicalSupportCases: 1,
-    },
-  },
-  {
-    label: "Sạt lở 30 người",
-    input: {
-      incidentType: "LANDSLIDE",
-      affectedPeople: 30,
-      durationHours: 48,
-      children: 3,
-      elderly: 2,
-      medicalSupportCases: 4,
-    },
-  },
-];
-
 const INCIDENT_TYPES = [
   { value: "FLOOD", label: "Lũ lụt" },
   { value: "STORM", label: "Bão" },
@@ -668,21 +631,6 @@ export function MissionView({
                 error={parseError}
                 analyzedValue={analyzedDescription}
               />
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                {SAMPLES.map((s) => (
-                  <button
-                    key={s.label}
-                    type="button"
-                    onClick={() =>
-                      setForm({ children: 0, elderly: 0, medicalSupportCases: 0, ...s.input })
-                    }
-                    className="rounded-full border bg-[var(--surface-2)] px-3 py-1.5 text-xs font-medium transition hover:bg-[var(--surface)] active:translate-y-px"
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
 
               <div className="mt-4 space-y-3">
                 <Field label="Loại tình huống">
