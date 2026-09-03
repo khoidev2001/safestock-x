@@ -28,8 +28,13 @@ import {
   OFFLINE_TILE_ATTRIBUTION,
   OFFLINE_TILE_URL,
   PROVINCE_BOUNDS,
+  SATELLITE_LABELS_TILE_URL,
+  SATELLITE_MAX_NATIVE_ZOOM,
+  SATELLITE_TILE_ATTRIBUTION,
+  SATELLITE_TILE_URL,
 } from "@/components/dashboard/map-tiles";
 import { alertHouseIcon, houseIcon, villaIcon } from "@/components/dashboard/map-house-icons";
+import { ColorIcon } from "@/components/shared/color-icon";
 
 /**
  * Báo Leaflet đo lại khung mỗi khi vào/ra toàn màn hình.
@@ -112,6 +117,7 @@ export interface IncidentMapProps {
   incidentPoint: LatLng | null;
   /**
    * Có thì bản đồ cho ghim điểm sự cố; không truyền thì chỉ xem.
+
    *
    * Bấm chỗ trống → đặt điểm. Bấm vào chính dấu ghim → gọi lại với null để bỏ.
    * Kéo dấu ghim → dời. Một bản đồ làm cả hai việc: trước khi lập phương án thì
@@ -210,7 +216,26 @@ export function IncidentMap({
 
   // Bản đồ trong cột form quá nhỏ để đọc đường sá quanh điểm nạn. Mở rộng ra hết
   // màn hình là cách xem cho rõ mà không phải rời trang và mất phần đang nhập dở.
+  /**
+   * Phương án đang xem đã có tuyến vẽ được chưa.
+   *
+   * Quyết định có vẽ tuyến của các nhiệm vụ khác hay không: có tuyến của mình rồi
+   * thì chúng chỉ làm rối. Đếm theo đúng điều kiện mà chỗ vẽ dùng (`ROUTED` và có
+   * hình học), không phải chỉ đếm số kho — kho tính không ra tuyến thì không vẽ gì.
+   */
+  const hasOwnRoutes = warehouses.some((w) => w.routeStatus === "ROUTED" && w.routeGeometry);
+
   const [fullscreen, setFullscreen] = useState(false);
+  /**
+   * Nền đang dùng. Mặc định ẢNH VỆ TINH: ghim đúng một căn nhà hay một ngã ba là
+   * việc chính của bản đồ này, mà nền vẽ offline chỉ tới zoom 15 và không có chữ
+   * nên thưa quá, không đối chiếu được với lời kể.
+   *
+   * Đánh đổi phải biết: ảnh vệ tinh tải từ Internet. Mất mạng thì nền trắng và
+   * người dùng bấm một nút để về gói offline — các dấu ghim, tuyến, ranh giới xã
+   * đều vẽ bằng dữ liệu của chính hệ thống nên KHÔNG mất theo.
+   */
+  const [baseLayer, setBaseLayer] = useState<"offline" | "satellite">("satellite");
   useEffect(() => {
     if (!fullscreen) return;
     const onKey = (e: KeyboardEvent) => {
@@ -269,15 +294,40 @@ export function IncidentMap({
               "relative isolate aspect-square w-full overflow-hidden rounded-md border"
         }
       >
-        <button
-          type="button"
-          onClick={() => setFullscreen((v) => !v)}
-          aria-label={fullscreen ? "Thu nhỏ bản đồ" : "Mở bản đồ toàn màn hình"}
-          title={fullscreen ? "Thu nhỏ (Esc)" : "Mở toàn màn hình"}
-          className="absolute right-3 top-3 z-[1000] rounded-md border bg-[var(--surface)] px-2.5 py-1.5 text-xs font-semibold shadow-sm transition hover:bg-[var(--surface-2)] active:translate-y-px"
-        >
-          {fullscreen ? "Thu nhỏ" : "Toàn màn hình"}
-        </button>
+        <div className="absolute right-3 top-3 z-[1000] flex gap-2">
+          {/* Chỉ icon, không chữ: hai nút cạnh nhau mà cả hai đều là chữ thì chiếm
+            gần hết mép trên của bản đồ. `aria-label` và `title` vẫn nói đủ nghĩa —
+            người dùng bàn phím và trình đọc màn hình không mất gì, và trỏ chuột vào
+            là hiện đúng đánh đổi của chế độ sắp bật. */}
+          <button
+            type="button"
+            onClick={() => setBaseLayer((v) => (v === "offline" ? "satellite" : "offline"))}
+            aria-label={
+              baseLayer === "offline" ? "Chuyển sang ảnh vệ tinh" : "Chuyển về bản đồ offline"
+            }
+            title={
+              baseLayer === "offline"
+                ? "Ảnh vệ tinh: thấy mái nhà, ngõ nhỏ, bờ ruộng — ghim chính xác hơn. Cần Internet."
+                : "Bản đồ offline: chạy được khi mất mạng, nhưng chỉ tới zoom 15 và không có chữ."
+            }
+            className="flex h-[30px] w-[34px] items-center justify-center rounded-md border bg-[var(--surface)] shadow-sm transition hover:bg-[var(--surface-2)] active:translate-y-px"
+          >
+            <ColorIcon
+              name={baseLayer === "offline" ? "satellite" : "mapFlat"}
+              size={17}
+              tone={baseLayer === "offline" ? "blue" : "green"}
+            />
+          </button>
+          <button
+            type="button"
+            onClick={() => setFullscreen((v) => !v)}
+            aria-label={fullscreen ? "Thu nhỏ bản đồ" : "Mở bản đồ toàn màn hình"}
+            title={fullscreen ? "Thu nhỏ (Esc)" : "Mở toàn màn hình"}
+            className="rounded-md border bg-[var(--surface)] px-2.5 py-1.5 text-xs font-semibold shadow-sm transition hover:bg-[var(--surface-2)] active:translate-y-px"
+          >
+            {fullscreen ? "Thu nhỏ" : "Toàn màn hình"}
+          </button>
+        </div>
         <div
           className={
             fullscreen ? "h-full w-full overflow-hidden rounded-md border" : "h-full w-full"
@@ -293,13 +343,43 @@ export function IncidentMap({
             scrollWheelZoom
             style={{ height: "100%", width: "100%" }}
           >
-            <TileLayer
-              url={OFFLINE_TILE_URL}
-              attribution={OFFLINE_TILE_ATTRIBUTION}
-              maxZoom={MAX_DETAIL_ZOOM}
-              maxNativeZoom={OFFLINE_MAX_NATIVE_ZOOM}
-              errorTileUrl={BLANK_TILE}
-            />
+            {/* `key` khác nhau cho hai nền: không có nó, React-Leaflet chỉ đổi prop
+              `url` trên cùng một lớp và Leaflet giữ nguyên `maxNativeZoom` cũ —
+              bật vệ tinh xong phóng quá zoom 15 vẫn ra ảnh mờ của gói offline. */}
+            {baseLayer === "satellite" ? (
+              <>
+                <TileLayer
+                  key="satellite"
+                  url={SATELLITE_TILE_URL}
+                  attribution={SATELLITE_TILE_ATTRIBUTION}
+                  maxZoom={MAX_DETAIL_ZOOM}
+                  maxNativeZoom={SATELLITE_MAX_NATIVE_ZOOM}
+                  errorTileUrl={BLANK_TILE}
+                />
+                {/* Chữ phủ lên ảnh: tên thôn, tên đường. Ảnh vệ tinh trần thấy được
+                  mái nhà nhưng không biết đó là thôn nào — mà lời kể qua điện thoại
+                  luôn nói bằng tên ("nhà văn hoá thôn Long Châu"). */}
+                {/* Lớp chữ CÓ ảnh thật tới z19 (đã đo), sâu hơn ảnh vệ tinh ở vùng
+                  này. Nên cho nó `maxNativeZoom` riêng: ảnh nền mờ dần khi phóng
+                  quá z18 nhưng tên thôn, tên đường vẫn nét. */}
+                <TileLayer
+                  key="satellite-labels"
+                  url={SATELLITE_LABELS_TILE_URL}
+                  maxZoom={MAX_DETAIL_ZOOM}
+                  maxNativeZoom={MAX_DETAIL_ZOOM}
+                  errorTileUrl={BLANK_TILE}
+                />
+              </>
+            ) : (
+              <TileLayer
+                key="offline"
+                url={OFFLINE_TILE_URL}
+                attribution={OFFLINE_TILE_ATTRIBUTION}
+                maxZoom={MAX_DETAIL_ZOOM}
+                maxNativeZoom={OFFLINE_MAX_NATIVE_ZOOM}
+                errorTileUrl={BLANK_TILE}
+              />
+            )}
             <BoundsForZoom />
             <ResizeOnToggle token={fullscreen} />
             {/* Ranh giới xã: giống bản đồ kho, để biết điểm vừa ghim thuộc xã nào. */}
@@ -383,19 +463,26 @@ export function IncidentMap({
                 />
               </Marker>
             ))}
-            {/* Tuyến của nhiệm vụ khác: XANH LÁ, nét đứt — khác hẳn tuyến xanh dương
-              đặc của phương án đang xem, nên nhìn là biết đường nào thuộc vụ nào.
-              Vẽ đầu tiên nên nằm dưới cùng, không che gì. */}
-            {(ongoingIncidents ?? []).flatMap((item) =>
+            {/* Tuyến của nhiệm vụ KHÁC — chỉ vẽ khi vụ đang xem chưa có tuyến nào.
+              Hai bộ đường cùng lúc là bản đồ rối không đọc được: năm vụ đang chạy
+              đã kéo hàng chục đường ngang dọc khắp xã, đúng lúc người điều phối cần
+              nhìn rõ hàng từ kho nào đi tới chỗ nạn vừa ghim. Còn khi vụ đang xem
+              chưa có tuyến thì chúng vẫn có ích: thấy xã đang huy động kho nào để
+              không lập hai phương án giẫm chân nhau.
+
+              Nét ĐỨT, xanh dương nhạt hơn tuyến đặc của phương án đang xem — cùng
+              hệ màu nên không bị đọc thành một loại thông tin khác, nhưng vẫn phân
+              biệt được bằng nét. Vẽ đầu tiên nên nằm dưới cùng, không che gì. */}
+            {(hasOwnRoutes ? [] : (ongoingIncidents ?? [])).flatMap((item) =>
               item.routes.map((line, index) => (
                 <Polyline
                   key={`ongoing-route-${item.id}-${index}`}
                   positions={line.map(([lng, lat]) => [lat, lng])}
                   interactive={false}
                   pathOptions={{
-                    color: "var(--color-ready, #2f9e6e)",
+                    color: ONGOING_ROUTE_COLOR,
                     weight: 3.5,
-                    opacity: 0.85,
+                    opacity: 0.8,
                     dashArray: "7 6",
                   }}
                 />
@@ -513,7 +600,11 @@ export function IncidentMap({
         {ongoingIncidents && ongoingIncidents.length > 0 ? (
           <LegendDot
             color="var(--color-attention, #d98613)"
-            label={`Nhiệm vụ đang điều phối (${ongoingIncidents.length}) — tuyến xanh lá`}
+            label={
+              hasOwnRoutes
+                ? `Nhiệm vụ đang điều phối (${ongoingIncidents.length}) — đã ẩn tuyến để nhìn rõ phương án này`
+                : `Nhiệm vụ đang điều phối (${ongoingIncidents.length}) — tuyến nét đứt`
+            }
           />
         ) : null}
         <LegendDot color="var(--color-accent, #2f9e6e)" label="Kho tổng" />
@@ -586,6 +677,14 @@ function BoundsForZoom() {
 }
 
 const ROUTE_COLORS = ["#2563eb", "#0284c7", "#4f46e5", "#0891b2", "#1d4ed8"];
+
+/**
+ * Tuyến của nhiệm vụ khác: cùng hệ xanh dương với `ROUTE_COLORS` nhưng nhạt hơn,
+ * và luôn vẽ nét đứt. Trước đây màu xanh lá — cùng màu với "kho tổng" và với trạng
+ * thái READY ở nơi khác trong app, nên trên bản đồ nó đọc ra như một loại thông tin
+ * khác hẳn thay vì "cũng là tuyến, nhưng của vụ khác".
+ */
+const ONGOING_ROUTE_COLOR = "#60a5fa";
 
 function LegendDot({ color, label }: { color: string; label: string }) {
   return (

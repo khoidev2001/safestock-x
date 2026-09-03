@@ -38,6 +38,58 @@ export const OFFLINE_TILE_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>' +
   ' &copy; <a href="https://carto.com/attributions">CARTO</a> · offline cụm Đồng Xuân';
 
+/**
+ * Nền vệ tinh — CHẾ ĐỘ TÙY CHỌN, CẦN INTERNET.
+ *
+ * Gói tile offline là nền vẽ (voyager_nolabels), tới zoom 15 và không có chữ: đủ
+ * để thấy kho nằm đâu, nhưng ghim đúng một căn nhà hay một khúc đường thì thưa
+ * quá — không có mái nhà, không có bờ ruộng, không có tên chỗ nào.
+ *
+ * Ảnh vệ tinh Esri World Imagery đi tới zoom 19 và là ảnh thật, nên ghim theo mái
+ * nhà/ngã ba được. Đánh đổi: nó tải từ Internet, nên MẤT MẠNG LÀ TRẮNG NỀN. Vì thế
+ * đây là chế độ người dùng tự bật, mặc định vẫn là gói offline — cam kết "chạy khi
+ * mất mạng" của hệ thống không được phụ thuộc vào nó.
+ */
+export const SATELLITE_TILE_URL =
+  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+/**
+ * Zoom SÂU NHẤT CÓ ẢNH THẬT của Esri ở vùng Đồng Xuân — đo trực tiếp, không phỏng đoán.
+ *
+ * Esri công bố World Imagery tới zoom 19, nhưng đó là mức toàn cầu ở nơi có ảnh độ
+ * phân giải cao. Vùng nông thôn Phú Yên chỉ có ảnh tới **z18**. Từ z19 trở lên máy
+ * chủ KHÔNG trả 404 — nó trả HTTP 200 kèm một ảnh xám in chữ "Map data not yet
+ * available". Leaflet coi đó là tile hợp lệ nên `errorTileUrl` không cứu được: nó
+ * dán thẳng chữ đó lên khắp bản đồ đúng lúc người dùng phóng to hết để ghim.
+ *
+ * Đo bằng cách lấy cùng một zoom ở hai chỗ cách xa nhau trong xã (Long Châu và
+ * Triêm Đức) rồi so md5:
+ *
+ *   z15  18.5KB / 18.1KB  md5 khác nhau  → ảnh thật
+ *   z16  21.2KB / 20.7KB  md5 khác nhau  → ảnh thật
+ *   z17  20.4KB / 17.5KB  md5 khác nhau  → ảnh thật
+ *   z18  14.5KB / 11.3KB  md5 khác nhau  → ảnh thật
+ *   z19   2.5KB /  2.5KB  md5 GIỐNG NHAU → ảnh giữ chỗ
+ *   z20   2.5KB /  2.5KB  md5 GIỐNG NHAU → ảnh giữ chỗ
+ *
+ * Đặt 18 vào `maxNativeZoom` (không phải `maxZoom`) thì Leaflet phóng to ô z18 khi
+ * người dùng zoom sâu hơn: mờ dần nhưng vẫn là ảnh thật của đúng chỗ đó, vẫn ghim
+ * được. Cùng lý do với `OFFLINE_MAX_NATIVE_ZOOM` ở trên.
+ */
+export const SATELLITE_MAX_NATIVE_ZOOM = 18;
+export const SATELLITE_TILE_ATTRIBUTION =
+  'Ảnh vệ tinh &copy; <a href="https://www.esri.com/">Esri</a>, Maxar, Earthstar Geographics ·' +
+  " cần Internet";
+
+/**
+ * Lớp chữ phủ lên ảnh vệ tinh: tên thôn, tên đường, địa điểm.
+ *
+ * Ảnh vệ tinh trần không có chữ nào — nhìn ra mái nhà nhưng không biết đó là thôn
+ * nào, nên vẫn khó đối chiếu với lời kể qua điện thoại ("nhà văn hoá thôn Long
+ * Châu"). Lớp này trong suốt, chỉ có chữ và nét đường, phủ lên trên.
+ */
+export const SATELLITE_LABELS_TILE_URL =
+  "https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png";
+
 // Tile xám 1x1 (base64) cho ô ngoài vùng offline — thay vì ô vỡ.
 export const BLANK_TILE =
   "data:image/gif;base64,R0lGODlhAQABAIAAAOfn5wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==";

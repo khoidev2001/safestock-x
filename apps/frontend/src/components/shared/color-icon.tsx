@@ -15,6 +15,7 @@ import {
   Dashboard,
   Delete,
   Down,
+  Earth,
   Edit,
   Exchange,
   FileExcel,
@@ -32,6 +33,7 @@ import {
   Logout,
   Magic,
   MapDraw,
+  MapTwo,
   Message,
   Mountain,
   OffScreenOne,
@@ -131,6 +133,9 @@ const icons = {
   wifiOff: CloseWifi,
   workflow: Clipboard,
   magic: Magic,
+  // Đổi nền bản đồ: quả đất = ảnh vệ tinh, bản đồ = gói tile offline.
+  satellite: Earth,
+  mapFlat: MapTwo,
   microphone: VoiceOne,
 } satisfies Record<string, IconParkComponent>;
 
