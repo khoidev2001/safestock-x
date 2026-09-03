@@ -19,6 +19,7 @@ import {
   generateActionPlan,
   generatePlan,
   getMission,
+  getWarehouseRoutes,
   listMissions,
   parseIncident,
   planFromReport,
@@ -191,6 +192,28 @@ export function MissionView({
   });
 
   const mission = missionQuery.data;
+
+  /**
+   * Tuyến từ các kho CÓ CẤP HÀNG tới điểm nạn, để bản đồ vẽ đường ngay sau khi tính
+   * nhu cầu.
+   *
+   * Trước đây tuyến chỉ nằm trong `mission.actionPlan`, mà cái đó chỉ sinh ra khi bấm
+   * "Lập bản tham mưu" — một bước có gọi LLM. Nên vừa tính xong nhu cầu, hệ thống đã
+   * biết chính xác kho nào cấp gì mà bản đồ vẫn trắng đường.
+   *
+   * `enabled` bám đúng hai điều kiện:
+   * - nhiệm vụ CÒN LÀ NHÁP: đã phát hành thì khối này là form khai vụ mới, vẽ tuyến
+   *   của vụ cũ lên đó là gây hiểu nhầm;
+   * - chưa có `actionPlan`: có rồi thì dùng luôn tuyến trong đó, gọi OSRM lần nữa
+   *   chỉ để nhận lại đúng kết quả cũ.
+   */
+  const routesQuery = useQuery({
+    queryKey: ["mission", missionId, "warehouse-routes"],
+    queryFn: () => getWarehouseRoutes(missionId as string),
+    enabled:
+      Boolean(missionId) && role === "ADMIN" && mission?.status === "DRAFT" && !mission?.actionPlan,
+    staleTime: 30 * 1000,
+  });
   // Báo cáo của trưởng thôn (mobile): DRAFT chỉ có mô tả thô, chưa phân tích (0 nhu cầu).
   // Admin mở tin này trên web để đọc lại rồi phân tích thành phương án ngay trên chính nó.
   const isReportDraft =
@@ -765,7 +788,15 @@ export function MissionView({
                   tưởng mình đang sửa vụ cũ. Tuyến đó vẫn xem được ở khối kế hoạch
                   bên dưới. */}
                 <IncidentMap
-                  warehouses={isMissionEditable ? (mission?.actionPlan?.warehouses ?? []) : []}
+                  // Tuyến ưu tiên lấy từ bản tham mưu nếu đã lập; chưa lập thì lấy
+                  // từ endpoint chỉ-đọc, để vẽ được đường ngay sau khi tính nhu cầu.
+                  // Cả hai nguồn đều CHỈ chứa kho có cấp hàng (backend lọc theo
+                  // `requirements.allocations`), nên không có đường của kho không góp gì.
+                  warehouses={
+                    isMissionEditable
+                      ? (mission?.actionPlan?.warehouses ?? routesQuery.data ?? [])
+                      : []
+                  }
                   baseWarehouses={warehouseListQuery.data ?? []}
                   incidentPoint={formIncidentPoint}
                   onPickIncident={canEditIncidentPoint ? setIncidentPoint : undefined}

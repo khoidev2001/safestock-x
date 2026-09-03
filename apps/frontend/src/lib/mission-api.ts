@@ -362,6 +362,15 @@ export const listMissions = (statuses?: MissionStatus[]) =>
 export const getClusterWarehouses = (warehouseId: string) =>
   apiFetch<ClusterWarehouse[]>(`/api/missions/${warehouseId}/warehouses`);
 
+/**
+ * Tuyến kho→điểm nạn của đúng các kho có cấp hàng. Chỉ đọc, không gọi LLM.
+ *
+ * Khác `generateActionPlan`: cái kia GHI `mission.actionPlan` và có gọi LLM viết
+ * diễn giải, nên không dùng được cho việc chỉ cần vẽ đường lên bản đồ.
+ */
+export const getWarehouseRoutes = (id: string) =>
+  apiFetch<DispatchRoute[]>(`/api/missions/${id}/warehouse-routes`);
+
 export const generateActionPlan = (id: string) =>
   apiFetch<ActionPlan>(`/api/missions/${id}/action-plan`, { method: "POST" });
 

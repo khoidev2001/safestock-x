@@ -1479,6 +1479,35 @@ export class MissionService {
     );
   }
 
+  /**
+   * Tuyến từ các kho CÓ CẤP HÀNG tới điểm nạn — không chạy AI, không ghi gì.
+   *
+   * Trước đây tuyến chỉ tồn tại bên trong `actionPlan`, mà `actionPlan` chỉ sinh ra
+   * ở `generateActionPlan` — bước lập bản tham mưu, có gọi LLM viết diễn giải. Hậu
+   * quả trên màn hình điều phối: bấm tính nhu cầu xong, hệ thống đã biết chính xác
+   * kho nào cấp gì, nhưng bản đồ vẫn trắng đường — người dùng thấy các chấm kho rời
+   * rạc và không biết hàng đi đường nào tới chỗ nạn. Muốn thấy đường thì phải chờ
+   * xong cả một lượt gọi LLM, cho một việc thuần hình học.
+   *
+   * Tách ra endpoint riêng chứ không nhét tuyến vào `generatePlan`: tính tuyến gọi
+   * OSRM một lượt cho mỗi kho, để trong đường tạo nhiệm vụ là bắt người dùng chờ
+   * thêm ngay ở bước họ cần nhanh nhất, và mỗi lần sửa số liệu lại chờ lại.
+   *
+   * Trả mảng rỗng (không ném) khi nhiệm vụ chưa có điểm nạn hoặc chưa cấp phát được
+   * gì: bản đồ lúc đó vẫn phải vẽ được các kho, chỉ là chưa có đường nào để vẽ.
+   */
+  async warehouseRoutes(
+    id: string,
+    actorUserId?: string,
+    scopeWarehouseId?: string | null,
+  ): Promise<WarehouseEta[]> {
+    // Đi qua `getMission` để dùng đúng một chỗ kiểm quyền xem nhiệm vụ; tự viết lại
+    // điều kiện ở đây là sớm muộn cũng lệch với chỗ kia.
+    const mission = await this.getMission(id, actorUserId, scopeWarehouseId);
+    if (!mission) throw new NotFoundException("Không tìm thấy nhiệm vụ");
+    return this.warehouseEtas(mission);
+  }
+
   /** Toàn bộ kho (tổng + thôn) trong cụm xã, có toạ độ — cho map ghim điểm nạn (FE-K). */
   async listClusterWarehouses(
     warehouseId: string,

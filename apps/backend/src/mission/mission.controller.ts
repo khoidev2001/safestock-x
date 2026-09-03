@@ -366,6 +366,19 @@ export class MissionController {
   }
 
   /**
+   * Tuyến kho→điểm nạn của đúng các kho có cấp hàng, để bản đồ vẽ đường ngay sau
+   * khi tính nhu cầu — không phải chờ hết bước lập bản tham mưu (có gọi LLM).
+   *
+   * `MISSION_VIEW` chứ không phải `MISSION_ANALYZE`: đây là route CHỈ ĐỌC, không ghi
+   * gì vào nhiệm vụ, khác hẳn `:id/action-plan` bên dưới.
+   */
+  @RequirePermission(Permission.MISSION_VIEW)
+  @Get(":id/warehouse-routes")
+  warehouseRoutes(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.missions.warehouseRoutes(id, req.user.userId, req.user.warehouseId);
+  }
+
+  /**
    * Sinh Incident Action Plan (8 mục): backend chấm severity/forecasts bằng rule,
    * LLM viết diễn giải, fallback template khi mất mạng. Lưu vào mission.actionPlan.
    * M1: route GHI mission.actionPlan → yêu cầu MISSION_ANALYZE (ADMIN), không phải VIEW.
