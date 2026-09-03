@@ -88,7 +88,7 @@ export function AdminUsersView({ warehouseId }: { warehouseId: string }) {
               className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
             />
           </Field>
-          <Field label="Email / tên đăng nhập">
+          <Field label="Tên đăng nhập">
             <input
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
