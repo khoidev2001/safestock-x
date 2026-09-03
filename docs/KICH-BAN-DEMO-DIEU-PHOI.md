@@ -25,10 +25,10 @@ xuất giữa chừng:
 | Cửa sổ | Tài khoản | Mật khẩu | Vai |
 |---|---|---|---|
 | A | `admin` | `admin123@` | Điều phối xã |
-| B | `longchau@ungphonhanh.life` | `truongthon123` | Phụ trách Kho thôn Long Châu |
+| B | `longchau` | `truongthon123` | Phụ trách Kho thôn Long Châu |
 
-Cần thêm thì: `staff@ungphonhanh.life` / `staff123` (kho trung tâm),
-`rescue@ungphonhanh.life` / `rescue123` (lực lượng hiện trường).
+Cần thêm thì: `staff` / `staff123` (kho trung tâm),
+`rescue` / `rescue123` (lực lượng hiện trường).
 
 **Ba điều về giao diện, biết trước đỡ lúng túng:**
 

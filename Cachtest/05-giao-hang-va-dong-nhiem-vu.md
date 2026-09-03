@@ -10,7 +10,7 @@ quay về sổ sách.
 
 ## Các bước
 
-1. Đăng nhập `rescue@ungphonhanh.life`.
+1. Đăng nhập `rescue`.
 2. Mở ứng dụng — vào thẳng **Lệnh điều phối**, không phải màn chung chung.
 3. Nhiệm vụ ở trạng thái **Kho đã sẵn sàng · chờ giao** có nút **Báo kết quả giao**.
 4. Chọn một trong ba kết quả.
@@ -63,7 +63,7 @@ không có nút, nhất là với người đang đứng ngoài mưa.
 ```bash
 API=http://localhost:3100/api
 RESCUE=$(curl -s -H 'Content-Type: application/json' \
-  -d '{"email":"rescue@ungphonhanh.life","password":"rescue123"}' \
+  -d '{"email":"rescue","password":"rescue123"}' \
   $API/auth/login | grep -o '"accessToken":"[^"]*' | cut -d'"' -f4)
 
 curl -s -H 'Content-Type: application/json' -H "Authorization: Bearer $RESCUE" \

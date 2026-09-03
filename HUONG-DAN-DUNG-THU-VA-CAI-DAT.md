@@ -137,11 +137,12 @@ Người giữ kho thôn kiêm luôn việc báo tình huống của thôn mình
 | Tài khoản | Mật khẩu | Vai | Phạm vi |
 |---|---|---|---|
 | `admin` | `admin123@` | Quản trị xã | Toàn xã |
-| `staff@ungphonhanh.life` | `staff123` | Phụ trách kho | Kho cứu trợ trung tâm Đồng Xuân |
-| `rescue@ungphonhanh.life` | `rescue123` | Lực lượng hiện trường | Toàn xã |
-| `iot@ungphonhanh.life` | `iot123456` | Thiết bị IoT (app desktop) | Kho trung tâm |
+| `staff` | `staff123` | Phụ trách kho | Kho cứu trợ trung tâm Đồng Xuân |
+| `rescue` | `rescue123` | Lực lượng hiện trường | Toàn xã |
+| `iot` | `iot123456` | Thiết bị IoT (app desktop) | Kho trung tâm |
 
-**Lưu ý:** tên đăng nhập của quản trị là **`admin`**, không phải một địa chỉ email.
+**Lưu ý:** mọi tài khoản đều đăng nhập bằng **tên đăng nhập trần**, không phải một
+địa chỉ email — `admin`, `staff`, `longchau`, không kèm hậu tố tên miền.
 
 ### 3.2. Mười bảy tài khoản phụ trách kho thôn
 
@@ -150,15 +151,15 @@ tên thôn bỏ dấu viết liền, nên nhìn là biết ai giữ kho nào.
 
 | Tài khoản | Kho phụ trách | | Tài khoản | Kho phụ trách |
 |---|---|---|---|---|
-| `kydu@ungphonhanh.life` | Kho thôn Kỳ Đu | | `phuson@ungphonhanh.life` | Kho thôn Phú Sơn |
-| `longbinh@ungphonhanh.life` | Kho thôn Long Bình | | `tanan@ungphonhanh.life` | Kho thôn Tân An |
-| `longchau@ungphonhanh.life` | Kho thôn Long Châu | | `tanbinh@ungphonhanh.life` | Kho thôn Tân Bình |
-| `longha@ungphonhanh.life` | Kho thôn Long Hà | | `tanhoa@ungphonhanh.life` | Kho thôn Tân Hòa |
-| `longhoa@ungphonhanh.life` | Kho thôn Long Hòa | | `tanphu@ungphonhanh.life` | Kho thôn Tân Phú |
-| `longmy@ungphonhanh.life` | Kho thôn Long Mỹ | | `tanphuoc@ungphonhanh.life` | Kho thôn Tân Phước |
-| `longthach@ungphonhanh.life` | Kho thôn Long Thạch | | `tanvinh@ungphonhanh.life` | Kho thôn Tân Vinh |
-| `longthang@ungphonhanh.life` | Kho thôn Long Thăng | | `triemduc@ungphonhanh.life` | Kho thôn Triêm Đức |
-| `phuochue@ungphonhanh.life` | Kho thôn Phước Huệ | | | |
+| `kydu` | Kho thôn Kỳ Đu | | `phuson` | Kho thôn Phú Sơn |
+| `longbinh` | Kho thôn Long Bình | | `tanan` | Kho thôn Tân An |
+| `longchau` | Kho thôn Long Châu | | `tanbinh` | Kho thôn Tân Bình |
+| `longha` | Kho thôn Long Hà | | `tanhoa` | Kho thôn Tân Hòa |
+| `longhoa` | Kho thôn Long Hòa | | `tanphu` | Kho thôn Tân Phú |
+| `longmy` | Kho thôn Long Mỹ | | `tanphuoc` | Kho thôn Tân Phước |
+| `longthach` | Kho thôn Long Thạch | | `tanvinh` | Kho thôn Tân Vinh |
+| `longthang` | Kho thôn Long Thăng | | `triemduc` | Kho thôn Triêm Đức |
+| `phuochue` | Kho thôn Phước Huệ | | | |
 
 Tổng cộng **21 tài khoản**: 1 quản trị + 1 hiện trường + 18 phụ trách kho (1 kho
 trung tâm + 17 kho thôn) + 1 tài khoản thiết bị IoT.
@@ -186,7 +187,7 @@ giúp nhật ký phân biệt số liệu do thiết bị bơm với thao tác d
 trạng thái Sẵn sàng**.
 *Ví dụ đã kiểm chứng:* một báo cáo ngập tại thôn Phú Hòa chia 5 loại vật tư thành
 **1 ở kho trung tâm** và **4 ở Kho thôn Long Châu** — phải đăng nhập thêm
-`longchau@ungphonhanh.life` mới hoàn tất được.
+`longchau` mới hoàn tất được.
 
 **② Lần gọi AI đầu tiên có thể lỗi.** Mô hình chạy ngay trên máy; lần nạp đầu (khi mô
 hình còn "nguội") mất hơn 15 giây, vượt thời gian chờ của máy chủ nên trả lỗi `503`
@@ -229,7 +230,7 @@ buổi trình diễn; nếu S01–S05 chạy đúng thì hệ thống đang kh�
 | S10 | **Tài khoản** | 21 tài khoản; chỉ quản trị xã thấy được mục này |
 
 **Bước 3 — Thử phân quyền (điểm đáng chấm).** Đăng xuất, đăng nhập lại bằng
-`rescue@ungphonhanh.life` / `rescue123`. Mục **Tài khoản** và **Nhật ký** biến mất.
+`rescue` / `rescue123`. Mục **Tài khoản** và **Nhật ký** biến mất.
 Quan trọng hơn: đây không phải chỉ ẩn nút — gọi thẳng API tương ứng cũng bị **chặn
 403** ở máy chủ.
 
@@ -473,7 +474,7 @@ pnpm desktop:dev
 **Kịch bản đáng xem:**
 
 1. **Đăng nhập** — Host: `localhost:3100` (khi tự cài) hoặc `ungphonhanh.life`.
-   Tài khoản: `iot@ungphonhanh.life` / `iot123456`.
+   Tài khoản: `iot` / `iot123456`.
 2. Kéo thanh trượt **Nhiệt độ** vượt `35°C`, ví dụ `46°C`.
    → Kỳ vọng: chỉ hiện nhãn *"đã chỉnh, chưa gửi"*. **Web và cơ sở dữ liệu chưa có gì
    thay đổi** — kéo thanh trượt chỉ sửa bản nháp cục bộ.

@@ -440,16 +440,16 @@ function LoginScreen({ onLogin }: { onLogin: (result: LoginResult) => Promise<vo
         accessibilityLabel="Logo Ứng phó nhanh"
       />
       <View style={styles.loginCard}>
-        <Text style={styles.label}>Địa chỉ email</Text>
+        <Text style={styles.label}>Tên đăng nhập</Text>
         <TextInput
           style={styles.input}
           value={email}
           onChangeText={setEmail}
           autoCapitalize="none"
-          keyboardType="email-address"
-          placeholder="email@ungphonhanh.vn"
+          autoCorrect={false}
+          placeholder="vd: longchau"
           placeholderTextColor={c.muted}
-          aria-label="Email đăng nhập"
+          aria-label="Tên đăng nhập"
         />
 
         <Text style={styles.label}>Mật khẩu</Text>

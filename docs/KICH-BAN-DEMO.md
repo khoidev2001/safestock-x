@@ -29,10 +29,10 @@ Ba mức thời lượng:
 |               | Màn hình            | Tài khoản                        | Mật khẩu        | Vai                         |
 | ------------- | --------------------- | ---------------------------------- | ----------------- | --------------------------- |
 | **M1**  | Chrome thường       | `admin`                          | `admin123@`     | Quản trị xã Đồng Xuân |
-| **M2**  | Chrome ẩn danh       | `staff@ungphonhanh.life`         | `staff123`      | Phụ trách kho trung tâm  |
-| **M3**  | BrowserOS             | `admin.xuantho@ungphonhanh.life` | `admin123@`     | Quản trị xã Xuân Thọ   |
-| **Đ1** | Điện thoại ảo S23 | `rescue@ungphonhanh.life`        | `rescue123`     | Đội hiện trường        |
-| **Đ2** | Điện thoại thật   | `longchau@ungphonhanh.life`      | `truongthon123` | Trưởng thôn Long Châu   |
+| **M2**  | Chrome ẩn danh       | `staff`         | `staff123`      | Phụ trách kho trung tâm  |
+| **M3**  | BrowserOS             | `admin.xuantho` | `admin123@`     | Quản trị xã Xuân Thọ   |
+| **Đ1** | Điện thoại ảo S23 | `rescue`        | `rescue123`     | Đội hiện trường        |
+| **Đ2** | Điện thoại thật   | `longchau`      | `truongthon123` | Trưởng thôn Long Châu   |
 
 Tài khoản quản trị là **`admin`** trần, không phải email.
 

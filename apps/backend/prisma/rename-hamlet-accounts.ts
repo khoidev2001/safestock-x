@@ -1,5 +1,5 @@
 /**
- * Đổi tên đăng nhập kho thôn sang dạng {tênthôn}@ungphonhanh.life trên database
+ * Đổi tên đăng nhập kho thôn sang dạng {tênthôn} trên database
  * đang chạy, và bỏ tài khoản truongthon@ trỏ trùng kho Long Châu.
  *
  * Seed đã sinh đúng dạng này cho môi trường mới; script chỉ để không phải seed lại
@@ -13,18 +13,21 @@ import { normalizeHamletName } from "../src/admin/hamlet-normalization";
 
 const prisma = new PrismaClient();
 
-const LEGACY_DUPLICATE_EMAIL = "truongthon@ungphonhanh.life";
+// Tài khoản trùng có thể còn ở dạng cũ kèm tên miền, hoặc đã bị strip-login-domain
+// cắt hậu tố. Kiểm cả hai để script vẫn dọn được dù chạy trước hay sau lần cắt đó.
+const LEGACY_DUPLICATE_EMAILS = ["truongthon", "truongthon@ungphonhanh.life"];
 
 function hamletAccountEmail(warehouseName: string): string {
   const hamletName = warehouseName.replace(/^Kho thôn\s+/iu, "");
-  return `${normalizeHamletName(hamletName).replace(/\s+/g, "")}@ungphonhanh.life`;
+  return normalizeHamletName(hamletName).replace(/\s+/g, "");
 }
 
 async function main() {
-  const legacy = await prisma.user.findUnique({ where: { email: LEGACY_DUPLICATE_EMAIL } });
-  if (legacy) {
+  for (const email of LEGACY_DUPLICATE_EMAILS) {
+    const legacy = await prisma.user.findUnique({ where: { email } });
+    if (!legacy) continue;
     await prisma.user.delete({ where: { id: legacy.id } });
-    console.log(`Đã xoá tài khoản trùng: ${LEGACY_DUPLICATE_EMAIL}`);
+    console.log(`Đã xoá tài khoản trùng: ${email}`);
   }
 
   const users = await prisma.user.findMany({

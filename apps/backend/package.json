@@ -14,6 +14,7 @@
     "prisma:backfill-inventory-transactions": "ts-node prisma/backfill-inventory-transaction-warehouses.ts",
     "prisma:backfill-audit-scope": "ts-node prisma/backfill-audit-scope.ts",
     "prisma:backfill-notification-organizations": "ts-node prisma/backfill-notification-organizations.ts",
+    "prisma:strip-login-domain": "ts-node prisma/strip-login-domain.ts",
     "device:issue": "ts-node prisma/device-gateway.ts issue",
     "device:revoke": "ts-node prisma/device-gateway.ts revoke",
     "device:monitor": "ts-node prisma/device-gateway.ts monitor",

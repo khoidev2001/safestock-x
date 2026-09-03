@@ -12,7 +12,7 @@ Hệ thống chỉ có **ba vai**: quản trị xã, phụ trách kho, lực lư
 thôn mình.
 
 Tên đăng nhập của kho thôn đặt theo đúng tên thôn người đó giữ, bỏ dấu và viết liền:
-`Kho thôn Phú Sơn` → `phuson@ungphonhanh.life`. Trước đây đánh số `truongthon1..17`
+`Kho thôn Phú Sơn` → `phuson`. Trước đây đánh số `truongthon1..17`
 theo thứ tự seed nên muốn biết ai giữ kho nào phải tra bảng.
 
 ---
@@ -22,11 +22,12 @@ theo thứ tự seed nên muốn biết ai giữ kho nào phải tra bảng.
 | Tài khoản | Mật khẩu | Vai | Phạm vi |
 |---|---|---|---|
 | `admin` | `admin123@` | Quản trị xã | Toàn xã |
-| `staff@ungphonhanh.life` | `staff123` | Phụ trách kho | Kho cứu trợ trung tâm Đồng Xuân |
-| `rescue@ungphonhanh.life` | `rescue123` | Lực lượng hiện trường | Toàn xã |
-| `iot@ungphonhanh.life` | `iot123456` | App IoT (giả lập cảm biến) | Kho trung tâm |
+| `staff` | `staff123` | Phụ trách kho | Kho cứu trợ trung tâm Đồng Xuân |
+| `rescue` | `rescue123` | Lực lượng hiện trường | Toàn xã |
+| `iot` | `iot123456` | App IoT (giả lập cảm biến) | Kho trung tâm |
 
-Lưu ý tên đăng nhập của quản trị là **`admin`**, không phải địa chỉ email.
+Lưu ý mọi tài khoản đều đăng nhập bằng **tên đăng nhập trần**, không phải địa chỉ
+email — `admin`, `staff`, `longchau`, không kèm hậu tố tên miền.
 
 App IoT phải dùng **tài khoản riêng `iot@`**, không dùng chung `admin`. Mỗi lượt
 đăng nhập đều xoay khoá phiên của tài khoản đó, nên hai máy dùng chung một tài
@@ -60,28 +61,28 @@ ai giữ kho nào — không phải tra bảng.
 
 | Tài khoản | Kho phụ trách |
 |---|---|
-| `kydu@ungphonhanh.life` | Kho thôn Kỳ Đu |
-| `longbinh@ungphonhanh.life` | Kho thôn Long Bình |
-| `longchau@ungphonhanh.life` | Kho thôn Long Châu |
-| `longha@ungphonhanh.life` | Kho thôn Long Hà |
-| `longhoa@ungphonhanh.life` | Kho thôn Long Hòa |
-| `longmy@ungphonhanh.life` | Kho thôn Long Mỹ |
-| `longthach@ungphonhanh.life` | Kho thôn Long Thạch |
-| `longthang@ungphonhanh.life` | Kho thôn Long Thăng |
-| `phuochue@ungphonhanh.life` | Kho thôn Phước Huệ |
-| `phuson@ungphonhanh.life` | Kho thôn Phú Sơn |
-| `tanan@ungphonhanh.life` | Kho thôn Tân An |
-| `tanbinh@ungphonhanh.life` | Kho thôn Tân Bình |
-| `tanhoa@ungphonhanh.life` | Kho thôn Tân Hòa |
-| `tanphu@ungphonhanh.life` | Kho thôn Tân Phú |
-| `tanphuoc@ungphonhanh.life` | Kho thôn Tân Phước |
-| `tanvinh@ungphonhanh.life` | Kho thôn Tân Vinh |
-| `triemduc@ungphonhanh.life` | Kho thôn Triêm Đức |
+| `kydu` | Kho thôn Kỳ Đu |
+| `longbinh` | Kho thôn Long Bình |
+| `longchau` | Kho thôn Long Châu |
+| `longha` | Kho thôn Long Hà |
+| `longhoa` | Kho thôn Long Hòa |
+| `longmy` | Kho thôn Long Mỹ |
+| `longthach` | Kho thôn Long Thạch |
+| `longthang` | Kho thôn Long Thăng |
+| `phuochue` | Kho thôn Phước Huệ |
+| `phuson` | Kho thôn Phú Sơn |
+| `tanan` | Kho thôn Tân An |
+| `tanbinh` | Kho thôn Tân Bình |
+| `tanhoa` | Kho thôn Tân Hòa |
+| `tanphu` | Kho thôn Tân Phú |
+| `tanphuoc` | Kho thôn Tân Phước |
+| `tanvinh` | Kho thôn Tân Vinh |
+| `triemduc` | Kho thôn Triêm Đức |
 
 Tổng cộng **20 tài khoản**: 1 quản trị + 1 hiện trường + 18 phụ trách kho (1 kho
 trung tâm + 17 kho thôn).
 
-Bản trước có thêm `truongthon@ungphonhanh.life` trỏ trùng Kho thôn Long Châu — dấu
+Bản trước có thêm `truongthon` trỏ trùng Kho thôn Long Châu — dấu
 vết từ thời có vai trưởng thôn riêng, đã bỏ vì 18 tài khoản cho 17 kho thì không ai
 biết ai giữ kho nào.
 
@@ -96,7 +97,7 @@ thái Sẵn sàng** — lúc đó không diễn được bước giao hàng.
 
 Kiểm chứng thực tế với một báo cáo ngập tại thôn Phú Hòa: 5 loại vật tư được chia
 thành **1 ở kho trung tâm** và **4 ở Kho thôn Long Châu**. Phải đăng nhập thêm
-`longchau@ungphonhanh.life` mới hoàn tất được.
+`longchau` mới hoàn tất được.
 
 **Đăng xuất trên điện thoại xoá sạch bản lưu ngoại tuyến.** Nếu định trình diễn chế
 độ mất mạng, đừng đăng xuất trước đó.

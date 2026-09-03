@@ -202,7 +202,7 @@ export function App() {
 
   async function handleLogin() {
     if (!email.trim() || !password) {
-      setLoginError("Nhập email và mật khẩu để đăng nhập.");
+      setLoginError("Nhập tên đăng nhập và mật khẩu để đăng nhập.");
       return;
     }
     primeAlarmBell();
@@ -449,12 +449,12 @@ export function App() {
             />
           </label>
           <label className="field">
-            <span>Email</span>
+            <span>Tên đăng nhập</span>
             <input
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               autoComplete="username"
-              placeholder="admin@safestock.local"
+              placeholder="iot"
             />
           </label>
           <label className="field">

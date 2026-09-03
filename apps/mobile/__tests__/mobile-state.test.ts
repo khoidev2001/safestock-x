@@ -38,7 +38,7 @@ const session = {
   refreshToken: "refresh-token",
   user: {
     id: "user-1",
-    email: "rescue@ungphonhanh.life",
+    email: "rescue",
     role: "RESCUE",
     fullName: "Lực lượng hiện trường",
   },

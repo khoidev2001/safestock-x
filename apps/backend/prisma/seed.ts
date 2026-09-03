@@ -98,14 +98,14 @@ async function main() {
       },
       {
         organizationId: organization.id,
-        email: "staff@ungphonhanh.life",
+        email: "staff",
         passwordHash: password("staff123"),
         fullName: "Phụ trách kho trung tâm",
         role: "WAREHOUSE",
       },
       {
         organizationId: organization.id,
-        email: "rescue@ungphonhanh.life",
+        email: "rescue",
         passwordHash: password("rescue123"),
         fullName: "Lực lượng hiện trường Đồng Xuân",
         role: "RESCUE",
@@ -125,11 +125,11 @@ async function main() {
     },
   });
   const warehouseUser = await prisma.user.update({
-    where: { email: "staff@ungphonhanh.life" },
+    where: { email: "staff" },
     data: { warehouseId: centralWarehouse.id },
   });
   const rescueUser = await prisma.user.findUniqueOrThrow({
-    where: { email: "rescue@ungphonhanh.life" },
+    where: { email: "rescue" },
   });
 
   const { zones, shelves } = await createCentralStorage(centralWarehouse.id);
@@ -392,13 +392,13 @@ async function createHamletWarehouses(organizationId: string, itemBySku: Map<str
 }
 
 /**
- * Tên đăng nhập theo đúng thôn người đó giữ: "Kho thôn Phú Sơn" → phuson@.
+ * Tên đăng nhập theo đúng thôn người đó giữ: "Kho thôn Phú Sơn" → phuson.
  * Trước đây đánh số truongthon1..17 theo thứ tự seed, nên muốn biết ai giữ kho
  * nào phải tra bảng — lúc diễn mà cần thêm một tài khoản kho là mất thời gian.
  */
 function hamletAccountEmail(warehouseName: string): string {
   const hamletName = warehouseName.replace(/^Kho thôn\s+/iu, "");
-  return `${normalizeHamletName(hamletName).replace(/\s+/g, "")}@ungphonhanh.life`;
+  return normalizeHamletName(hamletName).replace(/\s+/g, "");
 }
 
 async function createHamletLeaders(

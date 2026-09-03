@@ -9,7 +9,7 @@ việc thì người đó báo. Không ai phải gọi điện nhờ người kh
 
 ## Cách 1 — Gõ tay
 
-1. Đăng nhập `rescue@ungphonhanh.life`.
+1. Đăng nhập `rescue`.
 2. Vào thẻ **Báo cáo**.
 3. Gõ mô tả, ví dụ: *"Thôn Phú Hòa ngập sâu 1 mét, 3 hộ cần di dời và thiếu nước uống"*.
 4. Gửi.
@@ -55,7 +55,7 @@ ra hai nhiệm vụ.
 ```bash
 API=http://localhost:3100/api
 TOKEN=$(curl -s -H 'Content-Type: application/json' \
-  -d '{"email":"rescue@ungphonhanh.life","password":"rescue123"}' \
+  -d '{"email":"rescue","password":"rescue123"}' \
   $API/auth/login | grep -o '"accessToken":"[^"]*' | cut -d'"' -f4)
 
 curl -s -H 'Content-Type: application/json' -H "Authorization: Bearer $TOKEN" \

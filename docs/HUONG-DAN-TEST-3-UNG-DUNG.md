@@ -41,9 +41,9 @@ Kiểm tra backend sống: `GET http://localhost:3100/api/health` phải trả
 | Tài khoản | Mật khẩu | Vai |
 |---|---|---|
 | `admin` | `admin123@` | Quản trị xã |
-| `staff@ungphonhanh.life` | `staff123` | Phụ trách kho trung tâm |
-| `rescue@ungphonhanh.life` | `rescue123` | Lực lượng hiện trường |
-| `{tênthôn}@ungphonhanh.life` | `truongthon123` | Phụ trách kho thôn — ví dụ `phuson@`, `longchau@`, `triemduc@` |
+| `staff` | `staff123` | Phụ trách kho trung tâm |
+| `rescue` | `rescue123` | Lực lượng hiện trường |
+| `{tênthôn}` | `truongthon123` | Phụ trách kho thôn — ví dụ `phuson@`, `longchau@`, `triemduc@` |
 
 Hệ thống chỉ còn **ba vai**. Vai "trưởng thôn" riêng đã bị bỏ: người giữ kho thôn
 kiêm luôn việc báo tình huống của thôn mình, nên tách hai tài khoản chỉ thêm việc
@@ -107,7 +107,7 @@ thống.
 
 ### Bước 1 — Hiện trường báo tình huống *(điện thoại)*
 
-1. Đăng nhập `rescue@ungphonhanh.life`.
+1. Đăng nhập `rescue`.
 2. Vào thẻ **Báo cáo**.
 3. Mô tả tình huống bằng **gõ tay** hoặc **bấm giữ micro** để nói tiếng Việt.
 4. Nếu dùng giọng nói: kiểm tra chữ hiện ra khớp lời nói, **sửa lại nếu sai**, rồi mới gửi.
