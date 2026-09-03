@@ -470,15 +470,25 @@ export class MissionService {
     location: string | null | undefined,
     explicitPoint?: LatLng,
   ): Promise<{ hamletId?: string; name?: string; point?: LatLng }> {
-    // Legacy/manual flow may supply an explicit ADMIN-selected point without a name.
-    // No random or geocoded fallback is ever generated here.
+    // ĐIỂM GHIM THẮNG VĂN BẢN.
+    //
+    // Trưởng thôn đứng tại chỗ và ghim đúng điểm trên ảnh vệ tinh: đó là toạ độ
+    // CHÍNH XÁC của chỗ đang xảy ra sự việc. Tên thôn trong lời kể chỉ dẫn tới toạ
+    // độ điểm ứng phó của cả thôn — thường là nhà văn hoá, cách chỗ ngập thật vài
+    // trăm mét đến vài km. Bản trước ưu tiên tên thôn, nên ghim xong vẫn bị thay
+    // bằng tâm thôn: người báo thấy điểm mình ghim biến mất, và tuyến tính ra là
+    // đường tới nhà văn hoá chứ không tới chỗ cần cứu.
+    //
+    // Không suy ra `hamletId`/`hamletName` từ điểm ghim: bảng thôn chỉ có MỘT toạ
+    // độ mỗi thôn, không có ranh giới, nên "thôn gần nhất" là phỏng đoán. Để trống
+    // và giữ lời kể làm nhãn thì bản ghi nói đúng những gì hệ thống biết chắc.
+    if (explicitPoint) return { point: explicitPoint };
+
+    // Không có điểm ghim thì mới tra tên thôn. Không bịa toạ độ, không geocode.
     if (!location?.trim()) {
-      if (!explicitPoint) {
-        throw new BadRequestException(
-          "Cần xác nhận địa điểm ứng phó bằng thôn đã xác minh hoặc tọa độ trên bản đồ trước khi lập phương án.",
-        );
-      }
-      return { point: explicitPoint };
+      throw new BadRequestException(
+        "Cần xác nhận địa điểm ứng phó bằng thôn đã xác minh hoặc tọa độ trên bản đồ trước khi lập phương án.",
+      );
     }
     const warehouse = await this.prisma.warehouse.findUnique({
       where: { id: warehouseId },
