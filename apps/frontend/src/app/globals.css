@@ -428,14 +428,20 @@ button:disabled {
    chuyển nữa vào hàng đợi, và người dùng nhận về một trang không phải trang họ
    bấm cuối cùng.
 
-   `not-allowed` (vòng tròn gạch chéo) chứ không phải `progress`: đồng hồ cát
-   chỉ nói "đang bận", còn vòng cấm nói thẳng "bấm bây giờ không ăn" — đó mới là
-   điều người dùng cần biết để thôi bấm thêm. */
+   `wait` (vòng xoay) chứ không phải `not-allowed`. Bản trước dùng `not-allowed`
+   với lập luận "vòng cấm nói thẳng bấm bây giờ không ăn", nhưng con trỏ đó vẽ ra
+   là một vòng tròn ĐỎ gạch chéo — cùng thứ trình duyệt dùng cho vùng bị chặn và
+   thao tác bị từ chối. Người trực đổi tab giữa lúc điều phối nhìn thấy nó thì đọc
+   ra "vừa bấm sai" hoặc "hệ thống chặn tôi", rồi đi tìm lỗi không có. Còn vòng
+   xoay nói đúng chuyện đang xảy ra: chờ một nhịp là xong.
+
+   Chuyển động cũng làm hộ việc mà `not-allowed` không làm được — nó cho biết hệ
+   thống ĐANG chạy, nên không ai bấm thêm để "thúc" cho nhanh. */
 .tab-transition-block {
   position: fixed;
   inset: 0;
   z-index: 70;
-  cursor: not-allowed;
+  cursor: wait;
   background: transparent;
 }
 
