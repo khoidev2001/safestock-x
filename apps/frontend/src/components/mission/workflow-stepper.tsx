@@ -1,6 +1,7 @@
 "use client";
 
-import { ColorIcon, type ColorIconName, type ColorIconTone } from "@/components/shared/color-icon";
+import { Fragment } from "react";
+import { ColorIcon, type ColorIconName } from "@/components/shared/color-icon";
 import type { MissionStatus } from "@/lib/mission-api";
 import { FIELD_FORCE_ROLE_LABEL } from "@safestock/shared-types";
 import { activeStepIndex, completedStepIndex } from "./workflow-progress";
@@ -15,33 +16,19 @@ import { activeStepIndex, completedStepIndex } from "./workflow-progress";
  * trường trong khi việc đang nằm ở tay chính họ.
  */
 const STEPS = [
-  {
-    key: "admin",
-    label: "Điều phối lập và phát hành",
-    role: "ADMIN",
-    icon: "workflow",
-    tone: "blue",
-  },
-  {
-    key: "warehouse",
-    label: "Kho chuẩn bị và xuất",
-    role: "WAREHOUSE",
-    icon: "warehouse",
-    tone: "green",
-  },
+  { key: "admin", label: "Lập kế hoạch và phát hành", role: "ADMIN", icon: "workflow" },
+  { key: "warehouse", label: "Kho chuẩn bị và xuất", role: "WAREHOUSE", icon: "house" },
   {
     key: "rescue",
-    label: `${FIELD_FORCE_ROLE_LABEL} giao và báo kết quả`,
+    label: `${FIELD_FORCE_ROLE_LABEL} đã hoàn thành`,
     role: "RESCUE",
-    icon: "mission",
-    tone: "orange",
+    icon: "helmet",
   },
 ] satisfies {
   key: string;
   label: string;
   role: string;
   icon: ColorIconName;
-  tone: ColorIconTone;
 }[];
 
 /** Trạng thái ngoài luồng 3 bước — hiện băng riêng thay vì stepper. */
@@ -54,9 +41,16 @@ const OFF_FLOW: Partial<Record<MissionStatus, { label: string; tone: string }>> 
   CANCELLED: { label: "Nhiệm vụ đã huỷ", tone: "var(--text-muted)" },
 };
 
-export function WorkflowStepper({ status }: { status: MissionStatus }) {
-  const done = completedStepIndex(status);
-  const active = activeStepIndex(status);
+export function WorkflowStepper({
+  status,
+  warehouseRequests,
+}: {
+  status: MissionStatus;
+  /** Phiếu vật tư của nhiệm vụ — mốc "kho xong" đọc theo chữ ký nhận của đội. */
+  warehouseRequests?: { status: string }[] | null;
+}) {
+  const done = completedStepIndex(status, warehouseRequests);
+  const active = activeStepIndex(status, warehouseRequests);
   const offFlow = OFF_FLOW[status];
 
   if (offFlow) {
@@ -74,24 +68,37 @@ export function WorkflowStepper({ status }: { status: MissionStatus }) {
   }
 
   return (
-    <div className="flex items-center">
+    /* Mỗi bước là một cột RIÊNG, rộng bằng nhau, chữ và hình cùng canh giữa cột;
+       vạch nối là phần tử riêng nằm giữa hai cột.
+
+       Trước đây vạch nối nằm BÊN TRONG ô của bước, nên hình và chữ bị đẩy hết về
+       mép trái ô còn vạch chiếm phần còn lại — bước cuối không có vạch nên lại
+       dạt sang trái ô của nó. Ba bước vì thế không bao giờ thẳng hàng với nhau.
+
+       `items-start` để vạch nối không bị kéo giãn theo cột có chữ dài hai dòng. */
+    <div className="flex items-start">
       {STEPS.map((step, i) => {
         const isDone = i <= done;
         // Đúng một bước được gắn "Đang chờ": bước kế ngay sau bước đã xong.
         const isActive = i === active;
         return (
-          <div key={step.key} className="flex flex-1 items-center">
-            <div className="flex flex-col items-center gap-1.5">
+          <Fragment key={step.key}>
+            <div className="flex flex-1 flex-col items-center gap-1.5 text-center">
+              {/* MÀU nói bước đã xong hay chưa, HÌNH giữ nguyên theo bước.
+                  Xong thì xanh lá, chưa thì đen. Đổi luôn cả hình (trước đây bước
+                  xong biến thành dấu tích) làm mất mốc nhận dạng: người đọc quét
+                  thanh này bằng hình — nhà là kho, mũ bảo hộ là đội hiện trường —
+                  mà hình lại biến đi đúng lúc cần đối chiếu.
+
+                  Đen ở đây là `--text`, không phải #000 cứng: nền tối thì chữ đen
+                  tuyền biến mất, còn `--text` tự đảo theo giao diện. */}
               <div
                 className={`flex h-10 w-10 items-center justify-center transition ${isActive ? "scale-110" : ""}`}
+                style={{ color: isDone ? "var(--color-accent)" : "var(--text)" }}
               >
-                <ColorIcon
-                  name={isDone ? "success" : step.icon}
-                  size={isDone ? 24 : 22}
-                  tone={isDone ? "green" : step.tone}
-                />
+                <ColorIcon mono name={step.icon} size={24} />
               </div>
-              <div className="text-center">
+              <div>
                 <p className="text-xs font-medium leading-tight">{step.label}</p>
                 {isActive && !isDone && (
                   <p className="text-[10px] text-[var(--color-attention)]">Đang chờ</p>
@@ -99,12 +106,14 @@ export function WorkflowStepper({ status }: { status: MissionStatus }) {
               </div>
             </div>
             {i < STEPS.length - 1 && (
+              /* `mt-5` đẩy vạch xuống ngang tâm vòng tròn (ô hình cao 40px), để nó
+                 nối hai hình chứ không trôi lên trên đầu chúng. */
               <div
-                className="mx-2 h-0.5 flex-1"
+                className="mx-2 mt-5 h-0.5 min-w-4 flex-1"
                 style={{ background: i < done ? "var(--color-accent)" : "var(--border)" }}
               />
             )}
-          </div>
+          </Fragment>
         );
       })}
     </div>

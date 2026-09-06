@@ -19,7 +19,7 @@ const h = (over: Partial<HamletOption> & { name: string }): HamletOption => ({
   ...over,
 });
 
-const DANH_MUC = [
+const HAMLETS = [
   h({ name: "Long Châu", aliases: ["long chau", "thon long chau", "kho thon long chau"] }),
   h({ name: "Kỳ Đu", aliases: ["ky du", "thon ky du"] }),
   h({ name: "Phú Sơn", aliases: ["phu son"] }),
@@ -32,28 +32,28 @@ test("bỏ dấu, bỏ hoa thường, gom khoảng trắng — khớp với back
 });
 
 test("khớp cả khi người nói kèm chữ thôn", () => {
-  assert.equal(findHamlet(DANH_MUC, "thôn Long Châu")?.name, "Long Châu");
-  assert.equal(findHamlet(DANH_MUC, "long chau")?.name, "Long Châu");
-  assert.equal(findHamlet(DANH_MUC, "Kỳ Đu")?.name, "Kỳ Đu");
+  assert.equal(findHamlet(HAMLETS, "thôn Long Châu")?.name, "Long Châu");
+  assert.equal(findHamlet(HAMLETS, "long chau")?.name, "Long Châu");
+  assert.equal(findHamlet(HAMLETS, "Kỳ Đu")?.name, "Kỳ Đu");
 });
 
 test("tên không có trong danh mục thì KHÔNG đoán gần đúng", () => {
   // Đoán gần đúng ở đây là chọn sai thôn rồi điều hàng tới nhầm chỗ.
-  assert.equal(findHamlet(DANH_MUC, "Long Châu B"), null);
-  assert.equal(findHamlet(DANH_MUC, "Xuân Thọ"), null);
-  assert.equal(findHamlet(DANH_MUC, "Phú Sơn xuất"), null);
+  assert.equal(findHamlet(HAMLETS, "Long Châu B"), null);
+  assert.equal(findHamlet(HAMLETS, "Xuân Thọ"), null);
+  assert.equal(findHamlet(HAMLETS, "Phú Sơn xuất"), null);
 });
 
 test("ba trạng thái của ô địa điểm", () => {
-  assert.equal(locationStatus(DANH_MUC, ""), "EMPTY");
-  assert.equal(locationStatus(DANH_MUC, "   "), "EMPTY");
-  assert.equal(locationStatus(DANH_MUC, "Long Châu"), "VALID");
-  assert.equal(locationStatus(DANH_MUC, "Tân Hòa xa"), "INVALID");
+  assert.equal(locationStatus(HAMLETS, ""), "EMPTY");
+  assert.equal(locationStatus(HAMLETS, "   "), "EMPTY");
+  assert.equal(locationStatus(HAMLETS, "Long Châu"), "VALID");
+  assert.equal(locationStatus(HAMLETS, "Tân Hòa xa"), "INVALID");
 });
 
 test("thôn thiếu toạ độ hoặc chưa xác minh không được đưa vào danh sách chọn", () => {
   const ds = selectableHamlets([
-    ...DANH_MUC,
+    ...HAMLETS,
     h({ name: "Chưa ghim", lat: null, lng: null }),
     h({ name: "Chưa duyệt", verified: false }),
   ]);

@@ -1,4 +1,4 @@
-import { apiFetch } from "./api";
+import { apiFetch, apiStream } from "./api";
 import type {
   CoordinationAnalysis,
   FieldUpdateIntent,
@@ -93,6 +93,13 @@ export interface MissionReadinessAssessment {
 export interface Mission {
   id: string;
   createdAt: string;
+  /**
+   * Số hiệu để người trực gọi tên nhiệm vụ ("nhiệm vụ số 12").
+   *
+   * Sequence của Postgres nên không bao giờ cấp lại số đã dùng: xoá số 5 rồi tạo
+   * mới thì cái mới là số 6.
+   */
+  missionNo: number;
   warehouseId: string;
   incidentType: string;
   affectedPeople: number;
@@ -101,6 +108,13 @@ export interface Mission {
   hamletId?: string | null;
   hamletName?: string | null;
   status: MissionStatus;
+  /**
+   * Đã lập bản tham mưu chưa (backend đếm snapshot BASELINE).
+   *
+   * `status` đứng yên ở DRAFT suốt ba bước đầu, nên đây là thứ duy nhất phân biệt
+   * "mới khai số liệu" với "đã lập tham mưu".
+   */
+  hasCoordinationAnalysis?: boolean;
   fulfillment: number;
   // Mô tả thô của trưởng thôn (mobile) khi mission là "hộp thư" báo cáo — web tự điền + phân tích.
   reportText?: string | null;
@@ -117,6 +131,9 @@ export interface Mission {
   } | null;
   incidentLat: number | null;
   incidentLng: number | null;
+  approvedAt?: string | null;
+  /** Người bấm "Duyệt và phát hành" — một xã có nhiều quản trị viên cùng duyệt. */
+  approvedBy?: { id: string; fullName: string; email: string } | null;
   actionPlan: ActionPlan | null;
   readinessAssessment: MissionReadinessAssessment | null;
   requirements: MissionRequirement[];
@@ -127,12 +144,58 @@ export interface Mission {
   deliveryOutcome?: DeliveryOutcome | null;
   deliveryNote?: string | null;
   completedAt?: string | null;
+  /** Ảnh bằng chứng hiện trường gửi kèm lúc báo hoàn thành; bytes lấy riêng theo id. */
+  deliveryPhotos?: MissionDeliveryPhoto[];
+  /** Có bản ghi âm kèm báo cáo hay không — chỉ mô tả, bytes tải riêng khi bấm nghe. */
+  reportAudio?: MissionReportAudio | null;
+}
+
+export interface MissionDeliveryPhoto {
+  id: string;
+  mimeType: string;
+  byteSize: number;
+  createdAt: string;
+}
+
+/**
+ * Tải bytes một ảnh bằng chứng và trả về địa chỉ blob để gắn vào `<img>`.
+ *
+ * Không đặt thẳng đường API vào `src` được: phiên của web là access token giữ
+ * trong bộ nhớ và gửi kèm ở header, mà thẻ `<img>` thì không gửi header nào —
+ * trình duyệt sẽ nhận 401 và hiện ảnh vỡ. Bên gọi nhớ thu hồi địa chỉ blob khi
+ * gỡ khỏi màn hình.
+ */
+export interface MissionReportAudio {
+  id: string;
+  mimeType: string;
+  byteSize: number;
+  durationMs: number | null;
+}
+
+/**
+ * Bản ghi âm của báo cáo, tải về dạng địa chỉ blob để đưa vào thẻ `<audio>`.
+ *
+ * Cùng lý do với ảnh bằng chứng: không đặt thẳng đường API vào `src` được, vì
+ * phiên của web là access token giữ trong bộ nhớ và gửi kèm ở header, mà thẻ
+ * `<audio>` thì không gửi header nào. Bên gọi nhớ thu hồi địa chỉ blob khi gỡ
+ * khỏi màn hình.
+ */
+export async function fetchMissionReportAudio(missionId: string): Promise<string> {
+  const response = await apiStream(`/api/missions/${missionId}/report-audio`);
+  return URL.createObjectURL(await response.blob());
+}
+
+export async function fetchMissionDeliveryPhoto(
+  missionId: string,
+  photoId: string,
+): Promise<string> {
+  const response = await apiStream(`/api/missions/${missionId}/delivery-photos/${photoId}`);
+  return URL.createObjectURL(await response.blob());
 }
 
 export interface ActionPlan {
   severityLevel: number;
   severityReason: string[];
-  confidence: number;
   fulfillment: number;
   allocations: {
     sku: string;
@@ -147,7 +210,6 @@ export interface ActionPlan {
   forecasts: { label: string; probability: number }[];
   narrative: {
     objectives: string[];
-    phases: { window: string; actions: string[] }[];
     warnings: string[];
     followUpQuestions: string[];
   };
@@ -240,6 +302,8 @@ export interface AppNotification {
   body: string;
   read: boolean;
   missionId: string | null;
+  /** Số hiệu nhiệm vụ chép lại lúc gửi — thứ người trực gọi nhau qua điện thoại. */
+  missionNo?: number | null;
   fieldUpdateId?: string | null;
   /** Tình huống chép lại lúc gửi — thẻ và chuông dùng để chọn biểu tượng, in đậm. */
   incidentType?: string | null;
@@ -270,10 +334,11 @@ export interface GenerateInput {
   description?: string;
 }
 
-export const generatePlan = (input: GenerateInput) =>
+export const generatePlan = (input: GenerateInput, signal?: AbortSignal) =>
   apiFetch<Mission>("/api/missions/generate-plan", {
     method: "POST",
     body: JSON.stringify(input),
+    signal,
   });
 
 /** Tình huống đã parse để phân tích báo cáo (khớp ParsedIncident, gửi kèm khi có sẵn). */
@@ -296,10 +361,11 @@ export interface PlanFromReportInput {
  * Admin phân tích BÁO CÁO của trưởng thôn ngay trên mission đó (không tạo mission mới).
  * Trả về mission đã cập nhật (kèm requirements + readiness) để hiển thị phương án.
  */
-export const planFromReport = (id: string, input: PlanFromReportInput) =>
+export const planFromReport = (id: string, input: PlanFromReportInput, signal?: AbortSignal) =>
   apiFetch<Mission>(`/api/missions/${id}/plan-from-report`, {
     method: "POST",
     body: JSON.stringify(input),
+    signal,
   });
 
 /** Tình huống do AI trích xuất từ mô tả bằng lời (khớp form nhập tay). */
@@ -314,10 +380,11 @@ export interface ParsedIncident {
 }
 
 /** Gửi mô tả bằng lời → AI trích xuất tình huống có cấu trúc (người xác nhận trước khi lập phương án). */
-export const parseIncident = (description: string) =>
+export const parseIncident = (description: string, signal?: AbortSignal) =>
   apiFetch<ParsedIncident>("/api/missions/parse", {
     method: "POST",
     body: JSON.stringify({ description }),
+    signal,
   });
 
 /**
@@ -332,10 +399,15 @@ export const transcribeAudio = (audioBase64: string, mimeType = "audio/wav") =>
 
 export const getMission = (id: string) => apiFetch<Mission>(`/api/missions/${id}`);
 
-export const analyzeMission = (id: string, input: { requestId: string; description?: string }) =>
+export const analyzeMission = (
+  id: string,
+  input: { requestId: string; description?: string },
+  signal?: AbortSignal,
+) =>
   apiFetch<AnalyzeMissionResult>(`/api/missions/${id}/analyses`, {
     method: "POST",
     body: JSON.stringify(input),
+    signal,
   });
 
 export const getLatestCoordinationAnalysis = (id: string) =>
@@ -359,6 +431,48 @@ export const simulateMission = (
 export const listMissions = (statuses?: MissionStatus[]) =>
   apiFetch<Mission[]>(`/api/missions${statuses?.length ? `?status=${statuses.join(",")}` : ""}`);
 
+export type MissionInboxSort = "newest" | "oldest" | "most-people" | "fewest-people";
+/** Ô tìm kiếm đang nhắm vào trường nào. */
+export type MissionSearchField = "text" | "mission-no" | "affected-people";
+export type MissionInboxFilter = "all" | "needs-action" | "published";
+
+export interface MissionInboxPage {
+  items: Mission[];
+  /** Số nhiệm vụ khớp bộ lọc hiện tại — cơ sở để chia trang. */
+  total: number;
+  /** Tổng nhiệm vụ người này nhìn thấy được, KHÔNG theo bộ lọc. */
+  totalAll: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+/**
+ * Một trang của hộp nhiệm vụ. Lọc, xếp và cắt trang đều do backend làm.
+ *
+ * Không dùng `listMissions` rồi tự cắt ở web được: endpoint đó trả tối đa 100
+ * nhiệm vụ mới nhất, nên "cũ nhất trước" chỉ xếp lại đúng phần đã tải và không
+ * bao giờ ra được nhiệm vụ số 1.
+ */
+export const listMissionInbox = (params: {
+  page: number;
+  pageSize: number;
+  sort: MissionInboxSort;
+  filter: MissionInboxFilter;
+  search: string;
+  searchField: MissionSearchField;
+}) => {
+  const query = new URLSearchParams({
+    page: String(params.page),
+    pageSize: String(params.pageSize),
+    sort: params.sort,
+    filter: params.filter,
+    searchField: params.searchField,
+  });
+  if (params.search.trim()) query.set("search", params.search.trim());
+  return apiFetch<MissionInboxPage>(`/api/missions/inbox?${query.toString()}`);
+};
+
 export const getClusterWarehouses = (warehouseId: string) =>
   apiFetch<ClusterWarehouse[]>(`/api/missions/${warehouseId}/warehouses`);
 
@@ -368,11 +482,15 @@ export const getClusterWarehouses = (warehouseId: string) =>
  * Khác `generateActionPlan`: cái kia GHI `mission.actionPlan` và có gọi LLM viết
  * diễn giải, nên không dùng được cho việc chỉ cần vẽ đường lên bản đồ.
  */
+/** Nhiệm vụ theo số hiệu — nguồn cho đường dẫn /missions/nhiem-vu-98. */
+export const getMissionByNo = (missionNo: number) =>
+  apiFetch<Mission>(`/api/missions/by-no/${missionNo}`);
+
 export const getWarehouseRoutes = (id: string) =>
   apiFetch<DispatchRoute[]>(`/api/missions/${id}/warehouse-routes`);
 
-export const generateActionPlan = (id: string) =>
-  apiFetch<ActionPlan>(`/api/missions/${id}/action-plan`, { method: "POST" });
+export const generateActionPlan = (id: string, signal?: AbortSignal) =>
+  apiFetch<ActionPlan>(`/api/missions/${id}/action-plan`, { method: "POST", signal });
 
 // ADMIN phát hành trực tiếp tới kho; lực lượng hiện trường chỉ đọc phương án.
 export const approveMission = (id: string) =>

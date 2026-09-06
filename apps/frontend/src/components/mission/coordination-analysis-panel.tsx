@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { moTaSoLuongVatTu, type CoordinationAnalysis } from "@safestock/shared-types";
+import { describeItemQuantity, type CoordinationAnalysis } from "@safestock/shared-types";
 import { CollapsiblePanel } from "@/components/shared/collapsible-panel";
 import { FieldUpdateTimeline } from "./field-update-timeline";
 import { ColorIcon } from "@/components/shared/color-icon";
@@ -16,21 +16,32 @@ export function CoordinationAnalysisPanel({
   fieldUpdateId,
   onRun,
   running = false,
-  error = null,
+  defaultOpen,
 }: {
   missionId: string;
   /** Bằng chứng cần cuộn tới khi mở từ chuông thông báo. */
   fieldUpdateId?: string | null;
   /**
-   * Có thì khối này tự hiện nút "Lập bản tham mưu".
+   * Đường lập bản tham mưu ĐẦU TIÊN, chỉ dành cho nhiệm vụ đã phát hành.
    *
-   * Bình thường nút nằm cạnh "Tính nhu cầu vật tư" ở khối tình huống. Nhưng khối
-   * đó ẩn khi nhiệm vụ đã phát hành, nên lúc ấy nút phải về đây — nếu không thì
-   * không còn đường nào lập tham mưu cho một nhiệm vụ đang chạy.
+   * Lập xong rồi thì chỗ gọi không truyền nữa và nút biến mất vĩnh viễn: bản tham
+   * mưu nay tự lập lại mỗi khi số liệu nhiệm vụ đổi, nên một nút mời bấm lại chỉ
+   * lặp đúng việc hệ thống vừa tự làm — mỗi lượt bấm là một lượt gọi LLM và một
+   * bản mới đè lên bản đang đọc dở.
+   *
+   * Vẫn phải giữ cho trường hợp nhiệm vụ phát hành mà chưa hề có bản tham mưu:
+   * lúc đó khối khai tình huống đã ẩn, không còn đường nào khác.
    */
   onRun?: () => void;
   running?: boolean;
-  error?: string | null;
+  /**
+   * Mở sẵn hay thu gọn sẵn khi khối được dựng.
+   *
+   * Chỗ gọi quyết định, vì nó là nơi biết nhiệm vụ đang ở bước nào. `CollapsiblePanel`
+   * chỉ đọc giá trị này lúc gắn vào cây, nên muốn khối tự đóng lúc bước việc đổi thì
+   * chỗ gọi phải đổi luôn `key` — xem `MissionView`.
+   */
+  defaultOpen?: boolean;
 }) {
   const latest = useQuery({
     queryKey: ["mission", missionId, "coordination-analysis"],
@@ -41,6 +52,7 @@ export function CoordinationAnalysisPanel({
   const analysis = snapshot?.result;
   return (
     <CollapsiblePanel
+      defaultOpen={defaultOpen}
       headingId="coordination-analysis-title"
       icon={<ColorIcon name="magic" size={18} tone="amber" />}
       title="Phân tích tình huống và tham mưu điều phối"
@@ -72,11 +84,6 @@ export function CoordinationAnalysisPanel({
         Không tự duyệt, không tự điều động, không thay đổi tồn kho và không liên hệ xã khác.
       </p>
 
-      {error ? (
-        <p role="alert" className="mb-3 text-sm text-[var(--color-critical)]">
-          {error}
-        </p>
-      ) : null}
       {latest.isError && <ErrorState error={latest.error} />}
       {latest.isPending ? (
         <AnalysisSkeleton />
@@ -103,9 +110,6 @@ function AnalysisBody({
   const itemBySku = new Map(
     analysis.requirements.items.map((item) => [item.sku, { name: item.name, unit: item.unit }]),
   );
-  const hasOpenQuestions =
-    analysis.missingData.length + analysis.conflicts.length > 0 ||
-    analysis.priorityQuestion != null;
   return (
     <div className="mt-4 space-y-4">
       <div className="grid gap-3 sm:grid-cols-3">
@@ -124,49 +128,13 @@ function AnalysisBody({
         />
       </div>
 
-      {/* Không thiếu gì thì không có khối nào cả.
-          Một ô ghi "Chưa phát hiện dữ kiện còn thiếu" vẫn chiếm đúng chỗ và đúng
-          lượt đọc như một cảnh báo thật, nên khi có cảnh báo thật thì mắt đã quen
-          lướt qua vùng đó rồi. Khối này chỉ nên xuất hiện khi có việc phải làm. */}
-      {hasOpenQuestions && (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {analysis.missingData.length + analysis.conflicts.length > 0 && (
-            <Section title="Cần xác minh / mâu thuẫn">
-              <ul className="space-y-2 text-sm" role="list">
-                {analysis.missingData.map((item) => (
-                  <li key={`${item.key}-${item.question}`}>
-                    • {item.question}
-                    <span className="block pl-3 text-xs text-[var(--text-muted)]">
-                      {item.impact}
-                    </span>
-                  </li>
-                ))}
-                {analysis.conflicts.map((item) => (
-                  <li key={`${item.key}-${item.factIds.join("-")}`}>• {item.question}</li>
-                ))}
-              </ul>
-            </Section>
-          )}
-          {analysis.priorityQuestion && (
-            <Section title="Câu hỏi ưu tiên">
-              <p className="text-sm">
-                {analysis.priorityQuestion.question}
-                <span className="mt-1 block text-xs text-[var(--text-muted)]">
-                  {analysis.priorityQuestion.expectedImpact}
-                </span>
-              </p>
-            </Section>
-          )}
-        </div>
-      )}
-
       <Section title="Nhu cầu theo định mức của hệ thống">
         <DataTable
           headers={["Vật tư", "Nhu cầu", "Cơ sở"]}
           rows={analysis.requirements.items.map((item) => [
             item.name,
             // Nước hiện cả hai con số: kho bốc theo CHAI, định mức đối chiếu theo LÍT.
-            moTaSoLuongVatTu(item.sku, item.totalQuantity, item.unit),
+            describeItemQuantity(item.sku, item.totalQuantity, item.unit),
             item.basis,
           ])}
           empty={analysis.requirements.reason ?? "Chưa có nhu cầu để hiển thị."}
@@ -175,7 +143,7 @@ function AnalysisBody({
 
       <Section title="Điều phối nội xã">
         <DataTable
-          headers={["Kho", "Vật tư lấy từ kho này", "Tuyến"]}
+          headers={["Kho", "Những vật tư cần lấy", "Khoảng cách"]}
           rows={groupAllocationsByWarehouse(analysis.coordination.allocations, itemBySku).map(
             (group) => [group.warehouseName, group.items, group.route],
           )}

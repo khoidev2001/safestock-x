@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { draftKey, isDraftWorthKeeping, parseDraft, type MissionDraft } from "./mission-draft";
+import {
+  draftKey,
+  draftsToEvict,
+  isDraftWorthKeeping,
+  parseDraft,
+  type DraftEntry,
+  type MissionDraft,
+} from "./mission-draft";
 
 const base: Omit<MissionDraft, "savedAt"> = {
   description: "",
@@ -90,4 +97,61 @@ test("kiểu sai trong bộ nhớ không phá form", () => {
   assert.equal(draft.durationHours, 24);
   assert.equal(draft.children, 0);
   assert.equal(draft.incidentType, "FLOOD");
+});
+
+const entry = (key: string, savedAt: string): DraftEntry => ({ key, savedAt });
+const NOW = Date.parse("2026-09-05T12:00:00.000Z");
+const daysAgo = (n: number) => new Date(NOW - n * 24 * 60 * 60 * 1000).toISOString();
+
+test("bản nháp quá hạn bị dọn, bản còn hạn được giữ", () => {
+  const doomed = draftsToEvict(
+    [entry("a", daysAgo(8)), entry("b", daysAgo(30)), entry("c", daysAgo(1))],
+    NOW,
+  );
+  assert.deepEqual(doomed.sort(), ["a", "b"]);
+});
+
+test("quá hạn mức thì cắt từ bản cũ nhất", () => {
+  const entries = [
+    entry("m1", daysAgo(6)),
+    entry("m2", daysAgo(5)),
+    entry("m3", daysAgo(4)),
+    entry("m4", daysAgo(3)),
+    entry("m5", daysAgo(2)),
+    entry("m6", daysAgo(1)),
+  ];
+  // Sáu bản, hạn mức năm → đúng bản cũ nhất ra đi, năm bản mới ở lại.
+  assert.deepEqual(draftsToEvict(entries, NOW), ["m1"]);
+});
+
+test("bản của màn hình đang mở không bao giờ bị dọn, kể cả khi cũ nhất", () => {
+  const entries = [
+    entry("dang-mo", daysAgo(6)),
+    entry("m2", daysAgo(5)),
+    entry("m3", daysAgo(4)),
+    entry("m4", daysAgo(3)),
+    entry("m5", daysAgo(2)),
+    entry("m6", daysAgo(1)),
+  ];
+  // Xoá đúng thứ người dùng đang gõ dở là lỗi tệ hơn hẳn việc giữ thừa một bản.
+  const doomed = draftsToEvict(entries, NOW, "dang-mo");
+  assert.equal(doomed.includes("dang-mo"), false);
+  // Nó vẫn tính vào hạn mức, nên bản cũ nhất còn lại phải nhường chỗ.
+  assert.deepEqual(doomed, ["m2"]);
+});
+
+test("bản đang mở quá hạn cũng được giữ — người dùng vừa mở lại chính nó", () => {
+  const doomed = draftsToEvict([entry("dang-mo", daysAgo(90))], NOW, "dang-mo");
+  assert.deepEqual(doomed, []);
+});
+
+test("mốc thời gian hỏng hoặc thiếu bị xếp vào nhóm cũ nhất", () => {
+  // Ghi hỏng thì không biết nó cũ tới đâu; giữ lại là giữ một bản không đọc được.
+  assert.deepEqual(draftsToEvict([entry("hong", "khong-phai-ngay")], NOW).sort(), ["hong"]);
+  assert.deepEqual(draftsToEvict([entry("thieu", "")], NOW), ["thieu"]);
+});
+
+test("dưới hạn mức và còn hạn thì không dọn gì", () => {
+  assert.deepEqual(draftsToEvict([entry("a", daysAgo(1)), entry("b", daysAgo(2))], NOW), []);
+  assert.deepEqual(draftsToEvict([], NOW, "new"), []);
 });

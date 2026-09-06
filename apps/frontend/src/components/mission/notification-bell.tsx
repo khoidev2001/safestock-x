@@ -110,6 +110,14 @@ export function NotificationBell({
                       onClick={() => openMission(n.missionId as string, n.fieldUpdateId)}
                       className="block w-full border-b px-4 py-3 text-left transition last:border-0 hover:bg-[var(--surface-2)]"
                     >
+                      {/* Số hiệu trước tiêu đề: trong chuông có cả chục dòng của
+                          nhiều nhiệm vụ khác nhau, không có số thì phải mở từng
+                          dòng ra mới biết dòng nào thuộc việc mình đang theo. */}
+                      {n.missionNo != null ? (
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--text-muted)]">
+                          Nhiệm vụ số {n.missionNo}
+                        </p>
+                      ) : null}
                       <p className="flex items-center gap-1.5 text-sm font-medium">
                         {n.incidentType ? (
                           <ColorIcon name={incidentIconName(n.incidentType)} size={16} tone="red" />

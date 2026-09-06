@@ -55,6 +55,21 @@ export function isStickyNotification(kind: string): boolean {
   return kind === "INCIDENT_DETECTED";
 }
 
+/**
+ * Thông báo chỉ BÁO TIẾN ĐỘ, không phải cảnh báo.
+ *
+ * Kho tiếp nhận yêu cầu, kho xác nhận xuất hàng — đó là việc chạy đúng quy trình,
+ * người trực đọc để biết đã tới bước nào chứ không phải để phản ứng gấp.
+ *
+ * Thẻ thông báo mang theo loại thiên tai của nhiệm vụ để dựng biểu tượng, và trước
+ * đây chỉ cần có trường đó là thẻ mặc nguyên bộ cánh cảnh báo: viền đỏ, nền pha đỏ,
+ * bóng đổ đỏ. Thành ra một dòng "kho đã tiếp nhận" trông y hệt một sự cố đang cháy.
+ * Tô đỏ mọi thứ thì màu đỏ thôi mang nghĩa "khẩn".
+ */
+export function isProgressNotification(kind: string): boolean {
+  return kind === "WAREHOUSE_REQUEST_ACCEPTED" || kind === "WAREHOUSE_READY";
+}
+
 /** Số thông báo CHƯA ĐỌC của từng tab, để gắn lên thanh điều hướng. */
 export function unreadByNavPath(notifications: NotificationLike[]): Record<string, number> {
   const counts: Record<string, number> = {};

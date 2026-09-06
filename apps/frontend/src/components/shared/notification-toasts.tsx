@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { incidentTypeLabel } from "@safestock/shared-types";
 import { ColorIcon } from "./color-icon";
 import { incidentIconName } from "@/lib/incident-visuals";
-import { isStickyNotification } from "@/lib/notification-routing";
+import { isProgressNotification, isStickyNotification } from "@/lib/notification-routing";
 import { CloseGlyph } from "./close-glyph";
 
 export interface ToastItem {
@@ -13,6 +13,8 @@ export interface ToastItem {
   title: string;
   body: string;
   missionId?: string | null;
+  /** Số hiệu nhiệm vụ — thẻ phải nói được "việc này là nhiệm vụ nào". */
+  missionNo?: number | null;
   /** Khoản mượn liên xã — có nó thì thẻ dựng hai nút Đồng ý / Từ chối. */
   loanId?: string | null;
   /** Loại thiên tai của nhiệm vụ — quyết định biểu tượng và nhãn trên thẻ. */
@@ -21,7 +23,7 @@ export interface ToastItem {
   locationName?: string | null;
 }
 
-const GIAY_TU_TAT = 6;
+const AUTO_DISMISS_SECONDS = 6;
 
 /**
  * Thẻ thông báo toạt ra ở góc phải dưới, giống Zalo.
@@ -48,7 +50,7 @@ export function NotificationToasts({
   onOpen?: (item: ToastItem) => void;
   onDismiss?: (id: string) => void;
   /** Trả lời yêu cầu mượn ngay trên thẻ. Không truyền thì thẻ chỉ để đọc. */
-  onDecideLoan?: (loanId: string, dongY: boolean) => Promise<void> | void;
+  onDecideLoan?: (loanId: string, approve: boolean) => Promise<void> | void;
 }) {
   if (items.length === 0) return null;
   return (
@@ -84,42 +86,42 @@ function Toast({
   item: ToastItem;
   onOpen?: (item: ToastItem) => void;
   onDismiss?: (id: string) => void;
-  onDecideLoan?: (loanId: string, dongY: boolean) => Promise<void> | void;
+  onDecideLoan?: (loanId: string, approve: boolean) => Promise<void> | void;
 }) {
   // Thẻ có hành động thì KHÔNG tự tắt. Tự tắt một thẻ đang chờ người quyết là
   // vứt mất chính cái việc phải làm — người dùng ngoảnh đi ba giây là mất.
-  const coHanhDong = Boolean(item.loanId && onDecideLoan);
-  const [dangGui, setDangGui] = useState<"yes" | "no" | null>(null);
-  const sticky = isStickyNotification(item.kind) || coHanhDong;
-  const [conLai, setConLai] = useState(GIAY_TU_TAT);
+  const hasActions = Boolean(item.loanId && onDecideLoan);
+  const [sending, setSending] = useState<"yes" | "no" | null>(null);
+  const sticky = isStickyNotification(item.kind) || hasActions;
+  const [secondsLeft, setSecondsLeft] = useState(AUTO_DISMISS_SECONDS);
   /**
    * Con trỏ đang ở trên thẻ (hoặc bàn phím đang đứng trong thẻ) thì dừng đồng hồ.
    *
    * Người dùng đưa chuột tới là đang đọc, hoặc đang định bấm. Thẻ biến mất giữa
    * lúc đó vừa cướp mất câu đang đọc dở, vừa đẩy cú bấm xuống thứ nằm phía dưới.
    */
-  const [dangDoc, setDangDoc] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   // Giữ trong ref để đồng hồ đếm không phải dựng lại mỗi khi component vẽ lại —
   // dựng lại là đồng hồ nhảy về đầu và thẻ không bao giờ tự tắt.
   const dismissRef = useRef(onDismiss);
   dismissRef.current = onDismiss;
 
   useEffect(() => {
-    if (sticky || dangDoc) return;
+    if (sticky || isHovered) return;
     const timer = setInterval(() => {
-      setConLai((giay) => {
-        if (giay <= 1) {
+      setSecondsLeft((seconds) => {
+        if (seconds <= 1) {
           clearInterval(timer);
           dismissRef.current?.(item.id);
           return 0;
         }
-        return giay - 1;
+        return seconds - 1;
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [item.id, sticky, dangDoc]);
+  }, [item.id, sticky, isHovered]);
 
-  const mo = useCallback(() => onOpen?.(item), [item, onOpen]);
+  const open = useCallback(() => onOpen?.(item), [item, onOpen]);
 
   /**
    * Thẻ nào có nhiệm vụ thì CẢ THẺ bấm được, không chỉ mỗi dòng chữ "Mở nhiệm vụ".
@@ -128,24 +130,28 @@ function Toast({
    * điện thoại, giữa lúc người ta đang vừa đi vừa bấm. Bấm trượt thì thẻ tự tắt
    * sau vài giây và việc đó coi như chưa từng hiện ra.
    */
-  const bamDuocCaThe = Boolean(onOpen && item.missionId);
+  const isClickable = Boolean(onOpen && item.missionId);
   // Cảnh báo: thẻ có tình huống, hoặc loại thông báo vốn phải ở lại tới khi có
   // người bấm. Viền đỏ và chuông đỏ chỉ dành cho nhóm này — tô đỏ mọi thứ thì
   // màu đỏ thôi mang nghĩa "khẩn".
-  const canhBao = sticky || Boolean(item.incidentType);
-  const tenBieuTuong = item.incidentType
+  const isAlert = sticky || Boolean(item.incidentType);
+  // Thẻ báo tiến độ kho: nền trắng phẳng, KHÔNG viền, chỉ còn bóng đổ để tách khỏi
+  // trang. Bộ cánh cảnh báo (viền đỏ + nền pha đỏ + bóng đỏ) để dành cho việc thật
+  // sự cần phản ứng gấp.
+  const plainFrame = isProgressNotification(item.kind);
+  const iconName = item.incidentType
     ? incidentIconName(item.incidentType)
-    : canhBao
+    : isAlert
       ? "incident"
       : "notification";
 
   return (
     <article
-      className={`pointer-events-auto rounded-lg border bg-[var(--surface)] p-3.5 shadow-lg transition ${
-        bamDuocCaThe ? "cursor-pointer hover:brightness-[0.98]" : ""
-      }`}
+      className={`pointer-events-auto rounded-lg bg-[var(--surface)] p-3.5 shadow-lg transition ${
+        plainFrame ? "" : "border"
+      } ${isClickable ? "cursor-pointer hover:brightness-[0.98]" : ""}`}
       style={
-        canhBao
+        isAlert && !plainFrame
           ? {
               // Viền mảnh 1px, phần "nổi lên" giao cho bóng đổ.
               //
@@ -161,15 +167,24 @@ function Toast({
           : undefined
       }
       role={sticky ? "alert" : undefined}
-      onMouseEnter={() => setDangDoc(true)}
-      onMouseLeave={() => setDangDoc(false)}
-      onFocusCapture={() => setDangDoc(true)}
-      onBlurCapture={() => setDangDoc(false)}
-      onClick={bamDuocCaThe ? mo : undefined}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onFocusCapture={() => setIsHovered(true)}
+      onBlurCapture={() => setIsHovered(false)}
+      onClick={isClickable ? open : undefined}
     >
       <div className="flex items-start gap-2.5">
-        <ColorIcon name={tenBieuTuong} size={22} tone={canhBao ? "red" : "blue"} />
+        <ColorIcon name={iconName} size={22} tone={isAlert ? "red" : "blue"} />
         <div className="min-w-0 flex-1">
+          {/* Số hiệu đứng TRÊN tiêu đề: người trực đang chạy mấy việc cùng lúc thì
+              câu hỏi đầu tiên khi thẻ hiện ra là "của nhiệm vụ nào", rồi mới tới
+              "chuyện gì". Đọc ngược thứ tự đó là phải đọc hết thẻ mới biết có phải
+              việc mình đang theo hay không. */}
+          {item.missionNo != null ? (
+            <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--text-muted)]">
+              Nhiệm vụ số {item.missionNo}
+            </p>
+          ) : null}
           <p className="text-sm font-semibold leading-snug">{item.title}</p>
           {/* Ba dữ kiện người trực cần trước tiên: thiên tai gì, bao nhiêu người,
               ở đâu. Tách khỏi câu văn và in đậm để đọc được trong một cái liếc. */}
@@ -205,49 +220,49 @@ function Toast({
           <p className="mt-1 line-clamp-6 whitespace-pre-line text-xs leading-relaxed text-[var(--text-muted)]">
             {item.body}
           </p>
-          {coHanhDong ? (
+          {hasActions ? (
             <div className="mt-2.5 flex gap-2">
               <button
                 className="rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
-                disabled={dangGui !== null}
+                disabled={sending !== null}
                 onClick={async (event) => {
                   // Nút nằm TRONG thẻ bấm được: không chặn nổi bọt thì đồng ý xong
                   // màn hình nhảy luôn sang nhiệm vụ, người dùng mất dấu việc vừa làm.
                   event.stopPropagation();
-                  setDangGui("yes");
+                  setSending("yes");
                   try {
                     await onDecideLoan?.(item.loanId as string, true);
                     onDismiss?.(item.id);
                   } finally {
-                    setDangGui(null);
+                    setSending(null);
                   }
                 }}
                 style={{ background: "var(--color-ready)" }}
                 type="button"
               >
-                {dangGui === "yes" ? "Đang gửi…" : "Đồng ý"}
+                {sending === "yes" ? "Đang gửi…" : "Đồng ý"}
               </button>
               <button
                 className="rounded-md border px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
-                disabled={dangGui !== null}
+                disabled={sending !== null}
                 onClick={async (event) => {
                   event.stopPropagation();
-                  setDangGui("no");
+                  setSending("no");
                   try {
                     await onDecideLoan?.(item.loanId as string, false);
                     onDismiss?.(item.id);
                   } finally {
-                    setDangGui(null);
+                    setSending(null);
                   }
                 }}
                 style={{ borderColor: "var(--color-critical)", color: "var(--color-critical)" }}
                 type="button"
               >
-                {dangGui === "no" ? "Đang gửi…" : "Từ chối"}
+                {sending === "no" ? "Đang gửi…" : "Từ chối"}
               </button>
             </div>
           ) : null}
-          {bamDuocCaThe ? (
+          {isClickable ? (
             // Vẫn giữ một nút thật cho bàn phím và trình đọc màn hình: cả thẻ bấm
             // được là tiện cho chuột, nhưng gắn hành động vào <article> thì không
             // tab tới được, và người dùng bàn phím mất hẳn đường mở nhiệm vụ.
@@ -255,7 +270,7 @@ function Toast({
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
-                mo();
+                open();
               }}
               className="mt-2 text-xs font-semibold text-[var(--color-accent)] hover:underline"
             >
@@ -279,7 +294,7 @@ function Toast({
           hơn một câu chú thích thêm vào. */}
       {!sticky ? (
         <p className="mt-1.5 text-right text-[10px] text-[var(--text-muted)]">
-          tự đóng sau {conLai}s
+          tự đóng sau {secondsLeft}s
         </p>
       ) : null}
     </article>

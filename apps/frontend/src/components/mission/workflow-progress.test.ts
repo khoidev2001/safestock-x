@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   WORKFLOW_STEP_COUNT,
   activeStepIndex,
+  allRequestsPickedUp,
   completedStepIndex,
   type WorkflowStatus,
 } from "./workflow-progress";
@@ -61,4 +62,28 @@ test("mọi trạng thái đều cho ra bước hợp lệ, không trỏ ra ngo�
     const active = activeStepIndex(status);
     assert.ok(active === null || (active >= 0 && active < WORKFLOW_STEP_COUNT), status);
   }
+});
+
+test("kho soạn xong chưa phải là kho đã giao xong", () => {
+  const prepared = [{ status: "PREPARED" }, { status: "PICKED_UP" }];
+  const pickedUp = [{ status: "PICKED_UP" }, { status: "PICKED_UP" }];
+
+  // READY chỉ nói mọi kho đã SOẠN xong. Còn món nằm trên sân kho chờ đội tới ký
+  // nhận thì bước kho CHƯA xong — tick xanh lúc này là báo tin mừng chưa xảy ra,
+  // điều phối thôi không gọi nhắc trong khi hàng vẫn nằm ở kho thôn.
+  assert.equal(completedStepIndex("READY", prepared), 0);
+  assert.equal(activeStepIndex("READY", prepared), 1);
+
+  // Đội ký nhận đủ thì bước kho mới xong, việc chuyển sang hiện trường.
+  assert.equal(completedStepIndex("READY", pickedUp), 1);
+  assert.equal(activeStepIndex("READY", pickedUp), 2);
+
+  // Nhiệm vụ cũ không có phiếu nào thì không có chữ ký nào để chờ.
+  assert.equal(completedStepIndex("READY", []), 1);
+  assert.equal(completedStepIndex("READY"), 1);
+  assert.equal(allRequestsPickedUp([]), true);
+  assert.equal(allRequestsPickedUp(prepared), false);
+
+  // Đã báo kết quả thì mọi phiếu bên dưới không đổi được gì nữa.
+  assert.equal(completedStepIndex("COMPLETED", prepared), 2);
 });

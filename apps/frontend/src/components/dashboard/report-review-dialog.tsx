@@ -13,7 +13,7 @@ import { CloseGlyph } from "@/components/shared/close-glyph";
  * nó có thể là "không có", "chưa nhập", hay "không áp dụng" — mà đây là bảng ADMIN
  * đọc để quyết định duyệt hay không. Viết thẳng ra chữ thì không phải đoán.
  */
-const CHUA_CO = "Chưa có";
+const NOT_PROVIDED = "Chưa có";
 
 export function ReportReviewDialog({
   id,
@@ -108,7 +108,7 @@ export function ReportReviewDialog({
                 <b>Kỳ:</b> {report.data.period}
               </p>
               <p>
-                <b>Người gửi:</b> {report.data.submittedBy?.fullName ?? CHUA_CO}
+                <b>Người gửi:</b> {report.data.submittedBy?.fullName ?? NOT_PROVIDED}
               </p>
             </div>
             <ReportRows rows={report.data.rows ?? []} />
@@ -193,16 +193,16 @@ function ReportRows({ rows }: { rows: ReportRow[] }) {
               <td className="px-3 py-2">
                 <b className="block">{row.batchCode || "Chưa định danh lô"}</b>
                 <span className="text-xs text-[var(--text-muted)]">
-                  Kệ {row.shelfCode || CHUA_CO}
+                  Kệ {row.shelfCode || NOT_PROVIDED}
                 </span>
               </td>
               <td className="px-3 py-2 text-right font-semibold">{row.quantity}</td>
-              <td className="px-3 py-2">{row.unit || CHUA_CO}</td>
-              <td className="px-3 py-2">{row.expiryDate || CHUA_CO}</td>
+              <td className="px-3 py-2">{row.unit || NOT_PROVIDED}</td>
+              <td className="px-3 py-2">{row.expiryDate || NOT_PROVIDED}</td>
               <td className="px-3 py-2">
-                {row.condition ? itemConditionLabel(row.condition) : CHUA_CO}
+                {row.condition ? itemConditionLabel(row.condition) : NOT_PROVIDED}
               </td>
-              <td className="px-3 py-2">{row.note || CHUA_CO}</td>
+              <td className="px-3 py-2">{row.note || NOT_PROVIDED}</td>
             </tr>
           ))}
         </tbody>

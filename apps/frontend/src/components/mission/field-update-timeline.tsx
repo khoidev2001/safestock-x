@@ -52,7 +52,7 @@ export function FieldUpdateTimeline({
   //
   // CHƯA CÓ BẰNG CHỨNG THÌ KHÔNG CÓ KHỐI NÀO CẢ.
   //
-  // Một tiêu đề "Bằng chứng từ Lực lượng hiện trường" kèm ô "chưa có gì" vẫn
+  // Một tiêu đề "Bằng chứng từ Đội cứu hộ" kèm ô "chưa có gì" vẫn
   // chiếm đúng chỗ và đúng lượt đọc như khi có bằng chứng thật. Phần lớn nhiệm vụ
   // ở trạng thái đó suốt chặng đầu, nên người trực quen mắt lướt qua vùng này —
   // rồi khi có bằng chứng thật thì cũng lướt qua nốt.
@@ -69,7 +69,7 @@ export function FieldUpdateTimeline({
         className="flex items-center gap-2 text-sm font-semibold"
       >
         <ColorIcon name="mission" size={17} tone="blue" />
-        Bằng chứng từ Lực lượng hiện trường
+        Bằng chứng từ Đội cứu hộ
       </h4>
       <div className="mt-2">
         {query.error && (
