@@ -12,7 +12,7 @@ import type { ColorIconName } from "@/components/shared/color-icon";
  * Loại không rõ thì về dấu cảnh báo chung, KHÔNG đoán bừa một hình cụ thể: một
  * ngọn lửa vẽ nhầm cho vụ ngập còn tệ hơn là không vẽ gì.
  */
-const BIEU_TUONG: Readonly<Record<IncidentType, ColorIconName>> = {
+const ICONS: Readonly<Record<IncidentType, ColorIconName>> = {
   [IncidentType.FLOOD]: "flood",
   [IncidentType.STORM]: "storm",
   [IncidentType.LANDSLIDE]: "landslide",
@@ -23,5 +23,5 @@ const BIEU_TUONG: Readonly<Record<IncidentType, ColorIconName>> = {
 
 export function incidentIconName(type?: string | null): ColorIconName {
   if (!type) return "warning";
-  return BIEU_TUONG[type as IncidentType] ?? "warning";
+  return ICONS[type as IncidentType] ?? "warning";
 }

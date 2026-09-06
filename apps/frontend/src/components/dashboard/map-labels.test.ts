@@ -49,8 +49,8 @@ test("kho thôn rút nhãn về đúng tên thôn, kho trung tâm giữ tên đ�
   );
   assert.equal(formatWarehouseLabel(warehouse({ kind: "HAMLET", name: "Kỳ Đu" })), "Kỳ Đu");
   assert.equal(
-    formatWarehouseLabel(warehouse({ kind: "CENTRAL", name: "Kho cứu trợ trung tâm Đồng Xuân" })),
-    "Kho cứu trợ trung tâm Đồng Xuân",
+    formatWarehouseLabel(warehouse({ kind: "CENTRAL", name: "Kho xã Đồng Xuân" })),
+    "Kho xã Đồng Xuân",
   );
 });
 
