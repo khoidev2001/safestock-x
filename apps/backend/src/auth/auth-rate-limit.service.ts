@@ -6,9 +6,31 @@ interface AttemptRecord {
   blockedUntil: number | null;
 }
 
-const MAX_FAILURES = 5;
+/** Số lần gõ sai liên tiếp trước khi khoá. */
+export const MAX_FAILURES = 10;
+
+/**
+ * Từ lần sai thứ mấy thì bắt đầu đếm ngược số lần còn lại.
+ *
+ * Không cảnh báo ngay từ lần đầu: gõ nhầm một lần là chuyện thường ngày, đếm
+ * ngược ở đó chỉ làm người dùng hoảng. Nhưng cũng không được im lặng tới lúc
+ * khoá — bị khoá đột ngột giữa ca trực mà không có dấu hiệu nào báo trước là
+ * mất mười lăm phút không đăng nhập được, đúng lúc đang cần.
+ */
+export const WARN_AFTER_FAILURES = 5;
+
 const WINDOW_MS = 15 * 60 * 1000;
 const BLOCK_MS = 15 * 60 * 1000;
+
+/** Kết quả một lần gõ sai, để tầng gọi dựng câu báo cho người dùng. */
+export interface FailureState {
+  failures: number;
+  /** Còn bao nhiêu lần nữa thì khoá. */
+  remaining: number;
+  blocked: boolean;
+  /** Có nên nói ra số lần còn lại chưa. */
+  shouldWarn: boolean;
+}
 
 @Injectable()
 export class AuthRateLimitService {
@@ -24,14 +46,17 @@ export class AuthRateLimitService {
       return;
     }
     if (record.blockedUntil && record.blockedUntil > now) {
+      // Nói rõ còn bao lâu. "Thử lại sau" không trả lời được câu hỏi duy nhất
+      // người đang bị khoá muốn hỏi, nên họ bấm lại liên tục và tự gia hạn khoá.
+      const minutesRemaining = Math.max(1, Math.ceil((record.blockedUntil - now) / 60_000));
       throw new HttpException(
-        "Đã có quá nhiều lần đăng nhập thất bại. Vui lòng thử lại sau.",
+        `Đã nhập sai ${MAX_FAILURES} lần nên tài khoản tạm khoá đăng nhập. Vui lòng thử lại sau ${minutesRemaining} phút.`,
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
   }
 
-  recordFailure(identifier: string, sourceIp: string): void {
+  recordFailure(identifier: string, sourceIp: string): FailureState {
     const key = this.key(identifier, sourceIp);
     const now = Date.now();
     const previous = this.attempts.get(key);
@@ -45,6 +70,14 @@ export class AuthRateLimitService {
       record.blockedUntil = now + BLOCK_MS;
     }
     this.attempts.set(key, record);
+
+    const remaining = Math.max(MAX_FAILURES - record.failures, 0);
+    return {
+      failures: record.failures,
+      remaining,
+      blocked: record.blockedUntil !== null,
+      shouldWarn: record.failures >= WARN_AFTER_FAILURES && remaining > 0,
+    };
   }
 
   clear(identifier: string, sourceIp: string): void {

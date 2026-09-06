@@ -1,4 +1,4 @@
-const KHOA = "ung-pho-nhanh:co-phien-web";
+const STORAGE_KEY = "ung-pho-nhanh:co-phien-web";
 
 /**
  * Dấu hiệu "máy này có thể đang còn phiên đăng nhập", để khỏi gọi khôi phục phiên
@@ -18,29 +18,29 @@ const KHOA = "ung-pho-nhanh:co-phien-web";
  * vẫn còn, và phải đăng nhập lại. Đổi lại là không còn lượt gọi mạng vô ích nào,
  * cũng không còn dòng đỏ nào.
  */
-export function danhDauCoPhien(): void {
+export function markSessionPresent(): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(KHOA, "1");
+    window.localStorage.setItem(STORAGE_KEY, "1");
   } catch {
     // Trình duyệt chặn lưu trữ (chế độ riêng tư nghiêm ngặt) thì bỏ qua: cùng
     // lắm là quay về hành vi cũ, không được phép làm hỏng việc đăng nhập.
   }
 }
 
-export function xoaDauPhien(): void {
+export function clearSessionMarker(): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.removeItem(KHOA);
+    window.localStorage.removeItem(STORAGE_KEY);
   } catch {
     // Như trên.
   }
 }
 
-export function coTheConPhien(): boolean {
+export function maySessionExist(): boolean {
   if (typeof window === "undefined") return false;
   try {
-    return window.localStorage.getItem(KHOA) === "1";
+    return window.localStorage.getItem(STORAGE_KEY) === "1";
   } catch {
     // Không đọc được thì cứ thử khôi phục — thà thừa một lượt gọi còn hơn đá
     // người đang đăng nhập hợp lệ ra ngoài.

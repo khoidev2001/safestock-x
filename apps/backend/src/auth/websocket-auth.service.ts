@@ -66,28 +66,41 @@ export class WebSocketAuthService {
     if (
       !payload?.sub ||
       typeof payload.sub !== "string" ||
-      !Number.isInteger(payload.tokenVersion)
+      !Number.isInteger(payload.sessionVersion) ||
+      !payload.sid
     ) {
       throw new Error(UNAUTHORIZED_MESSAGE);
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
+    // Đọc qua dòng PHIÊN chứ không qua người dùng, cùng lý do với JwtStrategy:
+    // phiên đã đăng xuất phải rớt ngay, không đợi access token tự hết hạn. Ổ cắm
+    // socket còn sống lâu hơn một lượt HTTP nên chỗ này càng phải chặt.
+    const session = await this.prisma.userSession.findUnique({
+      where: { id: payload.sid },
       select: {
-        id: true,
-        email: true,
-        role: true,
-        organizationId: true,
-        warehouseId: true,
-        tokenVersion: true,
-        warehouse: { select: { organizationId: true } },
-        organization: { select: { warehouses: { select: { id: true } } } },
+        revokedAt: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            organizationId: true,
+            warehouseId: true,
+            sessionVersion: true,
+            warehouse: { select: { organizationId: true } },
+            organization: { select: { warehouses: { select: { id: true } } } },
+          },
+        },
       },
     });
+    const user = session?.user;
     if (
+      !session ||
+      session.revokedAt ||
       !user ||
+      user.id !== payload.sub ||
       isSimulationSystemActorEmail(user.email) ||
-      user.tokenVersion !== payload.tokenVersion
+      user.sessionVersion !== payload.sessionVersion
     ) {
       throw new Error(UNAUTHORIZED_MESSAGE);
     }

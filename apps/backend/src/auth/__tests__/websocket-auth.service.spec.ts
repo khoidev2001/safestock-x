@@ -6,7 +6,9 @@ const SECRET = "websocket-test-secret";
 
 describe("WebSocketAuthService", () => {
   const users = new Map<string, ReturnType<typeof warehouseUser>>();
-  const prisma = { user: { findUnique: jest.fn() } };
+  /** Phiên đã thu hồi, tra theo sid — mặc định mọi phiên đều còn sống. */
+  const revoked = new Set<string>();
+  const prisma = { userSession: { findUnique: jest.fn() } };
   const jwt = new JwtService();
   const config = { get: jest.fn(() => SECRET) };
   let service: WebSocketAuthService;
@@ -14,9 +16,17 @@ describe("WebSocketAuthService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     users.clear();
-    prisma.user.findUnique.mockImplementation(({ where }: { where: { id: string } }) =>
-      Promise.resolve(users.get(where.id) ?? null),
-    );
+    revoked.clear();
+    // Quy ước của bài test: sid là "sess-<userId>", nên một token chỉ tra ra
+    // phiên khi người dùng của nó có thật.
+    prisma.userSession.findUnique.mockImplementation(({ where }: { where: { id: string } }) => {
+      const user = users.get(where.id.replace(/^sess-/, ""));
+      if (!user) return Promise.resolve(null);
+      return Promise.resolve({
+        revokedAt: revoked.has(where.id) ? new Date() : null,
+        user,
+      });
+    });
     service = new WebSocketAuthService(prisma as never, jwt, config as never);
   });
 
@@ -24,19 +34,19 @@ describe("WebSocketAuthService", () => {
     await expect(service.authenticate(fakeSocket())).rejects.toThrow("Unauthorized");
 
     const invalid = await jwt.signAsync(
-      { sub: "user-a", tokenVersion: 0 },
+      { sub: "user-a", sessionVersion: 0, sid: "sess-user-a" },
       { secret: "wrong-secret" },
     );
     await expect(service.authenticate(fakeSocket(invalid))).rejects.toThrow();
 
     const expired = await jwt.signAsync(
-      { sub: "user-a", tokenVersion: 0 },
+      { sub: "user-a", sessionVersion: 0, sid: "sess-user-a" },
       { secret: SECRET, expiresIn: -1 },
     );
     await expect(service.authenticate(fakeSocket(expired))).rejects.toThrow();
 
     const deletedUserToken = await jwt.signAsync(
-      { sub: "deleted", tokenVersion: 0 },
+      { sub: "deleted", sessionVersion: 0, sid: "sess-deleted" },
       { secret: SECRET },
     );
     await expect(service.authenticate(fakeSocket(deletedUserToken))).rejects.toThrow(
@@ -47,7 +57,7 @@ describe("WebSocketAuthService", () => {
   it("uses current database role and assignment instead of stale token claims", async () => {
     users.set("user-a", warehouseUser("user-a", "wh-a"));
     const token = await jwt.signAsync(
-      { sub: "user-a", role: UserRole.ADMIN, warehouseId: "wh-b", tokenVersion: 0 },
+      { sub: "user-a", role: UserRole.ADMIN, warehouseId: "wh-b", sessionVersion: 0, sid: "sess-user-a" },
       { secret: SECRET },
     );
 
@@ -66,7 +76,10 @@ describe("WebSocketAuthService", () => {
       warehouse: null,
       organization: { warehouses: [{ id: "wh-a" }, { id: "wh-b" }] },
     });
-    const token = await jwt.signAsync({ sub: "admin", tokenVersion: 0 }, { secret: SECRET });
+    const token = await jwt.signAsync(
+      { sub: "admin", sessionVersion: 0, sid: "sess-admin" },
+      { secret: SECRET },
+    );
 
     await expect(service.authenticate(fakeSocket(token))).resolves.toMatchObject({
       role: UserRole.ADMIN,
@@ -79,7 +92,23 @@ describe("WebSocketAuthService", () => {
       ...warehouseUser("user-a", "wh-a"),
       warehouse: { organizationId: "org-b" },
     });
-    const token = await jwt.signAsync({ sub: "user-a" }, { secret: SECRET });
+    const token = await jwt.signAsync(
+      { sub: "user-a", sessionVersion: 0, sid: "sess-user-a" },
+      { secret: SECRET },
+    );
+
+    await expect(service.authenticate(fakeSocket(token))).rejects.toThrow("Unauthorized");
+  });
+
+  it("rejects a socket whose session was logged out", async () => {
+    users.set("user-a", warehouseUser("user-a", "wh-a"));
+    const token = await jwt.signAsync(
+      { sub: "user-a", sessionVersion: 0, sid: "sess-user-a" },
+      { secret: SECRET },
+    );
+    // Ổ cắm socket sống lâu hơn một lượt HTTP, nên phiên đã đăng xuất mà vẫn nối
+    // được là thiết bị đã thoát vẫn nghe tiếp thông báo của xã.
+    revoked.add("sess-user-a");
 
     await expect(service.authenticate(fakeSocket(token))).rejects.toThrow("Unauthorized");
   });
@@ -92,7 +121,7 @@ function warehouseUser(id: string, warehouseId: string) {
     role: UserRole.WAREHOUSE,
     organizationId: "org-a",
     warehouseId: warehouseId as string | null,
-    tokenVersion: 0,
+    sessionVersion: 0,
     warehouse: { organizationId: "org-a" } as { organizationId: string } | null,
     organization: { warehouses: [{ id: warehouseId }] },
   };
