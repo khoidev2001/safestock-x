@@ -34,6 +34,19 @@ export function ReportScreen({ token, user }: { token: string; user: AuthUser })
    */
   const [pinnedPoint, setPinnedPoint] = useState<PinnedPoint | null>(null);
   const [micStatus, setMicStatus] = useState<MicStatus>("idle");
+  /**
+   * Bản ghi âm sẽ GỬI KÈM báo cáo, tách hẳn khỏi đường nhận dạng giọng nói.
+   *
+   * Nút micro bên trên đổi tiếng nói thành chữ rồi vứt file đi. Chữ đó có thể
+   * sai tên thôn hay sai số người — hai thứ quyết định điều bao nhiêu xe đi đâu,
+   * mà người điều phối không có cách nào biết nó sai. Giữ lại file để họ nghe
+   * thẳng lời người báo rồi tự điền.
+   */
+  const [attachedAudio, setAttachedAudio] = useState<{
+    base64: string;
+    durationMs: number;
+  } | null>(null);
+  const [attachStatus, setAttachStatus] = useState<"idle" | "recording">("idle");
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -45,6 +58,11 @@ export function ReportScreen({ token, user }: { token: string; user: AuthUser })
   const [detailLoading, setDetailLoading] = useState(false);
   const recordingRef = useRef<AudioRecording | null>(null);
   const recordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Ref RIÊNG cho lượt ghi đính kèm: dùng chung một ref với lượt nhận dạng thì
+  // bấm nhầm nút thứ hai lúc nút thứ nhất đang chạy sẽ cắt mất bản ghi kia.
+  const attachRecordingRef = useRef<AudioRecording | null>(null);
+  const attachTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const attachStartedAtRef = useRef(0);
   const requestRef = useRef<{ key: string; requestId: string } | null>(null);
 
   useEffect(
@@ -52,9 +70,15 @@ export function ReportScreen({ token, user }: { token: string; user: AuthUser })
       if (recordingTimeoutRef.current) {
         clearTimeout(recordingTimeoutRef.current);
       }
+      if (attachTimeoutRef.current) {
+        clearTimeout(attachTimeoutRef.current);
+      }
       const recording = recordingRef.current;
       recordingRef.current = null;
       if (recording) void recording.stop().catch(() => undefined);
+      const attaching = attachRecordingRef.current;
+      attachRecordingRef.current = null;
+      if (attaching) void attaching.stop().catch(() => undefined);
     },
     [],
   );
@@ -77,8 +101,8 @@ export function ReportScreen({ token, user }: { token: string; user: AuthUser })
    * xong gửi lại vẫn mang `requestId` cũ, backend coi là trùng và giữ nguyên bản
    * ghi cũ — toạ độ mới bị bỏ, mà người báo thì thấy "đã gửi".
    */
-  function requestFor(descriptionText: string, point: PinnedPoint | null) {
-    const key = `${descriptionText}|${point ? `${point.lat},${point.lng}` : ""}`;
+  function requestFor(descriptionText: string, point: PinnedPoint | null, audioKey: string) {
+    const key = `${descriptionText}|${point ? `${point.lat},${point.lng}` : ""}|${audioKey}`;
     const current = requestRef.current;
     if (current?.key === key) return current.requestId;
     const next = { key, requestId: createRequestId() };
@@ -136,25 +160,104 @@ export function ReportScreen({ token, user }: { token: string; user: AuthUser })
     }
   }
 
-  async function send() {
-    if (description.trim().length < 5) {
-      setError("Vui lòng mô tả tình huống (ít nhất 5 ký tự).");
+  /** Dừng lượt ghi đính kèm và giữ lại file, KHÔNG gửi đi nhận dạng. */
+  async function finishAttachRecording(recording = attachRecordingRef.current) {
+    if (!recording || attachRecordingRef.current !== recording) return;
+    attachRecordingRef.current = null;
+    if (attachTimeoutRef.current) {
+      clearTimeout(attachTimeoutRef.current);
+      attachTimeoutRef.current = null;
+    }
+    setAttachStatus("idle");
+    try {
+      const base64 = await recording.stop();
+      if (!base64) {
+        setVoiceError("Bản ghi rỗng. Vui lòng ghi lại.");
+        return;
+      }
+      setAttachedAudio({ base64, durationMs: Date.now() - attachStartedAtRef.current });
+    } catch {
+      setVoiceError("Không lưu được bản ghi âm. Vui lòng thử lại.");
+    }
+  }
+
+  async function toggleAttachRecording() {
+    setVoiceError(null);
+    if (attachStatus === "recording") {
+      await finishAttachRecording();
       return;
     }
+    // Không cho hai lượt ghi chạy chồng nhau: một micro, một luồng âm thanh.
+    if (micStatus !== "idle") {
+      setVoiceError("Đang ghi âm để nhận dạng. Dừng lượt đó trước đã.");
+      return;
+    }
+    try {
+      const recording = await startRecording();
+      attachRecordingRef.current = recording;
+      attachStartedAtRef.current = Date.now();
+      attachTimeoutRef.current = setTimeout(() => {
+        void finishAttachRecording(recording);
+      }, MAX_RECORDING_MS);
+      setAttachStatus("recording");
+    } catch {
+      setVoiceError("Không truy cập được micro. Kiểm tra quyền rồi thử lại.");
+      setAttachStatus("idle");
+    }
+  }
+
+  async function send() {
     const cleanDescription = description.trim();
-    const requestId = requestFor(cleanDescription, pinnedPoint);
+    /*
+      Có file ghi âm thì KHÔNG bắt gõ chữ nữa.
+      
+      Người đứng giữa vùng ngập, một tay cầm ô một tay cầm điện thoại, vừa nói
+      xong cả đoạn vào micro — bắt họ gõ thêm năm ký tự là dựng một cái rào ngay
+      lúc họ ít rảnh tay nhất, và cái rào ấy chỉ đẻ ra những báo cáo ghi "aaaaa"
+      cho qua. Cơ quan điều phối nghe file rồi tự điền số liệu.
+      
+      Gõ dở dang thì vẫn phải đủ năm ký tự: một hai chữ lạc vào ô không nói được
+      gì mà lại che mất chuyện báo cáo này chỉ có tiếng nói.
+    */
+    if (!attachedAudio && cleanDescription.length < 5) {
+      setError("Vui lòng mô tả tình huống (ít nhất 5 ký tự) hoặc gửi kèm file ghi âm.");
+      return;
+    }
+    if (cleanDescription.length > 0 && cleanDescription.length < 5) {
+      setError("Mô tả quá ngắn. Viết rõ hơn hoặc xoá hẳn để chỉ gửi file ghi âm.");
+      return;
+    }
+    // Bản ghi âm nằm TRONG khoá: ghi âm xong gửi lại mà khoá không đổi thì máy
+    // chủ coi là trùng, giữ nguyên bản cũ — file mới bị bỏ, người gửi vẫn thấy
+    // "đã gửi". Đúng cái bẫy mà điểm ghim đã mắc phải trước đây.
+    const requestId = requestFor(
+      cleanDescription,
+      pinnedPoint,
+      attachedAudio ? String(attachedAudio.base64.length) : "",
+    );
     setSending(true);
     setError(null);
     try {
       await submitReport(token, {
-        description: cleanDescription,
+        // Bỏ hẳn khoá khi không có chữ: gửi chuỗi rỗng thì máy chủ vẫn coi là
+        // "có mô tả" và trả lỗi độ dài tối thiểu.
+        ...(cleanDescription ? { description: cleanDescription } : {}),
         requestId,
         ...(pinnedPoint ? { incidentLat: pinnedPoint.lat, incidentLng: pinnedPoint.lng } : {}),
+        ...(attachedAudio
+          ? {
+              audioBase64: attachedAudio.base64,
+              // Máy chủ vẫn tự nhận diện từ byte đầu tệp; gửi kèm chỉ để đối chiếu.
+              audioMimeType: "audio/wav",
+              audioDurationMs: attachedAudio.durationMs,
+            }
+          : {}),
       });
       requestRef.current = null;
       setSent(true);
       setDescription("");
       setPinnedPoint(null);
+      setAttachedAudio(null);
       await loadHistory();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không gửi được báo cáo");
@@ -193,7 +296,7 @@ export function ReportScreen({ token, user }: { token: string; user: AuthUser })
       ? "■ Dừng và nhận dạng"
       : micStatus === "transcribing"
         ? "Đang nhận dạng…"
-        : "🎤 Ghi âm mô tả";
+        : "🎤 Chuyển giọng nói thành văn bản";
 
   return (
     <View style={styles.screen}>
@@ -238,8 +341,6 @@ export function ReportScreen({ token, user }: { token: string; user: AuthUser })
           aria-label="Mô tả tình huống"
         />
 
-        <IncidentPinMap point={pinnedPoint} onChange={setPinnedPoint} disabled={sending} />
-
         {micSupported ? (
           <>
             <Pressable
@@ -261,10 +362,61 @@ export function ReportScreen({ token, user }: { token: string; user: AuthUser })
                 ? "Đang ghi… nói rõ rồi bấm dừng (tối đa 60 giây)."
                 : "Bấm để ghi âm, hệ thống tự chuyển thành chữ bằng PhoWhisper."}
             </Text>
+
+            {/* Nút THỨ HAI, việc khác hẳn nút trên: nút trên đổi tiếng nói thành
+                chữ rồi bỏ file đi, nút này giữ nguyên file gửi cho cơ quan điều
+                phối nghe. Nhãn nói rõ khác biệt đó, vì hai nút micro cạnh nhau
+                mà không nói gì thì người dùng đoán chúng làm cùng một việc. */}
+            <Pressable
+              style={[
+                styles.attachButton,
+                attachStatus === "recording" && styles.micButtonRecording,
+              ]}
+              onPress={toggleAttachRecording}
+              accessibilityRole="button"
+            >
+              <Text
+                style={
+                  attachStatus === "recording"
+                    ? styles.micButtonTextRecording
+                    : styles.attachButtonText
+                }
+              >
+                {attachStatus === "recording"
+                  ? "■ Dừng và đính kèm"
+                  : attachedAudio
+                    ? "🎙 Ghi âm lại"
+                    : "🎙 Gửi file ghi âm gốc"}
+              </Text>
+            </Pressable>
+            <Text style={styles.micHint}>
+              {attachStatus === "recording"
+                ? "Đang ghi lời kể… bấm dừng khi xong (tối đa 60 giây)."
+                : "Gửi nguyên file gốc cho cơ quan điều phối nghe lại. Có file này thì không cần gõ mô tả."}
+            </Text>
+
+            {attachedAudio ? (
+              <View style={styles.attachedRow}>
+                <Text style={styles.attachedText}>
+                  Đã đính kèm bản ghi {Math.max(1, Math.round(attachedAudio.durationMs / 1000))}{" "}
+                  giây
+                </Text>
+                <Pressable
+                  onPress={() => setAttachedAudio(null)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Bỏ bản ghi âm đính kèm"
+                >
+                  <Text style={styles.attachedRemove}>Bỏ</Text>
+                </Pressable>
+              </View>
+            ) : null}
           </>
         ) : null}
 
         {voiceError ? <Text style={styles.voiceError}>{voiceError}</Text> : null}
+
+        <IncidentPinMap point={pinnedPoint} onChange={setPinnedPoint} disabled={sending} />
+
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
         <Pressable

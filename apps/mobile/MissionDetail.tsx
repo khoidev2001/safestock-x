@@ -1,24 +1,101 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType,
+  type Ref,
+} from "react";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import {
+  CameraView as ExpoCameraView,
+  useCameraPermissions,
+  type CameraViewProps,
+} from "expo-camera";
+import * as ImagePicker from "expo-image-picker";
+import {
+  ActivityIndicator,
+  Image,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import {
   acceptWarehouseMaterialRequest,
+  completeMission,
   fetchMission,
+  fetchMissionDeliveryPhoto,
+  fetchMissionWarehouseRoutes,
   fetchWarehouseMaterialRequests,
   confirmWarehousePickup,
   prepareWarehouseMaterialRequest,
   reportWarehouseMaterialDiscrepancy,
-  submitFieldUpdate,
   transcribe,
+  type MissionDeliveryPhoto,
   type MissionDetail,
+  type MissionWarehouseRoute,
   type WarehouseMaterialRequest,
 } from "./api";
 import { c, styles } from "./styles";
 import { assessDanger, disasterOf, formatLongTime } from "./disaster";
+import {
+  BULK_ACTION_LABEL,
+  planBulkAction,
+  warehouseProgress,
+  type BulkActionKind,
+} from "@safestock/shared-types";
 import { supplyOf, supplyProgress } from "./supplies";
+import { confirmAction, notify } from "./dialog";
 import { readOfflineCache, writeOfflineCache } from "./offline-cache";
 import { FIELD_FORCE_ROLE_LABEL } from "./role-labels";
+import {
+  deliveryOutcomeLabel,
+  missionPickupStage,
+  missionPlaceLabel,
+  missionStageForViewer,
+  missionStageLabel,
+  missionStageNeedsAction,
+} from "./mission-state";
+import {
+  MAX_EVIDENCE_PHOTOS,
+  addEvidencePhoto,
+  deliveryReportSummary,
+  pickCaptureSize,
+  removeEvidencePhoto,
+  type EvidencePhoto,
+} from "./mission-delivery-report";
 import { isRecordingSupported, startRecording, type AudioRecording } from "./audio";
+import { MissionMap } from "./MissionMap";
+import { type MissionMapData } from "./mission-map-html";
+import {
+  buildPickupPlan,
+  formatTravel,
+  pickupItemStatusLabel,
+  pickupStopStateLabel,
+  type PickupStop,
+} from "./mission-pickup-plan";
+
+/**
+ * `CameraView` của expo-camera phải cast mới dùng được với bản @types/react hiện
+ * tại (cùng lý do đã ghi ở InventoryScreen). Khai luôn phần `takePictureAsync`
+ * cần tới, vì bản cast theo `ComponentType` làm mất kiểu của ref.
+ */
+interface CameraHandle {
+  takePictureAsync: (options?: {
+    base64?: boolean;
+    quality?: number;
+  }) => Promise<{ base64?: string; uri: string } | undefined>;
+  getAvailablePictureSizesAsync: () => Promise<string[]>;
+}
+
+const CompatibleCameraView = ExpoCameraView as unknown as ComponentType<
+  CameraViewProps & { ref?: Ref<CameraHandle> }
+>;
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: "Nháp",
@@ -37,27 +114,50 @@ export function MissionDetailScreen({
   token,
   userId,
   role,
+  warehouseId,
   missionId,
+  refreshSignal,
   onBack,
 }: {
   token: string;
   userId: string;
   role: string;
+  /** Kho người này phụ trách — quyết định dòng nào họ tự tay làm gộp được. */
+  warehouseId?: string | null;
   missionId: string;
+  /**
+   * Đổi giá trị là màn hình tải lại. Vỏ app truyền vào id thông báo mới nhất của
+   * chính nhiệm vụ này, nên kho vừa xuất hàng hay vừa ký nhận là nội dung ở đây
+   * đổi theo ngay — không bắt người đang đứng ở kho phải thoát ra rồi vào lại.
+   */
+  refreshSignal?: string | null;
   onBack: () => void;
 }) {
   const [mission, setMission] = useState<MissionDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cacheStoredAt, setCacheStoredAt] = useState<string | null>(null);
-  const [fieldUpdateText, setFieldUpdateText] = useState("");
-  const [fieldUpdateMode, setFieldUpdateMode] = useState<"TEXT" | "VOICE_TRANSCRIPT">("TEXT");
-  const [fieldUpdateBusy, setFieldUpdateBusy] = useState(false);
+  const [resultText, setResultText] = useState("");
+  const [resultPhotos, setResultPhotos] = useState<EvidencePhoto[]>([]);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [completing, setCompleting] = useState(false);
   const [fieldVoiceBusy, setFieldVoiceBusy] = useState(false);
   const [fieldRecording, setFieldRecording] = useState(false);
   const [warehouseActionId, setWarehouseActionId] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [warehouseNotes, setWarehouseNotes] = useState<Record<string, string>>({});
-  const [soThucLay, setSoThucLay] = useState<Record<string, string>>({});
+  const [pickedQuantities, setPickedQuantities] = useState<Record<string, string>>({});
+  const [routes, setRoutes] = useState<MissionWarehouseRoute[]>([]);
+  const [routesLoading, setRoutesLoading] = useState(role === "RESCUE");
+  /**
+   * Người xem có tự bấm mở/gấp phần chi tiết chưa; `null` là chưa bấm lần nào.
+   *
+   * Chưa bấm thì để trạng thái nhiệm vụ quyết định: đã đóng thì gấp lại, còn
+   * đang chạy thì mở. Không thể lấy `mission.status` làm giá trị khởi tạo vì lúc
+   * dựng màn hình nhiệm vụ chưa tải xong; mà lưu một `boolean` rồi ghi đè bằng
+   * effect thì màn hình bung ra một nhịp rồi tự gấp lại trước mắt người dùng.
+   */
+  const [detailsOpenChoice, setDetailsOpenChoice] = useState<boolean | null>(null);
   const recordingRef = useRef<AudioRecording | null>(null);
 
   useEffect(
@@ -110,6 +210,56 @@ export function MissionDetailScreen({
     load();
   }, [load]);
 
+  // Bỏ qua lần chạy đầu: `load` ở trên vừa tải xong, gọi thêm là hai lượt mạng
+  // cho cùng một lần mở màn.
+  const seenSignal = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (seenSignal.current === undefined) {
+      seenSignal.current = refreshSignal ?? null;
+      return;
+    }
+    if (seenSignal.current === (refreshSignal ?? null)) return;
+    seenSignal.current = refreshSignal ?? null;
+    void load();
+  }, [refreshSignal, load]);
+
+  /**
+   * Tuyến kho → điểm nạn, chỉ tải cho lực lượng hiện trường.
+   *
+   * Tách hẳn khỏi `load` chứ không gọi nối tiếp trong đó: tính tuyến gọi OSRM một
+   * lượt cho mỗi kho, mà nội dung nhiệm vụ (vật tư, trạng thái) phải hiện ngay.
+   * Gộp vào một lượt là bắt người đang đứng ngoài mưa chờ cả phần chậm nhất mới
+   * đọc được phần nhanh nhất — và OSRM lỗi thì mất luôn cả màn hình.
+   */
+  const loadRoutes = useCallback(async () => {
+    if (role !== "RESCUE") return;
+    const cacheKey = `mission.${missionId}.routes`;
+    try {
+      const cached = await readOfflineCache<MissionWarehouseRoute[]>(userId, cacheKey);
+      if (cached) {
+        setRoutes(cached.data);
+        setRoutesLoading(false);
+      }
+    } catch {
+      // Bản lưu hỏng chỉ làm mất tiện lợi; vẫn tải bản mới bên dưới.
+    }
+    try {
+      const latest = await fetchMissionWarehouseRoutes(token, missionId);
+      setRoutes(latest);
+      await writeOfflineCache(userId, cacheKey, latest);
+    } catch {
+      // Mất mạng hoặc máy định tuyến đang tắt: giữ bản lưu (nếu có) và để bản đồ
+      // tự báo. Không đẩy lên `error` chung — dòng lỗi đỏ ở đó nói về nhiệm vụ,
+      // mà nhiệm vụ thì vẫn tải được bình thường.
+    } finally {
+      setRoutesLoading(false);
+    }
+  }, [role, token, userId, missionId]);
+
+  useEffect(() => {
+    void loadRoutes();
+  }, [loadRoutes]);
+
   async function toggleFieldVoice() {
     setError(null);
     if (fieldRecording) {
@@ -120,9 +270,12 @@ export function MissionDetailScreen({
         setFieldRecording(false);
         if (!audioBase64) return;
         const result = await transcribe(token, audioBase64);
+        // Nối vào phần đã gõ chứ không ghi đè: người ta hay gõ vài chữ rồi nói
+        // nốt phần dài, mất phần đã gõ là mất công gõ lại giữa hiện trường.
         if (result.text.trim()) {
-          setFieldUpdateText(result.text.trim());
-          setFieldUpdateMode("VOICE_TRANSCRIPT");
+          setResultText((current) =>
+            current.trim() ? `${current.trim()} ${result.text.trim()}` : result.text.trim(),
+          );
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : "Không nhận dạng được giọng nói");
@@ -139,27 +292,106 @@ export function MissionDetailScreen({
     }
   }
 
-  async function submitFieldObservation() {
-    if (fieldUpdateText.trim().length === 0) {
-      setError("Hãy nhập hoặc ghi âm nội dung trước khi xác nhận gửi.");
-      return;
-    }
-    setFieldUpdateBusy(true);
+  /**
+   * Báo kết quả và ĐÓNG nhiệm vụ.
+   *
+   * Chỉ có đường "đã hoàn thành" ở đây: người chưa giao xong thì còn đang ở
+   * ngoài đường, họ không mở màn này ra để báo dở dang. Kết quả bằng chữ và ảnh
+   * bằng chứng đều tuỳ chọn, nên nút luôn bấm được — thứ bắt buộc duy nhất là
+   * người thật xác nhận việc đã xong.
+   */
+  async function submitDeliveryReport() {
+    const confirmed = await confirmAction({
+      title: "Xác nhận đã hoàn thành",
+      message: `${deliveryReportSummary(resultText, resultPhotos.length)} Nhiệm vụ sẽ đóng lại và không sửa được nữa.`,
+      confirmLabel: "Đã hoàn thành",
+    });
+    if (!confirmed) return;
+
+    setCompleting(true);
     setError(null);
     try {
-      await submitFieldUpdate(token, missionId, {
-        requestId: fieldRequestId(),
-        inputMode: fieldUpdateMode,
-        confirmedText: fieldUpdateText.trim(),
-        confirmedByUser: true,
-        clientCapturedAt: new Date().toISOString(),
-      });
-      setFieldUpdateText("");
-      setFieldUpdateMode("TEXT");
+      await completeMission(
+        token,
+        missionId,
+        "DELIVERED",
+        resultText.trim() || undefined,
+        resultPhotos.map((photo) => ({ dataBase64: photo.dataBase64 })),
+      );
+      setResultText("");
+      setResultPhotos([]);
+      await load();
+      notify("Đã ghi nhận", "Nhiệm vụ đã đóng với kết quả giao đủ.");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Không gửi được cập nhật hiện trường");
+      setError(e instanceof Error ? e.message : "Không gửi được báo cáo kết quả");
     } finally {
-      setFieldUpdateBusy(false);
+      setCompleting(false);
+    }
+  }
+
+  /**
+   * Nhận một loạt ảnh vừa chụp hoặc vừa chọn từ thư viện.
+   *
+   * Cộng dồn trong MỘT lượt rồi mới ghi lại: chọn 3 ảnh cùng lúc từ thư viện mà
+   * gọi ba lần thì mỗi lần đều tính từ danh sách cũ, và chỉ tấm cuối trụ lại.
+   */
+  function keepEvidencePhotos(dataList: string[]) {
+    let photos = resultPhotos;
+    let firstError: string | undefined;
+    for (const dataBase64 of dataList) {
+      const next = addEvidencePhoto(photos, {
+        id: `anh-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        dataBase64,
+      });
+      photos = next.photos;
+      if (next.error && !firstError) firstError = next.error;
+    }
+    setResultPhotos(photos);
+    if (firstError) setError(firstError);
+  }
+
+  /**
+   * Lấy ảnh có sẵn trong máy.
+   *
+   * Không phải ảnh nào cũng chụp được ngay lúc đang đứng báo cáo: nhiều người
+   * chụp lúc bàn giao hàng rồi mới mở app ra báo khi về tới chỗ có sóng. Bắt
+   * chụp lại là bắt họ chụp một tấm không còn nói lên điều gì.
+   */
+  async function pickEvidenceFromLibrary() {
+    setError(null);
+    const remainingSlots = MAX_EVIDENCE_PHOTOS - resultPhotos.length;
+    if (remainingSlots <= 0) {
+      setError(`Mỗi lần báo kèm tối đa ${MAX_EVIDENCE_PHOTOS} ảnh.`);
+      return;
+    }
+    try {
+      // KHÔNG xin quyền trước: bộ chọn ảnh của hệ điều hành trả về đúng tấm người
+      // dùng chỉ định, không cho app đọc cả thư viện, nên Android lẫn iOS đều
+      // không đòi quyền. Xin trước chỉ tạo thêm một cửa có thể bị từ chối và khoá
+      // luôn một tính năng vốn chạy được.
+      const picked = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        base64: true,
+        // Nén lại như lúc chụp: ảnh trong máy thường là bản gốc chưa qua nén nào.
+        quality: 0.5,
+        allowsMultipleSelection: true,
+        selectionLimit: remainingSlots,
+      });
+      if (picked.canceled) return;
+      const data = picked.assets
+        .map((asset) => asset.base64)
+        .filter((base64): base64 is string => Boolean(base64));
+      if (data.length === 0) {
+        setError("Không đọc được ảnh đã chọn, hãy thử ảnh khác.");
+        return;
+      }
+      keepEvidencePhotos(data);
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? `Không mở được thư viện ảnh: ${e.message}`
+          : "Không mở được thư viện ảnh",
+      );
     }
   }
 
@@ -175,20 +407,20 @@ export function MissionDetailScreen({
         throw new Error("Cần ghi rõ chênh lệch (ít nhất 3 ký tự).");
       }
       if (kind === "pickup") {
-        const raw = (soThucLay[request.id] ?? "").trim();
+        const raw = (pickedQuantities[request.id] ?? "").trim();
         // Để trống nghĩa là lấy đủ. Lấy đủ mới là trường hợp thường gặp; bắt gõ
         // lại đúng con số đã hiện sẵn chỉ tạo thêm một chỗ để gõ nhầm.
-        const soLuong = raw === "" ? request.preparedQuantity : Number(raw);
-        if (!Number.isInteger(soLuong) || soLuong < 0) {
+        const quantity = raw === "" ? request.preparedQuantity : Number(raw);
+        if (!Number.isInteger(quantity) || quantity < 0) {
           throw new Error("Số thực lấy phải là số nguyên không âm.");
         }
-        if (soLuong < request.preparedQuantity && !note) {
+        if (quantity < request.preparedQuantity && !note) {
           throw new Error(
-            `Thiếu ${request.preparedQuantity - soLuong} so với số đã soạn — phải ghi rõ lý do.`,
+            `Thiếu ${request.preparedQuantity - quantity} so với số đã soạn — phải ghi rõ lý do.`,
           );
         }
-        await confirmWarehousePickup(token, request.id, soLuong, note || undefined);
-        setSoThucLay((current) => ({ ...current, [request.id]: "" }));
+        await confirmWarehousePickup(token, request.id, quantity, note || undefined);
+        setPickedQuantities((current) => ({ ...current, [request.id]: "" }));
       } else if (kind === "accept") {
         await acceptWarehouseMaterialRequest(token, request.id, note || undefined);
       } else if (kind === "prepare") {
@@ -205,6 +437,76 @@ export function MissionDetailScreen({
     }
   }
 
+  /**
+   * Chạy một việc cho cả loạt dòng, TUẦN TỰ chứ không song song.
+   *
+   * Mỗi lượt gọi đều đụng vào tồn kho thật. Bắn năm lượt cùng lúc là năm giao
+   * dịch tranh nhau đúng những lô hàng đó, và thứ tự chúng chốt không ai đoán
+   * được. Chạy lần lượt thì chậm hơn vài giây, đổi lại kho luôn cộng trừ đúng.
+   *
+   * Dừng ngay ở lỗi ĐẦU TIÊN. Chạy tiếp là giấu mất chỗ hỏng: người dùng thấy
+   * "xong" trong khi một dòng đã trượt, mà chính dòng đó mới là dòng có chuyện.
+   */
+  async function runBulkWarehouseAction(
+    kind: BulkActionKind,
+    rows: WarehouseMaterialRequest[],
+  ) {
+    setBulkBusy(true);
+    setError(null);
+    try {
+      for (const request of rows) {
+        if (kind === "pickup") {
+          await confirmWarehousePickup(token, request.id, request.preparedQuantity);
+          setPickedQuantities((current) => ({ ...current, [request.id]: "" }));
+        } else if (kind === "accept") {
+          await acceptWarehouseMaterialRequest(token, request.id);
+        } else {
+          await prepareWarehouseMaterialRequest(token, request.id);
+        }
+      }
+      await load();
+    } catch (e) {
+      // Tải lại dù hỏng giữa chừng: những dòng đã chạy xong là thay đổi THẬT ở
+      // kho, màn hình phải phản ánh đúng phần đã làm được.
+      await load().catch(() => undefined);
+      setError(e instanceof Error ? e.message : "Không hoàn tất được thao tác hàng loạt");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  const fieldForce = role === "RESCUE";
+  const pickupStage = missionPickupStage(mission?.status ?? "", mission?.warehouseRequests);
+  const completed = mission?.status === "COMPLETED";
+  const detailsOpen = detailsOpenChoice ?? !completed;
+
+  const mapData = useMemo<MissionMapData>(
+    () => ({
+      incident:
+        mission?.incidentLat != null && mission?.incidentLng != null
+          ? { lat: mission.incidentLat, lng: mission.incidentLng }
+          : null,
+      incidentLabel: mission?.hamletName?.trim() || mission?.location?.trim() || "Điểm gặp nạn",
+      warehouses: routes.map((route) => ({
+        id: route.id,
+        name: route.name,
+        kind: route.kind,
+        lat: route.lat,
+        lng: route.lng,
+        distanceKm: route.distanceKm,
+        etaMinutes: route.etaMinutes,
+        routeCoordinates:
+          route.routeStatus === "ROUTED" ? (route.routeGeometry?.coordinates ?? null) : null,
+      })),
+    }),
+    [mission?.incidentLat, mission?.incidentLng, mission?.hamletName, mission?.location, routes],
+  );
+
+  const pickupStops = useMemo(
+    () => buildPickupPlan(routes, mission?.warehouseRequests ?? []),
+    [routes, mission?.warehouseRequests],
+  );
+
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
@@ -218,7 +520,15 @@ export function MissionDetailScreen({
           <MaterialCommunityIcons name="chevron-left" size={20} color={c.amber} />
           <Text style={styles.backLink}>Quay lại</Text>
         </Pressable>
-        <Text style={styles.title}>Chi tiết nhiệm vụ</Text>
+        {/* Số hiệu ngay trên thanh tiêu đề: mở hai ba nhiệm vụ rồi quay lại thì
+            "Chi tiết nhiệm vụ" không nói được đang đứng ở việc nào. Chưa tải xong
+            (hoặc bản ghi cũ không có số) thì giữ nguyên tiêu đề cũ thay vì nhấp
+            nháy một số rỗng. */}
+        <Text numberOfLines={1} style={styles.title}>
+          {mission?.missionNo != null
+            ? `Chi tiết nhiệm vụ số ${mission.missionNo}`
+            : "Chi tiết nhiệm vụ"}
+        </Text>
         <View style={{ width: 60 }} />
       </View>
 
@@ -256,73 +566,176 @@ export function MissionDetailScreen({
               </Text>
             </View>
           ) : null}
-          <MissionHero mission={mission} />
+          {/* Lỗi nằm NGOÀI khối gấp: nó nói về lượt tải vừa rồi, không phải về
+              nội dung nhiệm vụ, nên gấp mất là người dùng ngồi nhìn dữ liệu cũ
+              mà không biết lượt làm mới đã hỏng. */}
+          {error ? <Text style={[styles.errorText, { marginBottom: 12 }]}>{error}</Text> : null}
 
-          <View style={styles.factRow}>
-            <Fact
-              label="Nhận lúc"
-              value={mission.createdAt ? formatLongTime(mission.createdAt) : "—"}
-            />
-            <Fact label="Thời lượng" value={`${mission.durationHours} giờ`} />
-            <Fact label="Đáp ứng" value={`${mission.fulfillment}%`} />
-          </View>
-
-          <SuppliesSection requirements={mission.requirements} />
-
-          {role === "WAREHOUSE" && (mission.warehouseRequests?.length ?? 0) > 0 ? (
-            <WarehouseMaterialRequestPanel
-              requests={mission.warehouseRequests ?? []}
-              notes={warehouseNotes}
-              busyRequestId={warehouseActionId}
-              onNoteChange={(requestId, note) =>
-                setWarehouseNotes((current) => ({ ...current, [requestId]: note }))
-              }
-              onAction={(kind, request) => void updateWarehouseRequest(kind, request)}
-              onSoThucLayChange={(requestId, value) =>
-                setSoThucLay((current) => ({ ...current, [requestId]: value }))
-              }
-              soThucLay={soThucLay}
-              offline={Boolean(cacheStoredAt)}
-            />
+          {completed ? (
+            <>
+              <CompletedReportPanel token={token} mission={mission} />
+              {/* Một nút duy nhất cho cả mảng nội dung cũ: bản đồ, tuyến lấy hàng
+                  và bảng vật tư đều là chuyện trước lúc giao xong. Gấp riêng từng
+                  khối thì người muốn đối chiếu lại phải bấm ba lần. */}
+              <Pressable
+                onPress={() => setDetailsOpenChoice(!detailsOpen)}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: detailsOpen }}
+                style={local.detailsToggle}
+              >
+                <MaterialCommunityIcons
+                  name={detailsOpen ? "chevron-up" : "chevron-down"}
+                  size={18}
+                  color={c.primary}
+                />
+                <Text style={local.detailsToggleText}>
+                  {detailsOpen ? "Thu gọn chi tiết nhiệm vụ" : "Xem lại chi tiết nhiệm vụ"}
+                </Text>
+              </Pressable>
+            </>
           ) : null}
 
-          {role === "RESCUE" && !cacheStoredAt ? (
-            <FieldUpdatePanel
-              text={fieldUpdateText}
-              onChange={(text) => {
-                setFieldUpdateText(text);
-                setFieldUpdateMode("TEXT");
-              }}
-              onVoice={() => void toggleFieldVoice()}
-              onSubmit={() => void submitFieldObservation()}
-              voiceAvailable={isRecordingSupported()}
-              recording={fieldRecording}
-              voiceBusy={fieldVoiceBusy}
-              submitting={fieldUpdateBusy}
-            />
+          {detailsOpen ? (
+            <>
+              <MissionHero mission={mission} role={role} warehouseId={warehouseId} />
+
+              <View style={styles.factRow}>
+                <Fact
+                  label="Nhận lúc"
+                  value={mission.createdAt ? formatLongTime(mission.createdAt) : "—"}
+                />
+                <Fact label="Thời lượng" value={`${mission.durationHours} giờ`} />
+                <Fact label="Đáp ứng" value={`${mission.fulfillment}%`} />
+              </View>
+
+              {/* LỰC LƯỢNG HIỆN TRƯỜNG: chỗ nào, đi đường nào, ghé kho nào lấy gì.
+              Đặt NGAY SAU phần tóm tắt tình huống vì đó là thứ họ mở nhiệm vụ ra
+              để tìm; bảng vật tư tổng ở dưới chỉ để đối chiếu lại cho đủ. */}
+              {fieldForce ? (
+                <>
+                  <MissionMap data={mapData} loading={routesLoading && routes.length === 0} />
+                  <PickupPlanSection
+                    stops={pickupStops}
+                    loading={routesLoading && pickupStops.length === 0}
+                  />
+                </>
+              ) : null}
+
+              <SuppliesSection requirements={mission.requirements} />
+
+              {role === "WAREHOUSE" && (mission.warehouseRequests?.length ?? 0) > 0 ? (
+                <WarehouseMaterialRequestPanel
+                  requests={mission.warehouseRequests ?? []}
+                  notes={warehouseNotes}
+                  busyRequestId={warehouseActionId}
+                  onNoteChange={(requestId, note) =>
+                    setWarehouseNotes((current) => ({ ...current, [requestId]: note }))
+                  }
+                  onAction={(kind, request) => void updateWarehouseRequest(kind, request)}
+                  onPickedQuantityChange={(requestId, value) =>
+                    setPickedQuantities((current) => ({ ...current, [requestId]: value }))
+                  }
+                  pickedQuantities={pickedQuantities}
+                  offline={Boolean(cacheStoredAt)}
+                  assignedWarehouseId={warehouseId}
+                  onBulkAction={(kind, rows) => void runBulkWarehouseAction(kind, rows)}
+                  bulkBusy={bulkBusy}
+                />
+              ) : null}
+
+              {/* Ô báo kết quả chỉ hiện khi nhiệm vụ THẬT SỰ đóng được: kho đã sẵn
+              sàng và máy đang có mạng. Nút bấm vào là báo lỗi còn tệ hơn không
+              có nút, nhất là với người đang đứng ngoài mưa. */}
+              {fieldForce && !cacheStoredAt && pickupStage === "PICKED_UP" ? (
+                <DeliveryReportPanel
+                  text={resultText}
+                  onChangeText={setResultText}
+                  photos={resultPhotos}
+                  onAddPhoto={() => setCameraOpen(true)}
+                  onPickPhoto={() => void pickEvidenceFromLibrary()}
+                  onRemovePhoto={(id) =>
+                    setResultPhotos((current) => removeEvidencePhoto(current, id))
+                  }
+                  onVoice={() => void toggleFieldVoice()}
+                  onSubmit={() => void submitDeliveryReport()}
+                  voiceAvailable={isRecordingSupported()}
+                  recording={fieldRecording}
+                  voiceBusy={fieldVoiceBusy}
+                  submitting={completing}
+                />
+              ) : null}
+
+              <View style={{ marginTop: 20 }}>
+                {/* Nhãn trạng thái ĐỔI MÀU theo chặng của chính người đang xem.
+                Với người đi giao, "kho đã xuất xong" không phải một dòng trạng
+                thái để đọc cho biết — đó là hiệu lệnh xuất phát, nên nó phải bắt
+                mắt khác hẳn lúc còn phải ngồi chờ. */}
+                <View
+                  style={[
+                    styles.statusBadge,
+                    {
+                      backgroundColor:
+                        fieldForce && pickupStage === "READY_FOR_PICKUP"
+                          ? "rgba(21,128,61,0.12)"
+                          : c.surfaceAlt,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.statusText,
+                      {
+                        color: fieldForce && pickupStage === "READY_FOR_PICKUP" ? c.green : c.text,
+                      },
+                    ]}
+                  >
+                    {fieldForce && pickupStage === "READY_FOR_PICKUP"
+                      ? "Kho đã chuẩn bị xong vật tư — hãy đến lấy"
+                      : (STATUS_LABEL[mission.status] ?? mission.status)}
+                  </Text>
+                </View>
+                <Text style={[styles.emptyText, { marginTop: 10, textAlign: "left" }]}>
+                  {mission.status === "READY"
+                    ? "Các kho đã chuẩn bị xong vật tư. Việc liên hệ và triển khai do con người quyết định ngoài thực tế."
+                    : "Bạn nhận thông tin phương án và tự đến các điểm lấy vật tư; ứng dụng không phân công cá nhân hoặc đội."}
+                </Text>
+                {/* Nói thẳng vì sao CHƯA có ô báo kết quả, và điều gì sẽ mở nó ra.
+                Không có dòng này thì người đi hiện trường mở nhiệm vụ ra chỉ thấy
+                trống, và "trống" đọc ra thành "app hỏng" chứ không phải "chưa tới
+                lượt mình". */}
+                {fieldForce && !cacheStoredAt && mission.status !== "COMPLETED" ? (
+                  <Text
+                    style={[
+                      styles.emptyText,
+                      { marginTop: 8, textAlign: "left" },
+                      pickupStage === "READY_FOR_PICKUP" && { color: c.green, fontWeight: "700" },
+                    ]}
+                  >
+                    {pickupStage === "READY_FOR_PICKUP"
+                      ? "Tới kho nhận hàng. Người giữ kho bấm ký nhận sau khi bàn giao — ô báo cáo kết quả hiện ra ngay sau đó."
+                      : pickupStage === "WAITING_WAREHOUSE"
+                        ? "Ô báo cáo kết quả sẽ hiện ở đây khi tất cả kho tham gia đã xuất xong vật tư."
+                        : ""}
+                  </Text>
+                ) : null}
+              </View>
+            </>
           ) : null}
-
-          {error ? <Text style={[styles.errorText, { marginTop: 12 }]}>{error}</Text> : null}
-
-          <View style={{ marginTop: 20 }}>
-            <View style={[styles.statusBadge, { backgroundColor: c.surfaceAlt }]}>
-              <Text style={[styles.statusText, { color: c.text }]}>
-                {STATUS_LABEL[mission.status] ?? mission.status}
-              </Text>
-            </View>
-            <Text style={[styles.emptyText, { marginTop: 10, textAlign: "left" }]}>
-              {mission.status === "READY"
-                ? "Các kho đã chuẩn bị xong vật tư. Việc liên hệ và triển khai do con người quyết định ngoài thực tế."
-                : "Bạn nhận thông tin phương án và tự đến các điểm lấy vật tư; ứng dụng không phân công cá nhân hoặc đội."}
-            </Text>
-            {mission.status === "COMPLETED" && mission.deliveryNote ? (
-              <Text style={[styles.emptyText, { marginTop: 8, textAlign: "left" }]}>
-                Ghi chú lịch sử: {mission.deliveryNote}
-              </Text>
-            ) : null}
-          </View>
         </ScrollView>
       ) : null}
+
+      <EvidenceCamera
+        open={cameraOpen}
+        onClose={() => setCameraOpen(false)}
+        onCaptured={(dataBase64) => {
+          setCameraOpen(false);
+          keepEvidencePhotos([dataBase64]);
+        }}
+        onError={(message) => {
+          setCameraOpen(false);
+          setError(message);
+        }}
+      />
     </View>
   );
 }
@@ -333,9 +746,12 @@ function WarehouseMaterialRequestPanel({
   busyRequestId,
   onNoteChange,
   onAction,
-  onSoThucLayChange,
-  soThucLay,
+  onPickedQuantityChange,
+  pickedQuantities,
   offline,
+  assignedWarehouseId,
+  onBulkAction,
+  bulkBusy,
 }: {
   requests: WarehouseMaterialRequest[];
   notes: Record<string, string>;
@@ -345,15 +761,34 @@ function WarehouseMaterialRequestPanel({
     kind: "accept" | "prepare" | "discrepancy" | "pickup",
     request: WarehouseMaterialRequest,
   ) => void;
-  soThucLay: Record<string, string>;
-  onSoThucLayChange: (requestId: string, value: string) => void;
+  pickedQuantities: Record<string, string>;
+  onPickedQuantityChange: (requestId: string, value: string) => void;
   offline: boolean;
+  /** Kho của chính người đang xem — chỉ dòng của kho này mới làm gộp được. */
+  assignedWarehouseId?: string | null;
+  onBulkAction: (kind: BulkActionKind, rows: WarehouseMaterialRequest[]) => void;
+  bulkBusy: boolean;
 }) {
   // Đếm cả khoản đã ký nhận: hàng đã có người mang đi thì đương nhiên kho đã
   // soạn xong. Đếm thiếu là kho vừa làm xong lại lùi về "chưa xong".
   const prepared = requests.filter(
     (request) => request.status === "PREPARED" || request.status === "PICKED_UP",
   ).length;
+  /*
+    Nút làm GỘP, chỉ cho dòng của CHÍNH kho mình.
+    
+    Một nhiệm vụ lớn huy động năm kho; bấm hộ kho khác thì máy chủ chặn, và người
+    dùng nhận một câu báo lỗi cho việc lẽ ra phần mềm phải tự biết. Cùng điều kiện
+    với bản web — quy tắc ba mốc nối đuôi nằm trong `planBulkAction` ở gói dùng
+    chung, một bản cho cả hai màn hình.
+  */
+  const bulkTargets = assignedWarehouseId
+    ? requests.filter((request) => request.warehouseId === assignedWarehouseId)
+    : [];
+  const bulk = planBulkAction(bulkTargets, (request) => pickedQuantities[request.id] ?? "");
+  const progress = warehouseProgress(requests);
+  const bulkDisabled = offline || bulkBusy || bulk.kind === null || bulk.rows.length === 0;
+
   return (
     <View style={{ marginTop: 18 }}>
       <Text style={styles.sectionTitle}>
@@ -362,8 +797,89 @@ function WarehouseMaterialRequestPanel({
       <Text style={[styles.emptyText, { textAlign: "left", marginBottom: 10 }]}>
         Tiếp nhận từng dòng, kiểm tra lô thực tế rồi mới xác nhận xuất. Mỗi dòng chỉ xuất một lần.
       </Text>
+
+      {/*
+        KHO NÀO CÒN NỢ — khối quan trọng nhất của cả bảng này.
+
+        Một nhiệm vụ huy động nhiều kho. Kho mình làm xong hết phần của mình mà
+        nhiệm vụ vẫn ghi "Chờ kho chuẩn bị", người trực đọc thành "app hỏng" hoặc
+        "bấm không ăn" — trong khi sự thật là một kho khác chưa ai đụng tới. Con
+        số gộp không nói được điều đó; phải gọi thẳng tên kho ra thì họ mới biết
+        cần gọi điện cho ai.
+      */}
+      {progress.length > 1 ? (
+        <View style={{ marginBottom: 12, gap: 6 }}>
+          {progress.map((row) => (
+            <View
+              key={row.warehouseId}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                borderWidth: 1,
+                borderColor: row.done ? c.green : c.amber,
+                backgroundColor: row.done ? "rgba(34,197,94,0.10)" : "rgba(234,122,18,0.10)",
+                borderRadius: 10,
+                paddingHorizontal: 12,
+                paddingVertical: 9,
+              }}
+            >
+              <Text style={{ color: c.text, fontSize: 13, fontWeight: "800", flexShrink: 1 }}>
+                {row.warehouseId === assignedWarehouseId ? `${row.name} (kho mình)` : row.name}
+              </Text>
+              <Text
+                style={{
+                  color: row.done ? c.green : c.amber,
+                  fontSize: 12,
+                  fontWeight: "800",
+                }}
+              >
+                {row.done
+                  ? "✓ đội đã ký nhận đủ"
+                  : row.awaitingPickup
+                    ? "đã xuất, chờ đội tới lấy"
+                    : `còn ${row.total - row.prepared}/${row.total} chưa xuất`}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {/* Một nút duy nhất, đúng mốc kế tiếp. Bày cả ba cùng lúc thì người dùng
+          phải tự đoán bấm cái nào trước, mà bấm sai thứ tự là máy chủ chặn. */}
+      {bulk.kind && !offline ? (
+        <View style={{ marginBottom: 12 }}>
+          <Pressable
+            disabled={bulkDisabled}
+            onPress={() => onBulkAction(bulk.kind as BulkActionKind, bulk.rows)}
+            accessibilityRole="button"
+            style={[styles.actionButton, { opacity: bulkDisabled ? 0.6 : 1 }]}
+          >
+            <Text style={styles.actionButtonText}>
+              {bulkBusy
+                ? "Đang xử lý…"
+                : `${BULK_ACTION_LABEL[bulk.kind]} (${bulk.rows.length} dòng)`}
+            </Text>
+          </Pressable>
+          {/* Nói rõ vì sao còn dòng ở lại. Lặng lẽ bỏ qua thì người dùng bấm xong
+              tưởng đã hết, trong khi vẫn còn khoản hàng chưa ai ký. */}
+          {bulk.partialPickupCount > 0 ? (
+            <Text style={[styles.emptyText, { textAlign: "left", marginTop: 6 }]}>
+              {bulk.partialPickupCount} dòng khai lấy thiếu — phải ký riêng từng dòng kèm lý do.
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
       {requests.map((request) => {
         const busy = busyRequestId === request.id;
+        /*
+          Chỉ dòng của CHÍNH kho mình mới có nút.
+          
+          Máy chủ vốn đã chặn theo kho của người gọi, nên bấm vào dòng của kho
+          khác chỉ nhận về một câu báo lỗi — mà người dùng thì đọc thành "app
+          hỏng". Cùng điều kiện với bản web (`isOwnWarehouse`).
+        */
+        const isOwnWarehouse = !assignedWarehouseId || request.warehouseId === assignedWarehouseId;
         return (
           <View
             key={request.id}
@@ -449,7 +965,7 @@ function WarehouseMaterialRequestPanel({
                 đây là thiếu đúng chỗ người ta dùng. Để trống ô số nghĩa là lấy
                 đủ: lấy đủ mới là trường hợp thường gặp, bắt gõ lại đúng con số
                 đã hiện sẵn chỉ tạo thêm một chỗ để gõ nhầm. */}
-            {request.status === "PREPARED" && !offline ? (
+            {request.status === "PREPARED" && isOwnWarehouse && !offline ? (
               <View style={{ marginTop: 10 }}>
                 <Text style={{ color: c.text, fontSize: 12, fontWeight: "800", marginBottom: 6 }}>
                   Ký nhận đã lấy hàng
@@ -457,11 +973,11 @@ function WarehouseMaterialRequestPanel({
                 <TextInput
                   accessibilityLabel={`Số thực lấy của ${request.itemName}`}
                   keyboardType="number-pad"
-                  onChangeText={(text) => onSoThucLayChange(request.id, text)}
+                  onChangeText={(text) => onPickedQuantityChange(request.id, text)}
                   placeholder={`Số thực lấy (để trống = đủ ${request.preparedQuantity})`}
                   placeholderTextColor={c.muted}
                   style={[styles.reasonInput, { marginBottom: 8 }]}
-                  value={soThucLay[request.id] ?? ""}
+                  value={pickedQuantities[request.id] ?? ""}
                 />
                 <TextInput
                   accessibilityLabel={`Lý do thiếu của ${request.itemName}`}
@@ -485,7 +1001,10 @@ function WarehouseMaterialRequestPanel({
               </View>
             ) : null}
 
-            {request.status !== "PREPARED" && request.status !== "PICKED_UP" && !offline ? (
+            {request.status !== "PREPARED" &&
+            request.status !== "PICKED_UP" &&
+            isOwnWarehouse &&
+            !offline ? (
               <>
                 <TextInput
                   value={notes[request.id] ?? ""}
@@ -550,21 +1069,55 @@ function warehouseRequestStatus(status: WarehouseMaterialRequest["status"]): str
   return "ĐÃ KÝ NHẬN";
 }
 
-/** Banner đầu màn: mức nguy hiểm + loại thiên tai + số người gặp nạn (thứ bậc rõ). */
-function MissionHero({ mission }: { mission: MissionDetail }) {
+/**
+ * Thẻ đầu màn chi tiết — nói ĐÚNG những gì thẻ trong danh sách đã nói, cùng thứ
+ * tự, cùng chữ, cùng màu.
+ *
+ * Trước đây hai thẻ kể hai câu chuyện khác nhau về cùng một nhiệm vụ: danh sách
+ * nhấn "Cần tiếp nhận" (việc phải làm, chữ cam) còn thẻ này nhấn "CHƯA NGUY CẤP"
+ * (mức nguy, nền xanh). Người trực đọc danh sách rồi mở ra, thấy một màn hình
+ * nói giọng khác hẳn, và phải tự nối hai thứ lại với nhau.
+ *
+ * Chặng việc tính theo VAI người đang đọc, đúng cùng một hàm mà danh sách dùng —
+ * trưởng thôn đọc phiếu của chính kho mình, đội cứu hộ đọc chặng chung.
+ */
+function MissionHero({
+  mission,
+  role,
+  warehouseId,
+}: {
+  mission: MissionDetail;
+  role: string;
+  warehouseId?: string | null;
+}) {
   const disaster = disasterOf(mission.incidentType);
   const danger = assessDanger(mission.incidentType, mission.affectedPeople);
+  const stage = missionStageForViewer(mission, role, warehouseId);
+  const stageText = missionStageLabel(role, stage);
+  const stageNeedsAction = missionStageNeedsAction(role, stage);
+  const place = missionPlaceLabel(mission);
+
   return (
     <View style={[styles.hero, { backgroundColor: danger.bg, borderColor: danger.stripe }]}>
+      {/* Danh tính trước tiên, y như thẻ danh sách: số hiệu là thứ người trực đọc
+          cho nhau qua bộ đàm. Bản ghi cũ chưa có số thì lùi về tên thiên tai. */}
+      <Text style={styles.heroMissionNo}>
+        {mission.missionNo != null ? `Nhiệm vụ số ${mission.missionNo}` : disaster.label}
+      </Text>
+
       <View style={styles.heroTopRow}>
         <Text style={[styles.heroDanger, { color: danger.color }]}>⚠ {danger.label}</Text>
       </View>
+
+      {/* VIỆC PHẢI LÀM, viết theo vai người đang đọc — cùng câu chữ và cùng màu
+          nhấn với thẻ ngoài danh sách. */}
+      <Text style={[styles.heroStage, stageNeedsAction && { color: c.amber }]}>{stageText}</Text>
 
       <View style={styles.heroDisaster}>
         <Text style={styles.heroIcon}>{disaster.icon}</Text>
         <Text style={styles.heroDisasterName}>{disaster.label}</Text>
       </View>
-      {mission.location ? <Text style={styles.heroLocation}>📍 {mission.location}</Text> : null}
+      {place ? <Text style={styles.heroLocation}>📍 {place}</Text> : null}
 
       <View style={styles.heroPeopleRow}>
         <Text style={styles.heroPeopleNumber}>{mission.affectedPeople}</Text>
@@ -583,9 +1136,24 @@ function Fact({ label, value }: { label: string; value: string }) {
   );
 }
 
-function FieldUpdatePanel({
+/**
+ * Ô BÁO KẾT QUẢ ở cuối màn nhiệm vụ — bước cuối của người đi giao.
+ *
+ * Cả lời kể lẫn ảnh đều để trống được. Người vừa lội nước về có thể chẳng còn gì
+ * đáng kể ngoài "đã giao xong"; bắt nhập cho đủ ô chỉ đẻ ra những dòng ghi chú
+ * vô nghĩa, còn thứ thật sự cần ghi nhận là nhiệm vụ đã đóng. Vì vậy nút xác
+ * nhận KHÔNG BAO GIỜ bị khoá vì ô trống — nó chỉ khoá lúc đang gửi.
+ *
+ * Chỉ có một đường ra: đã hoàn thành. Chưa xong thì người ta còn ngoài đường,
+ * không mở màn này ra để báo dở dang.
+ */
+function DeliveryReportPanel({
   text,
-  onChange,
+  onChangeText,
+  photos,
+  onAddPhoto,
+  onPickPhoto,
+  onRemovePhoto,
   onVoice,
   onSubmit,
   voiceAvailable,
@@ -594,7 +1162,11 @@ function FieldUpdatePanel({
   submitting,
 }: {
   text: string;
-  onChange: (text: string) => void;
+  onChangeText: (text: string) => void;
+  photos: EvidencePhoto[];
+  onAddPhoto: () => void;
+  onPickPhoto: () => void;
+  onRemovePhoto: (id: string) => void;
   onVoice: () => void;
   onSubmit: () => void;
   voiceAvailable: boolean;
@@ -602,53 +1174,536 @@ function FieldUpdatePanel({
   voiceBusy: boolean;
   submitting: boolean;
 }) {
+  const full = photos.length >= MAX_EVIDENCE_PHOTOS;
   return (
-    <View style={[styles.reasonBox, { marginTop: 16 }]}>
-      <Text style={styles.reasonTitle}>Trợ lý hiện trường</Text>
+    <View style={local.reportBox}>
+      <Text style={styles.reasonTitle}>Báo cáo kết quả</Text>
       <Text style={[styles.emptyText, { textAlign: "left", marginBottom: 8 }]}>
-        Gõ hoặc nói, xem lại nội dung rồi xác nhận gửi. Không gửi audio thô hoặc vị trí GPS.
+        Kể lại kết quả tại điểm giao và chụp ảnh làm bằng chứng. Cả hai đều không bắt buộc — không
+        có gì để ghi thì cứ bấm xác nhận.
       </Text>
       <TextInput
         style={styles.reasonInput}
         value={text}
-        onChangeText={onChange}
+        onChangeText={onChangeText}
         multiline
-        placeholder="Ví dụ: đường vào thôn bị chắn, cần xác minh tuyến thay thế"
+        placeholder="Ví dụ: đã giao đủ cho 100 người tại nhà văn hoá thôn, có trưởng thôn ký nhận"
         placeholderTextColor={c.muted}
-        accessibilityLabel="Nội dung cập nhật hiện trường"
+        accessibilityLabel="Kết quả thực hiện nhiệm vụ"
       />
+
+      <View style={local.photoHeader}>
+        <Text style={local.photoTitle}>
+          Ảnh bằng chứng ({photos.length}/{MAX_EVIDENCE_PHOTOS})
+        </Text>
+        <View style={local.photoActions}>
+          <Pressable
+            onPress={onAddPhoto}
+            disabled={full || submitting}
+            accessibilityRole="button"
+            accessibilityLabel="Chụp ảnh bằng chứng"
+            style={[local.photoAdd, (full || submitting) && local.disabled]}
+          >
+            <MaterialCommunityIcons name="camera-plus-outline" size={16} color={c.primary} />
+            <Text style={local.photoAddText}>{full ? "Đã đủ" : "Chụp ảnh"}</Text>
+          </Pressable>
+          {/* Ảnh đã có sẵn trong máy: nhiều người chụp lúc bàn giao rồi mới mở
+              app ra báo khi về tới chỗ có sóng. */}
+          <Pressable
+            onPress={onPickPhoto}
+            disabled={full || submitting}
+            accessibilityRole="button"
+            accessibilityLabel="Chọn ảnh bằng chứng từ thư viện"
+            style={[local.photoAdd, (full || submitting) && local.disabled]}
+          >
+            <MaterialCommunityIcons name="image-multiple-outline" size={16} color={c.primary} />
+            <Text style={local.photoAddText}>Thư viện</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {photos.length > 0 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={local.photoStrip}>
+          {photos.map((photo) => (
+            <View key={photo.id} style={local.thumbWrap}>
+              <Image
+                source={{ uri: `data:image/jpeg;base64,${photo.dataBase64}` }}
+                style={local.thumb}
+                accessibilityLabel="Ảnh bằng chứng đã chụp"
+              />
+              {/* Bỏ được từng tấm: ảnh chụp vội ngoài hiện trường hay ra một tấm
+                  nhoè hoặc chụp nhầm mặt đất, mà gửi rồi thì không rút lại được. */}
+              <Pressable
+                onPress={() => onRemovePhoto(photo.id)}
+                disabled={submitting}
+                accessibilityRole="button"
+                accessibilityLabel="Bỏ ảnh này"
+                style={local.thumbRemove}
+              >
+                <MaterialCommunityIcons name="close" size={14} color="#FFFFFF" />
+              </Pressable>
+            </View>
+          ))}
+        </ScrollView>
+      ) : null}
+
+      <Text style={local.summary}>{deliveryReportSummary(text, photos.length)}</Text>
+
       <View style={styles.actionRow}>
         {voiceAvailable ? (
           <Pressable
-            style={[styles.btnReject, (voiceBusy || submitting) && { opacity: 0.6 }]}
+            style={[styles.btnReject, (voiceBusy || submitting) && local.disabled]}
             onPress={onVoice}
             disabled={voiceBusy || submitting}
             accessibilityRole="button"
             accessibilityLabel={
-              recording ? "Dừng ghi âm và chuyển thành chữ" : "Ghi âm cập nhật hiện trường"
+              recording ? "Dừng ghi âm và chuyển thành chữ" : "Đọc kết quả bằng giọng nói"
             }
           >
             <Text style={styles.btnRejectText}>
-              {voiceBusy ? "Đang nhận dạng…" : recording ? "Dừng ghi âm" : "Ghi âm"}
+              {voiceBusy ? "Đang nhận dạng…" : recording ? "Dừng ghi âm" : "Đọc kết quả"}
             </Text>
           </Pressable>
         ) : null}
         <Pressable
-          style={[styles.btnAccept, (submitting || text.trim().length === 0) && { opacity: 0.6 }]}
+          style={[styles.btnAccept, submitting && local.disabled]}
           onPress={onSubmit}
-          disabled={submitting || text.trim().length === 0}
+          disabled={submitting}
           accessibilityRole="button"
-          accessibilityLabel="Xác nhận gửi cập nhật hiện trường"
+          accessibilityLabel="Xác nhận đã hoàn thành nhiệm vụ"
         >
-          <Text style={styles.btnAcceptText}>{submitting ? "Đang gửi…" : "Xác nhận gửi"}</Text>
+          <Text style={styles.btnAcceptText}>
+            {submitting ? "Đang gửi…" : "Xác nhận đã hoàn thành"}
+          </Text>
         </Pressable>
       </View>
     </View>
   );
 }
 
-function fieldRequestId() {
-  return `field-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+/**
+ * Biên nhận của lần báo hoàn thành — thứ duy nhất còn mở sau khi nhiệm vụ đóng.
+ *
+ * Gửi xong rồi thì câu hỏi còn lại chỉ là "mình đã gửi đi những gì": lời kể nào,
+ * mấy tấm ảnh, ảnh chụp cái gì. Trước đây màn hình chỉ nói "đã gửi kèm 1 ảnh —
+ * xem trên máy điều phối", tức là người vừa gửi không xem lại được chính thứ
+ * mình gửi, mà đó lại là bằng chứng họ phải chịu trách nhiệm.
+ *
+ * Ảnh KHÔNG tải sẵn. Mỗi tấm vài trăm KB, và người mở lại báo cáo thường vẫn
+ * đứng đúng chỗ sóng yếu đã chụp nó — cũng chính là lý do máy chủ để ảnh ở một
+ * đường riêng thay vì nhét vào JSON nhiệm vụ. Bấm xem thì mới tải.
+ */
+function CompletedReportPanel({ token, mission }: { token: string; mission: MissionDetail }) {
+  // Giữ nguyên tham chiếu qua các lần vẽ lại: `?? []` sinh mảng mới mỗi lần, mà
+  // mảng đó nằm trong phụ thuộc của hàm tải ảnh bên dưới.
+  const photos = useMemo(() => mission.deliveryPhotos ?? [], [mission.deliveryPhotos]);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [uris, setUris] = useState<Record<string, string>>({});
+  const [loadingPhotos, setLoadingPhotos] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<MissionDeliveryPhoto | null>(null);
+  const missionId = mission.id;
+
+  const loadPhotos = useCallback(async () => {
+    setGalleryOpen(true);
+    setPhotoError(null);
+    setLoadingPhotos(true);
+    try {
+      // Tải song song: nhiều nhất sáu tấm, chờ lần lượt thì tấm cuối về sau cả
+      // phút trên 3G. Một tấm hỏng làm cả mẻ báo lỗi, nên có nút thử lại bên dưới.
+      const loaded = await Promise.all(
+        photos.map(
+          async (photo) =>
+            [photo.id, await fetchMissionDeliveryPhoto(token, missionId, photo.id)] as const,
+        ),
+      );
+      setUris(Object.fromEntries(loaded));
+    } catch (e) {
+      setPhotoError(e instanceof Error ? e.message : "Không tải được ảnh bằng chứng");
+    } finally {
+      setLoadingPhotos(false);
+    }
+  }, [photos, token, missionId]);
+
+  return (
+    <View style={local.doneBox}>
+      <View style={local.doneHead}>
+        <MaterialCommunityIcons name="check-decagram" size={20} color={c.green} />
+        <Text style={local.doneTitle}>Đã gửi báo cáo hoàn thành</Text>
+      </View>
+      <Text style={local.doneOutcome}>
+        Kết quả: {deliveryOutcomeLabel(mission.deliveryOutcome)}
+      </Text>
+
+      <Text style={local.doneLabel}>Lời kể đã gửi</Text>
+      {mission.deliveryNote?.trim() ? (
+        <Text style={local.doneNote}>{mission.deliveryNote}</Text>
+      ) : (
+        /* Nói rõ "không gửi gì" thay vì để trống: ô trống đọc ra thành "chưa tải
+           xong", và người ta sẽ ngồi chờ một thứ không bao giờ tới. */
+        <Text style={local.doneEmpty}>Không kèm lời kể nào.</Text>
+      )}
+
+      <Text style={local.doneLabel}>Ảnh bằng chứng ({photos.length})</Text>
+      {photos.length === 0 ? (
+        <Text style={local.doneEmpty}>Không kèm ảnh nào.</Text>
+      ) : !galleryOpen ? (
+        <Pressable
+          onPress={() => void loadPhotos()}
+          accessibilityRole="button"
+          accessibilityLabel={`Xem ${photos.length} ảnh bằng chứng đã gửi`}
+          style={local.photoAdd}
+        >
+          <MaterialCommunityIcons name="image-multiple-outline" size={16} color={c.primary} />
+          <Text style={local.photoAddText}>
+            Xem {photos.length} ảnh ·{" "}
+            {formatByteSize(photos.reduce((sum, p) => sum + p.byteSize, 0))}
+          </Text>
+        </Pressable>
+      ) : (
+        <>
+          {loadingPhotos ? (
+            <View style={local.photoLoading}>
+              <ActivityIndicator color={c.primary} />
+              <Text style={local.doneEmpty}>Đang tải ảnh…</Text>
+            </View>
+          ) : null}
+          {photoError ? (
+            <View>
+              <Text style={styles.errorText}>{photoError}</Text>
+              <Pressable onPress={() => void loadPhotos()} accessibilityRole="button">
+                <Text style={styles.linkText}>Thử lại</Text>
+              </Pressable>
+            </View>
+          ) : null}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={local.photoStrip}>
+            {photos.map((photo) => {
+              const uri = uris[photo.id];
+              return (
+                <Pressable
+                  key={photo.id}
+                  onPress={() => (uri ? setViewing(photo) : undefined)}
+                  disabled={!uri}
+                  accessibilityRole="imagebutton"
+                  accessibilityLabel="Xem to ảnh bằng chứng đã gửi"
+                  style={local.thumbWrap}
+                >
+                  {uri ? (
+                    <Image source={{ uri }} style={local.thumb} />
+                  ) : (
+                    <View style={[local.thumb, local.thumbPending]} />
+                  )}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </>
+      )}
+
+      {/* Xem to trên nền tối: ảnh hiện trường hay chụp trong mưa, thu nhỏ bằng
+          con tem thì không đọc nổi biển hiệu hay số lượng hàng trong khung. */}
+      <Modal
+        visible={viewing !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setViewing(null)}
+      >
+        <Pressable
+          style={local.viewerBackdrop}
+          onPress={() => setViewing(null)}
+          accessibilityRole="button"
+          accessibilityLabel="Đóng ảnh"
+        >
+          {viewing && uris[viewing.id] ? (
+            <Image
+              source={{ uri: uris[viewing.id] }}
+              style={local.viewerImage}
+              resizeMode="contain"
+              accessibilityLabel="Ảnh bằng chứng đã gửi"
+            />
+          ) : null}
+          <Text style={local.viewerHint}>Chạm để đóng</Text>
+        </Pressable>
+      </Modal>
+    </View>
+  );
+}
+
+/** Dung lượng cho người đang đếm dung lượng 3G, không phải cho máy. */
+function formatByteSize(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+/**
+ * Máy ảnh chụp bằng chứng tại chỗ.
+ *
+ * Chụp thẳng trong ứng dụng chứ không chọn từ thư viện: bằng chứng giao hàng
+ * phải là ảnh của chính chuyến đi này. Ảnh cũng đi thẳng từ máy ảnh vào lượt
+ * gửi, không lưu lại trên máy — điện thoại công vụ hay được dùng chung.
+ */
+function EvidenceCamera({
+  open,
+  onClose,
+  onCaptured,
+  onError,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCaptured: (dataBase64: string) => void;
+  onError: (message: string) => void;
+}) {
+  const [permission, requestPermission] = useCameraPermissions();
+  const [busy, setBusy] = useState(false);
+  const [pictureSize, setPictureSize] = useState<string | undefined>(undefined);
+  const cameraRef = useRef<CameraHandle | null>(null);
+
+  /**
+   * Hỏi máy xem chụp được những cỡ nào rồi chọn cỡ vừa đủ.
+   *
+   * Chạy sau khi máy ảnh sẵn sàng, vì trước đó danh sách cỡ chưa có. Hỏi không
+   * được thì bỏ qua — giữ mặc định của máy vẫn chụp được, chỉ nặng hơn.
+   */
+  async function choosePictureSize() {
+    try {
+      const sizes = await cameraRef.current?.getAvailablePictureSizesAsync();
+      if (sizes) setPictureSize(pickCaptureSize(sizes));
+    } catch {
+      // Máy không trả lời được thì giữ mặc định; đây không phải lỗi đáng báo.
+    }
+  }
+
+  async function capture() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      // quality 0.5 trên cỡ ảnh đã chọn ở trên: đủ đọc biển hiệu và mặt hàng, mà
+      // vẫn gửi nổi qua sóng 3G. Máy chủ còn nén lại lần nữa về cạnh 1600px, nên
+      // chụp to hơn mức này không thêm được chi tiết nào vào tấm ảnh cuối cùng.
+      const shot = await cameraRef.current?.takePictureAsync({ base64: true, quality: 0.5 });
+      if (!shot?.base64) throw new Error("Máy ảnh không trả về ảnh, hãy thử lại.");
+      onCaptured(shot.base64);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Không chụp được ảnh");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!open) return null;
+  return (
+    <Modal animationType="slide" onRequestClose={onClose}>
+      <View style={local.camera}>
+        {!permission ? (
+          <ActivityIndicator color={c.amber} size="large" />
+        ) : !permission.granted ? (
+          <View style={styles.center}>
+            <Text style={local.cameraTitle}>Cần quyền máy ảnh để chụp bằng chứng</Text>
+            <Pressable
+              onPress={() => void requestPermission()}
+              accessibilityRole="button"
+              style={local.cameraPrimary}
+            >
+              <Text style={local.cameraPrimaryText}>Cho phép máy ảnh</Text>
+            </Pressable>
+            <Pressable onPress={onClose} accessibilityRole="button" style={local.cameraSecondary}>
+              <Text style={local.cameraSecondaryText}>Đóng</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <>
+            <CompatibleCameraView
+              ref={cameraRef}
+              style={StyleSheet.absoluteFill}
+              facing="back"
+              pictureSize={pictureSize}
+              onCameraReady={() => void choosePictureSize()}
+            />
+            <View style={local.cameraOverlay}>
+              <Text style={local.cameraHint}>Chụp hàng đã giao và nơi giao</Text>
+              <Pressable
+                onPress={() => void capture()}
+                disabled={busy}
+                accessibilityRole="button"
+                accessibilityLabel="Chụp"
+                style={[local.shutter, busy && local.disabled]}
+              >
+                <MaterialCommunityIcons name="camera" size={28} color="#0f172a" />
+              </Pressable>
+              <Pressable onPress={onClose} accessibilityRole="button" style={local.cameraSecondary}>
+                <Text style={local.cameraSecondaryText}>Đóng</Text>
+              </Pressable>
+            </View>
+          </>
+        )}
+      </View>
+    </Modal>
+  );
+}
+
+/**
+ * Lộ trình lấy vật tư của lực lượng hiện trường: kho nào, xa bao nhiêu, mất bao
+ * lâu, lấy những món gì, và kho đã soạn xong chưa.
+ *
+ * Kho GẦN ĐIỂM NẠN xếp trước, đánh số 1, 2, 3 — đọc từ trên xuống là đúng thứ tự
+ * nên đi. Không có nút bấm nào ở đây: người đi lấy hàng chỉ xem rồi tự tới kho,
+ * còn việc ký xuất là của người giữ kho bấm trên máy của họ.
+ */
+function PickupPlanSection({ stops, loading }: { stops: PickupStop[]; loading: boolean }) {
+  if (loading) {
+    return (
+      <View style={{ marginTop: 18 }}>
+        <Text style={styles.sectionTitle}>Điểm lấy vật tư</Text>
+        <View style={styles.skeleton} />
+        <View style={styles.skeleton} />
+      </View>
+    );
+  }
+
+  if (stops.length === 0) {
+    return (
+      <View style={{ marginTop: 18 }}>
+        <Text style={styles.sectionTitle}>Điểm lấy vật tư</Text>
+        <Text style={[styles.emptyText, { textAlign: "left" }]}>
+          Phương án chưa phân bổ vật tư về kho nào. Chờ cơ quan điều phối phát hành, hoặc liên hệ
+          trực tiếp nếu đã nhận lệnh đi.
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ marginTop: 18 }}>
+      <Text style={styles.sectionTitle}>Điểm lấy vật tư ({stops.length} kho)</Text>
+      <Text style={[styles.emptyText, { textAlign: "left", marginBottom: 10 }]}>
+        Kho gần điểm gặp nạn xếp trước. Tự di chuyển tới kho để nhận hàng; người giữ kho bấm xác
+        nhận xuất kho sau khi bàn giao.
+      </Text>
+      {stops.map((stop, index) => (
+        <PickupStopCard key={stop.warehouseId} stop={stop} order={index + 1} />
+      ))}
+    </View>
+  );
+}
+
+function PickupStopCard({ stop, order }: { stop: PickupStop; order: number }) {
+  const state = pickupStopStateLabel(stop);
+  const tone = state.tone === "done" ? c.green : state.tone === "ready" ? c.amber : c.muted;
+
+  return (
+    <View
+      style={{
+        backgroundColor: c.surface,
+        borderWidth: 1,
+        borderColor: state.tone === "waiting" ? c.border : tone,
+        borderRadius: 12,
+        padding: 14,
+        marginBottom: 10,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+        {/* Số thứ tự đi: kho gần nhất là 1. Nhìn con số là biết ghé đâu trước,
+            không phải so từng dòng quãng đường với nhau. */}
+        <View
+          style={{
+            width: 26,
+            height: 26,
+            borderRadius: 13,
+            backgroundColor: stop.kind === "HAMLET" ? c.green : c.primary,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "800" }}>{order}</Text>
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ color: c.text, fontSize: 15, fontWeight: "800" }}>{stop.name}</Text>
+          <Text style={{ color: c.muted, fontSize: 12, marginTop: 3 }}>
+            {stop.kind === "HAMLET"
+              ? "Kho thôn"
+              : stop.kind === "CENTRAL"
+                ? "Kho trung tâm"
+                : "Kho trong xã"}
+          </Text>
+        </View>
+      </View>
+
+      <View
+        style={{
+          flexDirection: "row",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: 8,
+          marginTop: 10,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 5,
+            backgroundColor: c.surfaceAlt,
+            borderRadius: 8,
+            paddingHorizontal: 9,
+            paddingVertical: 6,
+          }}
+        >
+          <MaterialCommunityIcons name="map-marker-distance" size={14} color={c.text} />
+          <Text style={{ color: c.text, fontSize: 12, fontWeight: "700" }}>
+            {formatTravel(stop.distanceKm, stop.etaMinutes)}
+          </Text>
+        </View>
+        <View
+          style={{
+            borderRadius: 8,
+            paddingHorizontal: 9,
+            paddingVertical: 6,
+            backgroundColor: state.tone === "waiting" ? c.surfaceAlt : `${tone}1A`,
+            borderWidth: 1,
+            borderColor: state.tone === "waiting" ? c.border : tone,
+          }}
+        >
+          <Text style={{ color: tone, fontSize: 11, fontWeight: "800" }}>{state.label}</Text>
+        </View>
+      </View>
+
+      <View style={{ marginTop: 10, gap: 8 }}>
+        {stop.items.map((item) => {
+          const meta = supplyOf(item.sku, item.itemName);
+          return (
+            <View
+              key={item.sku}
+              style={{ flexDirection: "row", alignItems: "center", gap: 10, minWidth: 0 }}
+            >
+              <View
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 8,
+                  backgroundColor: meta.tint,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text style={{ fontSize: 15 }}>{meta.icon}</Text>
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ color: c.text, fontSize: 13, fontWeight: "700" }} numberOfLines={2}>
+                  {item.itemName}
+                </Text>
+                <Text style={{ color: c.muted, fontSize: 11, marginTop: 2 }}>
+                  {pickupItemStatusLabel(item.status)}
+                </Text>
+              </View>
+              <Text style={{ color: c.text, fontSize: 14, fontWeight: "800", flexShrink: 0 }}>
+                {item.quantity} {item.unit}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
 }
 
 /** Danh sách vật tư dạng thẻ trực quan + tóm tắt "đủ / thiếu" ở đầu mục. */
@@ -736,3 +1791,136 @@ function SupplyCard({ req }: { req: MissionDetail["requirements"][number] }) {
     </View>
   );
 }
+
+const local = StyleSheet.create({
+  doneBox: {
+    backgroundColor: "rgba(21,128,61,0.08)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.green,
+    padding: 14,
+    marginBottom: 12,
+  },
+  doneHead: { flexDirection: "row", alignItems: "center", gap: 8 },
+  doneTitle: { color: c.green, fontSize: 15, fontWeight: "800" },
+  doneOutcome: { color: c.text, fontSize: 14, fontWeight: "700", marginTop: 6 },
+  doneLabel: {
+    color: c.muted,
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  doneNote: { color: c.text, fontSize: 14, lineHeight: 20 },
+  doneEmpty: { color: c.muted, fontSize: 13, fontStyle: "italic" },
+  photoLoading: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
+  thumbPending: { borderWidth: 1, borderColor: c.border },
+  viewerBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.92)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 12,
+    gap: 12,
+  },
+  viewerImage: { width: "100%", height: "82%" },
+  viewerHint: { color: "#FFFFFF", fontSize: 13, fontWeight: "700" },
+  detailsToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 10,
+    paddingVertical: 12,
+    marginBottom: 4,
+  },
+  detailsToggleText: { color: c.primary, fontSize: 14, fontWeight: "700" },
+  reportBox: {
+    marginTop: 20,
+    backgroundColor: c.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.green,
+    padding: 14,
+  },
+  photoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  photoTitle: { color: c.text, fontSize: 13, fontWeight: "700" },
+  photoActions: { flexDirection: "row", gap: 8 },
+  photoAdd: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderColor: c.primary,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  photoAddText: { color: c.primary, fontSize: 13, fontWeight: "700" },
+  photoStrip: { marginBottom: 4 },
+  thumbWrap: { marginRight: 8 },
+  thumb: { width: 72, height: 72, borderRadius: 8, backgroundColor: c.surfaceAlt },
+  thumbRemove: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: c.red,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  summary: { color: c.muted, fontSize: 12, marginTop: 8 },
+  disabled: { opacity: 0.6 },
+  camera: { flex: 1, backgroundColor: "#000000" },
+  // Nền màn máy ảnh là đen tuyền, nên chữ ở nhánh xin quyền phải là chữ sáng.
+  cameraTitle: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  cameraOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "flex-end",
+    alignItems: "center",
+    paddingBottom: 36,
+    gap: 14,
+  },
+  cameraHint: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
+    backgroundColor: "rgba(15,23,42,0.55)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  shutter: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cameraPrimary: {
+    backgroundColor: c.amber,
+    borderRadius: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  cameraPrimaryText: { color: "#0f172a", fontSize: 15, fontWeight: "800" },
+  cameraSecondary: { paddingHorizontal: 18, paddingVertical: 10 },
+  cameraSecondaryText: { color: "#FFFFFF", fontSize: 14, fontWeight: "700" },
+});
