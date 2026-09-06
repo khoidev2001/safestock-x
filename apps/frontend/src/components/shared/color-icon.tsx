@@ -15,11 +15,13 @@ import {
   Dashboard,
   Delete,
   Down,
+  Earth,
   Edit,
   Exchange,
   FileExcel,
   FileSearch,
   FileText,
+  Fire,
   FullScreenOne,
   HeavyRain,
   Help,
@@ -31,7 +33,9 @@ import {
   Logout,
   Magic,
   MapDraw,
+  MapTwo,
   Message,
+  Mountain,
   OffScreenOne,
   PeopleSafe,
   Peoples,
@@ -49,6 +53,7 @@ import {
   Strongbox,
   Target,
   Thermometer,
+  Thunderstorm,
   Time,
   Transfer,
   Trend,
@@ -57,6 +62,8 @@ import {
   Upload,
   User,
   VoiceOne,
+  WaterLevel,
+  WaterNo,
 } from "@icon-park/react";
 import type { ComponentType } from "react";
 
@@ -75,6 +82,13 @@ const icons = {
   expand: FullScreenOne,
   help: Help,
   incident: Alarm,
+  // Bốn loại thiên tai có hình riêng: thẻ thông báo phải nhận ra được là việc gì
+  // trước khi người trực kịp đọc chữ.
+  flood: WaterLevel,
+  storm: Thunderstorm,
+  landslide: Mountain,
+  fire: Fire,
+  isolation: WaterNo,
   insights: Trend,
   inventory: Box,
   key: Key,
@@ -119,6 +133,9 @@ const icons = {
   wifiOff: CloseWifi,
   workflow: Clipboard,
   magic: Magic,
+  // Đổi nền bản đồ: quả đất = ảnh vệ tinh, bản đồ = gói tile offline.
+  satellite: Earth,
+  mapFlat: MapTwo,
   microphone: VoiceOne,
 } satisfies Record<string, IconParkComponent>;
 

@@ -11,7 +11,7 @@
     "ios": "expo run:ios",
     "android:keystore": "node scripts/generate-android-keystore.mjs",
     "android:release": "node scripts/build-android-release.mjs",
-    "test:state": "tsc --target ES2021 --module commonjs --moduleResolution node --esModuleInterop --skipLibCheck --outDir .expo/state-test session-state.ts offline-cache-state.ts dashboard-state.ts inventory-state.ts mission-state.ts audio-platform-state.ts role-labels.ts __tests__/mobile-state.test.ts && node --test .expo/state-test/__tests__/mobile-state.test.js",
+    "test:state": "tsc --target ES2021 --module commonjs --moduleResolution node --esModuleInterop --skipLibCheck --outDir .expo/state-test session-state.ts offline-cache-state.ts dashboard-state.ts inventory-state.ts mission-state.ts audio-platform-state.ts notification-feed-state.ts role-labels.ts __tests__/mobile-state.test.ts && node --test .expo/state-test/__tests__/mobile-state.test.js",
     "test:resolution": "node --test __tests__/dependency-resolution.test.cjs",
     "lint": "cross-env ESLINT_USE_FLAT_CONFIG=false expo lint",
     "lint:fix": "cross-env ESLINT_USE_FLAT_CONFIG=false expo lint -- --fix"
@@ -19,11 +19,13 @@
   "dependencies": {
     "@babel/runtime": "^7.25.0",
     "@expo/metro-runtime": "~4.0.1",
+    "@expo/vector-icons": "^14.0.4",
     "@react-native-async-storage/async-storage": "1.23.1",
     "@react-native-community/netinfo": "11.4.1",
     "@safestock/shared-types": "workspace:*",
     "expo": "~52.0.0",
     "expo-asset": "~11.0.5",
+    "expo-av": "~15.0.2",
     "expo-build-properties": "~0.13.3",
     "expo-camera": "~16.0.18",
     "expo-secure-store": "~14.0.1",
@@ -32,6 +34,7 @@
     "react-dom": "18.3.1",
     "react-native": "0.76.9",
     "react-native-web": "~0.19.13",
+    "react-native-webview": "13.12.5",
     "socket.io-client": "^4.8.0"
   },
   "devDependencies": {

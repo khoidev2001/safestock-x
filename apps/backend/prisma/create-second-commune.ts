@@ -15,7 +15,7 @@ import * as bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 const TEN_XA = "Xuân Thọ";
-const EMAIL = "admin.xuantho@ungphonhanh.life";
+const EMAIL = "admin.xuantho";
 const MAT_KHAU = "admin123@";
 
 async function main() {

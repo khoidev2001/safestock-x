@@ -1,7 +1,9 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { incidentTypeLabel } from "@safestock/shared-types";
 import { ColorIcon } from "@/components/shared/color-icon";
+import { incidentIconName } from "@/lib/incident-visuals";
 import { useEffect, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import { BASE } from "@/lib/api";
@@ -68,7 +70,9 @@ export function NotificationBell({
         className="relative inline-flex h-9 w-9 items-center justify-center rounded-md border bg-[var(--surface)] transition hover:bg-[var(--surface-2)] active:translate-y-px"
         type="button"
       >
-        <ColorIcon name="notification" size={19} tone="amber" />
+        {/* Còn việc chưa đọc thì chuông đỏ, không chỉ mỗi con số nhỏ ở góc:
+            màu đọc được từ xa hơn một chữ số cỡ 10px. */}
+        <ColorIcon name="notification" size={19} tone={unread > 0 ? "red" : "amber"} />
         {unread > 0 && (
           <span
             className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
@@ -81,10 +85,18 @@ export function NotificationBell({
 
       {open && (
         <>
+          {/* z nhỏ là đủ: hộp này nằm trong header `sticky z-10` nên dù đặt bao
+              nhiêu cũng chỉ được vẽ ở tầng 10 của trang. Thứ từng đè lên nó là
+              lớp control của Leaflet, và chỗ sửa đúng nằm ở khung bản đồ
+              (`isolate` trong incident-map), không phải ở đây. */}
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-30 mt-2 w-80 overflow-hidden rounded-md border bg-[var(--surface)] shadow-lg">
+          <div className="absolute right-0 z-30 mt-2 w-80 overflow-hidden rounded-md border bg-[var(--surface)] shadow-2xl">
             <div className="border-b px-4 py-2.5 text-sm font-semibold">Thông báo</div>
-            <div className="max-h-96 overflow-y-auto">
+            {/* Cao tới 800px để đọc được nhiều thông báo trong một lượt mở, nhưng
+                không vượt quá màn hình: hộp thả xuống từ chuông sát mép trên, nên
+                trên laptop cao 768px thì 800px cứng làm phần cuối danh sách rơi ra
+                ngoài màn hình mà không cuộn tới được. */}
+            <div className="max-h-[min(800px,75vh)] overflow-y-auto">
               {items.length === 0 ? (
                 <p className="px-4 py-6 text-center text-sm text-[var(--text-muted)]">
                   Chưa có thông báo.
@@ -98,7 +110,13 @@ export function NotificationBell({
                       onClick={() => openMission(n.missionId as string, n.fieldUpdateId)}
                       className="block w-full border-b px-4 py-3 text-left transition last:border-0 hover:bg-[var(--surface-2)]"
                     >
-                      <p className="text-sm font-medium">{n.title}</p>
+                      <p className="flex items-center gap-1.5 text-sm font-medium">
+                        {n.incidentType ? (
+                          <ColorIcon name={incidentIconName(n.incidentType)} size={16} tone="red" />
+                        ) : null}
+                        {n.title}
+                      </p>
+                      <NotificationFacts notification={n} />
                       <p className="mt-0.5 line-clamp-3 text-xs text-[var(--text-muted)]">
                         {n.body}
                       </p>
@@ -122,5 +140,39 @@ export function NotificationBell({
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Dòng dữ kiện gọn của một thông báo: thiên tai gì, bao nhiêu người, ở đâu.
+ *
+ * Cùng ba thứ với thẻ thông báo nổi, để người đọc lại trong chuông không phải
+ * dịch nghĩa lần nữa từ một cách trình bày khác.
+ */
+function NotificationFacts({
+  notification,
+}: {
+  notification: {
+    incidentType?: string | null;
+    affectedPeople?: number | null;
+    locationName?: string | null;
+  };
+}) {
+  const { incidentType, affectedPeople, locationName } = notification;
+  if (!incidentType && !affectedPeople && !locationName) return null;
+  return (
+    <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs">
+      {incidentType ? (
+        <span className="font-semibold" style={{ color: "var(--color-critical)" }}>
+          {incidentTypeLabel(incidentType)}
+        </span>
+      ) : null}
+      {affectedPeople ? (
+        <span>
+          <b>{affectedPeople.toLocaleString("vi")}</b> người
+        </span>
+      ) : null}
+      {locationName ? <b>{locationName}</b> : null}
+    </p>
   );
 }

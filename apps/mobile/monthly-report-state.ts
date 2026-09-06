@@ -85,3 +85,45 @@ export function finalizeMonthlyReportDraft(draft: MonthlyReportDraftRow[]): Mont
     return { ...row, quantity };
   });
 }
+
+/** Trạng thái báo cáo tháng, đúng bằng enum của máy chủ. */
+export type MonthlyReportStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+export interface SubmittedReportSummary {
+  warehouseId: string;
+  period: string;
+  status: string;
+}
+
+/**
+ * Báo cáo đang CHẶN kỳ này, nếu có.
+ *
+ * Máy chủ từ chối gửi khi kho đã có báo cáo kỳ đó ở trạng thái PENDING hoặc
+ * APPROVED (report.service → createPendingReport). Bị TỪ CHỐI thì được gửi lại —
+ * đó chính là mục đích của việc từ chối.
+ *
+ * Có hàm này ở phía điện thoại để màn hình chặn NGAY TỪ ĐẦU thay vì để người
+ * dùng đếm xong vài chục lô rồi mới nhận lỗi 409. Luật phải khớp từng chữ với
+ * máy chủ: rộng hơn thì khoá nhầm một kỳ hợp lệ, hẹp hơn thì vẫn để họ gõ phí
+ * công. Máy chủ vẫn là nơi quyết định cuối cùng — đây chỉ là lớp báo sớm.
+ */
+export function blockingMonthlyReport<T extends SubmittedReportSummary>(
+  reports: T[],
+  warehouseId: string,
+  period: string,
+): T | null {
+  if (!warehouseId || !period) return null;
+  return (
+    reports.find(
+      (report) =>
+        report.warehouseId === warehouseId &&
+        report.period === period &&
+        (report.status === "PENDING" || report.status === "APPROVED"),
+    ) ?? null
+  );
+}
+
+/** Kỳ báo cáo hợp lệ: đúng dạng YYYY-MM và tháng nằm trong 01–12. */
+export function isValidReportPeriod(period: string): boolean {
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(period.trim());
+}

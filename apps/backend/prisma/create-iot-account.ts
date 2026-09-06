@@ -18,7 +18,7 @@ import * as bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
-const EMAIL = "iot@ungphonhanh.life";
+const EMAIL = "iot";
 const PASSWORD = "iot123456";
 const NAME = "Thiết bị IoT — Giả lập cảm biến";
 

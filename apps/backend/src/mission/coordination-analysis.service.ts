@@ -1,5 +1,9 @@
 import { Injectable } from "@nestjs/common";
-import { incidentTypeLabel, SituationExtraction } from "@safestock/shared-types";
+import {
+  CoordinationFactKey,
+  incidentTypeLabel,
+  SituationExtraction,
+} from "@safestock/shared-types";
 import { AiClientService } from "../ai/ai-client.service";
 import { CoordinationSnapshotService } from "./coordination-snapshot.service";
 import { MissionCoordinationService } from "./mission-coordination.service";
@@ -70,12 +74,99 @@ export class CoordinationAnalysisService {
       extraction = this.fallbackExtraction(sourceId, sourceType, description);
     }
 
-    const computed = await this.snapshots.compute(missionId, extraction, {});
+    const computed = await this.snapshots.compute(
+      missionId,
+      this.groundInForm(mission, extraction, sourceId, sourceType),
+      {},
+    );
     return this.persist(missionId, actorId, scopeWarehouseId, input, computed, {
       extractionSource,
       sourceId,
       sourceType,
     });
+  }
+
+  /** Bốn dữ kiện thuộc quyền của biểu mẫu: AI đọc lời kể, người điều phối mới quyết. */
+  private static readonly FORM_OWNED_KEYS: ReadonlySet<CoordinationFactKey> = new Set([
+    "INCIDENT_TYPE",
+    "AFFECTED_PEOPLE",
+    "DURATION_HOURS",
+    "LOCATION",
+  ]);
+
+  /**
+   * Đặt số liệu biểu mẫu lên trên phần AI bóc ra từ lời kể.
+   *
+   * Trước đây có lời kể là toàn bộ dữ kiện lấy theo lời kể. Cán bộ sửa địa điểm
+   * ứng phó từ Tân An sang Long Bình rồi bấm "Lập bản tham mưu" thì bản tham mưu
+   * vẫn ghi Tân An — vì AI đọc lại đúng câu cũ. Nhìn từ ngoài, ô địa điểm trở
+   * thành ô trang trí: sửa được nhưng không đổi được gì.
+   *
+   * Phân vai đúng phải là: AI chỉ bóc lời kể thành số để ĐIỀN VÀO FORM, còn khi
+   * lập tham mưu thì form là bản gốc. Phần AI đọc thêm được mà form không có
+   * (nguy cơ cô lập, nhóm dễ tổn thương…) vẫn giữ nguyên — đó mới là chỗ nó thêm
+   * giá trị.
+   */
+  private groundInForm(
+    mission: {
+      incidentType: string;
+      affectedPeople: number;
+      durationHours: number;
+      location: string | null;
+    },
+    extraction: SituationExtraction,
+    sourceId: string,
+    sourceType: "USER_REPORT",
+  ): SituationExtraction {
+    const formFacts = this.extractionFromForm(mission, sourceId, sourceType).facts;
+    // Chỉ những khoá form THẬT SỰ có số liệu mới đè. Địa điểm bỏ trống thì giữ
+    // lấy phần AI đọc được, còn hơn là không có gì.
+    const ownedKeys = new Set<CoordinationFactKey>(formFacts.map((fact) => fact.key));
+    const dropped = new Set(
+      extraction.facts.filter((fact) => ownedKeys.has(fact.key)).map((fact) => fact.id),
+    );
+    // Suy luận dựa trên một dữ kiện vừa bị thay thì mất luôn chỗ dựa: giữ lại là
+    // treo một kết luận lên câu chữ mà biểu mẫu đã phủ nhận. Bỏ theo dây chuyền —
+    // và hợp đồng dữ liệu cũng bắt basisFactIds phải trỏ vào dữ kiện còn tồn tại.
+    let facts = extraction.facts.filter((fact) => !dropped.has(fact.id));
+    for (let changed = true; changed; ) {
+      changed = false;
+      facts = facts.filter((fact) => {
+        const orphan =
+          fact.provenance === "AI_INFERENCE" && fact.basisFactIds.some((id) => dropped.has(id));
+        if (orphan) {
+          dropped.add(fact.id);
+          changed = true;
+        }
+        return !orphan;
+      });
+    }
+    // Form đã điền thì không còn là "thiếu dữ liệu", và cũng không còn gì để hỏi.
+    const missingData = extraction.missingData.filter((item) => !ownedKeys.has(item.key));
+    const conflicts = extraction.conflicts
+      .filter((conflict) => !ownedKeys.has(conflict.key))
+      .map((conflict) => ({
+        ...conflict,
+        factIds: conflict.factIds.filter((id) => !dropped.has(id)),
+      }))
+      .filter((conflict) => conflict.factIds.length > 0);
+    const priorityQuestion =
+      extraction.priorityQuestion && !ownedKeys.has(extraction.priorityQuestion.factKey)
+        ? extraction.priorityQuestion
+        : missingData.length > 0
+          ? {
+              factKey: missingData[0].key,
+              question: missingData[0].question,
+              expectedImpact: missingData[0].impact,
+            }
+          : null;
+    return {
+      schemaVersion: extraction.schemaVersion,
+      facts: [...formFacts, ...facts],
+      missingData,
+      conflicts,
+      priorityQuestion,
+    };
   }
 
   /** Lưu snapshot bất biến — dùng chung cho cả đường có lời kể lẫn đường nhập tay. */

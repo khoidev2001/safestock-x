@@ -23,6 +23,8 @@ function makeService(options?: {
   const prisma = {
     warehouse: { findUnique: warehouseFindUnique },
     mission: { findFirst: missionFindFirst },
+    // Danh mục thôn để đọc tên thôn nhắc trong lời kể, gắn vào thẻ thông báo.
+    hamlet: { findMany: jest.fn().mockResolvedValue([{ id: "h-1", name: "Tân An", aliases: [] }]) },
     $transaction: jest.fn(async (fn: (client: typeof tx) => unknown) => fn(tx)),
   };
   const notifications = { pushPersisted: jest.fn() };

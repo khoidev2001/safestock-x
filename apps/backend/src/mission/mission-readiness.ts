@@ -5,6 +5,8 @@ export type MissionReadinessStatus = "READY" | "NEEDS_ACTION" | "NOT_DISPATCHABL
 export interface MissionItemReadiness {
   sku: string;
   itemName: string;
+  /** Đơn vị kho đếm (chai, chiếc, bộ…) — thiếu nó thì "760/760" không rõ là gì. */
+  unit: string;
   required: number;
   allocated: number;
   shortage: number;
@@ -45,6 +47,7 @@ export function assessMissionReadiness(
     return {
       sku: allocation.sku,
       itemName: allocation.itemName,
+      unit: allocation.unit,
       required: allocation.required,
       allocated: allocation.allocated,
       shortage: allocation.shortage,

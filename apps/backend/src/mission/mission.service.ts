@@ -13,7 +13,7 @@ import {
   Prisma,
   UserRole,
 } from "@prisma/client";
-import { FIELD_FORCE_ROLE_LABEL, IncidentType } from "@safestock/shared-types";
+import { FIELD_FORCE_ROLE_LABEL, IncidentType, incidentTypeLabel } from "@safestock/shared-types";
 import { AiClientService } from "../ai/ai-client.service";
 import { LatLng } from "../geo/haversine";
 import { LocalRoutingService } from "../geo/local-routing.service";
@@ -42,6 +42,7 @@ import {
 import { assessMissionReadiness, MissionReadinessAssessment } from "./mission-readiness";
 import { normalizeHamletName } from "../admin/hamlet-normalization";
 import { findHamletInReport } from "./hamlet-in-report";
+import { readReportSignal } from "./report-signal";
 import { buildWarehouseRequestCreates } from "./mission-warehouse-request";
 
 /** Gợi ý mượn kho lân cận cho 1 SKU thiếu. */
@@ -281,6 +282,15 @@ export class MissionService {
     };
     const excerpt =
       input.description.length > 140 ? `${input.description.slice(0, 140)}…` : input.description;
+    // Đọc thẳng lời kể để thẻ thông báo của ADMIN có biểu tượng đúng loại thiên
+    // tai, số người và tên thôn NGAY lúc nhận. Bản ghi nhiệm vụ lúc này vẫn là
+    // chỗ trống (OTHER, 0 người) và cố ý giữ nguyên như vậy: ADMIN vẫn phải bấm
+    // phân tích rồi xác nhận. Đây chỉ là nhãn cho một thẻ báo, không phải số
+    // liệu để tính vật tư.
+    const hamlets = await (this.prisma as unknown as MissionHamletPrisma).hamlet.findMany({
+      where: { organizationId: warehouse.organizationId, communeId: warehouse.communeId },
+    });
+    const tinHieu = readReportSignal(input.description, hamlets);
 
     try {
       const result = await this.prisma.$transaction(async (tx) => {
@@ -309,6 +319,7 @@ export class MissionService {
             missionId: mission.id,
             warehouseId: input.warehouseId,
             organizationId: warehouse.organizationId,
+            ...tinHieu,
           },
         });
         return { mission, notification };
@@ -459,15 +470,25 @@ export class MissionService {
     location: string | null | undefined,
     explicitPoint?: LatLng,
   ): Promise<{ hamletId?: string; name?: string; point?: LatLng }> {
-    // Legacy/manual flow may supply an explicit ADMIN-selected point without a name.
-    // No random or geocoded fallback is ever generated here.
+    // ĐIỂM GHIM THẮNG VĂN BẢN.
+    //
+    // Trưởng thôn đứng tại chỗ và ghim đúng điểm trên ảnh vệ tinh: đó là toạ độ
+    // CHÍNH XÁC của chỗ đang xảy ra sự việc. Tên thôn trong lời kể chỉ dẫn tới toạ
+    // độ điểm ứng phó của cả thôn — thường là nhà văn hoá, cách chỗ ngập thật vài
+    // trăm mét đến vài km. Bản trước ưu tiên tên thôn, nên ghim xong vẫn bị thay
+    // bằng tâm thôn: người báo thấy điểm mình ghim biến mất, và tuyến tính ra là
+    // đường tới nhà văn hoá chứ không tới chỗ cần cứu.
+    //
+    // Không suy ra `hamletId`/`hamletName` từ điểm ghim: bảng thôn chỉ có MỘT toạ
+    // độ mỗi thôn, không có ranh giới, nên "thôn gần nhất" là phỏng đoán. Để trống
+    // và giữ lời kể làm nhãn thì bản ghi nói đúng những gì hệ thống biết chắc.
+    if (explicitPoint) return { point: explicitPoint };
+
+    // Không có điểm ghim thì mới tra tên thôn. Không bịa toạ độ, không geocode.
     if (!location?.trim()) {
-      if (!explicitPoint) {
-        throw new BadRequestException(
-          "Cần xác nhận địa điểm ứng phó bằng thôn đã xác minh hoặc tọa độ trên bản đồ trước khi lập phương án.",
-        );
-      }
-      return { point: explicitPoint };
+      throw new BadRequestException(
+        "Cần xác nhận địa điểm ứng phó bằng thôn đã xác minh hoặc tọa độ trên bản đồ trước khi lập phương án.",
+      );
     }
     const warehouse = await this.prisma.warehouse.findUnique({
       where: { id: warehouseId },
@@ -575,14 +596,24 @@ export class MissionService {
           skipDuplicates: true,
         });
       }
+      // Chép tình huống vào thông báo: thẻ trên web dựa vào đây để chọn biểu
+      // tượng đúng loại thiên tai và in đậm số người, tên thôn. Hai lệnh tạo này
+      // nằm trong transaction nên không đi qua NotificationService — phần tự chép
+      // ở đó không chạm tới, phải truyền tay.
+      const boiCanh = {
+        incidentType: mission.incidentType,
+        affectedPeople: mission.affectedPeople,
+        locationName: mission.hamletName ?? mission.location ?? null,
+      };
       const warehouseNotification = await tx.notification.create({
         data: {
           recipientRole: UserRole.WAREHOUSE,
           kind: NotificationKind.MISSION_ASSIGNED,
           title: "Phương án vật tư mới cần chuẩn bị",
-          body: `${mission.incidentType} — ${mission.affectedPeople} người. Chuẩn bị phần vật tư được phân bổ cho kho.`,
+          body: `${incidentTypeLabel(mission.incidentType)} — ${mission.affectedPeople} người. Chuẩn bị phần vật tư được phân bổ cho kho.`,
           missionId: id,
           organizationId: mission.warehouse.organizationId,
+          ...boiCanh,
         },
       });
       const fieldForceNotification = await tx.notification.create({
@@ -590,9 +621,10 @@ export class MissionService {
           recipientRole: UserRole.RESCUE,
           kind: NotificationKind.MISSION_ASSIGNED,
           title: "Phương án ứng phó mới",
-          body: `${mission.incidentType} — ${mission.affectedPeople} người. Xem tuyến và các điểm lấy vật tư trong phương án.`,
+          body: `${incidentTypeLabel(mission.incidentType)} — ${mission.affectedPeople} người. Xem tuyến và các điểm lấy vật tư trong phương án.`,
           missionId: id,
           organizationId: mission.warehouse.organizationId,
+          ...boiCanh,
         },
       });
       const updated = await tx.mission.findUniqueOrThrow({
@@ -788,7 +820,7 @@ export class MissionService {
       recipientRole: UserRole.RESCUE,
       kind: NotificationKind.MISSION_ASSIGNED,
       title: "Nhiệm vụ đã cập nhật — mời xác nhận lại",
-      body: `${mission.incidentType} — ${mission.affectedPeople} người.${note ? ` Phản hồi: ${note}` : ""}`,
+      body: `${incidentTypeLabel(mission.incidentType)} — ${mission.affectedPeople} người.${note ? ` Phản hồi: ${note}` : ""}`,
       missionId: id,
     });
     return updated;
@@ -1455,6 +1487,35 @@ export class MissionService {
         };
       }),
     );
+  }
+
+  /**
+   * Tuyến từ các kho CÓ CẤP HÀNG tới điểm nạn — không chạy AI, không ghi gì.
+   *
+   * Trước đây tuyến chỉ tồn tại bên trong `actionPlan`, mà `actionPlan` chỉ sinh ra
+   * ở `generateActionPlan` — bước lập bản tham mưu, có gọi LLM viết diễn giải. Hậu
+   * quả trên màn hình điều phối: bấm tính nhu cầu xong, hệ thống đã biết chính xác
+   * kho nào cấp gì, nhưng bản đồ vẫn trắng đường — người dùng thấy các chấm kho rời
+   * rạc và không biết hàng đi đường nào tới chỗ nạn. Muốn thấy đường thì phải chờ
+   * xong cả một lượt gọi LLM, cho một việc thuần hình học.
+   *
+   * Tách ra endpoint riêng chứ không nhét tuyến vào `generatePlan`: tính tuyến gọi
+   * OSRM một lượt cho mỗi kho, để trong đường tạo nhiệm vụ là bắt người dùng chờ
+   * thêm ngay ở bước họ cần nhanh nhất, và mỗi lần sửa số liệu lại chờ lại.
+   *
+   * Trả mảng rỗng (không ném) khi nhiệm vụ chưa có điểm nạn hoặc chưa cấp phát được
+   * gì: bản đồ lúc đó vẫn phải vẽ được các kho, chỉ là chưa có đường nào để vẽ.
+   */
+  async warehouseRoutes(
+    id: string,
+    actorUserId?: string,
+    scopeWarehouseId?: string | null,
+  ): Promise<WarehouseEta[]> {
+    // Đi qua `getMission` để dùng đúng một chỗ kiểm quyền xem nhiệm vụ; tự viết lại
+    // điều kiện ở đây là sớm muộn cũng lệch với chỗ kia.
+    const mission = await this.getMission(id, actorUserId, scopeWarehouseId);
+    if (!mission) throw new NotFoundException("Không tìm thấy nhiệm vụ");
+    return this.warehouseEtas(mission);
   }
 
   /** Toàn bộ kho (tổng + thôn) trong cụm xã, có toạ độ — cho map ghim điểm nạn (FE-K). */

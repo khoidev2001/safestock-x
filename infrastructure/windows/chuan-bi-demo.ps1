@@ -397,7 +397,7 @@ if ($CanhBao.Count -gt 0) {
 
 Write-Host ""
 Write-Host "   Tài khoản:  admin / admin123@              (điều phối xã, cửa sổ thường)" -ForegroundColor DarkGray
-Write-Host "               longchau@ungphonhanh.life / truongthon123   (kho thôn, cửa sổ ẩn danh)" -ForegroundColor DarkGray
+Write-Host "               longchau / truongthon123   (kho thôn, cửa sổ ẩn danh)" -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "   Hai bẫy: gõ tiếng Việt CÓ DẤU khi khai tình huống; nút" -ForegroundColor DarkGray
 Write-Host "   'Lập kế hoạch cứu hộ' mất ~40 giây, bấm rồi nói tiếp." -ForegroundColor DarkGray

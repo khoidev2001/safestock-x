@@ -5,10 +5,11 @@
 | Vai | Tài khoản mẫu | Mật khẩu | Làm gì |
 |---|---|---|---|
 | Quản trị xã | `admin` | `admin123@` | Lập và duyệt phương án, quản lý tài khoản, xem nhật ký |
-| Phụ trách kho | `staff@ungphonhanh.life` | `staff123` | Giữ kho, chuẩn bị vật tư, kiêm báo tình huống của thôn |
-| Lực lượng hiện trường | `rescue@ungphonhanh.life` | `rescue123` | Nhận lệnh, đi giao, báo kết quả, báo tình huống |
+| Phụ trách kho | `staff` | `staff123` | Giữ kho, chuẩn bị vật tư, kiêm báo tình huống của thôn |
+| Lực lượng hiện trường | `rescue` | `rescue123` | Nhận lệnh, đi giao, báo kết quả, báo tình huống |
 
-Tên đăng nhập của quản trị là **`admin`**, không phải địa chỉ email.
+Mọi tài khoản đều đăng nhập bằng **tên đăng nhập trần**, không phải địa chỉ email —
+`admin`, `staff`, `longchau`, không kèm hậu tố tên miền.
 
 Vai "trưởng thôn" riêng đã bị bỏ: người giữ kho thôn kiêm luôn việc báo tình huống
 của thôn mình. Tách hai tài khoản chỉ thêm việc đăng nhập chứ không thêm quyền kiểm
@@ -60,7 +61,7 @@ thanh điều hướng là chưa đủ — người biết địa chỉ vẫn g�
 ```bash
 API=http://localhost:3100/api
 TOKEN=$(curl -s -H 'Content-Type: application/json' \
-  -d '{"email":"rescue@ungphonhanh.life","password":"rescue123"}' \
+  -d '{"email":"rescue","password":"rescue123"}' \
   $API/auth/login | grep -o '"accessToken":"[^"]*' | cut -d'"' -f4)
 
 curl -s -o /dev/null -w "danh sach tai khoan: %{http_code}\n" -H "Authorization: Bearer $TOKEN" $API/admin/users

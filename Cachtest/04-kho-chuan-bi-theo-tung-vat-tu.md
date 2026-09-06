@@ -58,7 +58,7 @@ sách. Muốn đóng nhiệm vụ thì phải báo kết quả giao, kể cả k
 ```bash
 API=http://localhost:3100/api
 STAFF=$(curl -s -H 'Content-Type: application/json' \
-  -d '{"email":"staff@ungphonhanh.life","password":"staff123"}' \
+  -d '{"email":"staff","password":"staff123"}' \
   $API/auth/login | grep -o '"accessToken":"[^"]*' | cut -d'"' -f4)
 
 # xem việc của kho mình

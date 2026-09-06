@@ -70,9 +70,14 @@ function aiExtraction(): SituationExtraction {
 
 function makeService() {
   const missions = {
-    getMission: jest
-      .fn()
-      .mockResolvedValue({ id: "mission-1", reportText: "co kha nang bi co lap" }),
+    getMission: jest.fn().mockResolvedValue({
+      id: "mission-1",
+      reportText: "co kha nang bi co lap",
+      incidentType: "FLOOD",
+      affectedPeople: 260,
+      durationHours: 60,
+      location: "Long Bình",
+    }),
   };
   const ai = { analyzeSituation: jest.fn().mockResolvedValue(aiExtraction()) };
   const snapshots = {
@@ -110,7 +115,14 @@ describe("CoordinationAnalysisService", () => {
     expect(ai.analyzeSituation).toHaveBeenCalledWith(
       expect.objectContaining({ description: "co kha nang bi co lap", sourceId: "mission-1" }),
     );
-    expect(snapshots.compute).toHaveBeenCalledWith("mission-1", aiExtraction(), expect.any(Object));
+    // Dữ kiện AI đọc thêm được vẫn giữ, nhưng bốn khoá của biểu mẫu do biểu mẫu quyết.
+    const extraction = snapshots.compute.mock.calls[0][1] as SituationExtraction;
+    expect(extraction.facts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "F1", key: "ISOLATION_RISK" })]),
+    );
+    expect(extraction.facts.map((fact) => fact.key)).toEqual(
+      expect.arrayContaining(["INCIDENT_TYPE", "AFFECTED_PEOPLE", "DURATION_HOURS", "LOCATION"]),
+    );
     expect(persistence.saveAnalysisSnapshot).toHaveBeenCalledWith(
       "mission-1",
       "admin-1",
@@ -118,6 +130,76 @@ describe("CoordinationAnalysisService", () => {
       expect.objectContaining({ kind: "BASELINE", fingerprint: "sha256:baseline-1" }),
     );
     expect(result.analysis).toEqual(analysis);
+  });
+
+  it("số liệu biểu mẫu đè lên phần AI đọc từ lời kể", async () => {
+    // Trưởng thôn kể "Thôn Tân An ngập", cán bộ đổi địa điểm ứng phó sang Long Bình
+    // rồi mới lập tham mưu. Bản tham mưu phải theo ô đã sửa, không theo câu chữ cũ.
+    const { service, ai, snapshots } = makeService();
+    ai.analyzeSituation.mockResolvedValue({
+      schemaVersion: "situation-extraction.v1",
+      facts: [
+        {
+          id: "AI-LOC",
+          key: "LOCATION",
+          provenance: "REPORTED",
+          value: "Thôn Tân An",
+          qualifier: "EXACT",
+          source: {
+            sourceType: "USER_REPORT",
+            sourceId: "mission-1",
+            excerpt: "Thôn Tân An ngập do triều cường",
+            capturedAt: null,
+          },
+        },
+        {
+          id: "AI-PEOPLE",
+          key: "AFFECTED_PEOPLE",
+          provenance: "REPORTED",
+          value: 260,
+          qualifier: "EXACT",
+          source: {
+            sourceType: "USER_REPORT",
+            sourceId: "mission-1",
+            excerpt: "260 người bị ảnh hưởng",
+            capturedAt: null,
+          },
+        },
+        {
+          id: "AI-ISOLATION",
+          key: "ISOLATION_RISK",
+          provenance: "AI_INFERENCE",
+          value: true,
+          source: null,
+          confidence: 0.6,
+          basisFactIds: ["AI-LOC"],
+          explanation: "Ngập trên diện rộng có thể gây chia cắt",
+        },
+      ],
+      missingData: [
+        { key: "LOCATION", question: "Cần xác minh thôn?", impact: "Cần để tính tuyến." },
+      ],
+      conflicts: [],
+      priorityQuestion: {
+        factKey: "LOCATION",
+        question: "Cần xác minh thôn?",
+        expectedImpact: "Cần để tính tuyến.",
+      },
+    } as SituationExtraction);
+
+    await service.analyze("mission-1", "admin-1", null, { requestId: "analysis-req-0010" });
+
+    const extraction = snapshots.compute.mock.calls[0][1] as SituationExtraction;
+    const location = extraction.facts.filter((fact) => fact.key === "LOCATION");
+    expect(location).toHaveLength(1);
+    expect(location[0].value).toBe("Long Bình");
+    // Dữ kiện AI đọc trùng khoá của biểu mẫu bị thay hẳn, không để hai giá trị chọi nhau.
+    expect(extraction.facts.some((fact) => fact.id === "AI-LOC")).toBe(false);
+    // Suy luận dựa trên dữ kiện vừa bị thay cũng mất chỗ dựa nên phải bỏ theo.
+    expect(extraction.facts.some((fact) => fact.id === "AI-ISOLATION")).toBe(false);
+    // Ô đã điền thì không còn là "thiếu dữ liệu", cũng không còn gì để hỏi lại.
+    expect(extraction.missingData).toEqual([]);
+    expect(extraction.priorityQuestion).toBeNull();
   });
 
   it("keeps the report usable with a deterministic fallback when AI is unavailable", async () => {
@@ -194,12 +276,21 @@ describe("CoordinationAnalysisService", () => {
   it("mọi câu hiển thị đều là tiếng Việt có dấu, không lọt tiếng Anh", async () => {
     const { service, ai, snapshots, missions } = makeService();
     ai.analyzeSituation.mockRejectedValue(new Error("offline"));
-    missions.getMission.mockResolvedValue({ id: "mission-1", reportText: "ngập sâu một mét" });
+    missions.getMission.mockResolvedValue({
+      id: "mission-1",
+      reportText: "ngập sâu một mét",
+      incidentType: "FLOOD",
+      affectedPeople: 30,
+      durationHours: 12,
+      location: "Long Bình",
+    });
     await service.analyze("mission-1", "admin-1", null, { requestId: "analysis-req-0004" });
 
     const shown = snapshots.compute.mock.calls
       .map(([, extraction]) => extraction as SituationExtraction)
       .flatMap((extraction) => [
+        // Trích dẫn của dữ kiện cũng hiện thẳng lên bản tham mưu như câu hỏi.
+        ...extraction.facts.map((fact) => fact.source?.excerpt ?? ""),
         ...extraction.missingData.flatMap((item) => [item.question, item.impact]),
         extraction.priorityQuestion?.question ?? "",
         extraction.priorityQuestion?.expectedImpact ?? "",

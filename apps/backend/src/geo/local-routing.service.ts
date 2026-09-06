@@ -1,6 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { LatLng } from "./haversine";
+import { reliefEtaAssumptions, reliefEtaMinutes, type ReliefEtaAssumptions } from "./relief-eta";
 
 export type LocalRouteStatus = "ROUTED" | "ENGINE_UNAVAILABLE" | "ROUTE_NOT_FOUND" | "TIMEOUT";
 
@@ -19,6 +20,11 @@ export class LocalRoutingService {
   private readonly log = new Logger(LocalRoutingService.name);
   private readonly baseUrl: string | null;
   private readonly graphVersion: string | null;
+  /**
+   * ETA không lấy thẳng `duration` của OSRM: đó là tốc độ xe con chạy thông thoáng.
+   * Xem `relief-eta.ts` để biết vì sao và mô hình thay thế.
+   */
+  private readonly etaAssumptions: ReliefEtaAssumptions;
 
   constructor(config: ConfigService) {
     this.baseUrl = config.get<string>("LOCAL_ROUTING_URL")?.replace(/\/$/, "") || null;
@@ -29,6 +35,7 @@ export class LocalRoutingService {
       !/(unconfigured|placeholder|unknown|replace[-_ ]?me|todo)/i.test(configuredGraphVersion)
         ? configuredGraphVersion
         : null;
+    this.etaAssumptions = reliefEtaAssumptions((key) => config.get(key));
   }
 
   async route(origin: LatLng, destination: LatLng): Promise<LocalRouteResult> {
@@ -60,11 +67,16 @@ export class LocalRoutingService {
       ) {
         return this.failure("ROUTE_NOT_FOUND");
       }
+      const distanceKm =
+        route.distance == null ? null : Math.round((route.distance / 1000) * 10) / 10;
       return {
         status: "ROUTED",
         geometry: { type: "LineString", coordinates: route.geometry.coordinates },
-        distanceKm: route.distance == null ? null : Math.round((route.distance / 1000) * 10) / 10,
-        etaMinutes: route.duration == null ? null : Math.max(1, Math.round(route.duration / 60)),
+        distanceKm,
+        // Cố ý tính từ `distanceKm` đã làm tròn, không từ mét thô: đây đúng là con
+        // số hiện cạnh ETA trên màn hình, nên hai thứ phải khớp nhau khi người dùng
+        // tự nhẩm lại.
+        etaMinutes: reliefEtaMinutes(distanceKm, route.duration ?? null, this.etaAssumptions),
         engine: "local-osrm",
         graphVersion: this.graphVersion,
       };

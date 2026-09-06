@@ -78,6 +78,8 @@ export interface MissionReadinessAssessment {
   items: {
     sku: string;
     itemName: string;
+    /** Đơn vị kho đếm. Bản ghi cũ (trước khi thêm trường) không có. */
+    unit?: string;
     required: number;
     allocated: number;
     shortage: number;
@@ -102,6 +104,17 @@ export interface Mission {
   fulfillment: number;
   // Mô tả thô của trưởng thôn (mobile) khi mission là "hộp thư" báo cáo — web tự điền + phân tích.
   reportText?: string | null;
+  /**
+   * Tình huống đã chốt của nhiệm vụ (nguồn để tính nhu cầu vật tư).
+   *
+   * Ba nhóm dễ tổn thương chỉ nằm ở đây chứ không có cột riêng, nên muốn biết form
+   * đang mở đã lệch khỏi nhiệm vụ hay chưa thì phải đọc trường này.
+   */
+  parsedInput?: {
+    children?: number;
+    elderly?: number;
+    medicalSupportCases?: number;
+  } | null;
   incidentLat: number | null;
   incidentLng: number | null;
   actionPlan: ActionPlan | null;
@@ -228,6 +241,10 @@ export interface AppNotification {
   read: boolean;
   missionId: string | null;
   fieldUpdateId?: string | null;
+  /** Tình huống chép lại lúc gửi — thẻ và chuông dùng để chọn biểu tượng, in đậm. */
+  incidentType?: string | null;
+  affectedPeople?: number | null;
+  locationName?: string | null;
   createdAt: string;
 }
 
@@ -345,6 +362,15 @@ export const listMissions = (statuses?: MissionStatus[]) =>
 export const getClusterWarehouses = (warehouseId: string) =>
   apiFetch<ClusterWarehouse[]>(`/api/missions/${warehouseId}/warehouses`);
 
+/**
+ * Tuyến kho→điểm nạn của đúng các kho có cấp hàng. Chỉ đọc, không gọi LLM.
+ *
+ * Khác `generateActionPlan`: cái kia GHI `mission.actionPlan` và có gọi LLM viết
+ * diễn giải, nên không dùng được cho việc chỉ cần vẽ đường lên bản đồ.
+ */
+export const getWarehouseRoutes = (id: string) =>
+  apiFetch<DispatchRoute[]>(`/api/missions/${id}/warehouse-routes`);
+
 export const generateActionPlan = (id: string) =>
   apiFetch<ActionPlan>(`/api/missions/${id}/action-plan`, { method: "POST" });
 
@@ -397,3 +423,9 @@ export const getNotifications = (unread = false) =>
   apiFetch<AppNotification[]>(`/api/notifications${unread ? "?unread=true" : ""}`);
 export const markAllRead = () =>
   apiFetch<{ count: number }>("/api/notifications/read-all", { method: "POST" });
+/** Đánh dấu đã đọc đúng một lô thông báo (dùng khi bấm vào tab đang có số việc). */
+export const markNotificationsRead = (ids: string[]) =>
+  apiFetch<{ count: number }>("/api/notifications/read", {
+    method: "POST",
+    body: JSON.stringify({ ids }),
+  });

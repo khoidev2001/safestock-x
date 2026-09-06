@@ -19,6 +19,7 @@ import {
   generateActionPlan,
   generatePlan,
   getMission,
+  getWarehouseRoutes,
   listMissions,
   parseIncident,
   planFromReport,
@@ -29,6 +30,14 @@ import {
   type Mission,
 } from "@/lib/mission-api";
 import { listAllWarehouses } from "@/lib/warehouse-api";
+import { listHamlets } from "@/lib/hamlet-api";
+import {
+  findHamlet,
+  locationStatus,
+  normalizeHamletName,
+  selectableHamlets,
+} from "@/lib/hamlet-match";
+import { clearDraft, readDraft, writeDraft } from "@/lib/mission-draft";
 import { blobToWavBase64, SILENCE_RMS } from "@/lib/audio-wav";
 import { ActionPlanView } from "./action-plan-view";
 import { MissionInbox, STATUS_LABELS } from "./mission-inbox";
@@ -42,43 +51,6 @@ const IncidentMap = dynamic(() => import("./incident-map").then((m) => m.Inciden
   ssr: false,
   loading: () => <div className="h-[320px] animate-pulse rounded-md border bg-[var(--surface)]" />,
 });
-
-/** Tình huống mẫu — bấm nhanh, phòng khi cán bộ chưa quen nhập tay. */
-const SAMPLES: { label: string; input: GenerateInput["incident"] }[] = [
-  {
-    label: "Lũ lụt 100 người",
-    input: {
-      incidentType: "FLOOD",
-      affectedPeople: 100,
-      durationHours: 24,
-      children: 10,
-      elderly: 5,
-      medicalSupportCases: 3,
-    },
-  },
-  {
-    label: "Bão 50 người",
-    input: {
-      incidentType: "STORM",
-      affectedPeople: 50,
-      durationHours: 12,
-      children: 5,
-      elderly: 3,
-      medicalSupportCases: 1,
-    },
-  },
-  {
-    label: "Sạt lở 30 người",
-    input: {
-      incidentType: "LANDSLIDE",
-      affectedPeople: 30,
-      durationHours: 48,
-      children: 3,
-      elderly: 2,
-      medicalSupportCases: 4,
-    },
-  },
-];
 
 const INCIDENT_TYPES = [
   { value: "FLOOD", label: "Lũ lụt" },
@@ -167,6 +139,13 @@ export function MissionView({
   const [description, setDescription] = useState("");
   const [parseError, setParseError] = useState<string | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  /**
+   * Lời kể đã được AI phân tích. Bấm phân tích lần hai trên đúng lời kể cũ chỉ
+   * tạo lại đúng kết quả cũ, nhưng trên đường đi nó xoá bản tham mưu và ghi đè
+   * nhu cầu — người dùng mất dữ liệu để đổi lấy không gì cả. Khoá nút cho tới khi
+   * lời kể thật sự đổi.
+   */
+  const [analyzedDescription, setAnalyzedDescription] = useState<string | null>(null);
 
   // Mở đúng nhiệm vụ khi bấm thông báo (chuông) — kể cả mission đã REJECTED/DEFERRED.
   const focusMissionId = useMissionFocus((s) => s.focusMissionId);
@@ -196,6 +175,15 @@ export function MissionView({
     staleTime: 5 * 60 * 1000,
   });
 
+  // Danh mục thôn để ô địa điểm là danh sách chọn thay vì ô gõ tự do. Cùng nguồn
+  // với bản đồ nên thứ chọn được ở đây đúng bằng thứ ghim được trên map.
+  const hamletListQuery = useQuery({
+    queryKey: ["hamlets", "dong-xuan", "mission-form"],
+    queryFn: () => listHamlets("dong-xuan"),
+    enabled: role === "ADMIN",
+    staleTime: 5 * 60 * 1000,
+  });
+
   const missionQuery = useQuery({
     queryKey: ["mission", missionId],
     queryFn: () => getMission(missionId as string),
@@ -204,6 +192,28 @@ export function MissionView({
   });
 
   const mission = missionQuery.data;
+
+  /**
+   * Tuyến từ các kho CÓ CẤP HÀNG tới điểm nạn, để bản đồ vẽ đường ngay sau khi tính
+   * nhu cầu.
+   *
+   * Trước đây tuyến chỉ nằm trong `mission.actionPlan`, mà cái đó chỉ sinh ra khi bấm
+   * "Lập bản tham mưu" — một bước có gọi LLM. Nên vừa tính xong nhu cầu, hệ thống đã
+   * biết chính xác kho nào cấp gì mà bản đồ vẫn trắng đường.
+   *
+   * `enabled` bám đúng hai điều kiện:
+   * - nhiệm vụ CÒN LÀ NHÁP: đã phát hành thì khối này là form khai vụ mới, vẽ tuyến
+   *   của vụ cũ lên đó là gây hiểu nhầm;
+   * - chưa có `actionPlan`: có rồi thì dùng luôn tuyến trong đó, gọi OSRM lần nữa
+   *   chỉ để nhận lại đúng kết quả cũ.
+   */
+  const routesQuery = useQuery({
+    queryKey: ["mission", missionId, "warehouse-routes"],
+    queryFn: () => getWarehouseRoutes(missionId as string),
+    enabled:
+      Boolean(missionId) && role === "ADMIN" && mission?.status === "DRAFT" && !mission?.actionPlan,
+    staleTime: 30 * 1000,
+  });
   // Báo cáo của trưởng thôn (mobile): DRAFT chỉ có mô tả thô, chưa phân tích (0 nhu cầu).
   // Admin mở tin này trên web để đọc lại rồi phân tích thành phương án ngay trên chính nó.
   const isReportDraft =
@@ -214,6 +224,7 @@ export function MissionView({
   // Mở một báo cáo chưa phân tích → đổ mô tả thô vào ô nhập để admin xem lại rồi phân tích.
   // Chỉ chạy khi cờ báo cáo/mô tả đổi (không đè chỉnh sửa của admin khi query tự refetch).
   useEffect(() => {
+    if (draftOwnsDescriptionRef.current) return;
     if (isReportDraft && mission?.reportText) setDescription(mission.reportText);
   }, [isReportDraft, mission?.reportText]);
 
@@ -229,6 +240,44 @@ export function MissionView({
   // Đổi nhiệm vụ thì bỏ điểm đang sửa dở, nếu không nó dính sang nhiệm vụ kế tiếp.
   useEffect(() => {
     setIncidentPoint(undefined);
+  }, [missionId]);
+
+  /**
+   * Khôi phục bản nháp khi mở lại đúng nhiệm vụ đó.
+   *
+   * Chặng giữa "đã phân tích bằng AI" và "đã lập bản tham mưu" không có gì nằm ở
+   * backend: nhu cầu mới chỉ là số trên form. Rời tab lúc này là mất sạch, và
+   * người dùng phải kể lại từ đầu. Giữ ở máy họ cho tới khi có bản tham mưu thật.
+   *
+   * Chỉ chạy một lần cho mỗi missionId — chạy lại sẽ đè lên phần đang gõ dở.
+   */
+  const restoredForRef = useRef<string | null>(null);
+  const [hydratedFor, setHydratedFor] = useState<string | null>(null);
+  // Bản nháp có lời kể riêng thì đừng để lời kể gốc của báo cáo đè lên: admin đã
+  // sửa lại rồi, trả về bản thô là xoá đúng phần họ vừa làm.
+  const draftOwnsDescriptionRef = useRef(false);
+  useEffect(() => {
+    const key = missionId ?? "new";
+    if (restoredForRef.current === key) return;
+    restoredForRef.current = key;
+    const draft = readDraft(missionId);
+    draftOwnsDescriptionRef.current = Boolean(draft?.description);
+    setHydratedFor(key);
+    if (!draft) return;
+    setForm({
+      incidentType: draft.incidentType,
+      location: draft.location,
+      affectedPeople: draft.affectedPeople,
+      durationHours: draft.durationHours,
+      children: draft.children,
+      elderly: draft.elderly,
+      medicalSupportCases: draft.medicalSupportCases,
+    });
+    if (draft.description) setDescription(draft.description);
+    setAnalyzedDescription(draft.analyzedDescription);
+    if (draft.incidentLat != null && draft.incidentLng != null) {
+      setIncidentPoint({ lat: draft.incidentLat, lng: draft.incidentLng });
+    }
   }, [missionId]);
 
   // Phân tích BÁO CÁO đang mở ngay trên nó (không tạo mission mới) — dùng lại cho cả
@@ -284,6 +333,7 @@ export function MissionView({
       });
     },
     onSuccess: (m: Mission) => {
+      setAnalyzedDescription(description.trim());
       selectMission(m.id);
       setParseError(null);
       queryClient.invalidateQueries({ queryKey: ["mission", m.id] });
@@ -297,6 +347,38 @@ export function MissionView({
       );
     },
   });
+
+  /**
+   * Số liệu trên form đã lệch khỏi nhiệm vụ đang lưu chưa.
+   *
+   * Bản tham mưu đọc BẢN GHI nhiệm vụ, không đọc form. Sửa form xong bấm thẳng
+   * "Lập bản tham mưu" thì tham mưu vẫn theo số của lần phân tích trước — đúng
+   * cái lỗi đổi địa điểm sang thôn khác mà bản tham mưu vẫn ghi thôn cũ.
+   *
+   * Chỉ đồng bộ khi thật sự lệch: mỗi lần đồng bộ là một lần tính lại nhu cầu và
+   * xoá phương án hành động đã sinh, không nên làm khi không có gì đổi.
+   */
+  const formDiffersFromMission = (current: Mission) => {
+    const parsed = current.parsedInput ?? {};
+    return (
+      current.incidentType !== form.incidentType ||
+      normalizeHamletName(current.location ?? "") !== normalizeHamletName(form.location ?? "") ||
+      current.affectedPeople !== form.affectedPeople ||
+      current.durationHours !== form.durationHours ||
+      (parsed.children ?? 0) !== (form.children ?? 0) ||
+      (parsed.elderly ?? 0) !== (form.elderly ?? 0) ||
+      (parsed.medicalSupportCases ?? 0) !== (form.medicalSupportCases ?? 0)
+    );
+  };
+
+  /** Ghi số liệu form xuống nhiệm vụ và tính lại nhu cầu vật tư theo đúng số đó. */
+  const syncMissionWithForm = (id: string) =>
+    planFromReport(id, {
+      incident: form,
+      ...(formIncidentPoint
+        ? { incidentLat: formIncidentPoint.lat, incidentLng: formIncidentPoint.lng }
+        : {}),
+    });
 
   /**
    * Lập bản tham mưu cho nhiệm vụ đang mở.
@@ -319,12 +401,22 @@ export function MissionView({
         id = created.id;
         queryClient.invalidateQueries({ queryKey: ["missions", "inbox"] });
         selectMission(created.id);
+      } else if (mission && isMissionEditable && formDiffersFromMission(mission)) {
+        // Form mới là bản gốc. Phân tích bằng AI chỉ điền hộ vào form; cán bộ sửa
+        // lại rồi thì phải ghi phần sửa đó xuống nhiệm vụ TRƯỚC khi tham mưu.
+        await syncMissionWithForm(id);
+        await queryClient.invalidateQueries({ queryKey: ["mission", id] });
+        queryClient.invalidateQueries({ queryKey: ["missions", "inbox"] });
       }
       const result = await analyzeMission(id, { requestId: requestId() });
       return { missionId: id, snapshot: result.snapshot };
     },
     onSuccess: (result) => {
       setAnalysisError(null);
+      // Từ đây backend đã giữ bản tham mưu, bản nháp cục bộ hết việc. Giữ lại chỉ
+      // để lần sau mở lên nó đè ngược lên dữ liệu thật vừa lập.
+      clearDraft(result.missionId);
+      clearDraft(null);
       queryClient.setQueryData(
         ["mission", result.missionId, "coordination-analysis"],
         result.snapshot,
@@ -441,9 +533,53 @@ export function MissionView({
   const canEditIncidentPoint = isAdmin;
 
   const reportHasIncidentPoint = isReportDraft && missionHasIncidentPoint;
-  const canCalculatePlan = Boolean(
-    formIncidentPoint || form.location?.trim() || reportHasIncidentPoint,
+  const hamletOptions = useMemo(
+    () => selectableHamlets(hamletListQuery.data ?? []),
+    [hamletListQuery.data],
   );
+  /**
+   * EMPTY = chưa chọn thôn (được phép, khi ghim tay một điểm ngoài thôn).
+   * INVALID = báo cáo có nhắc một nơi nhưng danh mục không có → phải cảnh báo.
+   */
+  const locationState = locationStatus(hamletOptions, form.location);
+  const locationInvalid = locationState === "INVALID";
+
+  const canCalculatePlan = Boolean(
+    (formIncidentPoint || form.location?.trim() || reportHasIncidentPoint) && !locationInvalid,
+  );
+
+  /**
+   * Ghi bản nháp lại mỗi lần người dùng đổi gì đó. Chỉ ghi khi khối khai báo còn
+   * hiện: nhiệm vụ đã phát hành thì form không còn nữa, ghi tiếp là lưu một bản
+   * nháp không bao giờ dùng tới.
+   */
+  useEffect(() => {
+    if (!composerVisible) return;
+    // Chưa khôi phục xong mà đã ghi thì lần ghi đầu tiên mang giá trị mặc định và
+    // xoá mất bản nháp vừa đọc lên — hiệu ứng chạy trước khi state kịp cập nhật.
+    if (hydratedFor !== (missionId ?? "new")) return;
+    writeDraft(missionId, {
+      description,
+      incidentType: form.incidentType,
+      location: form.location ?? "",
+      affectedPeople: form.affectedPeople,
+      durationHours: form.durationHours,
+      children: form.children,
+      elderly: form.elderly,
+      medicalSupportCases: form.medicalSupportCases,
+      incidentLat: formIncidentPoint?.lat ?? null,
+      incidentLng: formIncidentPoint?.lng ?? null,
+      analyzedDescription,
+    });
+  }, [
+    composerVisible,
+    hydratedFor,
+    missionId,
+    description,
+    form,
+    formIncidentPoint,
+    analyzedDescription,
+  ]);
 
   return (
     <div className="space-y-4">
@@ -516,22 +652,8 @@ export function MissionView({
                 onAnalyze={() => analyze.mutate()}
                 analyzing={analyze.isPending}
                 error={parseError}
+                analyzedValue={analyzedDescription}
               />
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                {SAMPLES.map((s) => (
-                  <button
-                    key={s.label}
-                    type="button"
-                    onClick={() =>
-                      setForm({ children: 0, elderly: 0, medicalSupportCases: 0, ...s.input })
-                    }
-                    className="rounded-full border bg-[var(--surface-2)] px-3 py-1.5 text-xs font-medium transition hover:bg-[var(--surface)] active:translate-y-px"
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
 
               <div className="mt-4 space-y-3">
                 <Field label="Loại tình huống">
@@ -548,13 +670,35 @@ export function MissionView({
                   </select>
                 </Field>
                 <Field label="Địa điểm ứng phó">
-                  <input
-                    value={form.location ?? ""}
+                  {/* Danh sách chọn, không phải ô gõ tự do: gõ tay thì sai một dấu
+                      là backend không tra ra thôn nào, mất toạ độ và mất luôn phần
+                      tính tuyến — mà lỗi chỉ hiện ra sau khi đã bấm lập phương án. */}
+                  <select
+                    value={
+                      locationInvalid ? "" : (findHamlet(hamletOptions, form.location)?.name ?? "")
+                    }
                     onChange={(e) => setForm({ ...form, location: e.target.value })}
-                    placeholder="Tên thôn đã được ADMIN xác minh"
+                    aria-invalid={locationInvalid}
                     className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
-                  />
+                    style={locationInvalid ? { borderColor: "var(--color-critical)" } : undefined}
+                  >
+                    <option value="">— Không thuộc thôn nào, ghim tay trên bản đồ —</option>
+                    {hamletOptions.map((h) => (
+                      <option key={h.id} value={h.name}>
+                        {h.name}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
+                {locationInvalid && (
+                  <p role="alert" className="text-xs text-[var(--color-critical)]">
+                    Vui lòng chọn thôn hợp lệ. Báo cáo ghi “{form.location}” nhưng tên này không có
+                    trong danh mục thôn đã xác minh của xã.
+                  </p>
+                )}
+                {hamletListQuery.isPending && (
+                  <p className="text-xs text-[var(--text-muted)]">Đang tải danh mục thôn…</p>
+                )}
 
                 {/* Không để tên thôn trống thì bấm bản đồ cũng vô ích: backend chỉ
                   dùng toạ độ rời khi ô địa điểm để trống. Nói rõ ngay tại đây. */}
@@ -572,7 +716,7 @@ export function MissionView({
                     onChange={(v) => setForm({ ...form, affectedPeople: v })}
                   />
                   <NumberField
-                    label="Số giờ dự kiến"
+                    label="Số giờ cô lập dự kiến"
                     value={form.durationHours}
                     onChange={(v) => setForm({ ...form, durationHours: v })}
                   />
@@ -601,9 +745,13 @@ export function MissionView({
                 <button
                   type="button"
                   onClick={() => analyzeCoordination.mutate()}
-                  disabled={analyzeCoordination.isPending || (!missionId && !canCalculatePlan)}
+                  // Nhiệm vụ còn sửa được thì bản tham mưu lập theo form, nên form
+                  // sai là không lập được — chứ không phải lặng lẽ lập theo số cũ.
+                  disabled={
+                    analyzeCoordination.isPending || (isMissionEditable && !canCalculatePlan)
+                  }
                   title={
-                    missionId || canCalculatePlan
+                    canCalculatePlan || !isMissionEditable
                       ? "Tính nhu cầu vật tư rồi lập bản tham mưu trong một lượt"
                       : "Cần nhập thôn đã xác minh hoặc ghim một điểm trên bản đồ"
                   }
@@ -640,7 +788,15 @@ export function MissionView({
                   tưởng mình đang sửa vụ cũ. Tuyến đó vẫn xem được ở khối kế hoạch
                   bên dưới. */}
                 <IncidentMap
-                  warehouses={isMissionEditable ? (mission?.actionPlan?.warehouses ?? []) : []}
+                  // Tuyến ưu tiên lấy từ bản tham mưu nếu đã lập; chưa lập thì lấy
+                  // từ endpoint chỉ-đọc, để vẽ được đường ngay sau khi tính nhu cầu.
+                  // Cả hai nguồn đều CHỈ chứa kho có cấp hàng (backend lọc theo
+                  // `requirements.allocations`), nên không có đường của kho không góp gì.
+                  warehouses={
+                    isMissionEditable
+                      ? (mission?.actionPlan?.warehouses ?? routesQuery.data ?? [])
+                      : []
+                  }
                   baseWarehouses={warehouseListQuery.data ?? []}
                   incidentPoint={formIncidentPoint}
                   onPickIncident={canEditIncidentPoint ? setIncidentPoint : undefined}
@@ -1125,12 +1281,15 @@ function DescribeIncidentBlock({
   onAnalyze,
   analyzing,
   error,
+  analyzedValue,
 }: {
   value: string;
   onChange: (v: string) => void;
   onAnalyze: () => void;
   analyzing: boolean;
   error: string | null;
+  /** Lời kể đã phân tích rồi; trùng với ô hiện tại thì khoá nút. */
+  analyzedValue: string | null;
 }) {
   // Ghi thêm vào cuối phần đã có (nối tiếp nhiều lần nói), gọn ghẽ khoảng trắng.
   const { supported, status, voiceError, toggle } = useAudioRecorder((text) =>
@@ -1138,6 +1297,9 @@ function DescribeIncidentBlock({
   );
   const recording = status === "recording";
   const transcribing = status === "transcribing";
+  // Phân tích lại đúng lời kể cũ cho ra đúng kết quả cũ, nhưng lại xoá bản tham
+  // mưu và ghi đè nhu cầu đang có. Sửa một chữ trong ô là nút mở lại ngay.
+  const analyzedAlready = analyzedValue !== null && analyzedValue === value.trim();
 
   return (
     <div className="mt-4 rounded-md border border-dashed bg-[var(--surface-2)] p-3">
@@ -1163,7 +1325,12 @@ function DescribeIncidentBlock({
         <button
           type="button"
           onClick={onAnalyze}
-          disabled={analyzing || value.trim().length < 5}
+          disabled={analyzing || value.trim().length < 5 || analyzedAlready}
+          title={
+            analyzedAlready
+              ? "Lời kể này đã phân tích rồi. Sửa nội dung ở ô trên để phân tích lại."
+              : "Đọc lời kể thành số liệu rồi điền vào form bên dưới"
+          }
           className="inline-flex items-center gap-2 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-fg)] transition hover:brightness-95 active:translate-y-px disabled:opacity-60"
         >
           <ColorIcon name="magic" size={15} tone="amber" />
@@ -1195,6 +1362,12 @@ function DescribeIncidentBlock({
         )}
         {/* Trạng thái ghi âm/nhận dạng đã nằm trên chính nhãn nút, không lặp lại. */}
       </div>
+      {analyzedAlready && !analyzing && (
+        <p className="mt-1.5 text-xs text-[var(--text-muted)]">
+          Đã phân tích lời kể này. Sửa nội dung ở ô trên nếu muốn phân tích lại — số liệu bên dưới
+          vẫn sửa tay được bình thường.
+        </p>
+      )}
       {voiceError && <p className="mt-1.5 text-xs text-[var(--color-attention)]">{voiceError}</p>}
       {error && <p className="mt-1.5 text-xs text-[var(--color-critical)]">{error}</p>}
     </div>

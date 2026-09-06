@@ -297,17 +297,21 @@ export class CoordinationSnapshotService {
       requirements: {
         status: canUsePlan ? ("COMPUTED" as const) : ("PENDING_DATA" as const),
         items: canUsePlan
-          ? mission.requirements.map((requirement) => ({
-              sku: requirement.sku,
-              name: requirement.itemName,
-              unit: requirement.unit,
-              baseQuantity: requirement.required,
-              reserveQuantity: 0,
-              totalQuantity: requirement.required,
-              basis: "Định mức vật tư của hệ thống",
-              sourceFactIds: factIdsForKeys(facts, ["AFFECTED_PEOPLE", "INCIDENT_TYPE"]),
-              ruleVersion: COORDINATION_RULE_VERSION,
-            }))
+          ? // Bỏ dòng định mức bằng 0. Nhiệm vụ lập trước khi định mức lọc số 0 vẫn
+            // còn những dòng đó trong bản ghi, và bản tham mưu đọc thẳng bản ghi.
+            mission.requirements
+              .filter((requirement) => requirement.required > 0)
+              .map((requirement) => ({
+                sku: requirement.sku,
+                name: requirement.itemName,
+                unit: requirement.unit,
+                baseQuantity: requirement.required,
+                reserveQuantity: 0,
+                totalQuantity: requirement.required,
+                basis: "Định mức vật tư của hệ thống",
+                sourceFactIds: factIdsForKeys(facts, ["AFFECTED_PEOPLE", "INCIDENT_TYPE"]),
+                ruleVersion: COORDINATION_RULE_VERSION,
+              }))
           : [],
         reason: canUsePlan ? null : "Thiếu dữ kiện có nguồn để áp định mức kho.",
         ruleVersion: canUsePlan ? COORDINATION_RULE_VERSION : null,

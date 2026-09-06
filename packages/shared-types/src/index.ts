@@ -44,6 +44,24 @@ export enum ItemCondition {
   DAMAGED = "DAMAGED",
 }
 
+/**
+ * Tên tiếng Việt của tình trạng vật tư.
+ *
+ * Đặt cạnh chính enum vì cả web, điện thoại lẫn bản in đều phải hiện chữ này cho
+ * cán bộ xã đọc. Trước đây mỗi màn hình chép một bảng riêng, và chỗ nào quên chép
+ * thì mã hằng `NEW` lọt thẳng ra bảng kiểm kê — đúng cái bảng người ta in ra ký.
+ */
+export const ITEM_CONDITION_LABELS: Readonly<Record<ItemCondition, string>> = {
+  [ItemCondition.NEW]: "Mới",
+  [ItemCondition.USED]: "Đã dùng",
+  [ItemCondition.NEEDS_CHECK]: "Cần kiểm tra",
+  [ItemCondition.DAMAGED]: "Hư hỏng",
+};
+
+export function itemConditionLabel(condition: ItemCondition | string): string {
+  return ITEM_CONDITION_LABELS[condition as ItemCondition] ?? condition;
+}
+
 /** Trạng thái vật tư 2 chiều — lưu hành */
 export enum CirculationStatus {
   IN_STOCK = "IN_STOCK",
@@ -249,3 +267,4 @@ export interface SensorEvent {
 export * from "./briefing";
 export * from "./inventory-qr";
 export * from "./coordination";
+export * from "./water-bottle";

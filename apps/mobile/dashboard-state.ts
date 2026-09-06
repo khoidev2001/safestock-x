@@ -1,5 +1,14 @@
-export type MobileTab =
-  "home" | "readiness" | "inventory" | "monthly-report" | "missions" | "alerts" | "report";
+export type MobileTab = "home" | "report" | "warehouse" | "missions" | "alerts" | "account";
+
+/**
+ * Ba mục con nằm trong tab Quản lý kho.
+ *
+ * Trước đây Sẵn sàng, Kho và Kiểm kê là ba tab riêng, nên trưởng thôn phải nhìn
+ * SÁU ô ở thanh dưới — mà ba trong số đó cùng nói về một cái kho, chỉ khác góc
+ * nhìn. Thanh tab hẹp, sáu nhãn bị cắt cụt, và người dùng phải nhớ "mức sẵn
+ * sàng" nằm ở tab nào. Gom lại một cửa: chọn kho trước, rồi chọn xem gì.
+ */
+export type WarehouseSection = "readiness" | "inventory" | "monthly-report";
 
 /**
  * App điện thoại có ĐÚNG HAI giao diện, chọn theo vai lúc đăng nhập.
@@ -13,11 +22,28 @@ export type MobileTab =
  *
  * ADMIN làm việc trên web; nếu đăng nhập điện thoại thì chỉ để quét QR nhập/xuất
  * ngay tại kệ, không mang theo cả bảng điều hành lên màn hình nhỏ.
+ *
+ * Tab Tài khoản có ở MỌI vai: đó là chỗ duy nhất chắc chắn tìm thấy nút đăng
+ * xuất, nên không vai nào được thiếu — kể cả vai chỉ có đúng một tab nghiệp vụ.
  */
 export function tabsForRole(role: string): MobileTab[] {
+  if (role === "ADMIN") return ["warehouse", "account"];
+  if (role === "RESCUE") return ["missions", "report", "alerts", "account"];
+  return ["home", "report", "warehouse", "alerts", "account"];
+}
+
+/**
+ * Mục con hiện ra khi mở tab Quản lý kho.
+ *
+ * ADMIN chỉ vào đây để quét QR nhập/xuất tại kệ, nên chỉ có mục Kho — không kèm
+ * mức sẵn sàng và báo cáo kiểm kê tháng, vốn là việc của người giữ kho tại chỗ.
+ * Một mục thì thanh chọn mục tự ẩn, khỏi bày ra một nút không có gì để chuyển.
+ */
+export function warehouseSectionsForRole(role: string): WarehouseSection[] {
   if (role === "ADMIN") return ["inventory"];
-  if (role === "RESCUE") return ["missions", "report", "alerts"];
-  return ["home", "readiness", "inventory", "monthly-report", "report", "alerts"];
+  // Kho đứng đầu vì đó là việc hằng ngày — nhập, xuất, quét QR tại kệ. Mức sẵn
+  // sàng chỉ liếc khi có cảnh báo, còn kiểm kê thì mỗi tháng một lần.
+  return ["inventory", "readiness", "monthly-report"];
 }
 
 /** Tab mở đầu sau khi đăng nhập: việc chính của vai đó, không phải màn chung chung. */

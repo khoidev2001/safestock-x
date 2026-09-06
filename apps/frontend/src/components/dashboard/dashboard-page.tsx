@@ -31,7 +31,6 @@ export function DashboardPage({ children, standalone = false }: DashboardPagePro
       <PageHeading
         subtitle={nav?.subtitle ?? ""}
         title={nav?.title ?? ""}
-        warehouseName={warehouseQuery.data?.name ?? "Đang tải kho"}
       />
 
       {warehouseQuery.isError ? (
@@ -50,16 +49,13 @@ export function DashboardPage({ children, standalone = false }: DashboardPagePro
 function PageHeading({
   subtitle,
   title,
-  warehouseName,
 }: {
   subtitle: string;
   title: string;
-  warehouseName: string;
 }) {
   return (
     <div className="border-b pb-5">
       <div>
-        <p className="mb-1.5 text-sm font-semibold text-[var(--color-accent)]">{warehouseName}</p>
         <h1 className="text-2xl font-semibold md:text-3xl">{title}</h1>
         <p className="mt-2 max-w-3xl text-base text-[var(--text-muted)]">{subtitle}</p>
       </div>

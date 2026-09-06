@@ -19,10 +19,25 @@ const flood = (overrides: Partial<IncidentInput> = {}): IncidentInput => ({
 });
 
 describe("computeRequirements", () => {
-  it("should compute life vest per affected person", () => {
-    const reqs = computeRequirements(flood({ affectedPeople: 100 }));
-    const adult = reqs.find((r) => r.sku === "LIFE-ADULT");
-    expect(adult?.required).toBe(100);
+  it("áo phao người lớn tính theo NGƯỜI LỚN, đã trừ trẻ em", () => {
+    // "Số người" là tổng số người ảnh hưởng, trẻ em nằm trong đó và đã có áo phao
+    // cỡ riêng. Tính theo tổng thì mỗi trẻ em lĩnh thêm một áo người lớn thừa.
+    const reqs = computeRequirements(flood({ affectedPeople: 100, children: 20 }));
+    expect(reqs.find((r) => r.sku === "LIFE-ADULT")?.required).toBe(80);
+    expect(reqs.find((r) => r.sku === "LIFE-CHILD")?.required).toBe(20);
+  });
+
+  it("trẻ em nhiều hơn tổng số người thì áo người lớn biến mất, không ra số âm", () => {
+    // Định mức ra 0 thì bỏ hẳn dòng: bảng nhu cầu không giữ chỗ cho thứ không cần.
+    const reqs = computeRequirements(flood({ affectedPeople: 5, children: 8 }));
+    expect(reqs.find((r) => r.sku === "LIFE-ADULT")).toBeUndefined();
+  });
+
+  it("không có ca cần y tế thì bộ sơ cứu không nằm trong danh sách", () => {
+    // Trước đây dòng này vẫn hiện với "đáp ứng 0/0, thiếu 0" ở mọi bảng.
+    const reqs = computeRequirements(flood({ medicalSupportCases: 0 }));
+    expect(reqs.find((r) => r.sku === "FIRSTAID-01")).toBeUndefined();
+    expect(reqs.every((r) => r.required > 0)).toBe(true);
   });
 
   it("should compute child vest per child", () => {
@@ -30,26 +45,25 @@ describe("computeRequirements", () => {
     expect(reqs.find((r) => r.sku === "LIFE-CHILD")?.required).toBe(20);
   });
 
-  it("nước tính theo CHAI, không phải lít (48h = 2 ngày)", () => {
-    // Chuẩn Sphere là 15 lít/người/ngày, nhưng kho xuất theo chai 5 lít:
-    // 15 / 5 = 3 chai/người/ngày → 3 * 100 người * 2 ngày = 600 chai.
-    // Ghi định mức theo lít là đẩy phép chia sang người đang vội bốc hàng.
+  it("nước đếm theo CHAI 1,5 lít, định mức 3 lít/người/ngày (48h = 2 ngày)", () => {
+    // Nước UỐNG đóng chai: 3 lít/người/ngày (Sphere mức sinh tồn cho ăn uống —
+    // 15 lít/ngày là tổng cả vệ sinh, do bồn và can gánh chứ không phải chai).
+    // 3 / 1,5 = 2 chai/người/ngày → * 100 người * 2 ngày = 400 chai.
     const reqs = computeRequirements(flood({ affectedPeople: 100, durationHours: 48 }));
-    expect(reqs.find((r) => r.sku === "WATER-01")?.required).toBe(600);
+    expect(reqs.find((r) => r.sku === "WATER-01")?.required).toBe(400);
     expect(reqs.find((r) => r.sku === "WATER-01")?.unit).toBe("chai");
   });
 
   it("should round duration up to full days", () => {
     const reqs = computeRequirements(flood({ affectedPeople: 10, durationHours: 25 }));
-    // 25h → 2 ngày → 3 chai * 10 người * 2 ngày = 60 chai
-    expect(reqs.find((r) => r.sku === "WATER-01")?.required).toBe(60);
+    // 25h → 2 ngày → 2 chai * 10 người * 2 ngày = 40 chai
+    expect(reqs.find((r) => r.sku === "WATER-01")?.required).toBe(40);
   });
 
-  it("cháy dùng 5 lít/người/ngày → đúng một chai 5 lít", () => {
-    // Với cỡ chai 5 lít, MỌI định mức hiện có đều chia hết nên không còn phần lẻ
-    // để quan sát. Phép làm tròn LÊN vẫn giữ nguyên trong mã và có bài kiểm riêng
-    // ở `bottle-units.spec` — đổi cỡ chai lần nữa là phần lẻ quay lại ngay, và
-    // lúc đó làm tròn xuống là cấp thiếu nước cho người thật.
+  it("cháy cũng 3 lít/người/ngày → 2 chai 1,5 lít cho một người một ngày", () => {
+    // Nhu cầu UỐNG là nhu cầu sinh tồn, không đổi theo loại thiên tai; phần khác
+    // nhau giữa các tình huống nằm ở số ngày. Định mức luôn ceil: làm tròn xuống
+    // là cấp thiếu nước cho người thật.
     const reqs = computeRequirements({
       incidentType: IncidentType.FIRE,
       affectedPeople: 1,
@@ -58,7 +72,7 @@ describe("computeRequirements", () => {
       elderly: 0,
       medicalSupportCases: 0,
     });
-    expect(reqs.find((r) => r.sku === "WATER-01")?.required).toBe(1);
+    expect(reqs.find((r) => r.sku === "WATER-01")?.required).toBe(2);
   });
 
   it("should round requirements up (ceil) for safety", () => {

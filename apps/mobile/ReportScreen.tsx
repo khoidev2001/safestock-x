@@ -10,6 +10,7 @@ import {
   type OwnReportSummary,
 } from "./api";
 import { isRecordingSupported, startRecording, type AudioRecording } from "./audio";
+import { IncidentPinMap, type PinnedPoint } from "./IncidentPinMap";
 import { MAX_RECORDING_MS } from "./audio-platform-state";
 import { c, styles } from "./styles";
 
@@ -22,16 +23,16 @@ type MicStatus = "idle" | "recording" | "transcribing";
  * cơ quan điều phối. Backend tạo DRAFT + báo ADMIN; admin mở tin trên web sẽ tự
  * phân tích AI. Android APK dùng AudioRecord native; Expo Web dùng Web Audio.
  */
-export function ReportScreen({
-  token,
-  user,
-  onLogout,
-}: {
-  token: string;
-  user: AuthUser;
-  onLogout: () => void;
-}) {
+export function ReportScreen({ token, user }: { token: string; user: AuthUser }) {
   const [description, setDescription] = useState("");
+  /**
+   * Điểm gặp nạn trưởng thôn ghim trên bản đồ. Không bắt buộc.
+   *
+   * Có điểm này thì backend dùng nó và BỎ QUA tên thôn trong lời kể: người đứng tại
+   * chỗ ghim đúng mái nhà bị ngập, còn tên thôn chỉ dẫn tới điểm ứng phó chung của
+   * thôn — thường là nhà văn hoá, cách chỗ cần cứu vài trăm mét đến vài km.
+   */
+  const [pinnedPoint, setPinnedPoint] = useState<PinnedPoint | null>(null);
   const [micStatus, setMicStatus] = useState<MicStatus>("idle");
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +45,7 @@ export function ReportScreen({
   const [detailLoading, setDetailLoading] = useState(false);
   const recordingRef = useRef<AudioRecording | null>(null);
   const recordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const requestRef = useRef<{ description: string; requestId: string } | null>(null);
+  const requestRef = useRef<{ key: string; requestId: string } | null>(null);
 
   useEffect(
     () => () => {
@@ -68,10 +69,19 @@ export function ReportScreen({
     return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }
 
-  function requestFor(descriptionText: string) {
+  /**
+   * Khoá chống-gửi-trùng: giữ nguyên `requestId` khi người dùng bấm lại đúng cùng
+   * một báo cáo (timeout rồi thử lại), nhưng phải ĐỔI khi nội dung đổi.
+   *
+   * Điểm ghim nằm trong khoá cùng với lời kể. Chỉ khoá theo lời kể thì sửa điểm ghim
+   * xong gửi lại vẫn mang `requestId` cũ, backend coi là trùng và giữ nguyên bản
+   * ghi cũ — toạ độ mới bị bỏ, mà người báo thì thấy "đã gửi".
+   */
+  function requestFor(descriptionText: string, point: PinnedPoint | null) {
+    const key = `${descriptionText}|${point ? `${point.lat},${point.lng}` : ""}`;
     const current = requestRef.current;
-    if (current?.description === descriptionText) return current.requestId;
-    const next = { description: descriptionText, requestId: createRequestId() };
+    if (current?.key === key) return current.requestId;
+    const next = { key, requestId: createRequestId() };
     requestRef.current = next;
     return next.requestId;
   }
@@ -132,14 +142,19 @@ export function ReportScreen({
       return;
     }
     const cleanDescription = description.trim();
-    const requestId = requestFor(cleanDescription);
+    const requestId = requestFor(cleanDescription, pinnedPoint);
     setSending(true);
     setError(null);
     try {
-      await submitReport(token, { description: cleanDescription, requestId });
+      await submitReport(token, {
+        description: cleanDescription,
+        requestId,
+        ...(pinnedPoint ? { incidentLat: pinnedPoint.lat, incidentLng: pinnedPoint.lng } : {}),
+      });
       requestRef.current = null;
       setSent(true);
       setDescription("");
+      setPinnedPoint(null);
       await loadHistory();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không gửi được báo cáo");
@@ -183,7 +198,6 @@ export function ReportScreen({
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        {/* Co lại được để không đè lên nút bên phải — xem ghi chú ở App.tsx. */}
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text numberOfLines={1} style={styles.title}>
             Báo cáo tình huống
@@ -192,13 +206,6 @@ export function ReportScreen({
             {user.fullName ?? user.email} · Trưởng thôn
           </Text>
         </View>
-        <Pressable
-          accessibilityRole="button"
-          onPress={onLogout}
-          style={{ flexShrink: 0, marginLeft: 12 }}
-        >
-          <Text style={[styles.pillText, { color: c.amber }]}>Đăng xuất</Text>
-        </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.reportScroll} keyboardShouldPersistTaps="handled">
@@ -230,6 +237,8 @@ export function ReportScreen({
           placeholderTextColor={c.muted}
           aria-label="Mô tả tình huống"
         />
+
+        <IncidentPinMap point={pinnedPoint} onChange={setPinnedPoint} disabled={sending} />
 
         {micSupported ? (
           <>
@@ -360,9 +369,26 @@ function OwnReportDetailPanel({ report, onBack }: { report: OwnReportDetail; onB
         {new Date(report.createdAt).toLocaleString("vi-VN")}
       </Text>
 
+      {/* Toạ độ đã ghim hiện TRƯỚC ô địa điểm, và nói rõ nó là thứ đang được dùng:
+        backend ưu tiên điểm ghim và bỏ qua tên thôn trong lời kể. Không nói thì
+        người báo thấy hai dòng khác nhau và không biết cơ quan điều phối đang đi
+        tới chỗ nào. */}
+      {report.incidentLat != null && report.incidentLng != null ? (
+        <>
+          <Text style={styles.reportDetailLabel}>Điểm đã ghim trên bản đồ</Text>
+          <Text style={styles.reportDetailValue}>
+            {report.incidentLat.toFixed(6)}, {report.incidentLng.toFixed(6)}
+          </Text>
+        </>
+      ) : null}
+
       {report.location ? (
         <>
-          <Text style={styles.reportDetailLabel}>Địa điểm</Text>
+          <Text style={styles.reportDetailLabel}>
+            {report.incidentLat != null && report.incidentLng != null
+              ? "Địa điểm ghi trong lời kể (không dùng để định vị)"
+              : "Địa điểm"}
+          </Text>
           <Text style={styles.reportDetailValue}>{report.location}</Text>
         </>
       ) : null}

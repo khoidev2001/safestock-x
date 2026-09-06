@@ -1,8 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { incidentTypeLabel } from "@safestock/shared-types";
 import { ColorIcon } from "./color-icon";
+import { incidentIconName } from "@/lib/incident-visuals";
 import { isStickyNotification } from "@/lib/notification-routing";
+import { CloseGlyph } from "./close-glyph";
 
 export interface ToastItem {
   id: string;
@@ -12,6 +15,10 @@ export interface ToastItem {
   missionId?: string | null;
   /** Khoản mượn liên xã — có nó thì thẻ dựng hai nút Đồng ý / Từ chối. */
   loanId?: string | null;
+  /** Loại thiên tai của nhiệm vụ — quyết định biểu tượng và nhãn trên thẻ. */
+  incidentType?: string | null;
+  affectedPeople?: number | null;
+  locationName?: string | null;
 }
 
 const GIAY_TU_TAT = 6;
@@ -85,13 +92,20 @@ function Toast({
   const [dangGui, setDangGui] = useState<"yes" | "no" | null>(null);
   const sticky = isStickyNotification(item.kind) || coHanhDong;
   const [conLai, setConLai] = useState(GIAY_TU_TAT);
+  /**
+   * Con trỏ đang ở trên thẻ (hoặc bàn phím đang đứng trong thẻ) thì dừng đồng hồ.
+   *
+   * Người dùng đưa chuột tới là đang đọc, hoặc đang định bấm. Thẻ biến mất giữa
+   * lúc đó vừa cướp mất câu đang đọc dở, vừa đẩy cú bấm xuống thứ nằm phía dưới.
+   */
+  const [dangDoc, setDangDoc] = useState(false);
   // Giữ trong ref để đồng hồ đếm không phải dựng lại mỗi khi component vẽ lại —
   // dựng lại là đồng hồ nhảy về đầu và thẻ không bao giờ tự tắt.
   const dismissRef = useRef(onDismiss);
   dismissRef.current = onDismiss;
 
   useEffect(() => {
-    if (sticky) return;
+    if (sticky || dangDoc) return;
     const timer = setInterval(() => {
       setConLai((giay) => {
         if (giay <= 1) {
@@ -103,27 +117,92 @@ function Toast({
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [item.id, sticky]);
+  }, [item.id, sticky, dangDoc]);
 
   const mo = useCallback(() => onOpen?.(item), [item, onOpen]);
 
+  /**
+   * Thẻ nào có nhiệm vụ thì CẢ THẺ bấm được, không chỉ mỗi dòng chữ "Mở nhiệm vụ".
+   *
+   * Cái link nhỏ ở góc là một mục tiêu bấm rộng chừng hai centimet trên màn hình
+   * điện thoại, giữa lúc người ta đang vừa đi vừa bấm. Bấm trượt thì thẻ tự tắt
+   * sau vài giây và việc đó coi như chưa từng hiện ra.
+   */
+  const bamDuocCaThe = Boolean(onOpen && item.missionId);
+  // Cảnh báo: thẻ có tình huống, hoặc loại thông báo vốn phải ở lại tới khi có
+  // người bấm. Viền đỏ và chuông đỏ chỉ dành cho nhóm này — tô đỏ mọi thứ thì
+  // màu đỏ thôi mang nghĩa "khẩn".
+  const canhBao = sticky || Boolean(item.incidentType);
+  const tenBieuTuong = item.incidentType
+    ? incidentIconName(item.incidentType)
+    : canhBao
+      ? "incident"
+      : "notification";
+
   return (
     <article
-      className="pointer-events-auto rounded-lg border bg-[var(--surface)] p-3.5 shadow-lg"
-      style={sticky ? { borderColor: "var(--color-critical)" } : undefined}
+      className={`pointer-events-auto rounded-lg border bg-[var(--surface)] p-3.5 shadow-lg transition ${
+        bamDuocCaThe ? "cursor-pointer hover:brightness-[0.98]" : ""
+      }`}
+      style={
+        canhBao
+          ? {
+              // Viền mảnh 1px, phần "nổi lên" giao cho bóng đổ.
+              //
+              // Viền dày kéo mắt vào chính cái khung, và trên nền sáng thì hai
+              // pixel đỏ chạy quanh chữ đỏ đọc thành một khối đặc. Bóng đổ pha
+              // đỏ tách thẻ ra khỏi nền mà không thêm nét nào lên phần chữ.
+              borderColor: "var(--color-critical)",
+              borderWidth: 1,
+              background: "color-mix(in oklch, var(--color-critical) 4%, var(--surface))",
+              boxShadow:
+                "0 12px 32px -12px color-mix(in oklch, var(--color-critical) 55%, transparent), 0 4px 12px -6px rgb(0 0 0 / 0.25)",
+            }
+          : undefined
+      }
       role={sticky ? "alert" : undefined}
+      onMouseEnter={() => setDangDoc(true)}
+      onMouseLeave={() => setDangDoc(false)}
+      onFocusCapture={() => setDangDoc(true)}
+      onBlurCapture={() => setDangDoc(false)}
+      onClick={bamDuocCaThe ? mo : undefined}
     >
       <div className="flex items-start gap-2.5">
-        <ColorIcon
-          name={sticky ? "incident" : "notification"}
-          size={18}
-          tone={sticky ? "red" : "blue"}
-        />
+        <ColorIcon name={tenBieuTuong} size={22} tone={canhBao ? "red" : "blue"} />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold leading-snug">{item.title}</p>
+          {/* Ba dữ kiện người trực cần trước tiên: thiên tai gì, bao nhiêu người,
+              ở đâu. Tách khỏi câu văn và in đậm để đọc được trong một cái liếc. */}
+          {(item.incidentType || item.affectedPeople || item.locationName) && (
+            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+              {item.incidentType ? (
+                <span
+                  className="rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide"
+                  style={{
+                    background: "color-mix(in oklch, var(--color-critical) 12%, transparent)",
+                    color: "var(--color-critical)",
+                  }}
+                >
+                  {incidentTypeLabel(item.incidentType)}
+                </span>
+              ) : null}
+              {item.affectedPeople ? (
+                <span>
+                  <b className="text-sm font-bold">{item.affectedPeople.toLocaleString("vi")}</b>{" "}
+                  người
+                </span>
+              ) : null}
+              {item.locationName ? (
+                <span className="inline-flex items-center gap-1">
+                  <ColorIcon name="location" size={13} tone="red" />
+                  <b className="text-sm font-bold">{item.locationName}</b>
+                </span>
+              ) : null}
+            </p>
+          )}
           {/* Cho phép cao tới 6 dòng thay vì 3: nhiều thông báo bị cắt đúng chỗ
               có con số hoặc tên kho, mà đó lại là phần người đọc cần nhất. */}
-          <p className="mt-0.5 line-clamp-6 whitespace-pre-line text-xs leading-relaxed text-[var(--text-muted)]">
+          <p className="mt-1 line-clamp-6 whitespace-pre-line text-xs leading-relaxed text-[var(--text-muted)]">
             {item.body}
           </p>
           {coHanhDong ? (
@@ -131,7 +210,10 @@ function Toast({
               <button
                 className="rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
                 disabled={dangGui !== null}
-                onClick={async () => {
+                onClick={async (event) => {
+                  // Nút nằm TRONG thẻ bấm được: không chặn nổi bọt thì đồng ý xong
+                  // màn hình nhảy luôn sang nhiệm vụ, người dùng mất dấu việc vừa làm.
+                  event.stopPropagation();
                   setDangGui("yes");
                   try {
                     await onDecideLoan?.(item.loanId as string, true);
@@ -148,7 +230,8 @@ function Toast({
               <button
                 className="rounded-md border px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
                 disabled={dangGui !== null}
-                onClick={async () => {
+                onClick={async (event) => {
+                  event.stopPropagation();
                   setDangGui("no");
                   try {
                     await onDecideLoan?.(item.loanId as string, false);
@@ -164,25 +247,36 @@ function Toast({
               </button>
             </div>
           ) : null}
-          {onOpen && item.missionId ? (
+          {bamDuocCaThe ? (
+            // Vẫn giữ một nút thật cho bàn phím và trình đọc màn hình: cả thẻ bấm
+            // được là tiện cho chuột, nhưng gắn hành động vào <article> thì không
+            // tab tới được, và người dùng bàn phím mất hẳn đường mở nhiệm vụ.
             <button
               type="button"
-              onClick={mo}
+              onClick={(event) => {
+                event.stopPropagation();
+                mo();
+              }}
               className="mt-2 text-xs font-semibold text-[var(--color-accent)] hover:underline"
             >
-              Mở nhiệm vụ
+              Xem nhiệm vụ ngay
             </button>
           ) : null}
         </div>
         <button
           type="button"
           aria-label="Đóng thông báo"
-          onClick={() => onDismiss?.(item.id)}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-lg leading-none text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDismiss?.(item.id);
+          }}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] transition hover:bg-[var(--surface-2)]"
         >
-          ×
+          <CloseGlyph />
         </button>
       </div>
+      {/* Đang rê chuột thì đồng hồ đứng yên, và con số đứng yên nói điều đó rõ
+          hơn một câu chú thích thêm vào. */}
       {!sticky ? (
         <p className="mt-1.5 text-right text-[10px] text-[var(--text-muted)]">
           tự đóng sau {conLai}s

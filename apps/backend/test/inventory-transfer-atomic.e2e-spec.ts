@@ -34,7 +34,7 @@ describe("Inventory transfer atomic (E2E PostgreSQL)", () => {
     } as never);
 
     const actor = await prisma.user.findUniqueOrThrow({
-      where: { email: "staff@ungphonhanh.life" },
+      where: { email: "staff" },
     });
     actorId = actor.id;
     warehouseId = actor.warehouseId as string;

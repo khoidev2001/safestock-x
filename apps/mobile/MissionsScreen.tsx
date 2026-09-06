@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { notify } from "./dialog";
 import {
   completeMission,
   fetchMissions,
@@ -89,9 +90,9 @@ export function MissionsScreen({
     try {
       await action();
       await load();
-      Alert.alert("Đã ghi nhận", done);
+      notify("Đã ghi nhận", done);
     } catch (actionError) {
-      Alert.alert(
+      notify(
         "Chưa gửi được",
         actionError instanceof Error ? actionError.message : "Vui lòng thử lại",
       );

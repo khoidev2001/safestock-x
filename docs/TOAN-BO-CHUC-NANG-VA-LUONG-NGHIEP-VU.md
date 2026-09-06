@@ -159,7 +159,7 @@ giữ kho thôn Phú Sơn gọi thẳng API để đọc tồn kho thôn Long Ch
 > **Hệ quả cần biết:** `tokenVersion` là **một số duy nhất cho mỗi tài khoản**, không
 > phải cho mỗi thiết bị. Hai máy dùng chung một tài khoản sẽ đá nhau — máy đăng nhập
 > sau làm máy trước rớt phiên. Đây là lý do ứng dụng desktop phải có tài khoản riêng
-> `iot@ungphonhanh.life` thay vì dùng chung `admin`.
+> `iot` thay vì dùng chung `admin`.
 
 ### 3.2. Duy trì và kết thúc phiên
 
@@ -177,7 +177,7 @@ giữ kho thôn Phú Sơn gọi thẳng API để đọc tồn kho thôn Long Ch
 | Sửa được | Họ tên, số điện thoại, email nhận thông báo, ảnh đại diện, mật khẩu |
 
 Trường **email nhận thông báo** tách riêng khỏi tên đăng nhập: tên đăng nhập của kho
-thôn là `phuson@ungphonhanh.life` — một định danh nội bộ, không phải hộp thư có thật.
+thôn là `phuson` — một định danh nội bộ, không phải hộp thư có thật.
 Muốn nhận cảnh báo qua email thì khai địa chỉ thật ở trường riêng này.
 
 ---
@@ -1043,7 +1043,7 @@ cùng một địa chỉ. APK mang sẵn chứng chỉ gốc nội bộ **chỉ 
 
 ## 16. Ứng dụng desktop — thiết bị IoT tại kho
 
-Electron · chạy bằng `pnpm desktop:dev` · tài khoản riêng `iot@ungphonhanh.life`
+Electron · chạy bằng `pnpm desktop:dev` · tài khoản riêng `iot`
 
 ### 16.1. Luồng thao tác
 
@@ -1263,7 +1263,7 @@ Ghi lại để người đọc không bị dẫn sai khi mở các file cũ.
 |---|---|---|
 | [`apps/mobile/README.md`](../apps/mobile/README.md) §Kiến trúc và §Test realtime | Mô tả luồng `POST /api/missions/:id/dispatch`, `/confirm`, `/reject` với nút **Chấp nhận** / **Từ chối** trên điện thoại | Ba điểm cuối này **không còn tồn tại**. Xã phát hành thẳng tới kho bằng `POST missions/:id/approve`. Điện thoại chỉ gọi `POST missions/:id/complete` để đóng nhiệm vụ. Xem [§5](#5-điều-phối-cứu-hộ--luồng-đầy-đủ) |
 | [`docs/HUONG-DAN-TEST-TOAN-DIEN.md`](HUONG-DAN-TEST-TOAN-DIEN.md) §5 ca S08 | "17 kho thôn hiển thị *chưa ghim*" | **12** kho thôn chưa ghim; dữ liệu mẫu đã gán tọa độ đã xác minh cho 5 thôn |
-| [`docs/HUONG-DAN-TEST-TOAN-DIEN.md`](HUONG-DAN-TEST-TOAN-DIEN.md) §2.4 và §5 ca S10 | "20 tài khoản" / "Người dùng 20" | Seed tạo **20** tài khoản; tài khoản thứ **21** là `iot@ungphonhanh.life`, do script riêng `prisma/create-iot-account.ts` tạo, **không** nằm trong seed và **bị mất mỗi lần seed lại** |
+| [`docs/HUONG-DAN-TEST-TOAN-DIEN.md`](HUONG-DAN-TEST-TOAN-DIEN.md) §2.4 và §5 ca S10 | "20 tài khoản" / "Người dùng 20" | Seed tạo **20** tài khoản; tài khoản thứ **21** là `iot`, do script riêng `prisma/create-iot-account.ts` tạo, **không** nằm trong seed và **bị mất mỗi lần seed lại** |
 | [`docs/HUONG-DAN-TEST-3-UNG-DUNG.md`](HUONG-DAN-TEST-3-UNG-DUNG.md) §1.1 | "21 người dùng, 19 thiết bị" | Seed in ra **20** người dùng và **68** thiết bị ảo. Con số 21 chỉ đúng sau khi chạy thêm script tạo tài khoản IoT |
 
 Nguyên tắc chung khi hai tài liệu mâu thuẫn: **mã nguồn là chuẩn**, sau đó tới tài liệu

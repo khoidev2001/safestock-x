@@ -78,7 +78,9 @@ describe("LocalRoutingService", () => {
     ).resolves.toMatchObject({
       status: "ROUTED",
       distanceKm: 2.5,
-      etaMinutes: 8,
+      // 2,5km trong 480s = 18,75km/h, đã chậm hơn trần 30km/h nên giữ ước lượng của
+      // OSRM (8 phút chạy) rồi cộng phụ phí mỗi chuyến 4 phút. Xem `relief-eta.ts`.
+      etaMinutes: 12,
       geometry: {
         type: "LineString",
         coordinates: [

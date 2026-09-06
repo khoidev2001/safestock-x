@@ -1,18 +1,12 @@
 "use client";
 
+import { itemConditionLabel } from "@safestock/shared-types";
 import { ColorIcon } from "@/components/shared/color-icon";
 import { Pagination, usePagination } from "@/components/shared/pagination";
 import type { InventoryBatch } from "@/lib/dashboard-api";
 
 export type InventoryRowAction =
   "IMPORT" | "EXPORT" | "TRANSFER" | "ADJUST" | "RECONCILE" | "CONDITION" | "BORROW";
-
-const conditionLabels: Record<string, string> = {
-  NEW: "Mới",
-  USED: "Đã dùng",
-  NEEDS_CHECK: "Cần kiểm tra",
-  DAMAGED: "Hư hỏng",
-};
 
 const actions: { key: InventoryRowAction; label: string }[] = [
   { key: "IMPORT", label: "Nhập thêm" },
@@ -126,7 +120,7 @@ export function InventoryTable({
                     </td>
                     <td className="px-4 py-3">
                       <span className="rounded-md bg-[var(--surface-2)] px-2 py-1 text-xs font-medium">
-                        {conditionLabels[batch.condition] ?? batch.condition}
+                        {itemConditionLabel(batch.condition)}
                       </span>
                       {batch.expiryDate ? (
                         <p className="mt-1 text-xs text-[var(--text-muted)]">

@@ -4,6 +4,10 @@ export interface NotificationLike {
   missionId?: string | null;
 }
 
+export interface IdentifiedNotification extends NotificationLike {
+  id: string;
+}
+
 /**
  * Thông báo nào thuộc về tab nào.
  *
@@ -61,4 +65,24 @@ export function unreadByNavPath(notifications: NotificationLike[]): Record<strin
     counts[path] = (counts[path] ?? 0) + 1;
   }
   return counts;
+}
+
+/**
+ * Id của những thông báo CHƯA ĐỌC đang làm nên con số của một tab.
+ *
+ * Bấm vào tab là đã xem việc của tab đó, nên con số phải mất ngay tại đó. Trước
+ * đây chỉ có mở chuông mới xoá được, nên người dùng bấm vào tab Nhiệm vụ, đọc
+ * xong hết việc, quay ra vẫn thấy số đỏ y nguyên — rồi lần sau họ thôi không tin
+ * con số nữa, đúng lúc nó đang báo một việc thật.
+ *
+ * Trả về danh sách id chứ không phải chỉ số đếm: đánh dấu đã đọc phải nhằm đúng
+ * những bản ghi này, không được lây sang việc của tab khác đang còn chờ xử lý.
+ */
+export function unreadIdsForNavPath(
+  notifications: IdentifiedNotification[],
+  navPath: string,
+): string[] {
+  return notifications
+    .filter((item) => !item.read && navPathForNotification(item.kind) === navPath)
+    .map((item) => item.id);
 }

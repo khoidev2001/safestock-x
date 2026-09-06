@@ -14,6 +14,15 @@ export interface CreateNotification {
   /** Khoản mượn liên xã mà thông báo nói tới — cho phép dựng nút hành động. */
   loanId?: string;
   fieldUpdateId?: string;
+  /**
+   * Tình huống của nhiệm vụ. Bỏ trống thì service tự chép từ chính nhiệm vụ đó.
+   *
+   * Người gửi chỉ nên truyền tay khi bản ghi nhiệm vụ chưa có số đúng ở thời
+   * điểm gửi (ví dụ báo cáo thô của trưởng thôn, chưa phân tích).
+   */
+  incidentType?: string | null;
+  affectedPeople?: number | null;
+  locationName?: string | null;
 }
 
 /** Gateway is injected at runtime; the service does not depend on Socket.IO. */
@@ -53,9 +62,13 @@ interface NotificationPersistence {
     }): Promise<{ organizationId: string } | null>;
   };
   mission: {
-    findUnique(
-      args: Record<string, unknown>,
-    ): Promise<{ warehouse: { organizationId: string } } | null>;
+    findUnique(args: Record<string, unknown>): Promise<{
+      warehouse: { organizationId: string };
+      incidentType?: string;
+      affectedPeople?: number;
+      location?: string | null;
+      hamletName?: string | null;
+    } | null>;
   };
 }
 
@@ -77,7 +90,8 @@ export class NotificationService {
   /** Persist then publish only to the exact organization + role room. */
   async create(input: CreateNotification) {
     const organizationId = await this.resolveOrganizationId(input);
-    const { organizationId: _providedOrganizationId, ...data } = input;
+    const { organizationId: _providedOrganizationId, ...rest } = input;
+    const data = { ...rest, ...(await this.resolveIncidentContext(input)) };
     if (input.fieldUpdateId) {
       const existing = await this.db.notification.findUnique({
         where: { fieldUpdateId: input.fieldUpdateId },
@@ -145,6 +159,26 @@ export class NotificationService {
     return { count: updated.count };
   }
 
+  /**
+   * Đánh dấu đã đọc một lô thông báo — không kêu khi có id không khớp.
+   *
+   * Khác `markRead` một cái có chủ ý: ở đó người dùng chỉ vào ĐÚNG MỘT thông
+   * báo, nên không tìm thấy là chuyện đáng báo. Ở đây danh sách id do trình
+   * duyệt gom từ bản chụp cách đó vài giây, nên vài id đã được người khác cùng
+   * vai đọc mất là chuyện bình thường. Ném lỗi vì chuyện bình thường đó sẽ làm
+   * hỏng cả lượt xoá số trên tab — số nằm nguyên tại chỗ dù đã bấm vào.
+   *
+   * `organizationId` + `recipientRole` vẫn nằm trong điều kiện, nên id của tổ
+   * chức khác lọt vào cũng chỉ được đếm là 0, không đọc và không sửa gì.
+   */
+  async markManyRead(actorId: string, role: UserRole, ids: string[]) {
+    const organizationId = await this.actorOrganizationId(actorId);
+    return this.db.notification.updateMany({
+      where: { id: { in: ids }, organizationId, recipientRole: role, read: false },
+      data: { read: true },
+    });
+  }
+
   async markAllRead(actorId: string, role: UserRole) {
     const organizationId = await this.actorOrganizationId(actorId);
     return this.db.notification.updateMany({
@@ -160,6 +194,43 @@ export class NotificationService {
     });
     if (!actor) throw new NotFoundException("Không tìm thấy người dùng");
     return actor.organizationId;
+  }
+
+  /**
+   * Chép tình huống của nhiệm vụ vào chính thông báo.
+   *
+   * Thẻ thông báo cần biểu tượng đúng loại thiên tai và cần in đậm số người,
+   * tên thôn — ba thứ đó nằm ở nhiệm vụ. Để màn hình tự đi hỏi thì mỗi thẻ là
+   * một lượt gọi mạng lúc đang có việc, mà thẻ hiện trước khi câu trả lời về
+   * thì người trực đọc được đúng một dòng chữ chung chung.
+   *
+   * Chép chứ không tham chiếu: nhiệm vụ sửa số về sau không được phép viết lại
+   * nội dung một thông báo đã gửi đi.
+   */
+  private async resolveIncidentContext(input: CreateNotification) {
+    // Xét CÓ NHẮC TỚI hay không, chứ không xét giá trị khác null: người gửi
+    // truyền thẳng `incidentType: null` là đang nói "thông báo này không gắn
+    // tình huống nào" — như báo cáo thô của trưởng thôn, nơi nhiệm vụ mới chỉ là
+    // chỗ trống (OTHER, 0 người). Đọc đè bằng số của nhiệm vụ lúc đó là dựng ra
+    // một con số không ai báo.
+    const daNoi = "incidentType" in input || "affectedPeople" in input || "locationName" in input;
+    if (daNoi || !input.missionId) return {};
+    const mission = await this.db.mission.findUnique({
+      where: { id: input.missionId },
+      select: {
+        incidentType: true,
+        affectedPeople: true,
+        location: true,
+        hamletName: true,
+        warehouse: { select: { organizationId: true } },
+      },
+    });
+    if (!mission) return {};
+    return {
+      incidentType: mission.incidentType ?? null,
+      affectedPeople: mission.affectedPeople ?? null,
+      locationName: mission.hamletName ?? mission.location ?? null,
+    };
   }
 
   private async resolveOrganizationId(input: CreateNotification): Promise<string> {
