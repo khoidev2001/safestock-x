@@ -51,6 +51,8 @@ const calculateTotalAmount = () => {};
 
 Comment có thể viết bằng tiếng Việt hoặc tiếng Anh, nhưng toàn bộ dự án phải thống nhất một ngôn ngữ.
 
+Quy tắc này có cổng chạy được: `pnpm lint:naming` (và bước `Reject Vietnamese identifiers` trong CI). Chi tiết cách đặt tên, từ điển nghiệp vụ và cách đặt tên test: [english-identifiers/SKILL.md](english-identifiers/SKILL.md).
+
 ## 2.2. Encoding
 
 Tất cả file mã nguồn **MUST sử dụng UTF-8**.
