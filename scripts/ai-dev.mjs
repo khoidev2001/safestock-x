@@ -28,6 +28,21 @@ if (!existsSync(python)) {
 const host = process.env.AI_SERVICE_HOST?.trim() || "127.0.0.1";
 const port = process.env.AI_SERVICE_PORT?.trim() || "8000";
 const args = ["-m", "uvicorn", "main:app", "--host", host, "--port", port];
+
+// Nạp lại khi sửa .py — PHẢI TỰ BẬT bằng AI_SERVICE_RELOAD=1.
+//
+// Không bật mặc định vì mỗi lần nạp lại là một lần hâm nóng PhoWhisper (xem
+// `_ham_nong_nhan_dang_giong_noi` trong main.py): nạp model torch mất vài chục
+// giây, gõ sửa liên tục thì máy dev nghẹt.
+//
+// Nhưng không có nó thì cái bẫy ngược lại còn tệ hơn và đã dính thật: sửa xong
+// logic Python, test xanh hết, mà service vẫn chạy bản cũ trong bộ nhớ — nhìn ra
+// y hệt "đã sửa mà vẫn lỗi", và mất cả một vòng thử nghiệm mới lần ra.
+// Đang sửa Python thì bật cờ này; kèm PHOWHISPER_WARM=false cho nhẹ.
+if (process.env.AI_SERVICE_RELOAD?.trim() === "1") {
+  args.push("--reload");
+  console.log("[ai-dev] --reload BẬT: sửa .py là service tự nạp lại.");
+}
 // stdio kế thừa để log uvicorn hiện trực tiếp; cwd = ai-service để uvicorn thấy main.py.
 const child = spawn(python, args, { cwd: serviceDir, stdio: "inherit" });
 
