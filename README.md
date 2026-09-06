@@ -15,8 +15,6 @@ Nền tảng đánh giá mức sẵn sàng kho và điều phối vật tư cứ
   cơ sở dữ liệu trên máy mới sau khi clone.
 - [Rà soát hệ thống và kế hoạch tối ưu](docs/RA-SOAT-HE-THONG-VA-KE-HOACH-TOI-UU.md):
   hiện trạng đo được, phát hiện về hiệu năng, kiến trúc, bảo mật và backlog ưu tiên.
-- [Bộ thiết kế UI/UX ứng dụng điện thoại](docs/thiet-ke-ui-mobile/README.md):
-  hệ thống thiết kế, thư viện thành phần và bản thiết kế từng màn.
 - [PM re-review quản lý kho ngày thường](docs/PM-REVIEW-QUAN-LY-KHO-NGAY-THUONG.md):
   điểm trước/sau, finding đã khắc phục và release gate còn chờ.
 - [Bàn giao chênh lệch so với GitHub](docs/BAN-GIAO-CHENH-LECH-SO-VOI-GITHUB.md):
