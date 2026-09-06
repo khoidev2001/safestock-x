@@ -96,18 +96,18 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
   const [scannerOpen, setScannerOpen] = useState(false);
   // Nhãn QR đang xem. Tải theo yêu cầu chứ không tải sẵn cho cả kho: một kho
   // vài trăm lô, tải hết là vài trăm ảnh không ai xem tới.
-  const [nhanQr, setNhanQr] = useState<BatchQrLabel | null>(null);
-  const [dangTaiQr, setDangTaiQr] = useState(false);
+  const [qrLabel, setQrLabel] = useState<BatchQrLabel | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
 
-  const moMaQr = useCallback(
+  const openQrLabel = useCallback(
     async (batch: InventoryBatch) => {
-      setDangTaiQr(true);
+      setQrLoading(true);
       try {
-        setNhanQr(await fetchBatchQr(token, batch.id));
+        setQrLabel(await fetchBatchQr(token, batch.id));
       } catch (e) {
         setError(e instanceof Error ? e.message : "Không tạo được mã QR cho lô này");
       } finally {
-        setDangTaiQr(false);
+        setQrLoading(false);
       }
     },
     [token],
@@ -120,6 +120,16 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(
     user.warehouseId ?? null,
   );
+  /**
+   * Đang xem DANH SÁCH kho thay vì lòng một kho.
+   *
+   * Trước đây danh sách chỉ hiện đúng một lần, lúc chưa chọn kho nào; sau đó
+   * cách duy nhất để đổi kho là hàng chip cuộn ngang trên đầu màn hình. Hàng
+   * chip ấy vừa chiếm chỗ vừa không tìm được: xã có hơn chục kho, muốn tới kho
+   * cuối phải vuốt ngang qua tất cả các kho đứng trước.
+   */
+  const [browsingWarehouses, setBrowsingWarehouses] = useState(false);
+  const [warehouseQuery, setWarehouseQuery] = useState("");
   const netInfo = useNetInfo();
   const snapshotRef = useRef<InventorySnapshot | null>(null);
 
@@ -230,6 +240,10 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
   }, [load]);
 
   const selectWarehouse = (warehouseId: string) => {
+    setBrowsingWarehouses(false);
+    setWarehouseQuery("");
+    // Bấm lại đúng kho đang mở: chỉ đóng danh sách, không tải lại từ đầu. Xoá
+    // snapshot ở đây là bắt người dùng chờ một lượt mạng cho thứ họ đã có.
     if (warehouseId === selectedWarehouseId) return;
     snapshotRef.current = null;
     setSnapshot(null);
@@ -245,6 +259,20 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
       // Không chặn thao tác nếu thiết bị không lưu được preference.
     });
   };
+
+  /**
+   * Lọc kho theo tên, bỏ dấu để gõ "ky du" vẫn ra "Kho thôn Kỳ Đu".
+   *
+   * Không ai gõ dấu khi đang đứng giữa kho, và bàn phím điện thoại còn tự sửa
+   * chính tả — bắt gõ đúng dấu là bắt người dùng chiến đấu với bàn phím.
+   */
+  const filteredWarehouses = useMemo(() => {
+    const keyword = stripDiacritics(warehouseQuery);
+    if (!keyword) return warehouseOptions;
+    return warehouseOptions.filter((warehouse) =>
+      stripDiacritics(warehouse.name).includes(keyword),
+    );
+  }, [warehouseOptions, warehouseQuery]);
 
   const filteredBatches = useMemo(() => {
     if (snapshot && semanticSkus) {
@@ -320,7 +348,17 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
     );
   }
 
-  if (!snapshot && user.role === "ADMIN" && warehouseOptions.length > 0) {
+  /*
+    Danh sách kho là một MÀN HÌNH riêng, không phải một dải chip trên đầu trang.
+    
+    Xã có hơn chục kho. Dải chip cuộn ngang bắt người dùng vuốt qua từng kho một
+    để tới kho cuối, không tìm được theo tên, mà vẫn chiếm một khoảng chiều cao
+    trên mọi màn hình kể cả khi họ đang làm việc trong đúng một kho suốt buổi.
+    
+    Hiện ở hai lúc: chưa mở kho nào (lần đầu), và khi người dùng chủ động bấm
+    "Đổi kho" từ trong lòng một kho.
+  */
+  if (user.role === "ADMIN" && warehouseOptions.length > 0 && (!snapshot || browsingWarehouses)) {
     return (
       <View style={local.chooserScreen}>
         <Text style={local.eyebrow}>PHẠM VI VẬN HÀNH</Text>
@@ -329,19 +367,61 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
           Mọi số liệu, phiếu mượn và thao tác sau đó chỉ áp dụng cho kho đã chọn.
         </Text>
         {error ? <Text style={local.error}>{error}</Text> : null}
-        <View style={local.chooserList}>
-          {warehouseOptions.map((warehouse) => (
-            <Pressable
-              accessibilityRole="button"
-              key={warehouse.id}
-              onPress={() => selectWarehouse(warehouse.id)}
-              style={local.chooserOption}
-            >
-              <Text style={local.chooserOptionText}>{warehouse.name}</Text>
-              <Text style={local.link}>Mở kho →</Text>
-            </Pressable>
-          ))}
-        </View>
+
+        <TextInput
+          accessibilityLabel="Tìm kho theo tên"
+          autoCorrect={false}
+          onChangeText={setWarehouseQuery}
+          placeholder="Tìm kho theo tên, ví dụ: Kỳ Đu"
+          placeholderTextColor={c.muted}
+          style={local.chooserSearch}
+          value={warehouseQuery}
+        />
+
+        {filteredWarehouses.length === 0 ? (
+          <Text style={local.chooserEmpty}>Không có kho nào khớp “{warehouseQuery}”.</Text>
+        ) : (
+          <ScrollView
+            contentContainerStyle={local.chooserList}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {filteredWarehouses.map((warehouse) => {
+              const isCurrent = warehouse.id === selectedWarehouseId;
+              return (
+                <Pressable
+                  accessibilityRole="button"
+                  key={warehouse.id}
+                  onPress={() => selectWarehouse(warehouse.id)}
+                  style={[local.chooserOption, isCurrent && local.chooserOptionCurrent]}
+                >
+                  <View style={local.chooserOptionMain}>
+                    <Text style={local.chooserOptionText}>{warehouse.name}</Text>
+                    {/* Đánh dấu kho đang mở: người dùng bấm "Đổi kho" rồi đổi ý
+                        cần biết quay lại đâu, mà mười cái tên thôn nhìn giống nhau. */}
+                    {isCurrent ? <Text style={local.chooserBadge}>đang mở</Text> : null}
+                  </View>
+                  <Text style={local.link}>{isCurrent ? "Quay lại →" : "Mở kho →"}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        )}
+
+        {/* Chỉ có đường lui khi đang thật sự có kho để lui về. Lần đầu vào app
+            thì chưa mở kho nào, hiện nút "Đóng" là hứa một chỗ không tồn tại. */}
+        {snapshot ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              setBrowsingWarehouses(false);
+              setWarehouseQuery("");
+            }}
+            style={local.chooserCancel}
+          >
+            <Text style={local.chooserCancelText}>Đóng, giữ kho đang mở</Text>
+          </Pressable>
+        ) : null}
       </View>
     );
   }
@@ -371,33 +451,19 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
         <View style={[local.statusDot, { backgroundColor: offline ? c.amber : c.green }]} />
       </View>
 
+      {/* Đổi kho là một cú bấm mở DANH SÁCH, không phải một dải chip nằm thường
+          trực trên đầu màn hình. Người trực làm việc trong một kho suốt buổi;
+          dải chip lấy chỗ của họ mỗi lần cuộn để phục vụ một thao tác hiếm. */}
       {user.role === "ADMIN" && warehouseOptions.length > 1 ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={local.warehouseChips}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setBrowsingWarehouses(true)}
+          style={local.switchWarehouse}
         >
-          {warehouseOptions.map((warehouse) => (
-            <Pressable
-              accessibilityRole="button"
-              key={warehouse.id}
-              onPress={() => selectWarehouse(warehouse.id)}
-              style={[
-                local.warehouseChip,
-                warehouse.id === snapshot.warehouse.id && local.warehouseChipActive,
-              ]}
-            >
-              <Text
-                style={[
-                  local.warehouseChipText,
-                  warehouse.id === snapshot.warehouse.id && local.warehouseChipTextActive,
-                ]}
-              >
-                {warehouse.name}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
+          <Text style={local.switchWarehouseText}>
+            Đổi kho ({warehouseOptions.length} kho trong xã)
+          </Text>
+        </Pressable>
       ) : null}
 
       {offline ? (
@@ -491,7 +557,7 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
                 role={user.role}
                 readOnly={offline}
                 onAction={(action) => openAction(item, action)}
-                onShowQr={() => void moMaQr(item)}
+                onShowQr={() => void openQrLabel(item)}
               />
             )}
           />
@@ -527,31 +593,31 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
         />
       )}
 
-      <Modal visible={Boolean(nhanQr) || dangTaiQr} transparent animationType="fade">
-        <View style={local.qrLop}>
-          <View style={local.qrHop}>
-            {dangTaiQr || !nhanQr ? (
+      <Modal visible={Boolean(qrLabel) || qrLoading} transparent animationType="fade">
+        <View style={local.qrOverlay}>
+          <View style={local.qrCard}>
+            {qrLoading || !qrLabel ? (
               <ActivityIndicator color={c.primary} size="large" />
             ) : (
               <>
-                <Text style={local.qrTen}>{nhanQr.itemName}</Text>
-                <Text style={local.qrLo}>Lô {nhanQr.batchCode}</Text>
+                <Text style={local.qrItemName}>{qrLabel.itemName}</Text>
+                <Text style={local.qrBatchCode}>Lô {qrLabel.batchCode}</Text>
                 {/* Nền trắng cố định: mã QR đọc bằng độ tương phản, đặt lên nền
                     tối là máy quét đọc chậm hoặc không đọc được. */}
-                <View style={local.qrNen}>
+                <View style={local.qrImageFrame}>
                   <Image
-                    source={{ uri: nhanQr.dataUrl }}
-                    style={local.qrAnh}
+                    source={{ uri: qrLabel.dataUrl }}
+                    style={local.qrImage}
                     resizeMode="contain"
                   />
                 </View>
-                <Text style={local.qrGhiChu}>
+                <Text style={local.qrHint}>
                   Đưa màn hình này cho máy khác quét, hoặc chụp lại để in nhãn dán lên lô.
                 </Text>
               </>
             )}
-            <Pressable onPress={() => setNhanQr(null)} style={local.qrDong}>
-              <Text style={local.qrDongChu}>Đóng</Text>
+            <Pressable onPress={() => setQrLabel(null)} style={local.qrCloseButton}>
+              <Text style={local.qrCloseText}>Đóng</Text>
             </Pressable>
           </View>
         </View>
@@ -653,6 +719,7 @@ function BatchCard({
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          style={local.chipScroller}
           contentContainerStyle={local.actionScroller}
         >
           {actions.map((action) => (
@@ -673,6 +740,21 @@ function BatchCard({
       ) : null}
     </View>
   );
+}
+
+/**
+ * Bỏ dấu tiếng Việt để so khớp khi tìm kho.
+ *
+ * Người trực đứng giữa kho, một tay cầm hàng — họ gõ "ky du" chứ không gõ
+ * "Kỳ Đu", và bàn phím điện thoại còn tự sửa chính tả giúp. Bắt gõ đúng dấu là
+ * bắt họ chiến đấu với bàn phím giữa lúc đang vội.
+ */
+function stripDiacritics(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 }
 
 function LoanCard({
@@ -1490,14 +1572,14 @@ function conditionLabel(condition: string): string {
 }
 
 const local = StyleSheet.create({
-  qrLop: {
+  qrOverlay: {
     flex: 1,
     backgroundColor: "rgba(15,23,42,0.6)",
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
   },
-  qrHop: {
+  qrCard: {
     width: "100%",
     maxWidth: 340,
     alignItems: "center",
@@ -1506,12 +1588,12 @@ const local = StyleSheet.create({
     backgroundColor: c.surface,
     padding: 20,
   },
-  qrTen: { color: c.text, fontSize: 16, fontWeight: "800", textAlign: "center" },
-  qrLo: { color: c.muted, fontSize: 12 },
-  qrNen: { backgroundColor: "#ffffff", borderRadius: 12, padding: 12, marginTop: 4 },
-  qrAnh: { width: 220, height: 220 },
-  qrGhiChu: { color: c.muted, fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 6 },
-  qrDong: {
+  qrItemName: { color: c.text, fontSize: 16, fontWeight: "800", textAlign: "center" },
+  qrBatchCode: { color: c.muted, fontSize: 12 },
+  qrImageFrame: { backgroundColor: "#ffffff", borderRadius: 12, padding: 12, marginTop: 4 },
+  qrImage: { width: 220, height: 220 },
+  qrHint: { color: c.muted, fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 6 },
+  qrCloseButton: {
     marginTop: 10,
     minHeight: 44,
     justifyContent: "center",
@@ -1520,7 +1602,7 @@ const local = StyleSheet.create({
     borderWidth: 1,
     borderColor: c.border,
   },
-  qrDongChu: { color: c.text, fontSize: 14, fontWeight: "700" },
+  qrCloseText: { color: c.text, fontSize: 14, fontWeight: "700" },
   screen: { flex: 1, backgroundColor: c.bg },
   chooserScreen: {
     flex: 1,
@@ -1531,6 +1613,17 @@ const local = StyleSheet.create({
   },
   chooserHint: { color: c.muted, fontSize: 13, lineHeight: 19 },
   chooserList: { gap: 10, marginTop: 8 },
+  chooserSearch: {
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 10,
+    backgroundColor: c.surface,
+    color: c.text,
+    fontSize: 14,
+    minHeight: 44,
+    paddingHorizontal: 12,
+  },
+  chooserEmpty: { color: c.muted, fontSize: 13, marginTop: 8 },
   chooserOption: {
     borderWidth: 1,
     borderColor: c.border,
@@ -1538,7 +1631,24 @@ const local = StyleSheet.create({
     backgroundColor: c.surface,
     padding: 14,
   },
+  chooserOptionCurrent: { borderColor: c.amber, backgroundColor: "rgba(234,122,18,0.08)" },
+  chooserOptionMain: { flexDirection: "row", alignItems: "center", gap: 8 },
   chooserOptionText: { color: c.text, fontSize: 15, fontWeight: "800" },
+  chooserBadge: { color: c.amber, fontSize: 11, fontWeight: "800" },
+  chooserCancel: { alignItems: "center", minHeight: 44, justifyContent: "center" },
+  chooserCancelText: { color: c.muted, fontSize: 13, fontWeight: "700" },
+  switchWarehouse: {
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 999,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    minHeight: 36,
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  switchWarehouseText: { color: c.muted, fontSize: 12, fontWeight: "700" },
   center: {
     flex: 1,
     alignItems: "center",
@@ -1563,24 +1673,14 @@ const local = StyleSheet.create({
   title: { color: c.text, fontSize: 22, fontWeight: "900", marginTop: 3 },
   subtitle: { color: c.muted, fontSize: 12, marginTop: 3 },
   statusDot: { width: 10, height: 10, borderRadius: 5 },
-  warehouseChips: {
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-  },
-  warehouseChip: {
-    borderWidth: 1,
-    borderColor: c.border,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  warehouseChipActive: {
-    borderColor: c.amber,
-    backgroundColor: "rgba(245,158,11,0.1)",
-  },
-  warehouseChipText: { color: c.muted, fontSize: 11, fontWeight: "700" },
-  warehouseChipTextActive: { color: c.amber },
+  /**
+   * Hàng chip cuộn ngang không được giãn theo chiều dọc.
+   *
+   * ScrollView của react-native-web mang sẵn `flexGrow: 1`, nên đặt trong một
+   * màn hình `flex: 1` là nó nuốt hết chỗ trống còn lại. Khoá lại ở đây một chỗ
+   * cho mọi hàng chip trong màn hình này.
+   */
+  chipScroller: { flexGrow: 0, flexShrink: 0 },
   offline: {
     marginHorizontal: 16,
     borderWidth: 1,
@@ -1704,7 +1804,7 @@ const local = StyleSheet.create({
     marginTop: 9,
   },
   meta: { color: c.muted, fontSize: 11 },
-  actionScroller: { gap: 7, paddingTop: 12 },
+  actionScroller: { alignItems: "center", gap: 7, paddingTop: 12 },
   actionChip: {
     borderWidth: 1,
     borderColor: c.border,

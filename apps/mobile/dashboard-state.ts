@@ -8,7 +8,7 @@ export type MobileTab = "home" | "report" | "warehouse" | "missions" | "alerts" 
  * nhìn. Thanh tab hẹp, sáu nhãn bị cắt cụt, và người dùng phải nhớ "mức sẵn
  * sàng" nằm ở tab nào. Gom lại một cửa: chọn kho trước, rồi chọn xem gì.
  */
-export type WarehouseSection = "readiness" | "inventory" | "monthly-report";
+export type WarehouseSection = "missions" | "readiness" | "inventory" | "monthly-report";
 
 /**
  * App điện thoại có ĐÚNG HAI giao diện, chọn theo vai lúc đăng nhập.
@@ -41,9 +41,18 @@ export function tabsForRole(role: string): MobileTab[] {
  */
 export function warehouseSectionsForRole(role: string): WarehouseSection[] {
   if (role === "ADMIN") return ["inventory"];
-  // Kho đứng đầu vì đó là việc hằng ngày — nhập, xuất, quét QR tại kệ. Mức sẵn
-  // sàng chỉ liếc khi có cảnh báo, còn kiểm kê thì mỗi tháng một lần.
-  return ["inventory", "readiness", "monthly-report"];
+  /**
+   * NHIỆM VỤ CỨU HỘ đứng đầu, trước cả Kho.
+   *
+   * Nhập xuất hằng ngày là việc trưởng thôn tự chủ động, giờ nào làm cũng được.
+   * Còn nhiệm vụ cứu hộ là việc CÓ NGƯỜI ĐANG CHỜ và có hạn: xã đã phát lệnh, đội
+   * cứu hộ đang trên đường tới lấy hàng. Thứ có người chờ phải nằm ở ô đầu tiên.
+   *
+   * Trước đây muốn xem mình đang có lệnh nào thì phải vào hộp Thông báo tự lọc
+   * bằng mắt giữa cảnh báo tồn kho và nhắc kiểm kê — mà mỗi nhiệm vụ lại sinh vài
+   * ba thông báo nên cùng một việc hiện lên mấy lần.
+   */
+  return ["missions", "inventory", "readiness", "monthly-report"];
 }
 
 /** Tab mở đầu sau khi đăng nhập: việc chính của vai đó, không phải màn chung chung. */

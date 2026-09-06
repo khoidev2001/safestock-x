@@ -19,7 +19,9 @@
     "android": {
       "package": "vn.ungphonhanh.safestock",
       "versionCode": 5,
-      "permissions": ["android.permission.RECORD_AUDIO"],
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.SYSTEM_ALERT_WINDOW",
@@ -42,8 +44,14 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Cho phép Ứng phó nhanh dùng camera để quét mã QR vật tư.",
+          "cameraPermission": "Cho phép Ứng phó nhanh dùng camera để quét mã QR vật tư và chụp ảnh bằng chứng khi báo kết quả nhiệm vụ.",
           "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Cho phép Ứng phó nhanh mở thư viện ảnh để gửi ảnh bằng chứng đã giao vật tư."
         }
       ]
     ],

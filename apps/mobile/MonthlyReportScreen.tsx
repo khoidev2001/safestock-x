@@ -88,19 +88,19 @@ export function MonthlyReportScreen({ token, user }: { token: string; user: Auth
    * pin và sóng của một chiếc điện thoại đang ở vùng bão.
    */
   useEffect(() => {
-    let huy = false;
-    const lamMoi = async () => {
+    let cancelled = false;
+    const refresh = async () => {
       try {
-        const moi = await fetchStockReports(token);
-        if (!huy) setReports(moi);
+        const latest = await fetchStockReports(token);
+        if (!cancelled) setReports(latest);
       } catch {
         // Mất sóng thì giữ nguyên số liệu đang hiện; lượt sau tự thử lại.
       }
     };
-    const dongHo = setInterval(() => void lamMoi(), 10_000);
+    const timer = setInterval(() => void refresh(), 10_000);
     return () => {
-      huy = true;
-      clearInterval(dongHo);
+      cancelled = true;
+      clearInterval(timer);
     };
   }, [token]);
 
@@ -113,9 +113,9 @@ export function MonthlyReportScreen({ token, user }: { token: string; user: Auth
    */
   useEffect(() => {
     if (!selected) return;
-    const moi = reports.find((report) => report.id === selected.id);
-    if (moi && moi.status !== selected.status) {
-      setSelected((hienTai) => (hienTai ? { ...hienTai, status: moi.status } : hienTai));
+    const latest = reports.find((report) => report.id === selected.id);
+    if (latest && latest.status !== selected.status) {
+      setSelected((current) => (current ? { ...current, status: latest.status } : current));
     }
   }, [reports, selected]);
 

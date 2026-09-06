@@ -99,7 +99,7 @@ Tại lần build ghi trong tài liệu này, `adb devices -l` chưa thấy thi�
 ## Test realtime (end-to-end)
 
 1. **Mobile web**: đăng nhập bằng tài khoản seed/demo được cấu hình riêng trong môi trường local; không dùng credential demo khi mở Internet. Thấy danh sách thông báo + chấm xanh **"Đã kết nối"**.
-2. **Dashboard** (`http://localhost:3200`): đăng nhập `admin` / `admin123@` → tab **Nhiệm vụ** → tạo/chọn 1 nhiệm vụ → bấm **Điều phối**.
+2. **Dashboard** (`http://localhost:3200`): đăng nhập `superadmindongxuan` / `admin123` → tab **Nhiệm vụ** → tạo/chọn 1 nhiệm vụ → bấm **Điều phối**.
 3. **Kỳ vọng**: app mobile hiện thông báo *"Nhiệm vụ cứu hộ mới"* **ngay lập tức** (không cần refresh), nhảy lên đầu danh sách kèm badge **MỚI**.
 4. **Test reconnect**: tắt rồi bật lại `pnpm be:dev` → chấm chuyển xám ("Mất kết nối") rồi xanh lại.
 
@@ -118,7 +118,7 @@ Tại lần build ghi trong tài liệu này, `adb devices -l` chưa thấy thi�
 ```bash
 # Lấy token admin
 TOKEN=$(curl -s localhost:3100/api/auth/login -H 'Content-Type: application/json' \
-  -d '{"email":"admin","password":"admin123@"}' | node -pe 'JSON.parse(require("fs").readFileSync(0)).accessToken')
+  -d '{"email":"superadmindongxuan","password":"admin123"}' | node -pe 'JSON.parse(require("fs").readFileSync(0)).accessToken')
 
 # Lấy 1 mission DRAFT bất kỳ rồi dispatch (thay <MISSION_ID>)
 curl -s -X POST localhost:3100/api/missions/<MISSION_ID>/dispatch -H "Authorization: Bearer $TOKEN"
