@@ -6,7 +6,7 @@ import { describeLoginError } from "./login-error";
 const WRONG_CREDENTIALS = new Error("Email hoặc mật khẩu sai");
 
 test("giữ nguyên câu của máy chủ", () => {
-  assert.ok(describeLoginError(WRONG_CREDENTIALS, "localhost:3100", "iot123456").startsWith(WRONG_CREDENTIALS.message));
+  assert.ok(describeLoginError(WRONG_CREDENTIALS, "localhost:3110", "iot123456").startsWith(WRONG_CREDENTIALS.message));
 });
 
 test("luôn nói rõ đã gọi tới đâu", () => {
@@ -18,20 +18,20 @@ test("luôn nói rõ đã gọi tới đâu", () => {
 test("chỉ ra khoảng trắng thừa trong mật khẩu", () => {
   // Mật khẩu dán từ tài liệu bàn giao hay dính một dấu cách. Trên màn hình nó chỉ
   // là thêm một chấm tròn, không ai đếm.
-  assert.match(describeLoginError(WRONG_CREDENTIALS, "localhost:3100", "iot123456 "), /khoảng trắng/);
-  assert.match(describeLoginError(WRONG_CREDENTIALS, "localhost:3100", " iot123456"), /khoảng trắng/);
+  assert.match(describeLoginError(WRONG_CREDENTIALS, "localhost:3110", "iot123456 "), /khoảng trắng/);
+  assert.match(describeLoginError(WRONG_CREDENTIALS, "localhost:3110", " iot123456"), /khoảng trắng/);
 });
 
 test("mật khẩu sạch thì không nhắc khoảng trắng", () => {
-  assert.doesNotMatch(describeLoginError(WRONG_CREDENTIALS, "localhost:3100", "iot123456"), /khoảng trắng/);
+  assert.doesNotMatch(describeLoginError(WRONG_CREDENTIALS, "localhost:3110", "iot123456"), /khoảng trắng/);
 });
 
 test("cảnh báo khi trỏ ra Internet trong lúc máy chủ chạy ngay tại chỗ", () => {
-  assert.match(describeLoginError(WRONG_CREDENTIALS, "ungphonhanh.life", "iot123456"), /localhost:3100/);
+  assert.match(describeLoginError(WRONG_CREDENTIALS, "ungphonhanh.life", "iot123456"), /localhost:3110/);
 });
 
 test("ô địa chỉ bỏ trống vẫn nói được mặc định", () => {
-  assert.match(describeLoginError(WRONG_CREDENTIALS, "   ", "iot123456"), /localhost:3100/);
+  assert.match(describeLoginError(WRONG_CREDENTIALS, "   ", "iot123456"), /localhost:3110/);
 });
 
 test("bị khoá tạm thì nói thẳng là chờ, đừng gợi ý sửa mật khẩu", () => {
@@ -41,7 +41,7 @@ test("bị khoá tạm thì nói thẳng là chờ, đừng gợi ý sửa mật
     status: 429,
   });
 
-  const message = describeLoginError(lockedOut, "localhost:3100", "iot123456 ");
+  const message = describeLoginError(lockedOut, "localhost:3110", "iot123456 ");
 
   assert.match(message, /15 phút/);
   assert.doesNotMatch(message, /khoảng trắng/);

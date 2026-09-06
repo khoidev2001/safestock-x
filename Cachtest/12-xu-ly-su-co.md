@@ -89,7 +89,7 @@ Giấu hẳn phép đo đáng ngờ thì có ngày giấu luôn một đám chá
 ## Kiểm chứng bằng lệnh
 
 ```bash
-API=http://localhost:3100/api
+API=http://localhost:3110/api
 STAFF=<mã đăng nhập của staff@>
 
 # danh sách sự cố đang mở

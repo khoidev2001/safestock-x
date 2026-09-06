@@ -14,7 +14,7 @@ ungphonhanh.life {
 
 	@backend path /api /api/* /socket.io /socket.io/*
 	handle @backend {
-		reverse_proxy 127.0.0.1:3100
+		reverse_proxy 127.0.0.1:3110
 	}
 
 	handle {

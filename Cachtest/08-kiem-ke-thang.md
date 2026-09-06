@@ -72,7 +72,7 @@ tác. Sửa nửa vời để lại sổ sách không ai đọc nổi.
 ## Kiểm chứng bằng lệnh
 
 ```bash
-API=http://localhost:3100/api
+API=http://localhost:3110/api
 ADMIN=<mã đăng nhập của admin>
 
 # danh sách phiếu

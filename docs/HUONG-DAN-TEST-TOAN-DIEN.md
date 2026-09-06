@@ -22,7 +22,7 @@
 
 | Thành phần | Thư mục | Công nghệ | Cổng mặc định |
 |---|---|---|---|
-| Backend API | `apps/backend` | NestJS + Prisma + PostgreSQL + Redis + Socket.IO | **3100** |
+| Backend API | `apps/backend` | NestJS + Prisma + PostgreSQL + Redis + Socket.IO | **3110** |
 | Frontend web | `apps/frontend` | Next.js | **3200** |
 | AI Service | `apps/ai-service` | FastAPI + Ollama (local) | **8000** |
 | Mobile | `apps/mobile` | React Native + Expo | Expo (Metro) |
@@ -135,7 +135,7 @@ pnpm fe:dev
 **Kiểm tra sức khỏe dịch vụ:**
 
 ```powershell
-Invoke-RestMethod http://localhost:3100/api/health    # status = ok, database + redis = up
+Invoke-RestMethod http://localhost:3110/api/health    # status = ok, database + redis = up
 Invoke-RestMethod http://localhost:8000/health        # status = ok, provider = ollama
 Invoke-WebRequest  http://localhost:3200 -UseBasicParsing   # HTTP 200
 ```
@@ -234,7 +234,7 @@ pnpm desktop:dev
 
 Trong cửa sổ Electron:
 
-1. **Đăng nhập**: Host = `localhost:3100`, `ungphonhanh.life`, hoặc hostname/IP LAN; dùng tài khoản ADMIN đúng scope kho.
+1. **Đăng nhập**: Host = `localhost:3110`, `ungphonhanh.life`, hoặc hostname/IP LAN; dùng tài khoản ADMIN đúng scope kho.
 2. Kéo slider **Nhiệt độ** vượt `35°C` (ví dụ `46°C`). Kỳ vọng: badge “đã chỉnh, chưa gửi” tăng, web/database chưa có snapshot mới.
 3. Bấm **Xác nhận và gửi**.
    - Kỳ vọng: app lưu hàng chờ trước, nhật ký báo đã gửi một snapshot; web poll tối đa 10 giây sẽ thấy số đọc/timeline mới, readiness và Incident cập nhật.
@@ -383,9 +383,9 @@ Sau reset phải quay lại: 18 kho, 17 thôn chưa ghim, 2 phiếu mượn mở
 | Triệu chứng | Cách xử lý |
 |---|---|
 | Backend health `degraded` | `docker ps`; xem `docker logs safestock_postgres` / `safestock_redis`; kiểm tra cổng trong `.env` |
-| Frontend báo không kết nối | `Get-NetTCPConnection -LocalPort 3100 -State Listen`; `Invoke-RestMethod http://localhost:3100/api/health` |
+| Frontend báo không kết nối | `Get-NetTCPConnection -LocalPort 3110 -State Listen`; `Invoke-RestMethod http://localhost:3110/api/health` |
 | Trợ lý AI không phản hồi | `ollama list` (có `qwen3.5:4b`?); `Invoke-RestMethod http://localhost:8000/health`; kiểm tra terminal `pnpm ai:dev` |
-| Cổng 3100/3200 bị chiếm | `Get-NetTCPConnection -LocalPort 3100,3200 -State Listen` → dừng đúng tiến trình cũ |
+| Cổng 3110/3200 bị chiếm | `Get-NetTCPConnection -LocalPort 3110,3200 -State Listen` → dừng đúng tiến trình cũ |
 | `EPERM` khi Prisma generate (Windows) | Dừng backend đang chạy rồi `pnpm be:generate` lại (Node khóa DLL) |
 | Đăng nhập demo sai | Mật khẩu có thể đã bị ADMIN đổi sau seed; dùng chức năng đổi mật khẩu, **không** seed lại trên DB có dữ liệu thật |
 | Backend hang khi khởi động | Redis host port có thể trúng dải TCP Windows reserved — dùng `16379` local |

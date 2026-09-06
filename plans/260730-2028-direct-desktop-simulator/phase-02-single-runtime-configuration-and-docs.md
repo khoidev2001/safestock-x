@@ -21,7 +21,7 @@ single configuration source for manual desktop testing.
 
 1. Replace demo-specific environment validation with boolean flag validation.
 2. Remove demo infrastructure and scripted static clients.
-3. Document enabling the flag locally and using the desktop app on port 3100.
+3. Document enabling the flag locally and using the desktop app on port 3110.
 4. Reconcile the pending rehearsal plan that previously described isolated demo reset.
 
 ## Todo

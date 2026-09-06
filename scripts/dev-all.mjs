@@ -20,7 +20,7 @@ if (invalidArg) {
 
 const services = [
   { name: "ai-service", port: 8000, command: pnpm, args: ["ai:dev"] },
-  { name: "backend", port: 3100, command: pnpm, args: ["be:dev"] },
+  { name: "backend", port: 3110, command: pnpm, args: ["be:dev"] },
   { name: "frontend", port: 3200, command: pnpm, args: ["fe:dev"] },
 ];
 

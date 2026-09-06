@@ -93,7 +93,7 @@ Monorepo `pnpm`, 5 ứng dụng và 2 gói dùng chung:
 
 | Thành phần | Thư mục | Công nghệ | Cổng khi chạy local |
 |---|---|---|---|
-| **Máy chủ API** | `apps/backend` | NestJS · Prisma · PostgreSQL · Redis · Socket.IO | **3100** |
+| **Máy chủ API** | `apps/backend` | NestJS · Prisma · PostgreSQL · Redis · Socket.IO | **3110** |
 | **Web vận hành** | `apps/frontend` | Next.js | **3200** |
 | **Dịch vụ AI** | `apps/ai-service` | FastAPI · Ollama (chạy cục bộ) | **8000** |
 | **App điện thoại** | `apps/mobile` | React Native · Expo · APK Android | — |
@@ -473,7 +473,7 @@ pnpm desktop:dev
 
 **Kịch bản đáng xem:**
 
-1. **Đăng nhập** — Host: `localhost:3100` (khi tự cài) hoặc `ungphonhanh.life`.
+1. **Đăng nhập** — Host: `localhost:3110` (khi tự cài) hoặc `ungphonhanh.life`.
    Tài khoản: `iot` / `iot123456`.
 2. Kéo thanh trượt **Nhiệt độ** vượt `35°C`, ví dụ `46°C`.
    → Kỳ vọng: chỉ hiện nhãn *"đã chỉnh, chưa gửi"*. **Web và cơ sở dữ liệu chưa có gì
@@ -575,7 +575,7 @@ Copy-Item .env apps/backend/.env -Force
 > Mỗi lần sửa cấu hình cơ sở dữ liệu trong `.env`, phải chạy lại lệnh sao chép trên.
 
 **Các cổng mặc định** — chỉ đổi nếu máy đang bị chiếm cổng:
-PostgreSQL `55433` · Redis `16379` · API `3100` · Web `3200` · AI `8000`.
+PostgreSQL `55433` · Redis `16379` · API `3110` · Web `3200` · AI `8000`.
 
 > Redis dùng cổng `16379` chứ không phải `6379`: trên Windows, cổng `56380` từng rơi
 > vào dải TCP hệ điều hành giữ riêng và làm backend treo lúc khởi động. Cổng `16379`
@@ -666,7 +666,7 @@ pnpm fe:dev
 **Kiểm tra cả cụm đã sống:**
 
 ```powershell
-Invoke-RestMethod http://localhost:3100/api/health    # status = ok, database + redis = up
+Invoke-RestMethod http://localhost:3110/api/health    # status = ok, database + redis = up
 Invoke-RestMethod http://localhost:8000/health        # status = ok, provider = ollama
 Invoke-WebRequest  http://localhost:3200 -UseBasicParsing   # HTTP 200
 ```
@@ -833,10 +833,10 @@ Nếu vừa chạy `seed` thì tài khoản `iot@` bị xóa — tạo lại b�
 |---|---|
 | `https://ungphonhanh.life` mở được nhưng đăng nhập báo lỗi mạng | Máy chủ demo đang tắt. Kiểm tra `/api/health` (§1.1) hoặc tự cài theo §8 |
 | `/api/health` trả `degraded` | `docker ps`; xem `docker logs safestock_postgres` và `docker logs safestock_redis`; kiểm tra cổng trong `.env` |
-| Web báo không kết nối được | `Get-NetTCPConnection -LocalPort 3100 -State Listen`; `Invoke-RestMethod http://localhost:3100/api/health` |
+| Web báo không kết nối được | `Get-NetTCPConnection -LocalPort 3110 -State Listen`; `Invoke-RestMethod http://localhost:3110/api/health` |
 | Trợ lý AI không phản hồi | `ollama list` (có `qwen3.5:4b` không?); `Invoke-RestMethod http://localhost:8000/health`; xem cửa sổ chạy `pnpm ai:dev` |
 | Trợ lý AI lỗi đúng **lần đầu tiên** rồi sau đó chạy tốt | Bình thường — mô hình đang được nạp. Xem §3.4 ② |
-| Cổng 3100/3200 bị chiếm | `Get-NetTCPConnection -LocalPort 3100,3200 -State Listen` → dừng đúng tiến trình cũ |
+| Cổng 3110/3200 bị chiếm | `Get-NetTCPConnection -LocalPort 3110,3200 -State Listen` → dừng đúng tiến trình cũ |
 | Lỗi `EPERM` khi Prisma generate (Windows) | Dừng backend đang chạy rồi chạy lại `pnpm be:generate` — tiến trình Node đang khóa file thư viện |
 | Backend treo lúc khởi động | Cổng Redis có thể trúng dải TCP Windows giữ riêng — dùng `16379` |
 | pytest báo `ModuleNotFoundError: 'main'` | Chạy pytest **từ trong `apps/ai-service`**, không phải thư mục gốc |

@@ -15,7 +15,7 @@ poll the REST state contract.
 
 - [ ] Local queue is written before network I/O, tolerates malformed old storage, and preserves idempotency keys.
 - [ ] Bell evaluates cached policy at confirmation, never auto-stops, and queues its acknowledgement.
-- [ ] `https://ungphonhanh.life` remains HTTPS without an implicit port; LAN host/IP defaults to `http://host:3100`.
+- [ ] `https://ungphonhanh.life` remains HTTPS without an implicit port; LAN host/IP defaults to `http://host:3110`.
 - [ ] Web no longer invalidates sensor data from `sensor_event`; timeline and devices poll.
 
 ## Implementation Steps

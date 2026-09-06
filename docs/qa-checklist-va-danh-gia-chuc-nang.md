@@ -36,7 +36,7 @@ Checklist ở Phần 4 chính là để đóng nốt 2 việc trên bằng tay.
 
 | App | Công nghệ | Vai trò dùng chính | Cổng dev |
 |---|---|---|---|
-| `apps/backend` | NestJS + Prisma/PostgreSQL + Redis/BullMQ | Nguồn sự thật, RBAC, workflow | 3100 |
+| `apps/backend` | NestJS + Prisma/PostgreSQL + Redis/BullMQ | Nguồn sự thật, RBAC, workflow | 3110 |
 | `apps/frontend` | Next.js 15 + React 19 + Leaflet | ADMIN + WAREHOUSE (desktop web) | 3200 |
 | `apps/mobile` | React Native / Expo SDK 52 | REPORTER + WAREHOUSE + RESCUE (APK) | Expo |
 | `apps/desktop` | Electron + electron-vite | Digital Twin — giả lập cảm biến IoT | — |

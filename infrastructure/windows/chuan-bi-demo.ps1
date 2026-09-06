@@ -213,7 +213,7 @@ Viet-TieuDe "Bốn dịch vụ của ứng dụng"
 $dichVu = @(
   # Phai la /api/health. Duong /health tra ve trang gioi thieu tinh, luon 200 ke ca
   # khi co so du lieu chet — kiem the la kiem nham, va nham theo huong nguy hiem nhat.
-  @{ Ten = "Backend"; Task = "UngPhoNhanh-Backend"; Url = "http://localhost:3100/api/health"; Nhan = "Backend (3100)" },
+  @{ Ten = "Backend"; Task = "UngPhoNhanh-Backend"; Url = "http://localhost:3110/api/health"; Nhan = "Backend (3110)" },
   @{ Ten = "Frontend"; Task = "UngPhoNhanh-Frontend"; Url = "http://localhost:3200"; Nhan = "Frontend (3200)" },
   @{ Ten = "AI"; Task = "UngPhoNhanh-AiService"; Url = "http://localhost:8000/health"; Nhan = "AI service (8000)" }
 )
@@ -312,7 +312,7 @@ Viet-TieuDe "Dọn dữ liệu thử nghiệm"
 $nenXoa = $false
 if ($KhongXoaDuLieu) {
   Viet-Dong "Bỏ qua theo yêu cầu (-KhongXoaDuLieu)." "DarkGray"
-} elseif (-not $KetQua["Backend (3100)"].Dat) {
+} elseif (-not $KetQua["Backend (3110)"].Dat) {
   Viet-Dong "Backend chưa lên, bỏ qua bước này." "Yellow"
 } else {
   Write-Host ""
@@ -338,7 +338,7 @@ if ($nenXoa) {
   } finally {
     Pop-Location
   }
-} elseif (-not $KhongXoaDuLieu -and $KetQua["Backend (3100)"].Dat) {
+} elseif (-not $KhongXoaDuLieu -and $KetQua["Backend (3110)"].Dat) {
   Viet-Dong "Giữ nguyên dữ liệu hiện có." "DarkGray"
 }
 

@@ -9,7 +9,7 @@ function resolveApiBase(): string {
   if (window.location.protocol === "https:") return window.location.origin;
   if (configuredBase && !configuredBase.includes("localhost")) return configuredBase;
 
-  return `${window.location.protocol}//${window.location.hostname}:3100`;
+  return `${window.location.protocol}//${window.location.hostname}:3110`;
 }
 
 const BASE = resolveApiBase();

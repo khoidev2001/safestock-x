@@ -1047,7 +1047,7 @@ Electron · chạy bằng `pnpm desktop:dev` · tài khoản riêng `iot`
 
 ### 16.1. Luồng thao tác
 
-1. **Đăng nhập** — nhập địa chỉ máy chủ (`localhost:3100`, `ungphonhanh.life`, hoặc
+1. **Đăng nhập** — nhập địa chỉ máy chủ (`localhost:3110`, `ungphonhanh.life`, hoặc
    tên máy/IP trong mạng nội bộ) và tài khoản thiết bị.
 2. **Kéo thanh trượt** nhiệt độ, độ ẩm, khói, loadcell.
    → Chỉ sửa **bản nháp cục bộ**. Máy chủ và cơ sở dữ liệu chưa có gì thay đổi. Giao

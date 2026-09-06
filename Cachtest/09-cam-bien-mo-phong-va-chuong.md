@@ -11,7 +11,7 @@ Trong `.env` phải có `SIMULATION_MUTATION_ENABLED=true`, rồi:
 pnpm desktop:dev
 ```
 
-Đăng nhập `admin` / `admin123@`, địa chỉ máy chủ `localhost:3100`.
+Đăng nhập `admin` / `admin123@`, địa chỉ máy chủ `localhost:3110`.
 
 Thử đăng nhập `staff@` → vào được, xem được thiết bị, nhưng **gửi số liệu trả 403**.
 Đây là hành vi đúng, không phải lỗi.
@@ -85,7 +85,7 @@ kích hoạt, và kể cả khi cờ mô phỏng đang tắt.
 Kiểm chứng bằng lệnh:
 
 ```bash
-API=http://localhost:3100/api
+API=http://localhost:3110/api
 STAFF=<mã đăng nhập của staff@>
 
 curl -s -H 'Content-Type: application/json' -H "Authorization: Bearer $STAFF" \

@@ -28,12 +28,12 @@ tư, 126 lô, 19 thiết bị, 2 sự cố.
 
 | Ứng dụng | Lệnh | Địa chỉ |
 |---|---|---|
-| Backend | `pnpm be:dev` | http://localhost:3100 |
+| Backend | `pnpm be:dev` | http://localhost:3110 |
 | Web | `pnpm fe:dev` | http://localhost:3200 |
 | Desktop | `pnpm desktop:dev` | cửa sổ Electron |
 | Điện thoại | cài `app-release.apk` | trỏ tới `https://ungphonhanh.life` |
 
-Kiểm tra backend sống: `GET http://localhost:3100/api/health` phải trả
+Kiểm tra backend sống: `GET http://localhost:3110/api/health` phải trả
 `{"status":"ok"}` kèm `database: up`, `redis: up`.
 
 ### 1.3. Tài khoản mẫu
@@ -241,7 +241,7 @@ chỉ thấy hàng trên kệ.
 
 ### 4.3. Desktop — cảm biến và chuông
 
-Đăng nhập `superadmindongxuan`, host `localhost:3100`.
+Đăng nhập `superadmindongxuan`, host `localhost:3110`.
 
 #### Chuông theo ngưỡng
 
@@ -287,7 +287,7 @@ Token **chỉ hiện đúng một lần**. Hệ thống chỉ giữ bản băm n
 ### Gửi số liệu như một cảm biến
 
 ```bash
-curl -X POST http://localhost:3100/api/telemetry/snapshots \
+curl -X POST http://localhost:3110/api/telemetry/snapshots \
   -H 'Content-Type: application/json' \
   -H 'X-Device-Token: upn_....' \
   -d '{"warehouseId":"<mã-kho>","idempotencyKey":"demo-1",

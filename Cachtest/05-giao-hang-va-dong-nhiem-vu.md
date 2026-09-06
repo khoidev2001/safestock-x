@@ -61,7 +61,7 @@ không có nút, nhất là với người đang đứng ngoài mưa.
 ## Kiểm chứng bằng lệnh
 
 ```bash
-API=http://localhost:3100/api
+API=http://localhost:3110/api
 RESCUE=$(curl -s -H 'Content-Type: application/json' \
   -d '{"email":"rescue","password":"rescue123"}' \
   $API/auth/login | grep -o '"accessToken":"[^"]*' | cut -d'"' -f4)

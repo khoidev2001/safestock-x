@@ -208,7 +208,7 @@ pnpm dev:all
 ### 4.2. Hoặc chạy từng phần ở các cửa sổ riêng
 
 ```bash
-pnpm be:dev        # Máy chủ API   → http://localhost:3100/api
+pnpm be:dev        # Máy chủ API   → http://localhost:3110/api
 pnpm fe:dev        # Web vận hành  → http://localhost:3200
 pnpm ai:dev        # Dịch vụ AI    → http://localhost:8000
 pnpm desktop:dev   # App giả lập cảm biến (Electron)
@@ -219,8 +219,8 @@ pnpm mobile:dev    # Expo cho ứng dụng điện thoại
 
 | Thành phần | Địa chỉ |
 |---|---|
-| Máy chủ API | `http://localhost:3100/api` |
-| Kiểm tra sức khỏe | `http://localhost:3100/api/health` |
+| Máy chủ API | `http://localhost:3110/api` |
+| Kiểm tra sức khỏe | `http://localhost:3110/api/health` |
 | Web vận hành | `http://localhost:3200` |
 | Dịch vụ AI | `http://localhost:8000` · sức khỏe tại `/health` |
 | Định tuyến OSRM | `http://localhost:5000` *(tùy chọn)* |
@@ -275,7 +275,7 @@ Kéo thanh trượt chỉ đổi bản nháp cục bộ. Bấm **Xác nhận và
 ## 6. Kiểm tra cài đặt thành công
 
 ```bash
-curl http://localhost:3100/api/health
+curl http://localhost:3110/api/health
 ```
 
 Kết quả mong đợi:

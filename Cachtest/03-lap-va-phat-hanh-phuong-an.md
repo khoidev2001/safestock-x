@@ -56,7 +56,7 @@ theo quy tắc — chỉ mất phần lời văn.
 ## Kiểm chứng bằng lệnh
 
 ```bash
-API=http://localhost:3100/api
+API=http://localhost:3110/api
 ADMIN=$(curl -s -H 'Content-Type: application/json' \
   -d '{"email":"admin","password":"admin123@"}' \
   $API/auth/login | grep -o '"accessToken":"[^"]*' | cut -d'"' -f4)

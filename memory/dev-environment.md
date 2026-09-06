@@ -9,7 +9,7 @@ Máy user chạy NHIỀU docker project song song (tkb, mikiname, timetable, lan
 
 - Postgres: **55433** (host) → 5432 (container)
 - Redis: **56380** (host) → 6379 (container)
-- API: **3100** (3000 bị mikiname-web chiếm)
+- API: **3110** (3000 bị mikiname-web chiếm)
 
 Cấu hình trong `.env` root. Docker compose PHẢI chạy với `--env-file .env` (compose -f trỏ subdir không tự đọc .env root). Scripts root đã set sẵn.
 
@@ -17,6 +17,6 @@ Cấu hình trong `.env` root. Docker compose PHẢI chạy với `--env-file .e
 
 Nest build ra `dist/src/main.js` (không phải dist/main.js) vì có prisma/ ở rootDir. Chạy trực tiếp: `node apps/api/dist/src/main.js`. Dev: `pnpm --filter @safestock/api start:dev`.
 
-Verify stack: `curl http://localhost:3100/api/health` → status ok + database/redis up.
+Verify stack: `curl http://localhost:3110/api/health` → status ok + database/redis up.
 
 **Lưu ý:** đừng dùng `taskkill /IM node.exe` (giết mọi node của user) — nhắm đúng PID.
