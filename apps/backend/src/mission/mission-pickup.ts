@@ -59,9 +59,9 @@ export function validatePickup(input: PickupInput): PickupResult {
 export function summarizeShortages(
   rows: { itemName: string; unit: string; shortage: number; note: string | null }[],
 ): string | null {
-  const thieu = rows.filter((r) => r.shortage > 0);
-  if (thieu.length === 0) return null;
-  return thieu
+  const shortages = rows.filter((r) => r.shortage > 0);
+  if (shortages.length === 0) return null;
+  return shortages
     .map((r) => `${r.itemName} thiếu ${r.shortage} ${r.unit}${r.note ? ` (${r.note})` : ""}`)
     .join("; ");
 }

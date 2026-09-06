@@ -17,6 +17,10 @@ import { PrismaService } from "../src/prisma/prisma.service";
 describe("Mission complete (E2E PostgreSQL)", () => {
   const runId = `${Date.now()}-${randomUUID()}`;
   const prefix = `E2E-COMPLETE-${runId}`;
+  // Tên đăng nhập được chuẩn hoá về chữ thường trước khi tra cứu, nên fixture
+  // phải LƯU sẵn chữ thường; email viết hoa tạo thẳng qua Prisma thì đăng nhập
+  // không bao giờ khớp và cả suite chết ở bước lấy token.
+  const loginPrefix = prefix.toLowerCase();
   const initialQuantity = 40;
   const allocated = 7;
 
@@ -76,14 +80,14 @@ describe("Mission complete (E2E PostgreSQL)", () => {
       data: [
         {
           organizationId,
-          email: `${prefix}-rescue@example.test`,
+          email: `${loginPrefix}-rescue@example.test`,
           passwordHash,
           fullName: "Hiện trường E2E complete",
           role: UserRole.RESCUE,
         },
         {
           organizationId,
-          email: `${prefix}-warehouse@example.test`,
+          email: `${loginPrefix}-warehouse@example.test`,
           passwordHash,
           fullName: "Kho E2E complete",
           role: UserRole.WAREHOUSE,
@@ -91,8 +95,8 @@ describe("Mission complete (E2E PostgreSQL)", () => {
         },
       ],
     });
-    rescueToken = await login(`${prefix}-rescue@example.test`, password);
-    warehouseToken = await login(`${prefix}-warehouse@example.test`, password);
+    rescueToken = await login(`${loginPrefix}-rescue@example.test`, password);
+    warehouseToken = await login(`${loginPrefix}-warehouse@example.test`, password);
   });
 
   afterAll(async () => {

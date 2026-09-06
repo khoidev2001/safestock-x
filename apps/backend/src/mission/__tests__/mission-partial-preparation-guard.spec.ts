@@ -47,6 +47,7 @@ function makeService({
     {} as never,
     {} as never,
     {} as never,
+    {} as never,
   );
   return {
     service,

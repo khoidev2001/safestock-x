@@ -4,6 +4,7 @@ import { InventoryModule } from "../inventory/inventory.module";
 import { ReadinessModule } from "../readiness/readiness.module";
 import { InsightsModule } from "../insights/insights.module";
 import { CoordinationSnapshotService } from "./coordination-snapshot.service";
+import { EvidenceStorageService } from "./evidence-storage.service";
 import { CoordinationAnalysisService } from "./coordination-analysis.service";
 import { WhatIfService } from "./what-if.service";
 import { MissionController } from "./mission.controller";
@@ -17,6 +18,7 @@ import { MissionWarehouseRequestService } from "./mission-warehouse-request.serv
   controllers: [MissionController],
   providers: [
     MissionService,
+    EvidenceStorageService,
     MissionCoordinationService,
     CoordinationSnapshotService,
     CoordinationAnalysisService,

@@ -44,6 +44,7 @@ describe("external surrounding-commune boundary", () => {
       {} as never,
       { getWarehouseScore: jest.fn() } as never,
       {} as never,
+      {} as never,
     );
 
     const pool = await (
@@ -65,6 +66,7 @@ describe("external surrounding-commune boundary", () => {
 
   it("cannot turn empty external summaries into allocation suggestions", () => {
     const service = new MissionService(
+      {} as never,
       {} as never,
       {} as never,
       {} as never,

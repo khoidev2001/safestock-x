@@ -7,7 +7,7 @@
  */
 
 import { incidentTypeLabel } from "@safestock/shared-types";
-import { IncidentInput } from "./mission.compute";
+import { countVulnerablePeople, IncidentInput } from "./mission.compute";
 
 export interface Forecast {
   label: string;
@@ -46,10 +46,15 @@ export interface WarehouseEta {
   };
 }
 
-/** Phần LLM viết (khớp ActionPlanNarrative của ai-service). */
+/**
+ * Phần LLM viết (khớp ActionPlanNarrative của ai-service).
+ *
+ * Không còn `phases`: bản chia việc theo ba khung 0-2h / 2-6h / 6-24h đã bỏ khỏi
+ * kế hoạch cứu hộ. Kế hoạch cũ trong cơ sở dữ liệu vẫn còn khoá đó — chúng là JSON
+ * tự do nên vẫn đọc được, chỉ là không ai dựng nó ra nữa.
+ */
 export interface ActionPlanNarrative {
   objectives: string[];
-  phases: { window: string; actions: string[] }[];
   warnings: string[];
   followUpQuestions: string[];
 }
@@ -58,7 +63,6 @@ export interface ActionPlanNarrative {
 export interface ActionPlan {
   severityLevel: number; // 1-5
   severityReason: string[];
-  confidence: number; // 0-100
   fulfillment: number; // % đáp ứng (min qua loại)
   allocations: AllocationSummary[];
   warehouses: WarehouseEta[];
@@ -92,7 +96,7 @@ export function scoreSeverity(
     reasons.push(`Loại thiên tai nguy hiểm: ${incidentTypeLabel(incident.incidentType)}.`);
   }
 
-  const vulnerable = incident.children + incident.elderly + incident.medicalSupportCases;
+  const vulnerable = countVulnerablePeople(incident);
   if (vulnerable > 0) {
     score += 1;
     reasons.push(`Có ${vulnerable} người thuộc nhóm dễ tổn thương.`);
@@ -127,7 +131,7 @@ export function computeForecasts(incident: IncidentInput, fulfillment: number): 
   forecasts.push({ label: "Thiếu vật tư", probability: clamp(100 - fulfillment, 5, 95) });
 
   // Cần sơ tán: theo số người + nhóm dễ tổn thương.
-  const vulnerable = incident.children + incident.elderly + incident.medicalSupportCases;
+  const vulnerable = countVulnerablePeople(incident);
   const evacProb = clamp(Math.round(incident.affectedPeople / 5) + vulnerable * 2, 5, 90);
   forecasts.push({ label: "Cần sơ tán", probability: evacProb });
 
@@ -143,7 +147,7 @@ export function buildTemplateNarrative(
   allocations: AllocationSummary[],
 ): ActionPlanNarrative {
   const shortages = allocations.filter((a) => a.shortage > 0).map((a) => a.itemName);
-  const hasVulnerable = incident.children + incident.elderly + incident.medicalSupportCases > 0;
+  const hasVulnerable = countVulnerablePeople(incident) > 0;
 
   return {
     objectives: [
@@ -152,31 +156,6 @@ export function buildTemplateNarrative(
       hasVulnerable
         ? "Ưu tiên trẻ em, người già, ca cần hỗ trợ y tế."
         : "Bảo đảm an toàn cho toàn bộ người dân.",
-    ],
-    phases: [
-      {
-        window: "0-2h",
-        actions: [
-          "Xác minh chính xác số người và vị trí.",
-          "Cấp nước uống và thuốc sơ cứu trước tiên.",
-        ],
-      },
-      {
-        window: "2-6h",
-        actions: [
-          "Chuyển thực phẩm và vật tư thiết yếu còn lại.",
-          hasVulnerable
-            ? "Lập danh sách người già, trẻ em, phụ nữ mang thai."
-            : "Rà soát nhu cầu phát sinh tại hiện trường.",
-        ],
-      },
-      {
-        window: "6-24h",
-        actions: [
-          "Thiết lập điểm tiếp tế tạm thời nếu tình huống kéo dài.",
-          "Chuẩn bị đợt tiếp tế thứ hai từ kho tổng.",
-        ],
-      },
     ],
     warnings: [
       shortages.length > 0

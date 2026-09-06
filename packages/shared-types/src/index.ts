@@ -85,7 +85,7 @@ export enum UserRole {
   ADMIN = "ADMIN",
 }
 
-export const FIELD_FORCE_ROLE_LABEL = "Lực lượng hiện trường" as const;
+export const FIELD_FORCE_ROLE_LABEL = "Đội cứu hộ" as const;
 
 export const USER_ROLE_LABELS: Readonly<Record<UserRole, string>> = {
   [UserRole.ADMIN]: "Quản trị xã",
@@ -93,7 +93,18 @@ export const USER_ROLE_LABELS: Readonly<Record<UserRole, string>> = {
   [UserRole.RESCUE]: FIELD_FORCE_ROLE_LABEL,
 };
 
-export function userRoleLabel(role: UserRole | string): string {
+/**
+ * Super admin KHÔNG phải một UserRole riêng — nó là ADMIN kèm cờ `isSuperAdmin`, để
+ * mọi tính năng khác (quyền, thông báo theo recipientRole, luồng nhiệm vụ) giữ nguyên
+ * như ADMIN. Chỉ nhãn hiển thị và phần quản trị tài khoản là phân biệt hai bậc.
+ */
+export const SUPER_ADMIN_ROLE_LABEL = "Quản trị cấp cao (Super admin)" as const;
+
+export function userRoleLabel(
+  role: UserRole | string,
+  options?: { isSuperAdmin?: boolean | null },
+): string {
+  if (options?.isSuperAdmin && role === UserRole.ADMIN) return SUPER_ADMIN_ROLE_LABEL;
   return USER_ROLE_LABELS[role as UserRole] ?? role;
 }
 
@@ -268,3 +279,4 @@ export * from "./briefing";
 export * from "./inventory-qr";
 export * from "./coordination";
 export * from "./water-bottle";
+export * from "./warehouse-request-bulk";

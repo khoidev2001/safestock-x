@@ -2,10 +2,10 @@ import { PickupError, summarizeShortages, validatePickup } from "../mission-pick
 
 describe("xác nhận lấy hàng", () => {
   it("lấy đủ thì không cần ghi chú", () => {
-    const ra = validatePickup({ preparedQuantity: 100, receivedQuantity: 100 });
+    const result = validatePickup({ preparedQuantity: 100, receivedQuantity: 100 });
 
-    expect(ra.shortage).toBe(0);
-    expect(ra.note).toBeNull();
+    expect(result.shortage).toBe(0);
+    expect(result.note).toBeNull();
   });
 
   it("thiếu mà không ghi lý do thì CHẶN", () => {
@@ -23,14 +23,14 @@ describe("xác nhận lấy hàng", () => {
   });
 
   it("thiếu có ghi lý do thì nhận, và cắt khoảng trắng thừa", () => {
-    const ra = validatePickup({
+    const result = validatePickup({
       preparedQuantity: 100,
       receivedQuantity: 80,
       note: "  Xe chỉ chở được 80, chuyến sau lấy nốt  ",
     });
 
-    expect(ra.shortage).toBe(20);
-    expect(ra.note).toBe("Xe chỉ chở được 80, chuyến sau lấy nốt");
+    expect(result.shortage).toBe(20);
+    expect(result.note).toBe("Xe chỉ chở được 80, chuyến sau lấy nốt");
   });
 
   it("lấy nhiều hơn số đã soạn thì CHẶN — hàng không tự sinh ra", () => {
@@ -70,12 +70,12 @@ describe("gộp phần thiếu thành một dòng", () => {
   });
 
   it("chỉ kể mã nào thiếu, kèm lý do", () => {
-    const ra = summarizeShortages([
+    const result = summarizeShortages([
       { itemName: "Nước uống", unit: "chai", shortage: 20, note: "Hết hàng" },
       { itemName: "Áo phao", unit: "chiếc", shortage: 0, note: null },
       { itemName: "Bạt che", unit: "tấm", shortage: 5, note: null },
     ]);
 
-    expect(ra).toBe("Nước uống thiếu 20 chai (Hết hàng); Bạt che thiếu 5 tấm");
+    expect(result).toBe("Nước uống thiếu 20 chai (Hết hàng); Bạt che thiếu 5 tấm");
   });
 });

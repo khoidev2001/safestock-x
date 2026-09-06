@@ -45,22 +45,23 @@ describe("computeRequirements", () => {
     expect(reqs.find((r) => r.sku === "LIFE-CHILD")?.required).toBe(20);
   });
 
-  it("nước đếm theo CHAI 1,5 lít, định mức 3 lít/người/ngày (48h = 2 ngày)", () => {
-    // Nước UỐNG đóng chai: 3 lít/người/ngày (Sphere mức sinh tồn cho ăn uống —
-    // 15 lít/ngày là tổng cả vệ sinh, do bồn và can gánh chứ không phải chai).
-    // 3 / 1,5 = 2 chai/người/ngày → * 100 người * 2 ngày = 400 chai.
+  it("nước đếm theo CHAI 1,5 lít, định mức 1 chai/người/ngày (48h = 2 ngày)", () => {
+    // Nước UỐNG đóng chai: 1,5 lít/người/ngày, tức đúng MỘT chai 1,5 lít mỗi
+    // người mỗi ngày — phần nước cầm tay phát tận nơi, không phải toàn bộ nước
+    // sinh hoạt (phần đó do bồn, giếng và can 20 lít gánh).
+    // 1 chai/người/ngày * 100 người * 2 ngày = 200 chai.
     const reqs = computeRequirements(flood({ affectedPeople: 100, durationHours: 48 }));
-    expect(reqs.find((r) => r.sku === "WATER-01")?.required).toBe(400);
+    expect(reqs.find((r) => r.sku === "WATER-01")?.required).toBe(200);
     expect(reqs.find((r) => r.sku === "WATER-01")?.unit).toBe("chai");
   });
 
   it("should round duration up to full days", () => {
     const reqs = computeRequirements(flood({ affectedPeople: 10, durationHours: 25 }));
-    // 25h → 2 ngày → 2 chai * 10 người * 2 ngày = 40 chai
-    expect(reqs.find((r) => r.sku === "WATER-01")?.required).toBe(40);
+    // 25h → 2 ngày → 1 chai * 10 người * 2 ngày = 20 chai
+    expect(reqs.find((r) => r.sku === "WATER-01")?.required).toBe(20);
   });
 
-  it("cháy cũng 3 lít/người/ngày → 2 chai 1,5 lít cho một người một ngày", () => {
+  it("cháy cũng 1,5 lít/người/ngày → 1 chai 1,5 lít cho một người một ngày", () => {
     // Nhu cầu UỐNG là nhu cầu sinh tồn, không đổi theo loại thiên tai; phần khác
     // nhau giữa các tình huống nằm ở số ngày. Định mức luôn ceil: làm tròn xuống
     // là cấp thiếu nước cho người thật.
@@ -72,7 +73,7 @@ describe("computeRequirements", () => {
       elderly: 0,
       medicalSupportCases: 0,
     });
-    expect(reqs.find((r) => r.sku === "WATER-01")?.required).toBe(2);
+    expect(reqs.find((r) => r.sku === "WATER-01")?.required).toBe(1);
   });
 
   it("should round requirements up (ceil) for safety", () => {

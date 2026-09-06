@@ -12,6 +12,7 @@ import { assertWarehouseInScope } from "../inventory/warehouse-scope";
 import { NotificationService } from "../notification/notification.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { PickupError, validatePickup } from "./mission-pickup";
+import { UNEXPORTED_REQUEST_STATUSES, isRequestExported } from "./mission-request-status";
 import { requestBatchItems, resizeRequestAllocations } from "./mission-warehouse-request";
 
 @Injectable()
@@ -47,6 +48,20 @@ export class MissionWarehouseRequestService {
     });
     if (!request) throw new NotFoundException("Không tìm thấy yêu cầu vật tư");
     assertWarehouseInScope(scopeWarehouseId, request.warehouseId);
+    /*
+     * Người ký nhận phải thuộc CHÍNH đơn vị giữ phiếu.
+     *
+     * Scope kho một mình không đủ: điều phối xã mang scope rỗng nên trước đây
+     * chỉ cần biết id phiếu là ký thay được cho kho của xã bên cạnh — mà ký nhận
+     * là chữ ký bàn giao, không sửa lại được sau khi đã ghi.
+     */
+    const actor = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { organizationId: true },
+    });
+    if (!actor || actor.organizationId !== request.warehouse.organizationId) {
+      throw new NotFoundException("Không tìm thấy yêu cầu vật tư");
+    }
     if (request.status !== MissionWarehouseRequestStatus.PREPARED) {
       throw new BadRequestException(
         request.status === MissionWarehouseRequestStatus.PICKED_UP
@@ -55,9 +70,9 @@ export class MissionWarehouseRequestService {
       );
     }
 
-    let ket: ReturnType<typeof validatePickup>;
+    let validated: ReturnType<typeof validatePickup>;
     try {
-      ket = validatePickup({
+      validated = validatePickup({
         preparedQuantity: request.preparedQuantity,
         receivedQuantity,
         note,
@@ -69,34 +84,89 @@ export class MissionWarehouseRequestService {
 
     // Chốt bằng điều kiện trạng thái: hai người cùng bấm ký nhận thì chỉ một người
     // thắng, người kia nhận câu báo rõ ràng thay vì ghi đè im lặng lên chữ ký trước.
-    const chot = await this.prisma.missionWarehouseRequest.updateMany({
+    const confirmed = await this.prisma.missionWarehouseRequest.updateMany({
       where: { id: requestId, status: MissionWarehouseRequestStatus.PREPARED },
       data: {
         status: MissionWarehouseRequestStatus.PICKED_UP,
-        pickedUpQuantity: ket.receivedQuantity,
-        pickupNote: ket.note,
+        pickedUpQuantity: validated.receivedQuantity,
+        pickupNote: validated.note,
         pickedUpByUserId: userId,
         pickedUpAt: new Date(),
       },
     });
-    if (chot.count !== 1) {
+    if (confirmed.count !== 1) {
       throw new BadRequestException("Yêu cầu vừa được ký nhận ở nơi khác, vui lòng tải lại");
     }
 
-    if (ket.shortage > 0) {
-      // Chỉ báo khi THIẾU. Lấy đủ là chuyện bình thường; báo cả những lần bình
-      // thường thì người điều phối quen tay bỏ qua, rồi bỏ qua luôn lần thiếu thật.
+    // Ký nhận xong là báo điều phối, ĐỦ hay THIẾU đều báo — nhưng chỉ MỘT thông báo
+    // và hai cách nói khác hẳn nhau.
+    //
+    // Trước đây chỉ báo khi thiếu, nên hàng rời kho đúng hẹn thì bảng điều phối im
+    // lặng: người trực không biết chuyến đó đã đi hay còn nằm chờ, phải tự mở nhiệm
+    // vụ ra dò. Nhưng gửi hai thông báo cho cùng một lần ký (một "đã lấy", một
+    // "thiếu") thì lần thiếu chìm ngay trong tiếng ồn của lần đủ — đúng cái bẫy mà
+    // việc chỉ-báo-khi-thiếu ngày trước sinh ra để tránh. Nên tách ở đây: dòng chữ
+    // của ca thiếu nói thẳng "THIẾU" ngay ở tiêu đề, còn ca đủ đọc như một dòng
+    // tiến độ.
+    if (validated.shortage > 0) {
       await this.notify(
         {
           recipientRole: UserRole.ADMIN,
           kind: NotificationKind.WAREHOUSE_READY,
           title: "Lấy hàng THIẾU so với số đã soạn",
-          body: `${request.warehouse.name}: ${request.itemName} lấy ${ket.receivedQuantity}/${request.preparedQuantity} ${request.unit} — thiếu ${ket.shortage}. Lý do: ${ket.note}`,
+          body: `${request.warehouse.name}: ${request.itemName} lấy ${validated.receivedQuantity}/${request.preparedQuantity} ${request.unit} — thiếu ${validated.shortage}. Lý do: ${validated.note}`,
           missionId: request.missionId,
           warehouseId: request.warehouseId,
           organizationId: request.warehouse.organizationId,
         },
         `pickup thiếu SKU ${requestId}`,
+      );
+    } else {
+      await this.notify(
+        {
+          recipientRole: UserRole.ADMIN,
+          kind: NotificationKind.WAREHOUSE_READY,
+          title: "Đội cứu hộ đã lấy hàng",
+          body: `${request.warehouse.name}: ${request.itemName} ${validated.receivedQuantity} ${request.unit} — đã ký nhận đủ.`,
+          missionId: request.missionId,
+          warehouseId: request.warehouseId,
+          organizationId: request.warehouse.organizationId,
+        },
+        `pickup đủ SKU ${requestId}`,
+      );
+    }
+
+    /*
+     * Ký nhận xong TẤT CẢ vật tư của nhiệm vụ: gọi đội báo kết quả.
+     *
+     * Đây mới là lúc hàng thật sự nằm trong tay người đi giao — `READY` chỉ nói
+     * kho đã xuất ra khỏi sổ. Và đây cũng là tín hiệu để màn chi tiết trên máy
+     * họ mở ô báo cáo kết quả ra ngay, không phải thoát ra rồi vào lại.
+     *
+     * Chỉ báo ở phiếu CUỐI CÙNG: một nhiệm vụ vài ba phiếu, báo từng phiếu là
+     * mấy lần rung điện thoại cho một lần đủ hàng.
+     */
+    const awaitingPickupCount = await this.prisma.missionWarehouseRequest.count({
+      where: {
+        missionId: request.missionId,
+        status: { not: MissionWarehouseRequestStatus.PICKED_UP },
+      },
+    });
+    if (awaitingPickupCount === 0) {
+      const mission = await this.prisma.mission.findUnique({
+        where: { id: request.missionId },
+        select: { missionNo: true },
+      });
+      await this.notify(
+        {
+          recipientRole: UserRole.RESCUE,
+          kind: NotificationKind.WAREHOUSE_READY,
+          title: "Đã nhận đủ vật tư — báo kết quả để đóng nhiệm vụ",
+          body: `${missionLabel(mission?.missionNo)}: các kho đã ký nhận bàn giao toàn bộ vật tư. Giao xong thì mở nhiệm vụ, nhập kết quả kèm ảnh bằng chứng rồi xác nhận hoàn thành.`,
+          missionId: request.missionId,
+          organizationId: request.warehouse.organizationId,
+        },
+        `nhận đủ vật tư sau SKU ${requestId}`,
       );
     }
 
@@ -150,7 +220,7 @@ export class MissionWarehouseRequestService {
     if (
       accepted.count === 0 &&
       current.status !== MissionWarehouseRequestStatus.ACCEPTED &&
-      current.status !== MissionWarehouseRequestStatus.PREPARED
+      !isRequestExported(current.status)
     ) {
       throw new BadRequestException("Yêu cầu không còn ở trạng thái chờ tiếp nhận");
     }
@@ -237,7 +307,7 @@ export class MissionWarehouseRequestService {
         },
       });
       if (!request) throw new NotFoundException("Không tìm thấy yêu cầu vật tư");
-      if (request.status === MissionWarehouseRequestStatus.PREPARED) {
+      if (isRequestExported(request.status)) {
         throw new BadRequestException("Không thể chỉnh sửa yêu cầu đã chuẩn bị xong");
       }
       const allocations = resizeRequestAllocations(request.allocations, input.requestedQuantity);
@@ -266,7 +336,7 @@ export class MissionWarehouseRequestService {
         const current = await tx.missionWarehouseRequest.findUnique({
           where: { id: requestId },
         });
-        if (current?.status === MissionWarehouseRequestStatus.PREPARED) {
+        if (current && isRequestExported(current.status)) {
           throw new BadRequestException("Không thể chỉnh sửa yêu cầu đã chuẩn bị xong");
         }
         throw new BadRequestException(
@@ -305,7 +375,10 @@ export class MissionWarehouseRequestService {
         where: { id: requestId, warehouseId },
         include: {
           warehouse: { select: { organizationId: true, name: true } },
-          mission: { select: { status: true } },
+          // Số hiệu để câu thông báo gọi đúng tên nhiệm vụ. Người trực có nhiều
+          // nhiệm vụ cùng chạy, "toàn bộ vật tư đã sẵn sàng" mà không nói của
+          // nhiệm vụ nào thì họ phải mở từng cái ra dò.
+          mission: { select: { status: true, missionNo: true } },
         },
       });
       if (!request) throw new NotFoundException("Không tìm thấy yêu cầu vật tư");
@@ -314,7 +387,9 @@ export class MissionWarehouseRequestService {
           request,
           exported: false,
           becameReady: false,
+          warehouseCompleted: false,
           items: [] as { batchId: string; quantity: number }[],
+          missionNo: request.mission.missionNo,
         };
       }
 
@@ -380,11 +455,13 @@ export class MissionWarehouseRequestService {
         throw new BadRequestException("Không thể hoàn tất yêu cầu vật tư");
       }
 
+      // Đếm phần CHƯA XUẤT, không đếm "khác PREPARED": yêu cầu vừa được ký nhận
+      // đã chuyển sang PICKED_UP, hỏi kiểu cũ là đếm nó thành món kho còn nợ.
       const remainingForWarehouse = await tx.missionWarehouseRequest.count({
         where: {
           missionId: request.missionId,
           warehouseId,
-          status: { not: MissionWarehouseRequestStatus.PREPARED },
+          status: { in: [...UNEXPORTED_REQUEST_STATUSES] },
         },
       });
       if (remainingForWarehouse === 0) {
@@ -397,7 +474,7 @@ export class MissionWarehouseRequestService {
       const remainingForMission = await tx.missionWarehouseRequest.count({
         where: {
           missionId: request.missionId,
-          status: { not: MissionWarehouseRequestStatus.PREPARED },
+          status: { in: [...UNEXPORTED_REQUEST_STATUSES] },
         },
       });
       let becameReady = false;
@@ -412,7 +489,16 @@ export class MissionWarehouseRequestService {
         where: { id: requestId },
         include: { warehouse: { select: { organizationId: true, name: true } } },
       });
-      return { request: updated, exported: true, becameReady, items };
+      return {
+        request: updated,
+        exported: true,
+        becameReady,
+        // Kho này vừa xuất nốt món cuối của mình — tín hiệu để gọi đội tới lấy
+        // hàng, không phải chờ cho tới khi TẤT CẢ các kho xong.
+        warehouseCompleted: remainingForWarehouse === 0,
+        items,
+        missionNo: request.mission.missionNo,
+      };
     });
 
     if (!result.exported) return result.request;
@@ -434,6 +520,21 @@ export class MissionWarehouseRequestService {
         },
         `prepare SKU ${requestId}`,
       ),
+      /*
+       * Gọi đội hiện trường NGAY KHI MỘT KHO xong phần của mình, không đợi cả
+       * phương án xong.
+       *
+       * Một nhiệm vụ thường trải qua nhiều kho, và kho xong sớm nhất có thể xong
+       * trước kho cuối cả buổi. Đợi đủ mới báo là bắt hàng nằm chờ trên kệ trong
+       * khi đội hoàn toàn có thể chạy trước một chuyến — mà đường vào vùng vừa có
+       * thiên tai thì mỗi giờ trôi qua lại xấu đi.
+       *
+       * Báo theo KHO chứ không theo từng vật tư: một kho vài ba món, báo từng món
+       * là ba lần rung điện thoại cho đúng một chuyến đi.
+       *
+       * Kho cuối cùng thì gộp thành MỘT câu "toàn bộ đã sẵn sàng" thay vì gửi hai
+       * thông báo sát nhau nói gần như cùng một điều.
+       */
       ...(result.becameReady
         ? [
             this.notify(
@@ -441,14 +542,29 @@ export class MissionWarehouseRequestService {
                 recipientRole: UserRole.RESCUE,
                 kind: NotificationKind.WAREHOUSE_READY,
                 title: "Toàn bộ vật tư đã sẵn sàng",
-                body: "Tất cả kho tham gia đã hoàn tất chuẩn bị theo phương án.",
+                body: `${missionLabel(result.missionNo)}: ${result.request.warehouse.name} vừa xuất xong, tất cả kho tham gia đã chuẩn bị đủ theo phương án. Tới các kho nhận hàng rồi báo kết quả để đóng nhiệm vụ.`,
                 missionId: result.request.missionId,
                 organizationId: result.request.warehouse.organizationId,
               },
               `mission sẵn sàng sau SKU ${requestId}`,
             ),
           ]
-        : []),
+        : result.warehouseCompleted
+          ? [
+              this.notify(
+                {
+                  recipientRole: UserRole.RESCUE,
+                  kind: NotificationKind.WAREHOUSE_READY,
+                  title: "Kho đã chuẩn bị xong — tới lấy hàng",
+                  body: `${missionLabel(result.missionNo)}: ${result.request.warehouse.name} đã xuất xong phần vật tư của kho. Tới kho nhận hàng; người giữ kho bấm ký nhận sau khi bàn giao. Các kho còn lại vẫn đang chuẩn bị.`,
+                  missionId: result.request.missionId,
+                  warehouseId: result.request.warehouseId,
+                  organizationId: result.request.warehouse.organizationId,
+                },
+                `kho xong phần của mình sau SKU ${requestId}`,
+              ),
+            ]
+          : []),
     ]);
     return result.request;
   }
@@ -486,4 +602,9 @@ function normalizeNote(value?: string | null): string | null {
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** "Nhiệm vụ số 145" — tên người trực gọi nhau; bản ghi cũ chưa có số thì lùi về tên chung. */
+function missionLabel(missionNo?: number | null): string {
+  return missionNo != null ? `Nhiệm vụ số ${missionNo}` : "Nhiệm vụ";
 }
