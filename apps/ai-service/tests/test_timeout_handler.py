@@ -13,42 +13,42 @@ from fastapi.testclient import TestClient
 import main
 
 
-def _app_gia(loi: Exception) -> TestClient:
+def _fake_app(error: Exception) -> TestClient:
     app = FastAPI()
     for exc_type, handler in main.app.exception_handlers.items():
         app.add_exception_handler(exc_type, handler)
 
-    @app.post("/thu")
-    def thu():  # noqa: ANN202
-        raise loi
+    @app.post("/probe")
+    def probe():  # noqa: ANN202
+        raise error
 
     return TestClient(app, raise_server_exceptions=False)
 
 
 @pytest.mark.parametrize(
-    "loi",
+    "error",
     [
         httpx.ReadTimeout("timed out"),
         httpx.ConnectTimeout("timed out"),
         httpx.PoolTimeout("timed out"),
     ],
 )
-def test_moi_kieu_qua_han_deu_ra_503(loi):
-    ra = _app_gia(loi).post("/thu")
+def test_every_timeout_kind_returns_503(error):
+    response = _fake_app(error).post("/probe")
 
-    assert ra.status_code == 503
+    assert response.status_code == 503
 
 
-def test_cau_bao_loi_noi_ro_phai_lam_gi():
-    ra = _app_gia(httpx.ReadTimeout("timed out")).post("/thu")
-    chu = ra.json()["detail"]
+def test_error_message_says_what_to_do():
+    response = _fake_app(httpx.ReadTimeout("timed out")).post("/probe")
+    message = response.json()["detail"]
 
-    assert "bận" in chu
+    assert "bận" in message
     # Phải nói việc cần làm, và nói rõ KHÔNG cần khởi động lại — đó là phản xạ sai
     # mà câu báo lỗi cũ gây ra.
-    assert "thử lại" in chu.lower() or "bấm lại" in chu.lower()
-    assert "khởi động lại" in chu
+    assert "thử lại" in message.lower() or "bấm lại" in message.lower()
+    assert "khởi động lại" in message
 
 
-def test_bo_bat_da_duoc_dang_ky_o_app_that():
+def test_handler_is_registered_on_the_real_app():
     assert httpx.TimeoutException in main.app.exception_handlers

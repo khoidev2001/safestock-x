@@ -30,7 +30,7 @@ class FakePipeline:
 AUDIO = np.zeros(16_000, dtype="float32")
 
 
-def test_ep_tieng_viet_va_khai_cua_so():
+def test_forces_vietnamese_and_declares_window():
     pipe = FakePipeline()
 
     _run_pipeline(pipe, AUDIO)
@@ -41,7 +41,7 @@ def test_ep_tieng_viet_va_khai_cua_so():
     assert kwargs["chunk_length_s"] == 30
 
 
-def test_khoi_chong_lan_de_khong_nuot_tu_o_cho_noi():
+def test_overlapping_chunks_do_not_swallow_words_at_seams():
     pipe = FakePipeline()
 
     _run_pipeline(pipe, AUDIO)
@@ -49,7 +49,7 @@ def test_khoi_chong_lan_de_khong_nuot_tu_o_cho_noi():
     assert pipe.calls[0]["stride_length_s"] == (5, 5)
 
 
-def test_phien_ban_khong_nhan_tham_so_thi_van_nhan_dang_duoc():
+def test_still_transcribes_when_version_rejects_kwargs():
     # Không phụ thuộc chữ ký của một phiên bản transformers cụ thể: bị từ chối thì
     # lùi về gọi trần, kém chính xác hơn nhưng vẫn ra chữ.
     pipe = FakePipeline(reject_kwargs=True)
@@ -60,7 +60,7 @@ def test_phien_ban_khong_nhan_tham_so_thi_van_nhan_dang_duoc():
     assert pipe.calls[-1] == {}
 
 
-def test_chan_im_lang_de_mo_hinh_khong_bia():
+def test_blocks_silence_so_the_model_cannot_hallucinate():
     # Whisper trả về một câu hoàn chỉnh khi đưa vào im lặng — người bấm nhầm nút
     # ghi âm sẽ thấy câu lạ hoắc trong ô mô tả. Đã gặp thật trên máy demo.
     from transcribe import _is_silent
@@ -70,13 +70,13 @@ def test_chan_im_lang_de_mo_hinh_khong_bia():
     assert _is_silent((np.random.randn(16_000) * 0.0005).astype("float32")) is True
 
 
-def test_giong_noi_binh_thuong_khong_bi_chan_nham():
+def test_normal_speech_is_not_blocked_by_mistake():
     from transcribe import _is_silent
 
     assert _is_silent((np.random.randn(16_000) * 0.08).astype("float32")) is False
 
 
-def test_giong_noi_NHO_van_qua_duoc_chot():
+def test_quiet_speech_still_passes_the_gate():
     # Micro máy ảo và micro điện thoại rẻ thu rất nhỏ. Chặn nhầm ở đây thì người
     # dùng nhận "chưa nghe rõ nội dung" trong khi họ có nói thật.
     from transcribe import _is_silent
@@ -84,43 +84,43 @@ def test_giong_noi_NHO_van_qua_duoc_chot():
     assert _is_silent((np.random.randn(16_000) * 0.01).astype("float32")) is False
 
 
-def test_chan_so_token_theo_do_dai_de_cat_vong_lap():
+def test_caps_tokens_by_clip_length_to_cut_loops():
     # Whisper gặp đoạn khó nghe là lặp một cụm cho tới khi cạn 448 token của cả
     # cửa sổ — clip ba giây tốn thời gian như clip ba mươi giây, kết quả là rác.
-    from transcribe import _gioi_han_token
+    from transcribe import _token_limit
 
-    ngan = _gioi_han_token(np.zeros(16_000 * 3, dtype="float32"))
-    dai = _gioi_han_token(np.zeros(16_000 * 25, dtype="float32"))
+    short_clip_limit = _token_limit(np.zeros(16_000 * 3, dtype="float32"))
+    long_clip_limit = _token_limit(np.zeros(16_000 * 25, dtype="float32"))
 
-    assert ngan < dai < 448
+    assert short_clip_limit < long_clip_limit < 448
 
 
-def test_han_muc_tinh_theo_KHOI_chu_khong_theo_tong():
+def test_limit_is_per_chunk_not_per_total():
     # Clip dài hơn 30 giây bị cắt thành nhiều khối, mỗi khối giải mã riêng. Tính
     # theo tổng là hạn mức vô nghĩa với khối, và vượt luôn giới hạn 448 của Whisper.
-    from transcribe import _gioi_han_token
+    from transcribe import _token_limit
 
-    assert _gioi_han_token(np.zeros(16_000 * 300, dtype="float32")) <= 440
+    assert _token_limit(np.zeros(16_000 * 300, dtype="float32")) <= 440
 
 
-def test_han_muc_du_rong_cho_giong_noi_that():
+def test_limit_is_wide_enough_for_real_speech():
     # Tiếng Việt nói nhanh khoảng 7 token mỗi giây. Hạn mức phải rộng hơn hẳn,
     # nếu không sẽ cắt cụt câu của người nói bình thường.
-    from transcribe import _gioi_han_token
+    from transcribe import _token_limit
 
-    assert _gioi_han_token(np.zeros(16_000 * 10, dtype="float32")) >= 10 * 7
+    assert _token_limit(np.zeros(16_000 * 10, dtype="float32")) >= 10 * 7
 
 
-def test_moi_luot_goi_dung_payload_moi():
+def test_each_call_uses_a_fresh_payload():
     # Pipeline lấy dữ liệu ra bằng `pop`, dict đã dùng một lần là rỗng. Dùng lại
     # sẽ ném ValueError khó hiểu về khoá "raw" ở đúng đường dự phòng.
     class PipeLayPayload:
         def __init__(self):
-            self.khoa_luc_goi = []
+            self.keys_at_call_time = []
 
         def __call__(self, payload, **kwargs):
             # Chụp lại khoá TẠI LÚC GỌI, vì ngay sau đây payload sẽ bị vét rỗng.
-            self.khoa_luc_goi.append(set(payload))
+            self.keys_at_call_time.append(set(payload))
             payload.pop("array", None)
             payload.pop("sampling_rate", None)
             if kwargs:
@@ -130,4 +130,4 @@ def test_moi_luot_goi_dung_payload_moi():
     pipe = PipeLayPayload()
 
     assert _run_pipeline(pipe, AUDIO)["text"] == "ok"
-    assert pipe.khoa_luc_goi[1] == {"array", "sampling_rate"}
+    assert pipe.keys_at_call_time[1] == {"array", "sampling_rate"}

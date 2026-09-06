@@ -84,11 +84,11 @@ class OllamaProvider(LLMProvider):
                     if not line:
                         continue
                     try:
-                        mau = json.loads(line)
+                        frame = json.loads(line)
                     except json.JSONDecodeError:
                         continue
-                    manh = mau.get("response")
-                    if manh:
-                        yield manh
-                    if mau.get("done"):
+                    chunk = frame.get("response")
+                    if chunk:
+                        yield chunk
+                    if frame.get("done"):
                         return

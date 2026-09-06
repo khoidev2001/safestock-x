@@ -44,40 +44,40 @@ def _fake_ollama(monkeypatch, loaded: list[str]):
     return calls
 
 
-def test_khong_nap_lai_khi_ca_hai_model_dang_o_trong_vram(monkeypatch):
+def test_no_reload_when_both_models_are_in_vram(monkeypatch):
     calls = _fake_ollama(monkeypatch, ["qwen3.5:4b", "nomic-embed-text:latest"])
     assert keep_warm.warm_once() == []
     assert calls == [], "model đã sẵn sàng thì không được gọi nạp lại"
 
 
-def test_nap_lai_khi_vram_trong(monkeypatch):
+def test_reloads_when_vram_is_empty(monkeypatch):
     calls = _fake_ollama(monkeypatch, [])
     reloaded = keep_warm.warm_once()
     assert set(reloaded) == {"qwen3.5:4b", "nomic-embed-text:latest"}
     assert [path for path, _ in calls] == ["/api/generate", "/api/embed"]
 
 
-def test_chi_nap_model_con_thieu(monkeypatch):
+def test_loads_only_the_missing_model(monkeypatch):
     calls = _fake_ollama(monkeypatch, ["qwen3.5:4b"])
     assert keep_warm.warm_once() == ["nomic-embed-text:latest"]
     assert [path for path, _ in calls] == ["/api/embed"]
 
 
-def test_luon_nap_voi_keep_alive_vinh_vien(monkeypatch):
+def test_always_loads_with_permanent_keep_alive(monkeypatch):
     """Nạp xong mà vẫn để hạn 30 phút thì lượt canh sau lại phải nạp tiếp."""
     calls = _fake_ollama(monkeypatch, [])
     keep_warm.warm_once()
     assert all(body["keep_alive"] == -1 for _, body in calls)
 
 
-def test_khong_sinh_chu_khi_chi_can_nap_trong_so(monkeypatch):
+def test_does_not_generate_text_when_only_loading_weights(monkeypatch):
     calls = _fake_ollama(monkeypatch, ["nomic-embed-text:latest"])
     keep_warm.warm_once()
     _, body = calls[0]
     assert body["options"]["num_predict"] == 0
 
 
-def test_ten_model_khong_ghi_tag_van_khop(monkeypatch):
+def test_model_name_without_tag_still_matches(monkeypatch):
     """Ollama trả "nomic-embed-text:latest" còn env ghi "nomic-embed-text"."""
     calls = _fake_ollama(monkeypatch, ["qwen3.5:4b", "nomic-embed-text:latest"])
     monkeypatch.setenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
@@ -85,26 +85,26 @@ def test_ten_model_khong_ghi_tag_van_khop(monkeypatch):
     assert calls == []
 
 
-def test_tat_duoc_qua_bien_moi_truong(monkeypatch):
+def test_can_be_disabled_via_environment_variable(monkeypatch):
     monkeypatch.setenv("OLLAMA_KEEP_WARM", "false")
     assert keep_warm.start() is None
 
 
-def test_khoang_canh_khong_duoi_30_giay(monkeypatch):
+def test_watch_interval_never_below_30_seconds(monkeypatch):
     monkeypatch.setenv("OLLAMA_KEEP_WARM_INTERVAL_SECONDS", "1")
     assert keep_warm._interval_seconds() == 30
     monkeypatch.setenv("OLLAMA_KEEP_WARM_INTERVAL_SECONDS", "rac")
     assert keep_warm._interval_seconds() == 120
 
 
-def test_provider_gui_keep_alive_vinh_vien():
+def test_provider_sends_permanent_keep_alive():
     # Phải là SỐ -1. Ollama đọc chuỗi như khoảng thời gian nên "-1" trả 400 và
     # làm hỏng mọi lệnh gọi sinh văn bản lẫn embedding.
     assert KEEP_ALIVE == -1, "mặc định phải là giữ model thường trú"
     assert isinstance(KEEP_ALIVE, int), "keep_alive dạng chuỗi bị Ollama từ chối"
 
 
-def test_keep_alive_dang_khoang_thoi_gian_van_giu_nguyen_chuoi():
+def test_duration_keep_alive_stays_a_string():
     from providers.runtime import _parse_keep_alive
 
     assert _parse_keep_alive("30m") == "30m"
@@ -115,20 +115,20 @@ def test_keep_alive_dang_khoang_thoi_gian_van_giu_nguyen_chuoi():
 # ===== Công tắc bật/tắt cho công cụ ngoài =====
 
 
-def test_day_model_ra_khoi_vram(monkeypatch):
+def test_unloads_models_from_vram(monkeypatch):
     calls = _fake_ollama(monkeypatch, ["qwen3.5:4b", "nomic-embed-text:latest"])
     unloaded = keep_warm.unload_all()
     assert set(unloaded) == {"qwen3.5:4b", "nomic-embed-text:latest"}
     assert all(body["keep_alive"] == 0 for _, body in calls), "phải trả VRAM ngay"
 
 
-def test_khong_day_model_von_da_khong_o_trong_vram(monkeypatch):
+def test_does_not_unload_models_absent_from_vram(monkeypatch):
     calls = _fake_ollama(monkeypatch, [])
     assert keep_warm.unload_all() == []
     assert calls == []
 
 
-def test_tam_dung_thi_vong_canh_khong_nap_lai(monkeypatch):
+def test_paused_watch_loop_does_not_reload(monkeypatch):
     """Lỗi nguy hiểm nhất: bấm nguội xong 120 giây sau model tự nóng lại."""
     calls = _fake_ollama(monkeypatch, [])
     keep_warm.pause()
@@ -139,7 +139,7 @@ def test_tam_dung_thi_vong_canh_khong_nap_lai(monkeypatch):
     assert [path for path, _ in calls] == ["/api/generate", "/api/embed"]
 
 
-def test_trang_thai_bao_dung_khi_ollama_tat(monkeypatch):
+def test_status_is_accurate_when_ollama_is_down(monkeypatch):
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("ollama chưa chạy")
 

@@ -47,7 +47,7 @@ _TARGET_SR = 16_000  # PhoWhisper/Whisper yêu cầu 16kHz mono.
 
 _pipe = None
 _load_lock = threading.Lock()
-_card_lock = threading.Lock()
+_gpu_lock = threading.Lock()
 _load_error: str | None = None
 
 
@@ -85,14 +85,14 @@ def _load_pipeline():
             ) from exc
 
 
-def _muon_card(pipe) -> None:
+def _acquire_gpu(pipe) -> None:
     """Đẩy trọng số lên card ngay trước khi nhận dạng."""
-    _doi_cho(pipe, "cuda:0")
+    _move_pipeline(pipe, "cuda:0")
 
 
-def _tra_card(pipe) -> None:
+def _release_gpu(pipe) -> None:
     """Đưa trọng số về RAM và trả sạch chỗ trên card."""
-    _doi_cho(pipe, "cpu")
+    _move_pipeline(pipe, "cpu")
     try:
         import torch
 
@@ -102,7 +102,7 @@ def _tra_card(pipe) -> None:
         pass
 
 
-def _doi_cho(pipe, dich: str) -> None:
+def _move_pipeline(pipe, destination: str) -> None:
     """Chuyển pipeline sang một chỗ chứa khác (card hoặc RAM).
 
     VÌ SAO PHẢI TRẢ CARD SAU MỖI LƯỢT — đây là bài học đắt nhất trên máy demo:
@@ -127,12 +127,12 @@ def _doi_cho(pipe, dich: str) -> None:
 
         if not torch.cuda.is_available():
             return
-        pipe.model.to(dich)
+        pipe.model.to(destination)
         # `pipe.device` quyết định nơi transformers đặt dữ liệu vào; quên dòng này
         # thì dữ liệu ở một chỗ, trọng số ở chỗ khác, và nó ném lỗi lệch thiết bị.
-        pipe.device = torch.device(dich)
+        pipe.device = torch.device(destination)
     except Exception as exc:  # noqa: BLE001
-        _log(f"Khong doi cho duoc sang {dich}: {type(exc).__name__}: {exc}")
+        _log(f"Khong doi cho duoc sang {destination}: {type(exc).__name__}: {exc}")
 
 
 def warm_up() -> float:
@@ -155,8 +155,8 @@ def warm_up() -> float:
     pipe = _load_pipeline()
     # Một giây tiếng ồn rất nhỏ: đủ để chạy hết đường giải mã (encoder → decoder →
     # tokenizer) mà không cần file mẫu nào trong repo. Nội dung trả về vứt đi.
-    nhap = (np.random.default_rng(0).standard_normal(_TARGET_SR) * 0.01).astype("float32")
-    _run_pipeline(pipe, nhap)
+    dummy_audio = (np.random.default_rng(0).standard_normal(_TARGET_SR) * 0.01).astype("float32")
+    _run_pipeline(pipe, dummy_audio)
     elapsed = time.perf_counter() - started
     _log(f"PhoWhisper ({_MODEL_ID}) da nong sau {elapsed:.1f}s")
     return elapsed
@@ -229,8 +229,8 @@ def transcribe_base64(audio_base64: str) -> str:
     text = (result or {}).get("text", "") if isinstance(result, dict) else str(result)
     # Ghi thời gian nhận dạng riêng, tách khỏi thời gian nạp model: người dùng kêu
     # chậm thì nhìn số này là biết ngay chậm ở bước nào.
-    ton = time.perf_counter() - started
-    _log(f"Nhan dang xong sau {ton:.2f}s (x{ton / max(audio.size / _TARGET_SR, 0.001):.2f} thoi luong)")
+    elapsed_seconds = time.perf_counter() - started
+    _log(f"Nhan dang xong sau {elapsed_seconds:.2f}s (x{elapsed_seconds / max(audio.size / _TARGET_SR, 0.001):.2f} thoi luong)")
     return text.strip()
 
 
@@ -264,13 +264,13 @@ def _run_pipeline(pipe, audio):
     generate_kwargs = {
         "language": "vi",
         "task": "transcribe",
-        "max_new_tokens": _gioi_han_token(audio),
+        "max_new_tokens": _token_limit(audio),
     }
     # Khoá để hai lượt nhận dạng cùng lúc không đổi chỗ trọng số ngay dưới chân
     # nhau: lượt này trả card về RAM trong khi lượt kia đang chạy trên card là lỗi
     # lệch thiết bị giữa chừng, rất khó lần ra.
-    with _card_lock:
-        _muon_card(pipe)
+    with _gpu_lock:
+        _acquire_gpu(pipe)
         try:
             try:
                 return pipe(
@@ -284,18 +284,18 @@ def _run_pipeline(pipe, audio):
         finally:
             # Nhận dạng hỏng cũng phải trả card. Giữ lại là để nguyên cái bẫy đã
             # làm trợ lý chậm mười bốn lần, chỉ khác là lần này không ai ngờ tới.
-            _tra_card(pipe)
+            _release_gpu(pipe)
 
 
 # Whisper giải mã tối đa 448 token cho mỗi cửa sổ 30 giây; chừa lại ít chỗ cho các
 # token điều khiển ở đầu chuỗi.
-_TOKEN_TOI_DA = 440
-_TOKEN_MOI_GIAY = 12  # gấp đôi tốc độ nói nhanh nhất, chỉ cắt đúng phần lặp vô hạn
+_MAX_NEW_TOKENS = 440
+_TOKENS_PER_SECOND = 12  # gấp đôi tốc độ nói nhanh nhất, chỉ cắt đúng phần lặp vô hạn
 
 
-def _gioi_han_token(audio) -> int:
+def _token_limit(audio) -> int:
     """Số token tối đa cho một cửa sổ giải mã, suy từ độ dài đoạn ghi."""
     # Clip dài hơn 30 giây bị cắt thành nhiều khối, mỗi khối tự giải mã riêng, nên
     # hạn mức tính theo khối chứ không theo tổng.
-    giay = min(audio.size / _TARGET_SR, 30.0)
-    return max(32, min(_TOKEN_TOI_DA, int(giay * _TOKEN_MOI_GIAY) + 24))
+    seconds = min(audio.size / _TARGET_SR, 30.0)
+    return max(32, min(_MAX_NEW_TOKENS, int(seconds * _TOKENS_PER_SECOND) + 24))
