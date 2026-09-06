@@ -4,28 +4,23 @@ import { useQuery } from "@tanstack/react-query";
 import { ColorIcon } from "@/components/shared/color-icon";
 import { useState } from "react";
 import { getAuditLogs, type AuditLog } from "@/lib/dashboard-api";
+import {
+  auditActionLabel,
+  auditEntityLabel,
+  auditReasonLabel,
+  auditStatusLabel,
+} from "@/lib/audit-labels";
+import { formatTimeAndDate } from "@/lib/date-format";
 import { Pagination, usePagination } from "@/components/shared/pagination";
 
 const FILTERS = [
   { value: "", label: "Tất cả" },
   { value: "ItemBatch", label: "Vật tư" },
-  { value: "Mission", label: "Nhiệm vụ" },
-  { value: "Incident", label: "Sự cố" },
+  { value: "MissionAnalysisSnapshot", label: "Nhiệm vụ" },
+  { value: "MissionFieldUpdate", label: "Hiện trường" },
   { value: "LoanRecord", label: "Mượn-trả" },
   { value: "MonthlyStockReport", label: "Báo cáo tháng" },
 ];
-
-const entityLabels: Record<string, string> = {
-  ItemBatch: "Lô vật tư",
-  Mission: "Nhiệm vụ",
-  Incident: "Sự cố",
-  LoanRecord: "Phiếu mượn",
-  MonthlyStockReport: "Báo cáo tháng",
-};
-
-function readableAction(value: string): string {
-  return value.toLowerCase().replaceAll("_", " ");
-}
 
 export function AuditView() {
   const [entity, setEntity] = useState("");
@@ -107,10 +102,10 @@ function AuditRow({ log }: { log: AuditLog }) {
       />
       <div className="min-w-0 flex-1">
         <p className="text-sm">
-          <b className="capitalize">{readableAction(log.action)}</b>{" "}
-          <span className="text-[var(--text-muted)]">
-            · {entityLabels[log.entity] ?? log.entity}
-          </span>
+          {/* Bỏ `capitalize`: nhãn giờ là câu tiếng Việt viết sẵn, ép hoa đầu mỗi
+              từ sẽ ra "Xuất Vật Tư Khỏi Kho" — kiểu viết hoa của tiếng Anh. */}
+          <b>{auditActionLabel(log.action)}</b>{" "}
+          <span className="text-[var(--text-muted)]">· {auditEntityLabel(log.entity)}</span>
         </p>
         {log.entityId && (
           <p className="truncate text-xs text-[var(--text-muted)]">Mã bản ghi: {log.entityId}</p>
@@ -120,10 +115,11 @@ function AuditRow({ log }: { log: AuditLog }) {
         </p>
         <AuditMetadata metadata={log.metadata} />
       </div>
-      <p className="shrink-0 text-xs text-[var(--text-muted)]">
-        {new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyle: "short" }).format(
-          new Date(log.createdAt),
-        )}
+      {/* `Intl` với "vi-VN" trả về "15:31 6/9/26" trên máy này và một kiểu khác trên
+          máy kia — xem ghi chú ở `date-format`. Dòng nhật ký là thứ được chép vào
+          biên bản đối chiếu, nên ngày tháng phải giống hệt nhau ở mọi máy. */}
+      <p className="shrink-0 text-xs tabular text-[var(--text-muted)]">
+        {formatTimeAndDate(log.createdAt)}
       </p>
     </div>
   );
@@ -138,17 +134,19 @@ function AuditMetadata({ metadata }: { metadata: unknown }) {
       : typeof value.note === "string"
         ? value.note
         : null;
+  // Vế "trước/sau" mang hai kiểu dữ liệu: số lượng tồn (số) hoặc trạng thái báo
+  // cáo (chuỗi). Chuỗi là mã enum của backend nên phải dịch, còn số thì giữ nguyên.
   const before =
     typeof value.before === "number"
       ? value.before
       : typeof value.beforeStatus === "string"
-        ? value.beforeStatus
+        ? auditStatusLabel(value.beforeStatus)
         : null;
   const after =
     typeof value.after === "number"
       ? value.after
       : typeof value.afterStatus === "string"
-        ? value.afterStatus
+        ? auditStatusLabel(value.afterStatus)
         : null;
   const quantity = typeof value.quantity === "number" ? value.quantity : null;
 
@@ -161,7 +159,7 @@ function AuditMetadata({ metadata }: { metadata: unknown }) {
         </span>
       ) : null}
       {quantity !== null ? <span>Số lượng: {quantity}</span> : null}
-      {reason ? <span className="basis-full">Lý do: {reason}</span> : null}
+      {reason ? <span className="basis-full">Lý do: {auditReasonLabel(reason)}</span> : null}
     </div>
   );
 }
