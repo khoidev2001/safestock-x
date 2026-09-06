@@ -24,11 +24,11 @@ xuất giữa chừng:
 
 | Cửa sổ | Tài khoản | Mật khẩu | Vai |
 |---|---|---|---|
-| A | `admin` | `admin123@` | Điều phối xã |
+| A | `superadmindongxuan` | `admin123` | Điều phối xã |
 | B | `longchau` | `truongthon123` | Phụ trách Kho thôn Long Châu |
 
 Cần thêm thì: `staff` / `staff123` (kho trung tâm),
-`rescue` / `rescue123` (lực lượng hiện trường).
+`rescue` / `rescue123` (đội cứu hộ).
 
 **Ba điều về giao diện, biết trước đỡ lúng túng:**
 
@@ -90,7 +90,7 @@ kết quả hiện ở khối **Phân tích tình huống và tham mưu điều 
 | **Điều phối nội xã** | Mỗi kho một dòng, liệt kê vật tư lấy từ đó kèm quãng đường và thời gian đi — tuyến tính bằng bản đồ đường thật, không phải đường chim bay. |
 | **Mưa và dự báo** | 4 mốc dự báo kèm giải thích. |
 | **Liên xã khi thiếu** | Chỉ là *điểm liên hệ đã ghim*, có nhãn "chưa xác nhận có hàng". Hệ thống không tự gọi, không tự cộng vào tỉ lệ đáp ứng. |
-| **Bằng chứng từ Lực lượng hiện trường** | Nằm cuối chính khối này: ảnh/lời báo từ hiện trường, nguồn duy nhất làm bản tham mưu đổi. |
+| **Bằng chứng từ Đội cứu hộ** | Nằm cuối chính khối này: ảnh/lời báo từ hiện trường, nguồn duy nhất làm bản tham mưu đổi. |
 
 **Câu chốt của cả bài:** *"AI chỉ được phép bóc tách dữ kiện có trích dẫn. Nhu cầu,
 tồn kho, tuyến đường, dự báo đều do hệ thống tính bằng định mức và dữ liệu thật.

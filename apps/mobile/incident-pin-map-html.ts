@@ -97,7 +97,7 @@ export function buildPinMapHtml(initial: PinnedPoint | null): string {
         marker = L.marker([lat, lng], { icon: icon, draggable: true }).addTo(map);
         marker.on('dragend', function () { place(marker.getLatLng(), true); });
         // Bấm vào chính dấu ghim = bỏ ghim, giống hệt bản đồ trên web.
-        marker.on('click', function () { clear(); });
+        marker.on('click', function () { clearPin(true); });
         ring = L.circle([lat, lng], {
           radius: 150, interactive: false, color: '#d64545', weight: 2,
           dashArray: '6 5', fillColor: '#d64545', fillOpacity: 0.12,
@@ -111,12 +111,39 @@ export function buildPinMapHtml(initial: PinnedPoint | null): string {
       if (notify) send({ type: 'pin', lat: lat, lng: lng });
     }
 
-    function clear() {
+    /**
+     * Xoá dấu ghim khỏi bản đồ. 'notify' = false khi lệnh ĐẾN TỪ vỏ bên ngoài
+     * (nút "Bỏ ghim"): vỏ đã tự xoá toạ độ của nó rồi, gửi ngược lên chỉ tạo một
+     * vòng lặp thừa.
+     */
+    function clearPin(notify) {
       if (marker) { map.removeLayer(marker); marker = null; }
       if (ring) { map.removeLayer(ring); ring = null; }
       document.getElementById('hint').textContent = 'Bấm lên bản đồ để ghim chỗ đang xảy ra sự việc';
-      send({ type: 'clear' });
+      if (notify) send({ type: 'clear' });
     }
+
+    /**
+     * Kênh lệnh đi XUỐNG trang, ngược chiều với 'send'. Cần vì dấu ghim sống bên
+     * trong Leaflet: vỏ bỏ toạ độ mà không nói xuống đây thì bản đồ vẫn hiện dấu
+     * ghim cũ kèm dòng "Đã ghim …" — người báo tưởng vẫn còn ghim.
+     *
+     * Điện thoại gọi thẳng hàm này qua injectJavaScript; Expo Web không với tay
+     * vào trong iframe được nên gửi bằng postMessage, và trình xử lý dưới đây dịch
+     * lại thành cùng một lời gọi.
+     */
+    window.__pinMapCommand = function (name) {
+      if (name === 'clear') clearPin(false);
+    };
+    window.addEventListener('message', function (event) {
+      if (typeof event.data !== 'string') return;
+      try {
+        var msg = JSON.parse(event.data);
+        if (msg && msg.command) window.__pinMapCommand(msg.command);
+      } catch (err) {
+        // Thông điệp lạ từ trang cha: bỏ qua.
+      }
+    });
 
     map.on('click', function (e) { place(e.latlng, true); });
     if (initial) place(L.latLng(initial.lat, initial.lng), false);

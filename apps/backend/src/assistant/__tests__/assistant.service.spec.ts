@@ -6,7 +6,7 @@ describe("AssistantService", () => {
       warehouse: {
         findUnique: jest.fn().mockResolvedValue({
           id: "warehouse-central",
-          name: "Kho cứu trợ trung tâm Đồng Xuân",
+          name: "Kho xã Đồng Xuân",
           communeId: "dong-xuan",
           lat: null,
           lng: null,
@@ -45,7 +45,7 @@ describe("AssistantService", () => {
       warehouse: {
         findUnique: jest.fn().mockResolvedValue({
           id: "warehouse-central",
-          name: "Kho cứu trợ trung tâm",
+          name: "Kho xã",
           communeId: "commune-1",
           lat: null,
           lng: null,
@@ -92,7 +92,7 @@ describe("AssistantService", () => {
       warehouse: {
         findUnique: jest.fn().mockResolvedValue({
           id: "warehouse-central",
-          name: "Kho cứu trợ trung tâm",
+          name: "Kho xã",
           communeId: "commune-1",
           lat: null,
           lng: null,
@@ -174,7 +174,7 @@ describe("AssistantService", () => {
         warehouse: {
           findUnique: jest.fn().mockResolvedValue({
             id: "warehouse-central",
-            name: "Kho cứu trợ trung tâm",
+            name: "Kho xã",
             communeId: "commune-1",
             lat: null,
             lng: null,

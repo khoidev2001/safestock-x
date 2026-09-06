@@ -81,11 +81,13 @@ export function FloatingAssistant({ warehouseId }: FloatingAssistantProps) {
         <header className="flex items-center justify-between gap-3 border-b px-4 py-3">
           <div className="flex min-w-0 items-center gap-2.5">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[var(--color-accent)] text-[var(--color-accent-fg)]">
-              <ColorIcon name="assistant" size={19} tone="blue" />
+              {/* `mono` vì nền là màu nhấn đặc: bảng bốn màu vốn để nổi trên nền
+                  trắng, đặt lên đây thì hình chìm hẳn vào nút. */}
+              <ColorIcon mono name="assistant" size={19} />
             </span>
             <div className="min-w-0">
               <h2 className="truncate text-sm font-semibold" id="floating-assistant-title">
-                Trợ lý ứng phó nhanh
+                Trợ lý ảo Ứng Phó Nhanh
               </h2>
               <p className="truncate text-xs text-[var(--text-muted)]">
                 Phân tích tình huống và dữ liệu kho
@@ -146,10 +148,12 @@ export function FloatingAssistant({ warehouseId }: FloatingAssistantProps) {
         tabIndex={isExpanded ? -1 : 0}
         type="button"
       >
+        {/* Cùng lý do: nút tròn tô kín màu nhấn, hình phải là một màu tương
+            phản chứ không phải bảng màu dành cho nền trắng. */}
         {isOpen ? (
-          <ColorIcon name="close" size={22} tone="red" />
+          <ColorIcon mono name="close" size={22} />
         ) : (
-          <ColorIcon name="message" size={24} tone="blue" />
+          <ColorIcon mono name="message" size={24} />
         )}
       </button>
     </div>

@@ -30,6 +30,7 @@ function makeService() {
     {} as never,
     {} as never,
     {} as never,
+    {} as never,
   );
   const internals = service as unknown as {
     assertWarehouseAccess: jest.Mock;

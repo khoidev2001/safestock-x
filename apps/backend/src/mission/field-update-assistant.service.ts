@@ -121,7 +121,7 @@ export class FieldUpdateAssistantService {
       await this.notifications.create({
         recipientRole: "ADMIN",
         kind: "FIELD_UPDATE_REPORTED" as never,
-        title: "Cập nhật mới từ Lực lượng hiện trường",
+        title: "Cập nhật mới từ Đội cứu hộ",
         body: notificationBody(intent, preliminarySimulation),
         missionId,
         fieldUpdateId,

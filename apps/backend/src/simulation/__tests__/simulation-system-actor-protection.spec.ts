@@ -36,16 +36,21 @@ describe("simulation system actor protection", () => {
         role: UserRole.WAREHOUSE,
         warehouseId: "warehouse-1",
         tokenVersion: 0,
+        sessionVersion: 0,
+        sid: "session-1",
       }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
+  const superAdmin = { id: "admin-1", role: UserRole.ADMIN, isSuperAdmin: true };
+
   it("admin không thể tạo reserved identity", async () => {
-    const prisma = { user: { findUnique: jest.fn() } };
-    const service = new AdminUserService(prisma as never);
+    const prisma = { user: { findUnique: jest.fn(), create: jest.fn() } };
+    prisma.user.findUnique.mockResolvedValueOnce(superAdmin);
+    const service = new AdminUserService(prisma as never, {} as never);
 
     await expect(
-      service.create({
+      service.create("admin-1", {
         email,
         password: "known-password",
         fullName: "[SYSTEM] Loadcell warehouse-1",
@@ -53,19 +58,20 @@ describe("simulation system actor protection", () => {
         warehouseId: "warehouse-1",
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
-    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(prisma.user.create).not.toHaveBeenCalled();
   });
 
   it.each(["update", "remove"] as const)("admin không thể %s actor hệ thống", async (method) => {
-    const prisma = {
-      user: { findUnique: jest.fn().mockResolvedValue({ id: "system-actor", email }) },
-    };
-    const service = new AdminUserService(prisma as never);
+    const prisma = { user: { findUnique: jest.fn() } };
+    prisma.user.findUnique
+      .mockResolvedValueOnce(superAdmin)
+      .mockResolvedValueOnce({ id: "system-actor", email });
+    const service = new AdminUserService(prisma as never, {} as never);
 
     const operation =
       method === "update"
-        ? service.update("system-actor", { fullName: "Changed" })
-        : service.remove("system-actor");
+        ? service.update("admin-1", "system-actor", { fullName: "Changed" })
+        : service.remove("admin-1", "system-actor");
     await expect(operation).rejects.toBeInstanceOf(ForbiddenException);
   });
 });

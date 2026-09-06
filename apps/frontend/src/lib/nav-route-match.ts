@@ -31,13 +31,13 @@ export interface NavRoute {
  * 3. Tiền tố dài nhất — trang con vô danh mượn tab cha gần nhất.
  */
 export function matchNavRoute<T extends NavRoute>(routes: T[], path: string): T | undefined {
-  const trungKhit = routes.find((route) => route.path === path);
-  if (trungKhit) return trungKhit;
+  const exactMatch = routes.find((route) => route.path === path);
+  if (exactMatch) return exactMatch;
 
-  const khaiBaoRo = routes.find((route) =>
+  const explicitMatch = routes.find((route) =>
     route.subPaths?.some((prefix) => path === prefix || path.startsWith(prefix)),
   );
-  if (khaiBaoRo) return khaiBaoRo;
+  if (explicitMatch) return explicitMatch;
 
   return routes
     .filter((route) => path.startsWith(`${route.path}/`))

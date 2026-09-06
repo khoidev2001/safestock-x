@@ -32,7 +32,6 @@ import {
  */
 export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) {
   const queryClient = useQueryClient();
-  const [batchId, setBatchId] = useState<Record<string, string>>({});
   const [quantity, setQuantity] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
 
@@ -42,15 +41,15 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
     refetchInterval: 20_000,
   });
 
-  const [moXinMuon, setMoXinMuon] = useState(false);
-  const [xinMuon, setXinMuon] = useState({
+  const [borrowFormOpen, setBorrowFormOpen] = useState(false);
+  const [borrowForm, setBorrowForm] = useState({
     peerCommuneName: "",
     itemName: "",
     quantity: "",
     note: "",
   });
-  const [moGhiTay, setMoGhiTay] = useState(false);
-  const [ghiTay, setGhiTay] = useState({
+  const [manualFormOpen, setManualFormOpen] = useState(false);
+  const [manualForm, setManualForm] = useState({
     direction: "OUTGOING" as "OUTGOING" | "INCOMING",
     peerCommuneName: "",
     itemSku: "",
@@ -61,16 +60,16 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
   // Chỉ tải danh sách khi form MỞ RA. Người dùng vào tab Mượn trả thường chỉ để
   // xem sổ; tải sẵn hai danh sách cho một form chưa chắc ai mở là tốn hai lượt
   // gọi mỗi lần vào tab.
-  const xaLanCan = useQuery({
+  const peerCommunes = useQuery({
     queryKey: ["peer-communes"],
     queryFn: getPeerCommunes,
-    enabled: moGhiTay || moXinMuon,
+    enabled: manualFormOpen || borrowFormOpen,
     staleTime: 5 * 60_000,
   });
-  const vatTuCoSan = useQuery({
+  const availableItems = useQuery({
     queryKey: ["available-items-for-loan"],
     queryFn: getAvailableItemsForLoan,
-    enabled: moGhiTay || moXinMuon,
+    enabled: manualFormOpen || borrowFormOpen,
     staleTime: 60_000,
   });
 
@@ -85,32 +84,32 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
    * Vẫn cộng trừ kho thật như luồng tự động: hàng đã đi thì kho phải phản ánh
    * đúng, dù thoả thuận diễn ra qua điện thoại chứ không qua mạng.
    */
-  const ghiTayMutation = useMutation({
+  const manualMutation = useMutation({
     mutationFn: () => {
-      const soLuong = Number(ghiTay.quantity);
-      if (!ghiTay.peerCommuneName.trim()) throw new Error("Cần chọn xã bên kia.");
-      if (!ghiTay.itemSku.trim()) throw new Error("Cần chọn vật tư.");
-      if (!Number.isInteger(soLuong) || soLuong < 1) {
+      const quantity = Number(manualForm.quantity);
+      if (!manualForm.peerCommuneName.trim()) throw new Error("Cần chọn xã bên kia.");
+      if (!manualForm.itemSku.trim()) throw new Error("Cần chọn vật tư.");
+      if (!Number.isInteger(quantity) || quantity < 1) {
         throw new Error("Số lượng phải là số nguyên dương.");
       }
       return recordManualInterCommuneLoan({
-        direction: ghiTay.direction,
-        peerCommuneName: ghiTay.peerCommuneName.trim(),
-        itemSku: ghiTay.itemSku.trim(),
-        quantity: soLuong,
-        note: ghiTay.note.trim() || undefined,
+        direction: manualForm.direction,
+        peerCommuneName: manualForm.peerCommuneName.trim(),
+        itemSku: manualForm.itemSku.trim(),
+        quantity: quantity,
+        note: manualForm.note.trim() || undefined,
       });
     },
     onMutate: () => setError(null),
     onSuccess: () => {
-      setGhiTay({
+      setManualForm({
         direction: "OUTGOING",
         peerCommuneName: "",
         itemSku: "",
         quantity: "",
         note: "",
       });
-      setMoGhiTay(false);
+      setManualFormOpen(false);
       queryClient.invalidateQueries({ queryKey: ["inter-commune-loans"] });
       queryClient.invalidateQueries({ queryKey: ["loan-stock-marks"] });
       queryClient.invalidateQueries({ queryKey: ["inventory-batches", warehouseId] });
@@ -128,39 +127,47 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
    * dùng chung danh mục vật tư, và mã phải khớp thì bên kia mới đối chiếu được
    * với kho họ. Gõ tay tên vật tư là hai bên nói về hai thứ khác nhau.
    */
-  const xinMuonMutation = useMutation({
+  const borrowMutation = useMutation({
     mutationFn: () => {
-      const soLuong = Number(xinMuon.quantity);
-      if (!xinMuon.peerCommuneName.trim()) throw new Error("Cần chọn xã để hỏi mượn.");
-      if (!xinMuon.itemName.trim()) throw new Error("Cần chọn vật tư cần mượn.");
-      if (!Number.isInteger(soLuong) || soLuong < 1) {
+      const quantity = Number(borrowForm.quantity);
+      if (!borrowForm.peerCommuneName.trim()) throw new Error("Cần chọn xã để hỏi mượn.");
+      if (!borrowForm.itemName.trim()) throw new Error("Cần chọn vật tư cần mượn.");
+      if (!Number.isInteger(quantity) || quantity < 1) {
         throw new Error("Số lượng phải là số nguyên dương.");
       }
-      const mon = (vatTuCoSan.data ?? []).find((m) => m.itemSku === xinMuon.itemName);
-      if (!mon) throw new Error("Không nhận ra vật tư đã chọn.");
+      const item = (availableItems.data ?? []).find((m) => m.itemSku === borrowForm.itemName);
+      if (!item) throw new Error("Không nhận ra vật tư đã chọn.");
       return requestInterCommuneLoan({
-        peerCommuneName: xinMuon.peerCommuneName.trim(),
-        itemSku: mon.itemSku,
-        itemName: mon.itemName,
-        unit: mon.unit,
-        quantity: soLuong,
-        note: xinMuon.note.trim() || undefined,
+        peerCommuneName: borrowForm.peerCommuneName.trim(),
+        itemSku: item.itemSku,
+        itemName: item.itemName,
+        unit: item.unit,
+        quantity: quantity,
+        note: borrowForm.note.trim() || undefined,
       });
     },
     onMutate: () => setError(null),
     onSuccess: () => {
-      setXinMuon({ peerCommuneName: "", itemName: "", quantity: "", note: "" });
-      setMoXinMuon(false);
+      setBorrowForm({ peerCommuneName: "", itemName: "", quantity: "", note: "" });
+      setBorrowFormOpen(false);
       queryClient.invalidateQueries({ queryKey: ["inter-commune-loans"] });
     },
     onError: (e) => setError(e instanceof Error ? e.message : "Không gửi được yêu cầu"),
   });
 
+  /**
+   * Đi tiếp một bước của khoản mượn.
+   *
+   * KHÔNG gửi mã lô. Trước đây mỗi bước có đụng kho đều bắt người trực dán một
+   * mã lô chép từ tab Vật tư sang — mà người đang nghe điện thoại thoả thuận với
+   * xã bên kia nói "nước uống", không nói "lô WATER-01-B3". Máy chủ tự chọn lô
+   * theo đúng nguyên tắc kho vẫn theo (hạn gần xuất trước), giống hệt đường ghi
+   * tay đã làm từ đầu.
+   */
   const advance = useMutation({
     mutationFn: (input: { loan: InterCommuneLoan; action: LoanAction }) =>
       advanceInterCommuneLoan(input.loan.id, {
         to: input.action.to,
-        batchId: input.action.needsBatch ? batchId[input.loan.id]?.trim() : undefined,
         quantity: input.action.needsQuantity
           ? Number(quantity[input.loan.id]) || undefined
           : undefined,
@@ -171,8 +178,8 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
   });
 
   const loans = query.data ?? [];
-  const dangMo = loans.filter((l) => isOpen(l.status));
-  const daDong = loans.filter((l) => !isOpen(l.status));
+  const openLoans = loans.filter((l) => isOpen(l.status));
+  const closedLoans = loans.filter((l) => !isOpen(l.status));
 
   return (
     <section className="app-panel p-5">
@@ -188,32 +195,32 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
         <button
           className="rounded-md px-3 py-2 text-xs font-semibold text-white"
           onClick={() => {
-            setMoXinMuon((truoc) => !truoc);
-            setMoGhiTay(false);
+            setBorrowFormOpen((previous) => !previous);
+            setManualFormOpen(false);
           }}
           style={{ background: "var(--color-accent)" }}
           type="button"
         >
-          {moXinMuon ? "Đóng" : "Gửi yêu cầu mượn xã khác"}
+          {borrowFormOpen ? "Đóng" : "Gửi yêu cầu mượn xã khác"}
         </button>
         <button
           className="rounded-md border px-3 py-2 text-xs font-semibold"
           onClick={() => {
-            setMoGhiTay((truoc) => !truoc);
-            setMoXinMuon(false);
+            setManualFormOpen((previous) => !previous);
+            setBorrowFormOpen(false);
           }}
           type="button"
         >
-          {moGhiTay ? "Đóng" : "Ghi tay khoản đã thoả thuận qua điện thoại"}
+          {manualFormOpen ? "Đóng" : "Ghi tay khoản đã thoả thuận qua điện thoại"}
         </button>
       </div>
 
-      {moXinMuon ? (
+      {borrowFormOpen ? (
         <form
           className="mt-3 space-y-3 rounded-md border p-4"
           onSubmit={(event) => {
             event.preventDefault();
-            xinMuonMutation.mutate();
+            borrowMutation.mutate();
           }}
         >
           <p className="text-xs text-[var(--text-muted)]">
@@ -230,14 +237,17 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
                 className="mt-1 w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
                 id="xin-muon-xa"
                 onChange={(event) =>
-                  setXinMuon((truoc) => ({ ...truoc, peerCommuneName: event.target.value }))
+                  setBorrowForm((previous) => ({
+                    ...previous,
+                    peerCommuneName: event.target.value,
+                  }))
                 }
-                value={xinMuon.peerCommuneName}
+                value={borrowForm.peerCommuneName}
               >
                 <option value="">— chọn xã —</option>
-                {(xaLanCan.data ?? []).map((ten) => (
-                  <option key={ten} value={ten}>
-                    {ten}
+                {(peerCommunes.data ?? []).map((name) => (
+                  <option key={name} value={name}>
+                    {name}
                   </option>
                 ))}
               </select>
@@ -250,14 +260,14 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
                 className="mt-1 w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
                 id="xin-muon-vattu"
                 onChange={(event) =>
-                  setXinMuon((truoc) => ({ ...truoc, itemName: event.target.value }))
+                  setBorrowForm((previous) => ({ ...previous, itemName: event.target.value }))
                 }
-                value={xinMuon.itemName}
+                value={borrowForm.itemName}
               >
                 <option value="">— chọn vật tư —</option>
-                {(vatTuCoSan.data ?? []).map((mon) => (
-                  <option key={mon.itemSku} value={mon.itemSku}>
-                    {mon.itemName}
+                {(availableItems.data ?? []).map((item) => (
+                  <option key={item.itemSku} value={item.itemSku}>
+                    {item.itemName}
                   </option>
                 ))}
               </select>
@@ -271,10 +281,10 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
                 id="xin-muon-so"
                 min={1}
                 onChange={(event) =>
-                  setXinMuon((truoc) => ({ ...truoc, quantity: event.target.value }))
+                  setBorrowForm((previous) => ({ ...previous, quantity: event.target.value }))
                 }
                 type="number"
-                value={xinMuon.quantity}
+                value={borrowForm.quantity}
               />
             </div>
             <div>
@@ -286,31 +296,31 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
                 id="xin-muon-ghichu"
                 maxLength={500}
                 onChange={(event) =>
-                  setXinMuon((truoc) => ({ ...truoc, note: event.target.value }))
+                  setBorrowForm((previous) => ({ ...previous, note: event.target.value }))
                 }
                 placeholder="Ngập thôn Tân Bình, cần gấp trong hôm nay"
-                value={xinMuon.note}
+                value={borrowForm.note}
               />
             </div>
           </div>
 
           <button
             className="rounded-md px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
-            disabled={xinMuonMutation.isPending}
+            disabled={borrowMutation.isPending}
             style={{ background: "var(--color-accent)" }}
             type="submit"
           >
-            {xinMuonMutation.isPending ? "Đang gửi…" : "Gửi yêu cầu"}
+            {borrowMutation.isPending ? "Đang gửi…" : "Gửi yêu cầu"}
           </button>
         </form>
       ) : null}
 
-      {moGhiTay ? (
+      {manualFormOpen ? (
         <form
           className="mt-3 space-y-3 rounded-md border p-4"
           onSubmit={(event) => {
             event.preventDefault();
-            ghiTayMutation.mutate();
+            manualMutation.mutate();
           }}
         >
           <p className="text-xs text-[var(--text-muted)]">
@@ -327,12 +337,12 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
                 className="mt-1 w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
                 id="ghi-tay-chieu"
                 onChange={(event) =>
-                  setGhiTay((truoc) => ({
-                    ...truoc,
+                  setManualForm((previous) => ({
+                    ...previous,
                     direction: event.target.value as "OUTGOING" | "INCOMING",
                   }))
                 }
-                value={ghiTay.direction}
+                value={manualForm.direction}
               >
                 <option value="OUTGOING">Mình cho xã khác mượn (kho mình GIẢM)</option>
                 <option value="INCOMING">Mình mượn của xã khác (kho mình TĂNG)</option>
@@ -349,18 +359,21 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
                 className="mt-1 w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
                 id="ghi-tay-xa"
                 onChange={(event) =>
-                  setGhiTay((truoc) => ({ ...truoc, peerCommuneName: event.target.value }))
+                  setManualForm((previous) => ({
+                    ...previous,
+                    peerCommuneName: event.target.value,
+                  }))
                 }
-                value={ghiTay.peerCommuneName}
+                value={manualForm.peerCommuneName}
               >
                 <option value="">— chọn xã —</option>
-                {(xaLanCan.data ?? []).map((ten) => (
-                  <option key={ten} value={ten}>
-                    {ten}
+                {(peerCommunes.data ?? []).map((name) => (
+                  <option key={name} value={name}>
+                    {name}
                   </option>
                 ))}
               </select>
-              {xaLanCan.data?.length === 0 ? (
+              {peerCommunes.data?.length === 0 ? (
                 <p className="mt-1 text-xs text-[var(--text-muted)]">
                   Chưa khai xã lân cận nào trong cấu hình máy chủ.
                 </p>
@@ -378,14 +391,14 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
                 className="mt-1 w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
                 id="ghi-tay-vattu"
                 onChange={(event) =>
-                  setGhiTay((truoc) => ({ ...truoc, itemSku: event.target.value }))
+                  setManualForm((previous) => ({ ...previous, itemSku: event.target.value }))
                 }
-                value={ghiTay.itemSku}
+                value={manualForm.itemSku}
               >
                 <option value="">— chọn vật tư —</option>
-                {(vatTuCoSan.data ?? []).map((mon) => (
-                  <option key={mon.itemSku} value={mon.itemSku}>
-                    {mon.itemName} (còn {mon.available} {mon.unit})
+                {(availableItems.data ?? []).map((item) => (
+                  <option key={item.itemSku} value={item.itemSku}>
+                    {item.itemName} (còn {item.available} {item.unit})
                   </option>
                 ))}
               </select>
@@ -399,10 +412,10 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
                 id="ghi-tay-so"
                 min={1}
                 onChange={(event) =>
-                  setGhiTay((truoc) => ({ ...truoc, quantity: event.target.value }))
+                  setManualForm((previous) => ({ ...previous, quantity: event.target.value }))
                 }
                 type="number"
-                value={ghiTay.quantity}
+                value={manualForm.quantity}
               />
             </div>
           </div>
@@ -415,18 +428,20 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
               className="mt-1 w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
               id="ghi-tay-ghichu"
               maxLength={500}
-              onChange={(event) => setGhiTay((truoc) => ({ ...truoc, note: event.target.value }))}
+              onChange={(event) =>
+                setManualForm((previous) => ({ ...previous, note: event.target.value }))
+              }
               placeholder="Anh Tuấn xã Xuân Thọ gọi lúc 14h, mất mạng"
-              value={ghiTay.note}
+              value={manualForm.note}
             />
           </div>
 
           <button
             className="rounded-md border px-3 py-2 text-xs font-semibold disabled:opacity-60"
-            disabled={ghiTayMutation.isPending}
+            disabled={manualMutation.isPending}
             type="submit"
           >
-            {ghiTayMutation.isPending ? "Đang ghi…" : "Ghi vào sổ"}
+            {manualMutation.isPending ? "Đang ghi…" : "Ghi vào sổ"}
           </button>
         </form>
       ) : null}
@@ -439,22 +454,20 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
 
       {query.isLoading ? (
         <p className="mt-4 text-sm text-[var(--text-muted)]">Đang tải sổ mượn…</p>
-      ) : dangMo.length === 0 && daDong.length === 0 ? (
+      ) : openLoans.length === 0 && closedLoans.length === 0 ? (
         <p className="mt-4 rounded-md border border-dashed p-4 text-sm text-[var(--text-muted)]">
           Chưa có khoản mượn nào với xã khác.
         </p>
       ) : (
         <>
-          {dangMo.length > 0 ? (
+          {openLoans.length > 0 ? (
             <ul className="mt-4 space-y-3">
-              {dangMo.map((loan) => (
+              {openLoans.map((loan) => (
                 <LoanRow
                   key={loan.id}
                   loan={loan}
-                  batchId={batchId[loan.id] ?? ""}
                   quantity={quantity[loan.id] ?? ""}
                   busy={advance.isPending && advance.variables?.loan.id === loan.id}
-                  onBatchId={(v) => setBatchId((c) => ({ ...c, [loan.id]: v }))}
                   onQuantity={(v) => setQuantity((c) => ({ ...c, [loan.id]: v }))}
                   onAction={(action) => advance.mutate({ loan, action })}
                 />
@@ -466,13 +479,13 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
             </p>
           )}
 
-          {daDong.length > 0 ? (
+          {closedLoans.length > 0 ? (
             <details className="mt-4">
               <summary className="cursor-pointer text-sm font-semibold text-[var(--text-muted)]">
-                {daDong.length} khoản đã đóng sổ
+                {closedLoans.length} khoản đã đóng sổ
               </summary>
               <ul className="mt-3 space-y-2">
-                {daDong.map((loan) => (
+                {closedLoans.map((loan) => (
                   <li className="rounded-md border p-3 text-sm" key={loan.id}>
                     <span className="font-medium">{loan.itemName}</span>{" "}
                     <span className="text-[var(--text-muted)]">
@@ -493,24 +506,20 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
 
 function LoanRow({
   loan,
-  batchId,
   quantity,
   busy,
-  onBatchId,
   onQuantity,
   onAction,
 }: {
   loan: InterCommuneLoan;
-  batchId: string;
   quantity: string;
   busy: boolean;
-  onBatchId: (value: string) => void;
   onQuantity: (value: string) => void;
   onAction: (action: LoanAction) => void;
 }) {
   const actions = loanActions(loan.direction, loan.status, loan.recordedManually);
-  const conNo = outstanding(loan.quantity, loan.returnedQuantity);
-  const laChoMuon = loan.direction === "OUTGOING";
+  const outstandingQuantity = outstanding(loan.quantity, loan.returnedQuantity);
+  const isLender = loan.direction === "OUTGOING";
 
   return (
     <li className="rounded-md border p-4">
@@ -520,15 +529,15 @@ function LoanRow({
           <p className="mt-0.5 text-sm text-[var(--text-muted)]">
             {/* Nói rõ chiều bằng lời, không bằng mũi tên: mũi tên đọc được hai
                 nghĩa, mà nhầm chiều ở đây là đòi nợ nhầm người. */}
-            {laChoMuon ? "Cho " : "Mượn của "}
+            {isLender ? "Cho " : "Mượn của "}
             <span className="font-medium text-[var(--text)]">{loan.peerCommuneName}</span>
-            {laChoMuon ? " mượn" : ""} · {statusLabel(loan.status)}
+            {isLender ? " mượn" : ""} · {statusLabel(loan.status)}
             {loan.recordedManually ? " · ghi tay" : ""}
           </p>
         </div>
         <div className="text-right">
           <p className="font-mono text-sm font-semibold">
-            {conNo} {loan.unit}
+            {outstandingQuantity} {loan.unit}
           </p>
           <p className="text-xs text-[var(--text-muted)]">
             còn nợ / {loan.quantity} {loan.unit}
@@ -538,17 +547,6 @@ function LoanRow({
 
       {actions.length > 0 ? (
         <div className="mt-3 flex flex-wrap items-end gap-2 border-t pt-3">
-          {actions.some((a) => a.needsBatch) ? (
-            <label className="text-xs">
-              <span className="block text-[var(--text-muted)]">Mã lô vật tư</span>
-              <input
-                className="mt-1 w-56 rounded-md border px-2 py-1.5 text-sm"
-                onChange={(e) => onBatchId(e.target.value)}
-                placeholder="Dán mã lô từ tab Vật tư"
-                value={batchId}
-              />
-            </label>
-          ) : null}
           {actions.some((a) => a.needsQuantity) ? (
             <label className="text-xs">
               <span className="block text-[var(--text-muted)]">Số lượng lần này</span>
@@ -556,7 +554,7 @@ function LoanRow({
                 className="mt-1 w-32 rounded-md border px-2 py-1.5 text-sm"
                 inputMode="numeric"
                 onChange={(e) => onQuantity(e.target.value)}
-                placeholder={String(conNo)}
+                placeholder={String(outstandingQuantity)}
                 value={quantity}
               />
             </label>
@@ -564,7 +562,7 @@ function LoanRow({
           {actions.map((action) => (
             <button
               className="rounded-md border px-3 py-2 text-sm font-semibold disabled:opacity-50"
-              disabled={busy || (action.needsBatch && !batchId.trim())}
+              disabled={busy}
               key={action.to}
               onClick={() => onAction(action)}
               style={
@@ -579,6 +577,16 @@ function LoanRow({
               {busy ? "Đang xử lý…" : action.label}
             </button>
           ))}
+          {/* Bỏ ô mã lô rồi thì phải nói bằng lời rằng bấm nút này là hàng rời
+              kho thật — mất ô nhập mà không nói gì thì nút trông như chỉ đổi
+              một dòng chữ trên sổ. Kho tự chọn lô hạn gần nhất, đúng nguyên tắc
+              hạn gần xuất trước mà thủ kho vẫn theo. */}
+          {actions.some((a) => a.movesStock) ? (
+            <p className="w-full text-xs text-[var(--text-muted)]">
+              Bước này cộng trừ kho thật. Hệ thống tự lấy lô {loan.itemName} có hạn dùng gần nhất,
+              không cần nhập mã lô.
+            </p>
+          ) : null}
         </div>
       ) : null}
     </li>

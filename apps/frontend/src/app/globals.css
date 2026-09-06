@@ -88,6 +88,46 @@ button:disabled {
   outline-offset: 2px;
 }
 
+/**
+ * Ô nhập chiếm trọn một ô bảng, không có viền riêng — chính ô bảng là khung của nó.
+ *
+ * Viền tiêu điểm mặc định nở ra ngoài 2px, mà ở đây bên ngoài đã là ô kế bên và
+ * mép bảng: nó chồm qua đường kẻ và trông đúng như ô nhập bị tràn khỏi bảng. Kéo
+ * viền vào trong để nó ôm sát lòng ô.
+ *
+ * Phải viết ở đây chứ không phải bằng utility của Tailwind: quy tắc trên nằm ngoài
+ * @layer nên luôn thắng mọi lớp utility, bất kể thứ tự.
+ */
+.cell-input:focus-visible {
+  outline-offset: -3px;
+}
+
+/**
+ * Ô chọn tự vẽ mũi tên thay vì dùng mũi tên của trình duyệt.
+ *
+ * Mũi tên gốc bám cứng vào mép phải của ô chọn — và padding-right của phần tử
+ * KHÔNG đẩy nó vào được, nên không có cách nào chừa lề cho nó bằng CSS thông
+ * thường. Tự vẽ thì đặt được nó cách mép đúng 0.75rem, bằng lề trái của chữ, để
+ * hai bên cân nhau.
+ *
+ * Lề phải 2rem là chỗ trống dành cho mũi tên: thiếu nó thì chữ dài chạy thẳng
+ * xuống dưới mũi tên.
+ *
+ * Hai tên gọi cho cùng một cách vẽ: `.cell-select` cho ô chọn nằm trong lòng một
+ * ô bảng (nơi mũi tên gốc còn đụng cả đường kẻ), `.select-field` cho ô chọn đứng
+ * riêng có viền của nó. Gộp chung một khối vì hình mũi tên phải giống nhau — nuôi
+ * hai bản SVG là nuôi hai thứ sẽ lệch nhau ở lần sửa sau.
+ */
+.cell-select,
+.select-field {
+  appearance: none;
+  padding-right: 2rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.75 6 6.25 11 1.75' fill='none' stroke='%236b7280' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 0.7rem;
+}
+
 ::selection {
   background: var(--accent-soft);
   color: var(--text);
@@ -182,6 +222,66 @@ button:disabled {
   isolation: isolate;
 }
 
+/* Chú thích "vì sao nhiệm vụ cần món này" cạnh từng dòng vật tư.
+
+   Viết bằng CSS thường thay vì thuộc tính `title` của trình duyệt: `title` phụ
+   thuộc hoàn toàn vào trình duyệt — nó chờ khoảng một giây, tắt ngay khi con trỏ
+   nhích, không mở được bằng bàn phím, và trên vài trình duyệt thì im lặng không
+   hiện gì khi phần tử mang title chỉ chứa một icon SVG. Đó đúng là lỗi đã gặp:
+   trỏ vào dấu hỏi mà không ra chữ nào.
+
+   Bong bóng tự vẽ thì hiện tức thì, mở được bằng Tab (nhờ :focus-within), và
+   ngắt dòng đọc được thay vì một dòng dài chạy hết màn hình. */
+.why-tip {
+  position: relative;
+  display: inline-flex;
+}
+.why-tip-trigger {
+  display: inline-flex;
+  cursor: help;
+  border-radius: 999px;
+  outline-offset: 2px;
+}
+.why-tip-bubble {
+  position: absolute;
+  top: calc(100% + 6px);
+  /* Neo mép TRÁI vào dấu hỏi, không căn giữa: căn giữa thì bong bóng rộng 17rem
+     thò sang trái quá mép thẻ khi tên vật tư ngắn. Thò sang phải thì còn chỗ. */
+  left: -4px;
+  z-index: 40;
+  width: 17rem;
+  max-width: min(17rem, 60vw);
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease;
+}
+.why-tip:hover .why-tip-bubble,
+.why-tip:focus-within .why-tip-bubble {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .why-tip-bubble {
+    transition: none;
+  }
+}
+
 /* Nhãn tên kho luôn hiện trên bản đồ (kiểu ghim Google Maps).
    Nền trắng mờ + viền để đọc rõ trên cả ảnh vệ tinh lẫn bản đồ đường phố. */
 .leaflet-tooltip.wh-label {
@@ -198,19 +298,16 @@ button:disabled {
   /* Để nhãn không chặn click vào marker/tile bên dưới. */
   pointer-events: none;
 }
-/* Nhiệm vụ khác đang chạy: viền cam để phân biệt ngay với nhãn kho.
-   Nền đục hơn một chút vì nhãn này hay nằm chồng lên đường và nhà cửa. */
-.leaflet-tooltip.wh-label-ongoing {
-  color: #8a4b06;
-  border-color: rgba(217, 134, 19, 0.65);
-  background: rgba(255, 247, 235, 0.95);
-}
-
-/* Kho tổng xã nổi bật hơn: viền và chữ theo màu nhấn. */
+/* Kho tổng xã: chữ to hơn chút cho nổi giữa cụm kho thôn — nhưng KHÔNG tô xanh.
+   Xanh trên bản đồ này chỉ có một nghĩa: kho đang cấp hàng cho phương án. */
 .leaflet-tooltip.wh-label-central {
+  font-size: 12.5px;
+}
+/* Kho được huy động tiếp tế: viền và chữ theo màu nhấn, khớp với dấu ghim xanh. */
+.leaflet-tooltip.wh-label-supply {
   color: #1f7a52;
   border-color: rgba(47, 158, 110, 0.55);
-  font-size: 12.5px;
+  font-weight: 700;
 }
 /* Ẩn mũi tên mặc định của tooltip cho gọn. */
 .leaflet-tooltip.wh-label::before {
@@ -598,6 +695,64 @@ button:disabled {
   }
 }
 
+/* ── Khối "đang phân tích" của bản tin đầu ngày ──────────────────────────────
+   Bản tin do mô hình chạy trong mạng nội bộ viết ra, và nó mất từ vài giây tới
+   vài chục giây. Một dòng chữ đứng im suốt quãng đó đọc ra là "hỏng rồi": người
+   trực chuyển tab đi chỗ khác rồi quay lại, hoặc tải lại trang — vừa mất bản tin
+   đang chạy dở, vừa xếp thêm một lượt gọi nữa vào hàng đợi.
+
+   Vệt sáng quét qua các vạch chữ giả nói đúng một điều: máy đang làm việc chứ
+   không treo. Chỉ chạy `transform` nên vòng lặp không kéo theo layout. */
+.analyzing-line {
+  position: relative;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--text-muted) 16%, transparent);
+}
+
+.analyzing-line::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklch, var(--surface) 80%, transparent),
+    transparent
+  );
+  /* Độ trễ đặt qua biến vì hoạt ảnh nằm ở phần tử giả — style nội tuyến của
+     React không với tới `::after` được, chỉ đặt được biến trên phần tử cha. Lệch
+     nhau một chút thì mấy vạch quét thành một làn sóng chạy dọc khối, thay vì
+     sáu vạch cùng nháy một nhịp như đèn báo lỗi. */
+  animation: analyzing-sweep 1.5s ease-in-out infinite;
+  animation-delay: var(--sweep-delay, 0ms);
+}
+
+/* Dấu hiệu đầu dòng thở cùng nhịp với vệt quét, để hai chuyển động trên cùng một
+   khối không đá nhau thành ra nhấp nháy loạn. */
+.analyzing-mark {
+  animation: analyzing-breathe 1.5s ease-in-out infinite;
+}
+
+@keyframes analyzing-sweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes analyzing-breathe {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
 /* Người đã tắt hiệu ứng trong hệ điều hành thường tắt vì chuyển động làm họ chóng
    mặt hoặc buồn nôn. Giữ nguyên MỌI THÔNG TIN — dấu hiệu, dòng chữ, vạch tiến
    trình vẫn hiện — chỉ bỏ phần nhấp nháy và trượt. */
@@ -605,6 +760,8 @@ button:disabled {
   .brand-loader-mark,
   .brand-loader-halo,
   .brand-loader-label,
+  .analyzing-line::after,
+  .analyzing-mark,
   .login-hero-enter,
   .login-panel-enter,
   .login-busy-veil,
@@ -620,5 +777,11 @@ button:disabled {
   .login-progress::after {
     width: 100%;
     opacity: 0.7;
+  }
+
+  /* Bỏ vệt quét thì vạch chữ giả vẫn phải trông như chỗ đang chờ nội dung, nên
+     giữ nguyên nền xám — chỉ mất phần chuyển động. */
+  .analyzing-line::after {
+    opacity: 0;
   }
 }

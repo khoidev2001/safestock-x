@@ -18,10 +18,10 @@ describe("danh bạ máy chủ xã lân cận", () => {
     // Nhận một nửa cấu hình rồi gửi tin tới địa chỉ rỗng, hoặc gửi mà không kèm
     // khoá, còn tệ hơn là không gửi.
     const peers = parseCommunePeers({
-      COMMUNE_PEER_THIEU_KHOA: "Xuân Thọ|https://xuantho.example",
-      COMMUNE_PEER_THIEU_URL: "Xuân Thọ||khoa",
-      COMMUNE_PEER_THIEU_TEN: "|https://x.example|khoa",
-      COMMUNE_PEER_RONG: "",
+      COMMUNE_PEER_NO_KEY: "Xuân Thọ|https://xuantho.example",
+      COMMUNE_PEER_NO_URL: "Xuân Thọ||khoa",
+      COMMUNE_PEER_NO_NAME: "|https://x.example|khoa",
+      COMMUNE_PEER_EMPTY: "",
     });
 
     expect(peers).toEqual([]);
@@ -58,26 +58,26 @@ describe("tra xã theo khoá chia sẻ", () => {
     COMMUNE_PEER_A: "Xuân Thọ|https://a.example|khoa-a",
     COMMUNE_PEER_B: "Tuy An Bắc|https://b.example|khoa-b",
   });
-  const soSanh = (a: string, b: string) => a === b;
+  const compare = (a: string, b: string) => a === b;
 
   it("khoá đúng thì ra đúng xã", () => {
-    expect(findPeerByKey(peers, "khoa-b", soSanh)?.communeName).toBe("Tuy An Bắc");
+    expect(findPeerByKey(peers, "khoa-b", compare)?.communeName).toBe("Tuy An Bắc");
   });
 
   it("khoá sai trả null", () => {
-    expect(findPeerByKey(peers, "khoa-lung-tung", soSanh)).toBeNull();
-    expect(findPeerByKey([], "khoa-a", soSanh)).toBeNull();
+    expect(findPeerByKey(peers, "khoa-lung-tung", compare)).toBeNull();
+    expect(findPeerByKey([], "khoa-a", compare)).toBeNull();
   });
 
   it("KHÔNG dừng sớm khi đã khớp", () => {
     // Dừng sớm thì thời gian trả lời tiết lộ vị trí của xã trong danh bạ: khoá
     // của xã đầu danh sách trả lời nhanh hơn hẳn khoá của xã cuối.
-    let soLanSo = 0;
+    let comparisons = 0;
     findPeerByKey(peers, "khoa-a", (a, b) => {
-      soLanSo += 1;
+      comparisons += 1;
       return a === b;
     });
 
-    expect(soLanSo).toBe(peers.length);
+    expect(comparisons).toBe(peers.length);
   });
 });

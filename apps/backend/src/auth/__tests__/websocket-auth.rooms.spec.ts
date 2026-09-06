@@ -11,7 +11,7 @@ const SECRET = "websocket-test-secret";
 
 describe("authenticated Socket.IO rooms", () => {
   const users = new Map<string, ReturnType<typeof warehouseUser>>();
-  const prisma = { user: { findUnique: jest.fn() } };
+  const prisma = { userSession: { findUnique: jest.fn() } };
   const jwt = new JwtService();
   const config = { get: jest.fn(() => SECRET) };
   const clients: ClientSocket[] = [];
@@ -38,10 +38,13 @@ describe("authenticated Socket.IO rooms", () => {
       warehouse: null,
       organization: { warehouses: [{ id: "wh-b" }] },
     });
-    prisma.user.findUnique.mockClear();
-    prisma.user.findUnique.mockImplementation(({ where }: { where: { id: string } }) =>
-      Promise.resolve(users.get(where.id) ?? null),
-    );
+    prisma.userSession.findUnique.mockClear();
+    // Quy ước của bài test: sid là "sess-<userId>". Phiên chỉ tra ra được khi
+    // người dùng của nó có thật, và luôn ở trạng thái còn sống.
+    prisma.userSession.findUnique.mockImplementation(({ where }: { where: { id: string } }) => {
+      const user = users.get(where.id.replace(/^sess-/, ""));
+      return Promise.resolve(user ? { revokedAt: null, user } : null);
+    });
 
     const auth = new WebSocketAuthService(prisma as never, jwt, config as never);
     notifications = {};
@@ -68,15 +71,15 @@ describe("authenticated Socket.IO rooms", () => {
 
   it("rejects missing, invalid, expired, and deleted-user tokens during handshake", async () => {
     const invalid = await jwt.signAsync(
-      { sub: "user-a", tokenVersion: 0 },
+      { sub: "user-a", sessionVersion: 0, sid: "sess-user-a" },
       { secret: "wrong-secret" },
     );
     const expired = await jwt.signAsync(
-      { sub: "user-a", tokenVersion: 0 },
+      { sub: "user-a", sessionVersion: 0, sid: "sess-user-a" },
       { secret: SECRET, expiresIn: -1 },
     );
     const deletedUser = await jwt.signAsync(
-      { sub: "deleted", tokenVersion: 0 },
+      { sub: "deleted", sessionVersion: 0, sid: "sess-deleted" },
       { secret: SECRET },
     );
 
@@ -89,8 +92,8 @@ describe("authenticated Socket.IO rooms", () => {
   });
 
   it("does not expose the retired sensor_event channel to warehouse clients", async () => {
-    const tokenA = await jwt.signAsync({ sub: "user-a", tokenVersion: 0 }, { secret: SECRET });
-    const tokenB = await jwt.signAsync({ sub: "user-b", tokenVersion: 0 }, { secret: SECRET });
+    const tokenA = await jwt.signAsync({ sub: "user-a", sessionVersion: 0, sid: "sess-user-a" }, { secret: SECRET });
+    const tokenB = await jwt.signAsync({ sub: "user-b", sessionVersion: 0, sid: "sess-user-b" }, { secret: SECRET });
     const [clientA, clientB] = await Promise.all([
       connect(baseUrl, tokenA),
       connect(baseUrl, tokenB),
@@ -105,17 +108,17 @@ describe("authenticated Socket.IO rooms", () => {
     await delay(30);
     expect(receivedA).toEqual([]);
     expect(receivedB).toEqual([]);
-    expect(prisma.user.findUnique).toHaveBeenCalledTimes(2);
+    expect(prisma.userSession.findUnique).toHaveBeenCalledTimes(2);
   });
 
   it("derives notification role from the database and isolates organization rooms", async () => {
     const staleAdminToken = await jwt.signAsync(
-      { sub: "user-a", role: UserRole.ADMIN, tokenVersion: 0 },
+      { sub: "user-a", role: UserRole.ADMIN, sessionVersion: 0, sid: "sess-user-a" },
       { secret: SECRET },
     );
-    const adminToken = await jwt.signAsync({ sub: "admin", tokenVersion: 0 }, { secret: SECRET });
+    const adminToken = await jwt.signAsync({ sub: "admin", sessionVersion: 0, sid: "sess-admin" }, { secret: SECRET });
     const adminBToken = await jwt.signAsync(
-      { sub: "admin-b", tokenVersion: 0 },
+      { sub: "admin-b", sessionVersion: 0, sid: "sess-admin-b" },
       { secret: SECRET },
     );
     const [warehouseClient, adminClient, adminBClient] = await Promise.all([
@@ -155,7 +158,7 @@ function warehouseUser(id: string, warehouseId: string, organizationId = "org-a"
     role: UserRole.WAREHOUSE,
     organizationId,
     warehouseId: warehouseId as string | null,
-    tokenVersion: 0,
+    sessionVersion: 0,
     warehouse: { organizationId } as { organizationId: string } | null,
     organization: { warehouses: [{ id: warehouseId }] },
   };

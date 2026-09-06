@@ -10,6 +10,7 @@ import {
   Popup,
   TileLayer,
   Tooltip,
+  ZoomControl,
   useMap,
   useMapEvents,
 } from "react-leaflet";
@@ -33,8 +34,18 @@ import {
   SATELLITE_TILE_ATTRIBUTION,
   SATELLITE_TILE_URL,
 } from "@/components/dashboard/map-tiles";
-import { alertHouseIcon, houseIcon, villaIcon } from "@/components/dashboard/map-house-icons";
+import {
+  MAP_IDLE_COLOR,
+  MAP_SUPPLYING_COLOR,
+  houseIcon,
+  houseSvg,
+  sosPinIcon,
+  sosPinSvg,
+  villaIcon,
+  villaSvg,
+} from "@/components/dashboard/map-house-icons";
 import { ColorIcon } from "@/components/shared/color-icon";
+import { formatCoordinate } from "@/lib/coordinate-input";
 
 /**
  * Báo Leaflet đo lại khung mỗi khi vào/ra toàn màn hình.
@@ -50,6 +61,34 @@ function ResizeOnToggle({ token }: { token: unknown }) {
     const id = window.setTimeout(() => map.invalidateSize(), 60);
     return () => window.clearTimeout(id);
   }, [map, token]);
+  return null;
+}
+
+/**
+ * Đo lại mỗi khi CHÍNH khung bản đồ đổi kích thước, không đợi ai báo.
+ *
+ * `ResizeOnToggle` chỉ chạy khi có một thao tác đã biết trước (vào/ra toàn màn
+ * hình). Nhưng khung bản đồ có thể được kéo cao bằng cột bên cạnh, mà cột đó dài
+ * ngắn theo dữ liệu vừa tải về — không có cú bấm nào để bám vào. Không đo lại thì
+ * Leaflet giữ nguyên số đo cũ: viền xám quanh mép và bấm một chỗ ghim ra chỗ khác.
+ */
+function ResizeOnContainerChange() {
+  const map = useMap();
+  useEffect(() => {
+    const container = map.getContainer();
+    // Lần đầu gọi ngay lúc gắn observer là số đo đang đúng — bỏ qua để khỏi tốn
+    // một lượt vẽ lại thừa ngay sau khi bản đồ vừa khởi tạo.
+    let first = true;
+    const observer = new ResizeObserver(() => {
+      if (first) {
+        first = false;
+        return;
+      }
+      map.invalidateSize();
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [map]);
   return null;
 }
 
@@ -85,24 +124,6 @@ function overlapsIncident(point: LatLng, incident: LatLng | null): boolean {
   return Math.abs(point.lat - incident.lat) < 0.0004 && Math.abs(point.lng - incident.lng) < 0.0004;
 }
 
-/** Một nhiệm vụ khác đang chạy, để đối chiếu trước khi lập vụ mới. */
-export interface OngoingIncident {
-  id: string;
-  /** Tên chỗ xảy ra sự việc; trống thì dùng loại tình huống. */
-  label: string;
-  statusLabel: string;
-  lat: number;
-  lng: number;
-  /**
-   * Tuyến từ các kho tới điểm nạn của nhiệm vụ đó, dạng [kinh độ, vĩ độ].
-   *
-   * Chỉ một dấu ghim thì biết "có sự việc ở đó", còn thấy tuyến mới biết xã đang
-   * huy động kho nào và đi đường nào — đó mới là thứ giúp nhận ra hai nhiệm vụ
-   * sắp giẫm chân nhau.
-   */
-  routes: [number, number][][];
-}
-
 export interface IncidentMapProps {
   /** Kho có góp hàng cho phương án — kèm tuyến, quãng đường và danh sách vật tư. */
   warehouses: DispatchRoute[];
@@ -125,16 +146,6 @@ export interface IncidentMapProps {
    */
   onPickIncident?: (point: LatLng | null) => void;
   /**
-   * Điểm nạn của các nhiệm vụ ĐÃ DUYỆT đang chạy.
-   *
-   * Không thấy chúng thì rất dễ lập thêm một nhiệm vụ cho đúng chỗ mà xã đã điều
-   * phối rồi — hai phương án cùng rút một kho, cùng gọi một tuyến. Hiện lên bản
-   * đồ là cách rẻ nhất để nhận ra trùng trước khi bấm tính nhu cầu.
-   */
-  ongoingIncidents?: OngoingIncident[];
-  /** Bấm vào một điểm nạn đang chạy thì mở nhiệm vụ đó. */
-  onOpenIncident?: (missionId: string) => void;
-  /**
    * Giữ khung nhìn bám điểm nạn thay vì thu ra cho vừa hết các kho.
    *
    * Dùng ở khối khai tình huống: ở đó người dùng đang xem/chọn đúng một chỗ, thu
@@ -142,6 +153,37 @@ export interface IncidentMapProps {
    * hành động thì ngược lại — cần thấy trọn tuyến nên vẫn khớp theo các kho.
    */
   keepIncidentFocus?: boolean;
+  /**
+   * Đổi giá trị này là đưa khung nhìn về lại điểm đang bám (dùng cùng
+   * `keepIncidentFocus`). Bản đồ kho dùng để mỗi lần bấm "Ghim toạ độ" là bay tới
+   * chỗ vừa nhập, kể cả khi nhập lại đúng con số cũ.
+   */
+  focusKey?: string;
+  /**
+   * Tên gọi của dấu ghim đỏ, hiện ở popup và chú giải.
+   *
+   * Cùng một bản đồ phục vụ hai chỗ: bên điều phối dấu ghim là chỗ đang xảy ra
+   * việc, bên bản đồ kho nó chỉ là toạ độ người dùng tra để nhìn cho rõ. Gọi tên
+   * theo ngữ cảnh, chứ đừng bắt người xem bản đồ kho đọc "điểm gặp nạn" cho một
+   * con số họ vừa tự gõ vào.
+   */
+  pointLabel?: string;
+  /**
+   * Lớp CSS của khung bản đồ khi KHÔNG toàn màn hình.
+   *
+   * Mặc định là khung vuông, hợp với chỗ đứng cạnh form khai tình huống. Trang bản
+   * đồ kho không có form nào bên cạnh nên cho nó cao gần hết màn hình.
+   */
+  frameClassName?: string;
+  /**
+   * Lớp CSS của VỎ NGOÀI (khung bản đồ + chú giải bên dưới).
+   *
+   * Mặc định chỉ giãn dòng giữa hai phần. Chỗ nào cần bản đồ cao bằng đúng cột bên
+   * cạnh thì truyền một flex-column có chiều cao đầy, rồi cho `frameClassName` ăn
+   * hết phần còn lại — khung vuông mặc định không làm được việc đó vì chiều cao
+   * của nó bị bề ngang quyết định.
+   */
+  className?: string;
 }
 
 /**
@@ -160,10 +202,19 @@ function FitBounds({
   points,
   focusPoint,
   keepIncidentFocus = false,
+  focusKey = "",
 }: {
   points: LatLng[];
   focusPoint: LatLng | null;
   keepIncidentFocus?: boolean;
+  /**
+   * Đổi giá trị này là bắt khung nhìn nhảy về điểm đang bám.
+   *
+   * Bản đồ điều phối cố tình KHÔNG dùng: ở đó điểm đổi liên tục dưới ngón tay
+   * người đang chọn. Bản đồ kho thì ngược lại — người dùng dán một toạ độ rồi
+   * bấm tra, và cú bấm đó phải đưa được bản đồ tới chỗ vừa nhập.
+   */
+  focusKey?: string;
 }) {
   const map = useMap();
   const focusRef = useRef(focusPoint);
@@ -187,44 +238,43 @@ function FitBounds({
     const bounds = L.latLngBounds(all.map((p) => [p.lat, p.lng]));
     map.fitBounds(bounds, { padding: [24, 24], maxZoom: 15 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, keepIncidentFocus]);
+  }, [key, keepIncidentFocus, focusKey]);
   return null;
 }
+
+/** Cỡ chung của hai nút góc trên phải, để chúng luôn bằng nhau. */
+const MAP_BUTTON_CLASS =
+  "flex h-[30px] w-[34px] items-center justify-center rounded-md border bg-[var(--surface)] shadow-sm transition hover:bg-[var(--surface-2)] active:translate-y-px";
+
+/** Khung mặc định: vuông, để cân với cột form khai tình huống bên cạnh. */
+const DEFAULT_FRAME_CLASS =
+  "relative isolate aspect-square w-full overflow-hidden rounded-md border";
 
 export function IncidentMap({
   warehouses,
   baseWarehouses,
   incidentPoint,
   onPickIncident,
-  ongoingIncidents,
-  onOpenIncident,
   keepIncidentFocus = false,
+  focusKey = "",
+  pointLabel = "Điểm gặp nạn",
+  frameClassName = DEFAULT_FRAME_CLASS,
+  className = "space-y-2",
 }: IncidentMapProps) {
-  // Kho tổng vẽ nhà lớn, kho thôn vẽ nhà thường — cùng bộ hình với tab Bản đồ kho.
-  const centralIcon = useMemo(() => villaIcon("var(--color-accent, #2f9e6e)", 34), []);
-  const hamletIcon = useMemo(() => houseIcon("var(--text-muted, #8a8f98)", 26), []);
-  // Điểm gặp nạn: NGÔI NHÀ tô đỏ mang dấu chấm than, không phải dấu ghim địa điểm.
-  const incidentIcon = useMemo(() => alertHouseIcon("var(--color-critical, #d64545)", 34), []);
+  // Hình nói LOẠI kho (nhà lớn = kho tổng, nhà thường = kho thôn), màu nói kho đó
+  // có đang cấp hàng cho phương án này không. Hai chiều thông tin tách bạch nên
+  // nhìn một dấu ghim là trả lời được cả hai câu hỏi mà không cần tra chú giải.
+  const supplyCentralIcon = useMemo(() => villaIcon(MAP_SUPPLYING_COLOR, 34), []);
+  const supplyHamletIcon = useMemo(() => houseIcon(MAP_SUPPLYING_COLOR, 28), []);
+  // Kho chưa được huy động: xám. Trước đây kho tổng lúc nào cũng xanh, nên ngay
+  // lúc chưa lập phương án nó đã trông như kho đã được chọn đi tiếp tế.
+  const idleCentralIcon = useMemo(() => villaIcon(MAP_IDLE_COLOR, 34), []);
+  const idleHamletIcon = useMemo(() => houseIcon(MAP_IDLE_COLOR, 26), []);
+  // Điểm gặp nạn: ghim SOS — hình duy nhất trên bản đồ không phải ngôi nhà.
+  const incidentIcon = useMemo(() => sosPinIcon(38), []);
   const communeGeo = useCommuneGeo();
-  // Cùng cỡ, cùng dáng với dấu ghim điểm nạn, chỉ khác màu: một chỗ có người mắc
-  // kẹt thì vẫn là một chỗ có người mắc kẹt, dù xã đã điều phối hay chưa. Vẽ nó
-  // nhỏ và mờ đi khiến nó trông như chú thích phụ, đúng cái bẫy đang muốn tránh —
-  // người dùng lướt qua rồi lập thêm một nhiệm vụ trùng chỗ.
-  // Vụ đang xử lý của nhiệm vụ khác: cùng hình nhà cảnh báo, màu cam để không
-  // tranh chỗ với điểm nạn đang mở. Hai thứ cùng loại thì phải cùng hình.
-  const ongoingIcon = useMemo(() => alertHouseIcon("var(--color-attention, #d98613)", 30), []);
-
   // Bản đồ trong cột form quá nhỏ để đọc đường sá quanh điểm nạn. Mở rộng ra hết
   // màn hình là cách xem cho rõ mà không phải rời trang và mất phần đang nhập dở.
-  /**
-   * Phương án đang xem đã có tuyến vẽ được chưa.
-   *
-   * Quyết định có vẽ tuyến của các nhiệm vụ khác hay không: có tuyến của mình rồi
-   * thì chúng chỉ làm rối. Đếm theo đúng điều kiện mà chỗ vẽ dùng (`ROUTED` và có
-   * hình học), không phải chỉ đếm số kho — kho tính không ra tuyến thì không vẽ gì.
-   */
-  const hasOwnRoutes = warehouses.some((w) => w.routeStatus === "ROUTED" && w.routeGeometry);
-
   const [fullscreen, setFullscreen] = useState(false);
   /**
    * Nền đang dùng. Mặc định ẢNH VỆ TINH: ghim đúng một căn nhà hay một ngã ba là
@@ -269,7 +319,7 @@ export function IncidentMap({
   const center = boundsPoints[0] ?? { lat: DEFAULT_CENTER[0], lng: DEFAULT_CENTER[1] };
 
   return (
-    <div className="space-y-2">
+    <div className={className}>
       {/* Vuông: bản đồ nằm cạnh form theo cột dọc, khung vuông giữ cân với chiều
           cao form và không bóp méo khi cột hẹp lại. Ở chế độ toàn màn hình thì bỏ
           tỉ lệ vuông đi — lúc đó mục đích là nhìn được xa, không phải giữ cân. */}
@@ -291,14 +341,19 @@ export function IncidentMap({
               // `isolation: isolate` tạo ngữ cảnh xếp lớp ngay tại đây, nên 1000
               // của Leaflet chỉ còn nghĩa BÊN TRONG khung bản đồ. Sửa một chỗ,
               // hết cả nút toàn màn hình lẫn nút phóng to của Leaflet chọc ra.
-              "relative isolate aspect-square w-full overflow-hidden rounded-md border"
+              frameClassName
         }
       >
         <div className="absolute right-3 top-3 z-[1000] flex gap-2">
           {/* Chỉ icon, không chữ: hai nút cạnh nhau mà cả hai đều là chữ thì chiếm
             gần hết mép trên của bản đồ. `aria-label` và `title` vẫn nói đủ nghĩa —
             người dùng bàn phím và trình đọc màn hình không mất gì, và trỏ chuột vào
-            là hiện đúng đánh đổi của chế độ sắp bật. */}
+            là hiện đúng đánh đổi của chế độ sắp bật.
+
+            Hai nút dùng CHUNG một lớp cỡ (MAP_BUTTON_CLASS): trước đây nút toàn màn
+            hình là chữ nên nó cao thấp rộng hẹp theo độ dài chữ ("Toàn màn hình" rồi
+            "Thu nhỏ"), tức là cứ bấm một cái là hàng nút đổi bề ngang và nút bên
+            cạnh nhảy chỗ. */}
           <button
             type="button"
             onClick={() => setBaseLayer((v) => (v === "offline" ? "satellite" : "offline"))}
@@ -310,7 +365,7 @@ export function IncidentMap({
                 ? "Ảnh vệ tinh: thấy mái nhà, ngõ nhỏ, bờ ruộng — ghim chính xác hơn. Cần Internet."
                 : "Bản đồ offline: chạy được khi mất mạng, nhưng chỉ tới zoom 15 và không có chữ."
             }
-            className="flex h-[30px] w-[34px] items-center justify-center rounded-md border bg-[var(--surface)] shadow-sm transition hover:bg-[var(--surface-2)] active:translate-y-px"
+            className={MAP_BUTTON_CLASS}
           >
             <ColorIcon
               name={baseLayer === "offline" ? "satellite" : "mapFlat"}
@@ -323,9 +378,11 @@ export function IncidentMap({
             onClick={() => setFullscreen((v) => !v)}
             aria-label={fullscreen ? "Thu nhỏ bản đồ" : "Mở bản đồ toàn màn hình"}
             title={fullscreen ? "Thu nhỏ (Esc)" : "Mở toàn màn hình"}
-            className="rounded-md border bg-[var(--surface)] px-2.5 py-1.5 text-xs font-semibold shadow-sm transition hover:bg-[var(--surface-2)] active:translate-y-px"
+            className={MAP_BUTTON_CLASS}
           >
-            {fullscreen ? "Thu nhỏ" : "Toàn màn hình"}
+            {/* Bốn mũi tên hướng ra = mở rộng, hướng vào = thu lại. Hình này ai cũng
+              đọc được mà không cần chữ, nên nút giữ đúng một cỡ ở cả hai trạng thái. */}
+            <ColorIcon name={fullscreen ? "shrink" : "expand"} size={17} tone="blue" />
           </button>
         </div>
         <div
@@ -341,8 +398,13 @@ export function IncidentMap({
             maxBounds={PROVINCE_BOUNDS}
             maxBoundsViscosity={1}
             scrollWheelZoom
+            // Nút +/- mặc định của Leaflet nằm góc trên TRÁI, nơi nhãn tên kho và
+            // dấu ghim hay dồn về; tắt đi rồi dựng lại ở góc dưới phải để nó không
+            // đè lên bản đồ mà vẫn nằm trong tầm ngón cái.
+            zoomControl={false}
             style={{ height: "100%", width: "100%" }}
           >
+            <ZoomControl position="bottomright" />
             {/* `key` khác nhau cho hai nền: không có nó, React-Leaflet chỉ đổi prop
               `url` trên cùng một lớp và Leaflet giữ nguyên `maxNativeZoom` cũ —
               bật vệ tinh xong phóng quá zoom 15 vẫn ra ảnh mờ của gói offline. */}
@@ -382,12 +444,14 @@ export function IncidentMap({
             )}
             <BoundsForZoom />
             <ResizeOnToggle token={fullscreen} />
+            <ResizeOnContainerChange />
             {/* Ranh giới xã: giống bản đồ kho, để biết điểm vừa ghim thuộc xã nào. */}
             {communeGeo ? <CommuneBoundaries geo={communeGeo} /> : null}
             <FitBounds
               points={boundsPoints}
               focusPoint={incidentPoint}
               keepIncidentFocus={keepIncidentFocus}
+              focusKey={focusKey}
             />
             {onPickIncident ? <ClickToPin onPick={onPickIncident} /> : null}
             {/* Kho chưa tham gia phương án — vẫn phải thấy để biết ghim gần kho nào. */}
@@ -395,7 +459,7 @@ export function IncidentMap({
               <Marker
                 key={`base-${w.id}`}
                 position={[w.lat as number, w.lng as number]}
-                icon={w.kind === "CENTRAL" ? centralIcon : hamletIcon}
+                icon={w.kind === "CENTRAL" ? idleCentralIcon : idleHamletIcon}
                 opacity={0.75}
               >
                 <Popup>
@@ -432,7 +496,7 @@ export function IncidentMap({
               <Marker
                 key={w.id}
                 position={[w.lat, w.lng]}
-                icon={w.kind === "CENTRAL" ? centralIcon : hamletIcon}
+                icon={w.kind === "CENTRAL" ? supplyCentralIcon : supplyHamletIcon}
               >
                 <Popup>
                   <strong>{w.name}</strong>
@@ -460,75 +524,8 @@ export function IncidentMap({
                   kind={w.kind}
                   point={{ lat: w.lat, lng: w.lng }}
                   incidentPoint={incidentPoint}
+                  supplying
                 />
-              </Marker>
-            ))}
-            {/* Tuyến của nhiệm vụ KHÁC — chỉ vẽ khi vụ đang xem chưa có tuyến nào.
-              Hai bộ đường cùng lúc là bản đồ rối không đọc được: năm vụ đang chạy
-              đã kéo hàng chục đường ngang dọc khắp xã, đúng lúc người điều phối cần
-              nhìn rõ hàng từ kho nào đi tới chỗ nạn vừa ghim. Còn khi vụ đang xem
-              chưa có tuyến thì chúng vẫn có ích: thấy xã đang huy động kho nào để
-              không lập hai phương án giẫm chân nhau.
-
-              Nét ĐỨT, xanh dương nhạt hơn tuyến đặc của phương án đang xem — cùng
-              hệ màu nên không bị đọc thành một loại thông tin khác, nhưng vẫn phân
-              biệt được bằng nét. Vẽ đầu tiên nên nằm dưới cùng, không che gì. */}
-            {(hasOwnRoutes ? [] : (ongoingIncidents ?? [])).flatMap((item) =>
-              item.routes.map((line, index) => (
-                <Polyline
-                  key={`ongoing-route-${item.id}-${index}`}
-                  positions={line.map(([lng, lat]) => [lat, lng])}
-                  interactive={false}
-                  pathOptions={{
-                    color: ONGOING_ROUTE_COLOR,
-                    weight: 3.5,
-                    opacity: 0.8,
-                    dashArray: "7 6",
-                  }}
-                />
-              )),
-            )}
-            {/* Nhiệm vụ khác đang chạy — vẽ trước để nằm dưới điểm đang chọn. */}
-            {(ongoingIncidents ?? []).map((item) => (
-              <Circle
-                key={`ongoing-zone-${item.id}`}
-                center={[item.lat, item.lng]}
-                radius={INCIDENT_ZONE_RADIUS_M}
-                interactive={false}
-                pathOptions={{
-                  color: "var(--color-attention, #d98613)",
-                  weight: 2,
-                  opacity: 0.85,
-                  dashArray: "6 5",
-                  fillColor: "var(--color-attention, #d98613)",
-                  fillOpacity: 0.1,
-                }}
-              />
-            ))}
-            {(ongoingIncidents ?? []).map((item) => (
-              <Marker
-                key={`ongoing-${item.id}`}
-                position={[item.lat, item.lng]}
-                icon={ongoingIcon}
-                eventHandlers={
-                  onOpenIncident ? { click: () => onOpenIncident(item.id) } : undefined
-                }
-              >
-                <Tooltip
-                  permanent
-                  direction="top"
-                  offset={[0, -32]}
-                  className="wh-label wh-label-ongoing"
-                >
-                  {item.label} · {item.statusLabel}
-                </Tooltip>
-                {onOpenIncident ? null : (
-                  <Popup>
-                    <strong>{item.label}</strong>
-                    <br />
-                    {item.statusLabel}
-                  </Popup>
-                )}
               </Marker>
             ))}
             {incidentPoint ? (
@@ -573,46 +570,74 @@ export function IncidentMap({
                 }
               >
                 {/* Chỉ mở popup khi xem: lúc đang ghim thì cú bấm dành cho việc xoá. */}
-                {onPickIncident ? null : <Popup>Điểm nạn</Popup>}
+                {onPickIncident ? null : <Popup>{pointLabel}</Popup>}
               </Marker>
             ) : null}
           </MapContainer>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--text-muted)]">
-        <LegendDot color="var(--color-critical, #d64545)" label="Điểm nạn" />
-        {incidentPoint ? (
-          <span className="flex items-center gap-1.5">
-            <span
-              className="inline-block h-2.5 w-2.5 rounded-full border border-dashed"
-              style={{
-                borderColor: "var(--color-critical, #d64545)",
-                backgroundColor:
-                  "color-mix(in srgb, var(--color-critical, #d64545) 12%, transparent)",
-              }}
+      {/* Hai hàng: hàng trên là các hình có trên bản đồ, hàng dưới là số đo của
+          điểm đang ghim (bán kính vòng khoanh, rồi toạ độ). Mọi ô hình đều rộng
+          đúng 20px — kể cả chấm tròn bé của vòng khoanh — nên chữ của hai hàng
+          bắt đầu ở cùng một mép trái thay vì so le nhau. */}
+      <div className="space-y-1.5 text-xs text-[var(--text-muted)]">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <LegendGlyph svg={sosPinSvg(20)} label={pointLabel} />
+          <LegendGlyph svg={villaSvg(MAP_IDLE_COLOR, 20)} label="Kho tổng" />
+          <LegendGlyph svg={houseSvg(MAP_IDLE_COLOR, 18)} label="Kho thôn" />
+          {/* Chỉ nói tới màu xanh khi trên bản đồ THẬT SỰ có kho đang tiếp tế —
+              chú giải cho một thứ không có mặt chỉ làm người đọc đi tìm. */}
+          {warehouses.length > 0 ? (
+            <LegendGlyph
+              svg={houseSvg(MAP_SUPPLYING_COLOR, 18)}
+              label={`Kho tiếp tế (${warehouses.length})`}
             />
-            {/* Nói thẳng đây là mốc nhìn: vòng tròn trên bản đồ rất dễ bị đọc thành
-                "phạm vi ảnh hưởng đã đo", mà hệ thống không hề có số liệu đó. */}
-            Vùng quanh điểm nạn (mốc nhìn, bán kính {INCIDENT_ZONE_RADIUS_M} m)
-          </span>
-        ) : null}
-        {ongoingIncidents && ongoingIncidents.length > 0 ? (
-          <LegendDot
-            color="var(--color-attention, #d98613)"
-            label={
-              hasOwnRoutes
-                ? `Nhiệm vụ đang điều phối (${ongoingIncidents.length}) — đã ẩn tuyến để nhìn rõ phương án này`
-                : `Nhiệm vụ đang điều phối (${ongoingIncidents.length}) — tuyến nét đứt`
-            }
-          />
-        ) : null}
-        <LegendDot color="var(--color-accent, #2f9e6e)" label="Kho tổng" />
-        <LegendDot color="var(--text-muted, #8a8f98)" label="Kho thôn" />
+          ) : null}
+        </div>
         {incidentPoint ? (
-          <span className="tabular">
-            {incidentPoint.lat.toFixed(6)}, {incidentPoint.lng.toFixed(6)}
-          </span>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <span className="flex items-center gap-1.5">
+              <span
+                aria-hidden
+                className="inline-flex h-5 w-5 shrink-0 items-center justify-center"
+              >
+                <span
+                  className="inline-block h-2.5 w-2.5 rounded-full border border-dashed"
+                  style={{
+                    borderColor: "var(--color-critical, #d64545)",
+                    backgroundColor:
+                      "color-mix(in srgb, var(--color-critical, #d64545) 12%, transparent)",
+                  }}
+                />
+              </span>
+              {/* Nói thẳng đây là mốc nhìn: vòng tròn trên bản đồ rất dễ bị đọc thành
+                  "phạm vi ảnh hưởng đã đo", mà hệ thống không hề có số liệu đó. */}
+              Bán kính {pointLabel.toLowerCase()} (mốc nhìn, {INCIDENT_ZONE_RADIUS_M}m)
+            </span>
+            <span className="flex items-center gap-1.5">
+              {/* Vòng ngắm đỏ, đặt trong cùng ô 20px như mọi hình khác: không có nó
+                  thì dòng toạ độ là dòng DUY NHẤT bắt đầu bằng chữ, nhìn như một câu
+                  bị bỏ quên chứ không phải một mục của chú giải. Vòng ngắm chứ không
+                  phải ghim — ghim đã là hình của điểm gặp nạn ở hàng trên, dùng lại
+                  thì thành hai mục cùng hình. */}
+              <span
+                aria-hidden
+                className="inline-flex h-5 w-5 shrink-0 items-center justify-center"
+              >
+                <ColorIcon name="target" size={16} tone="red" />
+              </span>
+              <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span>
+                  Tọa độ {pointLabel.toLowerCase()}:{" "}
+                  <span className="tabular font-semibold text-[var(--text)]">
+                    {formatCoordinate(incidentPoint)}
+                  </span>
+                </span>
+                <CopyCoordinateButton point={incidentPoint} />
+              </span>
+            </span>
+          </div>
         ) : null}
       </div>
     </div>
@@ -632,22 +657,64 @@ function WarehouseLabel({
   kind,
   point,
   incidentPoint,
+  supplying = false,
 }: {
   name: string;
   kind: string;
   point: LatLng;
   incidentPoint: LatLng | null;
+  /** Kho này có cấp hàng cho phương án đang xem không — quyết định nhãn có tô xanh. */
+  supplying?: boolean;
 }) {
   const hidden = overlapsIncident(point, incidentPoint);
+  // Xanh đi theo VAI TRÒ trong phương án, giống hệt dấu ghim — nhãn xanh cho một
+  // kho tổng chưa được huy động thì đọc ra là "kho này đang tiếp tế", sai hẳn.
+  // Kho tổng chưa huy động vẫn được chữ to hơn một chút để nổi giữa cụm kho thôn.
+  const tone = supplying ? " wh-label-supply" : kind === "CENTRAL" ? " wh-label-central" : "";
   return (
     <Tooltip
       permanent
       direction={hidden ? "left" : "right"}
       offset={hidden ? [-12, -14] : [10, -14]}
-      className={kind === "CENTRAL" ? "wh-label wh-label-central" : "wh-label"}
+      className={`wh-label${tone}`}
     >
       {shortWarehouseName(name)}
     </Tooltip>
+  );
+}
+
+/**
+ * Chép cặp toạ độ ra clipboard.
+ *
+ * Đây là mắt nối giữa hai bản đồ: người trực đọc toạ độ ở nhiệm vụ rồi dán vào ô
+ * tra cứu của bản đồ kho để xem cùng một chỗ. Chép tay 12 chữ số thì sai một số là
+ * ghim lệch cả cây số mà nhìn vẫn thấy "hợp lý", nên nút này không phải tiện nghi.
+ */
+function CopyCoordinateButton({ point }: { point: LatLng }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const id = window.setTimeout(() => setCopied(false), 1600);
+    return () => window.clearTimeout(id);
+  }, [copied]);
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(formatCoordinate(point));
+          setCopied(true);
+        } catch {
+          // Trình duyệt chặn clipboard (thường vì trang không chạy HTTPS). Không
+          // báo lỗi ồn ào: toạ độ vẫn hiện ngay bên cạnh để bôi đen chép tay.
+          setCopied(false);
+        }
+      }}
+      title="Chép toạ độ để dán vào ô tra cứu của bản đồ kho"
+      className="rounded-md border px-1.5 py-0.5 text-[11px] font-medium transition hover:bg-[var(--surface-2)] active:translate-y-px"
+    >
+      {copied ? "Đã chép" : "Chép"}
+    </button>
   );
 }
 
@@ -679,17 +746,21 @@ function BoundsForZoom() {
 const ROUTE_COLORS = ["#2563eb", "#0284c7", "#4f46e5", "#0891b2", "#1d4ed8"];
 
 /**
- * Tuyến của nhiệm vụ khác: cùng hệ xanh dương với `ROUTE_COLORS` nhưng nhạt hơn,
- * và luôn vẽ nét đứt. Trước đây màu xanh lá — cùng màu với "kho tổng" và với trạng
- * thái READY ở nơi khác trong app, nên trên bản đồ nó đọc ra như một loại thông tin
- * khác hẳn thay vì "cũng là tuyến, nhưng của vụ khác".
+ * Một dòng chú giải vẽ ĐÚNG hình đang có trên bản đồ.
+ *
+ * Chấm tròn màu thì rẻ, nhưng bắt người xem tự nối "chấm xanh" với "ngôi nhà lớn
+ * màu xanh" ở giữa một tấm ảnh vệ tinh dày đặc — mà chú giải sinh ra chính là để
+ * khỏi phải làm việc đó. Chuỗi SVG lấy từ cùng một hàm mà Leaflet dùng để vẽ
+ * marker, nên chú giải không thể lệch với bản đồ.
  */
-const ONGOING_ROUTE_COLOR = "#60a5fa";
-
-function LegendDot({ color, label }: { color: string; label: string }) {
+function LegendGlyph({ svg, label }: { svg: string; label: string }) {
   return (
     <span className="flex items-center gap-1.5">
-      <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
+      <span
+        aria-hidden
+        className="inline-flex h-5 w-5 shrink-0 items-center justify-center"
+        dangerouslySetInnerHTML={{ __html: svg }}
+      />
       {label}
     </span>
   );

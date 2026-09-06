@@ -3,9 +3,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { DashboardPage } from "@/components/dashboard/dashboard-page";
-import { LoanStockMarksPanel } from "@/components/dashboard/loan-stock-marks-panel";
 import { MissionInbox } from "@/components/mission/mission-inbox";
+import { missionNumberLink } from "@/lib/mission-inbox-state";
 import { DispatchBlockersBanner } from "@/components/dashboard/dispatch-blockers-banner";
+import { CommuneSupplySummary } from "@/components/dashboard/commune-supply-summary";
 import { OperationsSummary } from "@/components/dashboard/operations-summary";
 import { ReadinessOverview } from "@/components/dashboard/readiness-overview";
 import { SimulatorPanel } from "@/components/dashboard/simulator-panel";
@@ -19,19 +20,25 @@ import {
   getWarehouseReadiness,
   getWarehouseTree,
 } from "@/lib/dashboard-api";
-import { listMissions, type Mission } from "@/lib/mission-api";
 import { useAuth } from "@/lib/auth-store";
+import { useTabTransitionContext } from "@/lib/tab-transition-context";
 
-export default function ReadinessPage() {
+export default function OverallPage() {
   return (
-    <DashboardPage>{(warehouseId) => <ReadinessContent warehouseId={warehouseId} />}</DashboardPage>
+    <DashboardPage>{(warehouseId) => <OverallContent warehouseId={warehouseId} />}</DashboardPage>
   );
 }
 
-function ReadinessContent({ warehouseId }: { warehouseId: string }) {
+function OverallContent({ warehouseId }: { warehouseId: string }) {
   const queryClient = useQueryClient();
   const router = useRouter();
+  const transition = useTabTransitionContext();
   const role = useAuth((state) => state.user?.role);
+
+  // Ngoài shell thì không có khối chờ nào — rơi về chuyển trang thường thay vì
+  // bỏ hẳn cú bấm.
+  const goToTab = (path: string) =>
+    transition ? transition.goToTab(path) : router.push(path);
 
   const treeQuery = useQuery({
     queryKey: ["warehouse-tree", warehouseId],
@@ -61,14 +68,6 @@ function ReadinessContent({ warehouseId }: { warehouseId: string }) {
     refetchInterval: 10_000,
   });
 
-  // Nhiệm vụ đưa lên trang này để người trực thấy việc ngay khi mở, không phải
-  // nhớ sang tab khác. Chính `MissionInbox` đã tự đẩy việc cần mình lên đầu.
-  const missionsQuery = useQuery({
-    queryKey: ["missions"],
-    queryFn: () => listMissions(),
-    refetchInterval: 15_000,
-  });
-
   const incidentsQuery = useQuery({
     queryKey: ["open-incidents", warehouseId],
     queryFn: () => getOpenIncidents(warehouseId),
@@ -90,12 +89,12 @@ function ReadinessContent({ warehouseId }: { warehouseId: string }) {
         Người trực mở trang lúc đang có việc, đọc từ trên xuống và dừng lại ở chỗ
         đầu tiên cần làm gì đó. Thứ nào cần hành động sớm hơn thì nằm cao hơn:
 
-          1. Việc đang chặn điều phối  — chặn thì không điều được xe, phải xử ngay
-          2. Nhiệm vụ đang chờ mình     — việc cụ thể đã giao, có người đang đợi
-          3. Sự cố đang mở              — đã xảy ra, cần theo dõi
-          4. Mức sẵn sàng, tồn, kiểm kê — trạng thái, đọc để quyết định
-          5. Hàng đang mắc nợ xã khác   — đối chiếu, không gấp
-          6. Bản đồ và thiết bị         — tra cứu khi cần
+          1. Việc đang chặn điều phối    — chặn thì không điều được xe, phải xử ngay
+          2. Nhiệm vụ đang chờ mình       — việc cụ thể đã giao, có người đang đợi
+          3. Vật tư toàn xã, hạn dùng     — đi được hay không phụ thuộc chỗ này
+          4. Lô còn ít, sự cố, mượn — trả — việc phải để mắt trong ca trực
+          5. Mức sẵn sàng theo 6 tiêu chí — trạng thái, đọc để quyết định
+          6. Bản đồ và thiết bị           — tra cứu khi cần
 
         Đảo thứ tự này là đảo mức độ khẩn, nên đừng chèn khối mới vào giữa mà
         không hỏi nó cần hành động nhanh tới đâu.
@@ -103,20 +102,30 @@ function ReadinessContent({ warehouseId }: { warehouseId: string }) {
       <DispatchBlockersBanner blockers={readinessQuery.data?.blockers} />
 
       <MissionInbox
-        error={missionsQuery.error as Error | null}
-        isLoading={missionsQuery.isLoading}
-        missions={(missionsQuery.data as Mission[] | undefined) ?? []}
-        onRetry={() => missionsQuery.refetch()}
-        onSelect={(missionId) => router.push(`/mission?id=${missionId}`)}
+        // Mở nhiệm vụ qua khối chờ chung, không phải `router.push` trần: thẻ
+        // nhiệm vụ là cú bấm hay dùng nhất trên trang này, mà trang chi tiết còn
+        // phải gọi mạng lấy nhiệm vụ nên khoảng lặng sau cú bấm dài nhất ở đây.
+        onSelect={(missionNo) => goToTab(missionNumberLink(missionNo))}
+        // 9 thẻ: vừa đúng ba hàng của lưới ba cột, và giữ cho tồn kho, sự cố,
+        // mượn — trả bên dưới còn nằm trong tầm cuộn. Tab Nhiệm vụ giữ mặc định
+        // 15 vì ở đó hộp nhiệm vụ là thứ duy nhất trên trang.
+        pageSize={9}
         role={role}
         selectedMissionId={null}
         warehouseId={warehouseId}
       />
 
+      {/* Vật tư toàn xã đứng ngay sau hộp nhiệm vụ: đọc xong "phải đi những đâu"
+          thì câu kế tiếp luôn là "xã còn đủ hàng không, và thứ gì sắp hỏng cần
+          đẩy đi trước". Để nó dưới các khối trạng thái là bắt người trực cuộn
+          qua ba màn hình giữa hai câu hỏi dính liền nhau. */}
+      <CommuneSupplySummary warehouseId={warehouseId} />
+
       <OperationsSummary
         batches={batchesQuery.data}
         incidents={incidentsQuery.data}
         readiness={readinessQuery.data}
+        warehouseId={warehouseId}
       />
       <ReadinessOverview
         isError={readinessQuery.isError || recalculateMutation.isError}
@@ -125,9 +134,6 @@ function ReadinessContent({ warehouseId }: { warehouseId: string }) {
         onRefresh={() => recalculateMutation.mutate()}
         readiness={readinessQuery.data}
       />
-
-      {/* Tự ẩn khi không nợ ai — không chiếm chỗ lúc không có gì để đối chiếu. */}
-      <LoanStockMarksPanel />
 
       <div className="grid gap-4 xl:grid-cols-[1fr_420px]">
         <WarehouseMap isLoading={treeQuery.isLoading} tree={treeQuery.data} />

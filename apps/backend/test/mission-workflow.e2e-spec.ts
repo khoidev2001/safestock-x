@@ -5,6 +5,7 @@ import { Test } from "@nestjs/testing";
 import * as bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
 import request from "supertest";
+import sharp from "sharp";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
 
@@ -455,8 +456,34 @@ describe("Mission workflow (E2E)", () => {
         mission: { id: string };
       }[]
     )
-      .filter((request) => request.mission.id === missionId && request.status !== "PREPARED")
+      .filter(
+        (request) =>
+          request.mission.id === missionId &&
+          request.status !== "PREPARED" &&
+          request.status !== "PICKED_UP",
+      )
       .map(({ id, sku, status }) => ({ id, sku, status }));
+  }
+
+  /** Toàn bộ yêu cầu vật tư của một kho trong nhiệm vụ, kèm số đã soạn để ký nhận. */
+  async function requestsOf(
+    role: TokenRole,
+    missionId: string,
+  ): Promise<{ id: string; status: string; preparedQuantity: number }[]> {
+    const response = await http
+      .get("/api/missions/warehouse-requests/own")
+      .set(auth(role))
+      .expect(200);
+    return (
+      response.body as {
+        id: string;
+        status: string;
+        preparedQuantity: number;
+        mission: { id: string };
+      }[]
+    )
+      .filter((request) => request.mission.id === missionId)
+      .map(({ id, status, preparedQuantity }) => ({ id, status, preparedQuantity }));
   }
 
   /**
@@ -688,6 +715,85 @@ describe("Mission workflow (E2E)", () => {
       expect(response.body.deliveryOutcome).toBe("DELIVERED");
       expect(response.body.completedAt).toBeTruthy();
       expect(await stockOfBatch(owned.batchId)).toBe(before);
+    });
+
+    it("luồng đủ: kho xuất → đội ký nhận → READY → báo kết quả kèm ảnh → COMPLETED", async () => {
+      // Đi trọn đường mà người dùng thật đi, theo đúng thứ tự đã làm hỏng dữ liệu
+      // thật: kho A xuất, đội KÝ NHẬN NGAY, rồi kho B mới xuất. Phép đếm cũ coi
+      // phần đã ký nhận là "kho còn nợ" nên nhiệm vụ kẹt ở PENDING_WAREHOUSE và
+      // đội hiện trường không bao giờ thấy ô báo kết quả.
+      const owned = await createMultiWarehouseMissionFixture();
+      await approveMission(owned.missionId);
+
+      await prepareAllRequests("warehouse", owned.missionId);
+      for (const request of await requestsOf("warehouse", owned.missionId)) {
+        await http
+          .post(`/api/missions/warehouse-requests/${request.id}/pickup`)
+          .set(auth("warehouse"))
+          .send({ receivedQuantity: request.preparedQuantity })
+          .expect(201);
+      }
+      expect(
+        (await requestsOf("warehouse", owned.missionId)).every((r) => r.status === "PICKED_UP"),
+      ).toBe(true);
+
+      await prepareAllRequests("warehouseB", owned.missionId);
+
+      const afterWarehouses = await http
+        .get(`/api/missions/${owned.missionId}`)
+        .set(auth("admin"))
+        .expect(200);
+      expect(afterWarehouses.body.status).toBe("READY");
+      // Bước "Kho chuẩn bị và xuất" trên web đọc đúng hai dấu này để đánh dấu xong.
+      expect(
+        (afterWarehouses.body.warehousePreparations as { preparedAt: string | null }[]).every(
+          (preparation) => preparation.preparedAt !== null,
+        ),
+      ).toBe(true);
+
+      // Đội hiện trường gửi kết quả kèm ảnh bằng chứng.
+      const originalPhoto = await sharp({
+        create: { width: 2400, height: 1800, channels: 3, background: { r: 190, g: 120, b: 60 } },
+      })
+        .jpeg({ quality: 95 })
+        .toBuffer();
+      const completed = await http
+        .post(`/api/missions/${owned.missionId}/complete`)
+        .set(auth("rescue"))
+        .send({
+          outcome: "DELIVERED",
+          note: "Đã giao đủ tại nhà văn hoá thôn, trưởng thôn ký nhận",
+          photos: [{ dataBase64: originalPhoto.toString("base64") }],
+        })
+        .expect(201);
+      expect(completed.body.status).toBe("COMPLETED");
+
+      // Điều phối mở nhiệm vụ: thấy phần mô tả ảnh, KHÔNG kèm bytes.
+      const forAdmin = await http
+        .get(`/api/missions/${owned.missionId}`)
+        .set(auth("admin"))
+        .expect(200);
+      expect(forAdmin.body.deliveryNote).toContain("trưởng thôn ký nhận");
+      const photos = forAdmin.body.deliveryPhotos as {
+        id: string;
+        mimeType: string;
+        byteSize: number;
+        data?: unknown;
+      }[];
+      expect(photos).toHaveLength(1);
+      expect(photos[0].data).toBeUndefined();
+      expect(photos[0].mimeType).toBe("image/jpeg");
+
+      // Và tải được đúng tấm ảnh đó về, đã nén nhỏ lại.
+      const servedPhoto = await http
+        .get(`/api/missions/${owned.missionId}/delivery-photos/${photos[0].id}`)
+        .set(auth("admin"))
+        .expect(200);
+      expect(servedPhoto.headers["content-type"]).toContain("image/jpeg");
+      const body = servedPhoto.body as Buffer;
+      expect(body.length).toBe(photos[0].byteSize);
+      expect(body.length).toBeLessThan(originalPhoto.length);
+      expect((await sharp(body).metadata()).width).toBe(1600);
     });
   });
 

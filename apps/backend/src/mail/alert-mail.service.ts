@@ -2,8 +2,8 @@ import { existsSync } from "fs";
 import { join } from "path";
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import * as nodemailer from "nodemailer";
 import type { Transporter } from "nodemailer";
+import { createSmtpTransport, isSmtpConfigured, parseSmtpBool } from "./smtp-transport";
 
 export interface IncidentAlertInput {
   title: string;
@@ -60,8 +60,10 @@ export class AlertMailService {
     }
 
     const logoPath = this.resolveLogoPath();
+    const sender =
+      this.config.get<string>("ALERT_EMAIL_FROM") || this.config.get<string>("SMTP_USER") || "";
     await this.getTransporter().sendMail({
-      from: `"${APP_NAME}" <${this.config.get<string>("ALERT_EMAIL_FROM") || this.config.get<string>("SMTP_USER")!}>`,
+      from: `"${APP_NAME}" <${sender}>`,
       bcc: recipientList,
       subject: `⚠️ [${APP_NAME}] Cảnh báo kho: ${incident.title}`,
       text: this.buildText(incident, explanation, timing),
@@ -71,7 +73,7 @@ export class AlertMailService {
         : [],
     });
     this.log.log(
-      `Đã gửi email cảnh báo "${incident.title}" tới ${recipientList.length} người nhận.`,
+      `Đã gửi email cảnh báo "${incident.title}" tới ${recipientList.length} người nhận (gửi từ ${sender}).`,
     );
   }
 
@@ -160,17 +162,7 @@ export class AlertMailService {
 
   private getTransporter(): Transporter {
     if (this.transporter) return this.transporter;
-    const port = Number(this.config.get("SMTP_PORT") ?? 465);
-    const secure = this.config.get("SMTP_SECURE");
-    this.transporter = nodemailer.createTransport({
-      host: this.config.get<string>("SMTP_HOST"),
-      port,
-      secure: secure == null || secure === "" ? port === 465 : this.parseBool(secure),
-      auth: {
-        user: this.config.get<string>("SMTP_USER"),
-        pass: this.config.get<string>("SMTP_PASS"),
-      },
-    });
+    this.transporter = createSmtpTransport(this.config);
     return this.transporter;
   }
 
@@ -188,16 +180,10 @@ export class AlertMailService {
 
   private isConfigured(recipients: string[]): boolean {
     return Boolean(
-      this.parseBool(this.config.get("ALERT_EMAIL_ENABLED")) &&
-      this.config.get("SMTP_HOST") &&
-      this.config.get("SMTP_USER") &&
-      this.config.get("SMTP_PASS") &&
-      recipients.length > 0,
+      parseSmtpBool(this.config.get("ALERT_EMAIL_ENABLED")) &&
+        isSmtpConfigured(this.config) &&
+        recipients.length > 0,
     );
-  }
-
-  private parseBool(value: unknown): boolean {
-    return String(value).toLowerCase() === "true";
   }
 }
 

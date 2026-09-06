@@ -5,8 +5,7 @@
 .env.demo
 .env.local
 .env.*.local
-.env.bak-cors
-.env.bak-routing
+.env.bak-*
 **/.env
 !.env.example
 !.env.demo.example
@@ -54,6 +53,9 @@ coverage/
 # ============================================================
 *.log
 .DS_Store
+
+# Vùng làm việc của trợ lý AI: worktree tạm, ghi chú phiên. Sinh ra tại máy, không chia sẻ.
+.claude/
 prisma/*.db
 
 # Báo cáo xuất cục bộ; dữ liệu có thể chứa thông tin vận hành và được sinh lại khi cần

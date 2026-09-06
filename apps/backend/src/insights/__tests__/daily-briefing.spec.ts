@@ -54,12 +54,12 @@ describe("daily briefing safety", () => {
   it("kho không có vấn đề gì thì không đọc ra các con số 0", () => {
     // Bản tin cũ luôn đọc đủ 4 câu, nên ngày yên ổn vẫn nghe "0 mặt hàng tồn
     // thấp, 0 sự cố đang mở" — ba con số 0 chen giữa làm loãng dòng cần chú ý.
-    const yenOn: DailyBriefingSnapshot = {
+    const calmSnapshot: DailyBriefingSnapshot = {
       ...snapshot,
       inventory: { lowStockCount: 0, expiringBatchCount: 0, weatherRiskCount: 0 },
       incidents: { openCount: 0, highOrCriticalCount: 0 },
     };
-    const facts = buildDailyBriefingFacts(yenOn);
+    const facts = buildDailyBriefingFacts(calmSnapshot);
 
     expect(facts.map((fact) => fact.id)).toEqual(["F1", "F2"]);
     expect(facts.map((fact) => fact.text).join(" ")).not.toMatch(/(?<!\d)0 /u);

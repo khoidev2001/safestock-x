@@ -27,6 +27,7 @@ function makeService(options: {
     {} as never,
     {} as never,
     {} as never,
+    {} as never,
   );
   return { service, prisma, userFindUnique };
 }

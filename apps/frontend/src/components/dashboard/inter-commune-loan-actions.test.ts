@@ -3,54 +3,55 @@ import { test } from "node:test";
 
 import { isOpen, loanActions, outstanding, statusLabel } from "./inter-commune-loan-actions";
 
-const nhan = (d: "OUTGOING" | "INCOMING", s: Parameters<typeof loanActions>[1], m = false) =>
+const actionsFor = (d: "OUTGOING" | "INCOMING", s: Parameters<typeof loanActions>[1], m = false) =>
   loanActions(d, s, m).map((a) => a.to);
 
 test("bên cho mượn quyết yêu cầu, bên đi mượn chỉ huỷ được của mình", () => {
-  assert.deepEqual(nhan("OUTGOING", "REQUESTED"), ["APPROVED", "REJECTED"]);
-  assert.deepEqual(nhan("INCOMING", "REQUESTED"), ["CANCELLED"]);
+  assert.deepEqual(actionsFor("OUTGOING", "REQUESTED"), ["APPROVED", "REJECTED"]);
+  assert.deepEqual(actionsFor("INCOMING", "REQUESTED"), ["CANCELLED"]);
 });
 
 test("đã đồng ý: bên mượn xác nhận nhận, bên cho mượn thu hồi được", () => {
-  assert.deepEqual(nhan("INCOMING", "APPROVED"), ["ACTIVE"]);
-  assert.deepEqual(nhan("OUTGOING", "APPROVED"), ["CANCELLED"]);
+  assert.deepEqual(actionsFor("INCOMING", "APPROVED"), ["ACTIVE"]);
+  assert.deepEqual(actionsFor("OUTGOING", "APPROVED"), ["CANCELLED"]);
 });
 
 test("đang nợ: chỉ bên đi mượn ghi trả, bên cho mượn không có nút nào", () => {
   // Bên cho mượn bấm được nút trả là bấm hộ việc của người khác, và kho họ sẽ bị
   // trừ thêm lần nữa.
-  assert.deepEqual(nhan("INCOMING", "ACTIVE"), ["PARTIALLY_RETURNED"]);
-  assert.deepEqual(nhan("OUTGOING", "ACTIVE"), []);
+  assert.deepEqual(actionsFor("INCOMING", "ACTIVE"), ["PARTIALLY_RETURNED"]);
+  assert.deepEqual(actionsFor("OUTGOING", "ACTIVE"), []);
 });
 
 test("trạng thái đã đóng thì không còn nút nào", () => {
   for (const s of ["RETURNED", "REJECTED", "CANCELLED"] as const) {
-    assert.deepEqual(nhan("OUTGOING", s), []);
-    assert.deepEqual(nhan("INCOMING", s), []);
+    assert.deepEqual(actionsFor("OUTGOING", s), []);
+    assert.deepEqual(actionsFor("INCOMING", s), []);
   }
 });
 
 test("bản ghi ghi tay: người giữ nó ghi nhận trả được ở CẢ HAI chiều", () => {
   // Không có bản ghi đối ứng ở xã kia nên họ làm thay cả hai vai. Ẩn nút ở đây
   // thì khoản mượn ghi tay không bao giờ đóng lại được.
-  assert.deepEqual(nhan("OUTGOING", "ACTIVE", true), ["PARTIALLY_RETURNED"]);
-  assert.deepEqual(nhan("INCOMING", "ACTIVE", true), ["PARTIALLY_RETURNED"]);
+  assert.deepEqual(actionsFor("OUTGOING", "ACTIVE", true), ["PARTIALLY_RETURNED"]);
+  assert.deepEqual(actionsFor("INCOMING", "ACTIVE", true), ["PARTIALLY_RETURNED"]);
   assert.equal(loanActions("OUTGOING", "ACTIVE", true)[0].label, "Ghi nhận nhận lại");
   assert.equal(loanActions("INCOMING", "ACTIVE", true)[0].label, "Ghi nhận đã trả");
 });
 
 test("bản ghi ghi tay chưa tới lúc trả thì không có nút", () => {
-  assert.deepEqual(nhan("OUTGOING", "REQUESTED", true), []);
-  assert.deepEqual(nhan("OUTGOING", "RETURNED", true), []);
+  assert.deepEqual(actionsFor("OUTGOING", "REQUESTED", true), []);
+  assert.deepEqual(actionsFor("OUTGOING", "RETURNED", true), []);
 });
 
-test("bước có chuyển hàng thì bắt buộc chọn lô", () => {
-  // Bày nút mà không bắt chọn lô là để người dùng bấm rồi nhận lỗi từ máy chủ.
-  const duyet = loanActions("OUTGOING", "REQUESTED", false).find((a) => a.to === "APPROVED")!;
-  const tuChoi = loanActions("OUTGOING", "REQUESTED", false).find((a) => a.to === "REJECTED")!;
+test("chỉ bước thật sự đụng kho mới được đánh dấu là chuyển hàng", () => {
+  // Nhãn này là thứ giao diện dùng để cảnh báo trước khi bấm. Đánh dấu bừa cho
+  // cả nút "Từ chối" thì lời cảnh báo hiện ở mọi nút, và người dùng thôi đọc nó.
+  const approve = loanActions("OUTGOING", "REQUESTED", false).find((a) => a.to === "APPROVED")!;
+  const reject = loanActions("OUTGOING", "REQUESTED", false).find((a) => a.to === "REJECTED")!;
 
-  assert.equal(duyet.needsBatch, true);
-  assert.equal(tuChoi.needsBatch, false);
+  assert.equal(approve.movesStock, true);
+  assert.equal(reject.movesStock, false);
 });
 
 test("số còn nợ không bao giờ âm", () => {

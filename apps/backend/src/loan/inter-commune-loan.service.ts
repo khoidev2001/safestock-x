@@ -7,6 +7,7 @@ import {
   NotFoundException,
   type OnApplicationBootstrap,
 } from "@nestjs/common";
+import { communeNameFromUnitName } from "../auth/commune-name";
 import {
   InterCommuneLoanDirection,
   InterCommuneLoanStatus,
@@ -34,7 +35,7 @@ import {
 } from "./inter-commune-loan.workflow";
 
 /** Lấy câu lỗi đọc được, kể cả khi thứ ném ra không phải Error. */
-function moTaLoi(error: unknown): string {
+function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
@@ -80,25 +81,25 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
    * không lên được — lúc bão thì màn hình sống quan trọng hơn một dòng sổ.
    */
   async onApplicationBootstrap(): Promise<void> {
-    await this.lamNotViecDo().catch((error) =>
-      this.log.error(`Không quét được việc chuyển kho còn dở: ${moTaLoi(error)}`),
+    await this.finishPendingStockMoves().catch((error) =>
+      this.log.error(`Không quét được việc chuyển kho còn dở: ${describeError(error)}`),
     );
   }
 
-  private async lamNotViecDo(): Promise<void> {
-    const conNo = await this.prisma.interCommuneLoan.findMany({
+  private async finishPendingStockMoves(): Promise<void> {
+    const pending = await this.prisma.interCommuneLoan.findMany({
       // `not: Prisma.DbNull` chứ không phải `NOT: { … : DbNull }`: bộ lọc cột JSON
       // của Prisma phân biệt "ô trống trong bảng" với "giá trị JSON null", và chỉ
       // dạng viết này hỏi đúng câu "ô này có gì không".
       where: { pendingStockMove: { not: Prisma.DbNull } },
       select: { id: true, pendingStockMove: true },
     });
-    if (conNo.length === 0) return;
+    if (pending.length === 0) return;
 
-    this.log.warn(`${conNo.length} lần chuyển kho còn dở từ lần chạy trước — đang làm nốt`);
-    for (const row of conNo) {
-      const viec = parsePendingStockMove(row.pendingStockMove);
-      if (!viec) {
+    this.log.warn(`${pending.length} lần chuyển kho còn dở từ lần chạy trước — đang làm nốt`);
+    for (const row of pending) {
+      const move = parsePendingStockMove(row.pendingStockMove);
+      if (!move) {
         // Dữ liệu méo thì KHÔNG đoán. Xoá cờ để khỏi kêu mãi mỗi lần khởi động,
         // nhưng ghi lại rõ để người trực còn đối chiếu tay được.
         this.log.error(
@@ -110,13 +111,13 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
         continue;
       }
       try {
-        await this.moveStock(viec.effect, {
-          userId: viec.userId,
-          batchId: viec.batchId,
-          quantity: viec.quantity,
-          scopeWarehouseId: viec.scopeWarehouseId ?? undefined,
-          note: viec.note,
-          requestId: viec.requestId,
+        await this.moveStock(move.effect, {
+          userId: move.userId,
+          batchId: move.batchId,
+          quantity: move.quantity,
+          scopeWarehouseId: move.scopeWarehouseId ?? undefined,
+          note: move.note,
+          requestId: move.requestId,
         });
         await this.prisma.interCommuneLoan.update({
           where: { id: row.id },
@@ -126,7 +127,7 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
       } catch (error) {
         // Giữ nguyên cờ: lần khởi động sau thử lại. Hết hàng hay sai lô là chuyện
         // người phải xử, xoá cờ ở đây là giấu mất việc còn nợ.
-        this.log.error(`Chưa làm nốt được khoản mượn ${row.id}: ${moTaLoi(error)}`);
+        this.log.error(`Chưa làm nốt được khoản mượn ${row.id}: ${describeError(error)}`);
       }
     }
   }
@@ -142,7 +143,7 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
     // KHAI BÁO, mà trong đó REJECTED đứng ngay sau REQUESTED — tức là các khoản
     // đã đóng nổi lên trên những khoản đang cần làm. Danh sách việc mà xếp kiểu
     // đó thì phải cuộn qua đống đã xong mới thấy việc của mình.
-    const uuTien: Record<string, number> = {
+    const statusRank: Record<string, number> = {
       REQUESTED: 0,
       APPROVED: 1,
       ACTIVE: 2,
@@ -151,7 +152,7 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
       REJECTED: 5,
       CANCELLED: 6,
     };
-    return rows.sort((a, b) => (uuTien[a.status] ?? 9) - (uuTien[b.status] ?? 9));
+    return rows.sort((a, b) => (statusRank[a.status] ?? 9) - (statusRank[b.status] ?? 9));
   }
 
   /**
@@ -254,7 +255,7 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
           // Tự xưng tên thay vì để bên kia suy từ khoá máy. Bên gửi là bên biết
           // rõ tên mình nhất; suy ngược từ khoá chỉ đúng chừng nào mỗi khoá đại
           // diện đúng một xã, mà đó là điều kiện không ai bảo đảm được mãi.
-          fromCommuneName: await this.tenXaCuaMinh(loan.organizationId),
+          fromCommuneName: await this.ownCommuneName(loan.organizationId),
           itemSku: loan.itemSku,
           itemName: loan.itemName,
           unit: loan.unit,
@@ -297,10 +298,10 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
     note?: string;
   }) {
     this.assertQuantity(input.quantity);
-    const daCo = await this.prisma.interCommuneLoan.findUnique({
+    const existing = await this.prisma.interCommuneLoan.findUnique({
       where: { inboundKey: input.inboundKey },
     });
-    if (daCo) return daCo;
+    if (existing) return existing;
 
     // TỰ GỬI CHO CHÍNH MÌNH. Khai địa chỉ xã lân cận trỏ về đúng máy chủ này —
     // rất dễ xảy ra khi cấu hình demo, hoặc khi hai xã cùng dùng một tên miền —
@@ -310,7 +311,7 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
     //
     // Nhận ra bằng chính dữ liệu, không cần khai thêm địa chỉ của mình: id bản
     // ghi bên gửi mà đã có sẵn trong cơ sở dữ liệu này thì người gửi chính là ta.
-    const banGhiGoc = await this.prisma.interCommuneLoan.findUnique({
+    const originalRecord = await this.prisma.interCommuneLoan.findUnique({
       where: { id: input.peerLoanId },
       select: { organizationId: true },
     });
@@ -330,9 +331,9 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
     // Đã thử suy tên từ bản ghi gốc nằm trong cùng cơ sở dữ liệu: điều kiện đúng
     // nhưng nhánh không chạy, chưa cô lập được nguyên nhân. Gỡ đi thay vì để lại
     // mã phức tạp mà vô tác dụng — ghi lại đây để người sau biết hướng đó đã thử.
-    const tenXaGui = input.peerCommuneName.trim();
+    const senderCommuneName = input.peerCommuneName.trim();
 
-    if (banGhiGoc && banGhiGoc.organizationId === input.organizationId) {
+    if (originalRecord && originalRecord.organizationId === input.organizationId) {
       throw new BadRequestException(
         "Địa chỉ xã lân cận đang trỏ về chính máy chủ này. Sửa lại COMMUNE_PEER_* trong .env.",
       );
@@ -343,7 +344,7 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
         organizationId: input.organizationId,
         direction: InterCommuneLoanDirection.OUTGOING,
         status: InterCommuneLoanStatus.REQUESTED,
-        peerCommuneName: tenXaGui,
+        peerCommuneName: senderCommuneName,
         peerLoanId: input.peerLoanId,
         inboundKey: input.inboundKey,
         itemSku: input.itemSku.trim(),
@@ -363,7 +364,7 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
       organizationId: input.organizationId,
       recipientRole: UserRole.ADMIN,
       kind: NotificationKind.INTER_WAREHOUSE_REQUEST,
-      title: `${tenXaGui} xin mượn ${input.quantity} ${input.unit} ${input.itemName}`,
+      title: `${senderCommuneName} xin mượn ${input.quantity} ${input.unit} ${input.itemName}`,
       body: input.note?.trim() || "Đồng ý hay từ chối ngay trên thông báo này.",
       warehouseId: input.warehouseId,
       // Gắn khoản mượn để màn hình dựng được hai nút ngay trên thẻ thông báo.
@@ -398,13 +399,13 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
     // Đây chỉ là NHÃN, không phải danh tính: quyền gửi đã chốt ở khoá máy trước
     // khi vào tới đây. Ai không có khoá thì không vào được; ai có khoá thì vốn đã
     // gửi được rồi, khai tên gì cũng không mở thêm cửa nào.
-    const tenXaGui = dto.fromCommuneName?.trim() || peerCommuneName;
+    const senderCommuneName = dto.fromCommuneName?.trim() || peerCommuneName;
     // Sắp theo ngày tạo để chọn ổn định: `findFirst` không kèm thứ tự thì mỗi
     // lần gọi có thể ra một kho khác khi cơ sở dữ liệu có nhiều đơn vị.
     // Ưu tiên đúng xã mà bên gửi chỉ định. Chỉ khi họ không nói, hoặc nói một tên
     // không có ở đây, mới lùi về kho trung tâm đầu tiên — đúng cho trường hợp
     // thường gặp nhất là một máy chủ phục vụ đúng một xã.
-    const theoTen = dto.toCommuneName?.trim()
+    const byCommuneName = dto.toCommuneName?.trim()
       ? await this.prisma.warehouse.findFirst({
           where: {
             kind: "CENTRAL",
@@ -414,7 +415,7 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
         })
       : null;
     const warehouse =
-      theoTen ??
+      byCommuneName ??
       (await this.prisma.warehouse.findFirst({
         where: { kind: "CENTRAL" },
         orderBy: { createdAt: "asc" },
@@ -424,12 +425,12 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
 
     // Bóc `fromCommuneName` ra: nó là thông tin đường truyền, không phải cột của
     // bản ghi. Để nó lọt vào là nhét một trường lạ xuống tầng lưu trữ.
-    const { fromCommuneName: _boQua, ...duLieu } = dto;
+    const { fromCommuneName: _ignoredFromName, ...payload } = dto;
     return this.receiveRequestFromPeer({
       organizationId: warehouse.organizationId,
       warehouseId: warehouse.id,
-      ...duLieu,
-      peerCommuneName: tenXaGui,
+      ...payload,
+      peerCommuneName: senderCommuneName,
     });
   }
 
@@ -449,10 +450,10 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
    * khoản mượn với chính mình: sổ ghi có nợ, kho trừ thật, mà không ai nợ ai cả.
    */
   async peerCommuneNames(userId: string): Promise<string[]> {
-    const tenMinh = (await this.tenXaCuaMinh(await this.orgOf(userId)))?.toLowerCase();
+    const ownName = (await this.ownCommuneName(await this.orgOf(userId)))?.toLowerCase();
     return parseCommunePeers(process.env)
       .map((peer) => peer.communeName)
-      .filter((ten) => !tenMinh || ten.trim().toLowerCase() !== tenMinh)
+      .filter((name) => !ownName || name.trim().toLowerCase() !== ownName)
       .sort((a, b) => a.localeCompare(b, "vi"));
   }
 
@@ -486,19 +487,19 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
       orderBy: [{ expiryDate: "asc" }, { createdAt: "asc" }],
     });
 
-    const theoSku = new Map<
+    const bySku = new Map<
       string,
       { itemSku: string; itemName: string; unit: string; available: number; batchId: string }
     >();
     for (const b of batches) {
-      const cu = theoSku.get(b.item.sku);
-      if (cu) {
-        cu.available += b.quantity;
+      const existing = bySku.get(b.item.sku);
+      if (existing) {
+        existing.available += b.quantity;
         continue;
       }
       // Lô đầu tiên gặp là lô hạn gần nhất nhờ thứ tự truy vấn ở trên. Prisma xếp
       // giá trị rỗng sau cùng theo mặc định của Postgres với `asc`, đúng ý muốn.
-      theoSku.set(b.item.sku, {
+      bySku.set(b.item.sku, {
         itemSku: b.item.sku,
         itemName: b.item.name,
         unit: b.item.category.unit,
@@ -507,7 +508,7 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
       });
     }
 
-    return [...theoSku.values()].sort((a, b) => a.itemName.localeCompare(b.itemName, "vi"));
+    return [...bySku.values()].sort((a, b) => a.itemName.localeCompare(b.itemName, "vi"));
   }
 
   /**
@@ -517,7 +518,7 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
    * cũ nằm lại tới lúc hỏng rồi phải bỏ — kho cứu trợ mà bỏ hàng vì hết hạn là
    * mất đúng thứ cần dùng lúc bão.
    */
-  private async chonLoTheoSku(input: {
+  private async pickBatchForSku(input: {
     itemSku?: string;
     userId: string;
     scopeWarehouseId?: string | null;
@@ -526,7 +527,7 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
     if (!sku) throw new BadRequestException("Cần chọn vật tư hoặc nhập mã lô");
 
     const organizationId = await this.orgOf(input.userId);
-    const lo = await this.prisma.itemBatch.findFirst({
+    const batch = await this.prisma.itemBatch.findFirst({
       where: {
         item: { sku },
         circulation: "IN_STOCK",
@@ -538,8 +539,45 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
       orderBy: [{ expiryDate: "asc" }, { createdAt: "asc" }],
       select: { id: true },
     });
-    if (!lo) throw new BadRequestException(`Kho không còn lô nào của vật tư ${sku}`);
-    return lo.id;
+    if (!batch) throw new BadRequestException(`Kho không còn lô nào của vật tư ${sku}`);
+    return batch.id;
+  }
+
+  /**
+   * Lô dùng cho một bước có đụng kho của khoản mượn liên xã.
+   *
+   * Chiều TRỪ đi qua đúng `pickBatchForSku`: chỉ lô còn hàng mới trừ được, và lô
+   * hạn gần nhất đi trước.
+   *
+   * Chiều CỘNG phải nới hơn một bậc. Kho đi mượn thường đã cạn đúng mặt hàng đó —
+   * cạn nên mới phải mượn — nên lô còn hàng có thể không tồn tại, mà bắt buộc có
+   * thì hàng mượn về không nhập vào đâu được. Nên: ưu tiên lô còn hàng (để hàng
+   * cùng loại nằm chung một chỗ), không có thì lấy lô đã hết của chính mặt hàng
+   * ấy trong phạm vi kho mình. Hết cách thì nói thẳng phải nhập lô mới ở tab Vật
+   * tư — thà một câu chỉ đúng việc phải làm còn hơn lỗi "không tìm thấy lô".
+   */
+  private async pickBatchForLoanMove(
+    effect: "DEDUCT" | "ADD",
+    input: { itemSku: string; userId: string; scopeWarehouseId?: string | null },
+  ): Promise<string> {
+    if (effect === "DEDUCT") return this.pickBatchForSku(input);
+
+    const organizationId = await this.orgOf(input.userId);
+    const scope = input.scopeWarehouseId
+      ? { zone: { warehouseId: input.scopeWarehouseId } }
+      : { zone: { warehouse: { organizationId } } };
+    const batch = await this.prisma.itemBatch.findFirst({
+      where: { item: { sku: input.itemSku }, circulation: "IN_STOCK", shelf: scope },
+      // Lô còn hàng đứng trước lô đã hết, rồi tới hạn gần nhất.
+      orderBy: [{ quantity: "desc" }, { expiryDate: "asc" }, { createdAt: "asc" }],
+      select: { id: true },
+    });
+    if (!batch) {
+      throw new BadRequestException(
+        `Kho chưa có lô nào của vật tư ${input.itemSku} để nhận hàng vào. Tạo lô ở tab Vật tư rồi ghi nhận lại.`,
+      );
+    }
+    return batch.id;
   }
 
   async recordManually(input: {
@@ -562,7 +600,7 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
     // WATER-01-B3". Nhưng đường nhận mã lô vẫn giữ: có lúc người ta cần chỉ đúng
     // một lô cụ thể (lô sắp hỏng, lô vừa nhận về), và bỏ đường đó là lấy mất khả
     // năng ấy chỉ để cho gọn chữ ký hàm.
-    const batchId = input.batchId?.trim() || (await this.chonLoTheoSku(input));
+    const batchId = input.batchId?.trim() || (await this.pickBatchForSku(input));
     const batch = await this.batchInfo(batchId);
 
     const effect = manualEntryStockEffect(input.direction);
@@ -598,9 +636,15 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
   /**
    * Chuyển trạng thái một khoản mượn và áp hiệu ứng kho kèm theo.
    *
-   * `batchId` bắt buộc khi bước đó có đụng kho: người thủ kho tự chọn lô để đưa
-   * hoặc để nhận vào, thay vì hệ thống tự phân bổ. Đúng việc họ vẫn làm, và tránh
-   * phải viết một thuật toán chọn lô mới — chỗ đó sai là mất hàng thật trong sổ.
+   * `batchId` KHÔNG bắt buộc. Trước đây mỗi bước đụng kho đều đòi người thao tác
+   * dán vào một mã lô chép từ tab Vật tư — với lập luận "để thủ kho tự chọn lô".
+   * Trên thực tế người bấm nút này là người trực đang nghe điện thoại thoả thuận
+   * với xã bên kia; họ nói "nước uống", không nói "lô WATER-01-B3". Bắt chép mã
+   * chỉ đẻ ra một bước sao chép thủ công, và chép nhầm thì trừ nhầm lô.
+   *
+   * Thuật toán chọn lô không phải viết mới: đường ghi tay đã dùng `pickBatchForSku`
+   * từ đầu, theo đúng nguyên tắc hạn gần xuất trước mà kho vẫn theo. Vẫn nhận
+   * `batchId` nếu chỗ gọi truyền vào, cho trường hợp cần chỉ đúng một lô cụ thể.
    */
   async advance(input: {
     loanId: string;
@@ -642,17 +686,23 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
     let movingQuantity = loan.quantity;
     if (input.to === "RETURNED" || input.to === "PARTIALLY_RETURNED") {
       movingQuantity = input.quantity ?? loan.quantity - loan.returnedQuantity;
-      const ketQua = statusAfterReturn(loan.quantity, loan.returnedQuantity, movingQuantity);
-      status = ketQua.status;
-      returnedQuantity = ketQua.totalReturned;
+      const result = statusAfterReturn(loan.quantity, loan.returnedQuantity, movingQuantity);
+      status = result.status;
+      returnedQuantity = result.totalReturned;
     }
 
     const effect = loan.recordedManually
       ? manualStockEffect(direction, status)
       : stockEffect(direction, transition);
-    if (effect !== "NONE" && !input.batchId) {
-      throw new BadRequestException("Bước này có thay đổi tồn kho nên phải chọn lô vật tư");
-    }
+    const batchId =
+      effect === "NONE"
+        ? undefined
+        : input.batchId?.trim() ||
+          (await this.pickBatchForLoanMove(effect, {
+            itemSku: loan.itemSku,
+            userId: input.userId,
+            scopeWarehouseId: input.scopeWarehouseId,
+          }));
 
     // GIÀNH quyền chuyển trạng thái trước khi đụng kho.
     //
@@ -668,13 +718,13 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
     // giữa sổ và kho: hai việc nằm ở hai transaction khác nhau, nên sập nguồn
     // giữa chừng thì sổ đã đổi mà hàng còn nguyên. Có lời hứa nằm lại thì lần
     // khởi động sau biết còn nợ việc gì mà làm nốt.
-    const loiHua =
+    const pendingMove =
       effect === "NONE"
         ? null
         : ({
             effect,
             userId: input.userId,
-            batchId: input.batchId as string,
+            batchId: batchId as string,
             quantity: movingQuantity,
             scopeWarehouseId: input.scopeWarehouseId ?? null,
             note: `Mượn liên xã với ${loan.peerCommuneName} — ${transition.label}`,
@@ -694,7 +744,9 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
         decidedAt: from === "REQUESTED" ? now : loan.decidedAt,
         receivedAt: input.to === "ACTIVE" ? now : loan.receivedAt,
         returnedAt: status === "RETURNED" ? now : loan.returnedAt,
-        pendingStockMove: loiHua ? (loiHua as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
+        pendingStockMove: pendingMove
+          ? (pendingMove as unknown as Prisma.InputJsonValue)
+          : Prisma.DbNull,
       },
     });
     if (claimed.count !== 1) {
@@ -703,15 +755,15 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
       );
     }
 
-    if (loiHua) {
+    if (pendingMove) {
       try {
         await this.moveStock(effect, {
-          userId: loiHua.userId,
-          batchId: loiHua.batchId,
-          quantity: loiHua.quantity,
-          scopeWarehouseId: loiHua.scopeWarehouseId ?? undefined,
-          note: loiHua.note,
-          requestId: loiHua.requestId,
+          userId: pendingMove.userId,
+          batchId: pendingMove.batchId,
+          quantity: pendingMove.quantity,
+          scopeWarehouseId: pendingMove.scopeWarehouseId ?? undefined,
+          note: pendingMove.note,
+          requestId: pendingMove.requestId,
         });
         // Hàng đã đi thật thì xoá lời hứa. Để lại là lần khởi động sau chạy lại
         // một việc đã xong — không sai nhờ khoá chống trùng, nhưng làm người đọc
@@ -740,9 +792,9 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
       }
     }
 
-    const daCapNhat = await this.prisma.interCommuneLoan.findUnique({ where: { id: loan.id } });
-    if (daCapNhat) void this.pushStatusToPeer(daCapNhat).catch(() => undefined);
-    return daCapNhat;
+    const updated = await this.prisma.interCommuneLoan.findUnique({ where: { id: loan.id } });
+    if (updated) void this.pushStatusToPeer(updated).catch(() => undefined);
+    return updated;
   }
 
   /**
@@ -834,7 +886,7 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
     },
     status: InterCommuneStatus,
   ) {
-    const cau: Partial<Record<InterCommuneStatus, string>> = {
+    const titles: Partial<Record<InterCommuneStatus, string>> = {
       APPROVED: `${loan.peerCommuneName} ĐỒNG Ý cho mượn ${loan.quantity} ${loan.unit} ${loan.itemName}`,
       REJECTED: `${loan.peerCommuneName} từ chối cho mượn ${loan.itemName}`,
       ACTIVE: `${loan.peerCommuneName} đã nhận ${loan.quantity} ${loan.unit} ${loan.itemName}`,
@@ -842,7 +894,7 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
       RETURNED: `${loan.peerCommuneName} đã trả xong ${loan.itemName}`,
       CANCELLED: `${loan.peerCommuneName} đã huỷ khoản mượn ${loan.itemName}`,
     };
-    const title = cau[status];
+    const title = titles[status];
     if (!title) return;
     await this.notifications.create({
       organizationId: loan.organizationId,
@@ -914,16 +966,13 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
    * Xuân" — họ đối chiếu tên này với tên xã đã gõ lúc gửi yêu cầu, mà lúc đó
    * người dùng gõ tên xã chứ không gõ tên hội.
    */
-  private async tenXaCuaMinh(organizationId: string): Promise<string | undefined> {
+  private async ownCommuneName(organizationId: string): Promise<string | undefined> {
     const org = await this.prisma.organization.findUnique({
       where: { id: organizationId },
       select: { name: true },
     });
     if (!org) return undefined;
-    // Cắt tại "xã"/"phường"/"thị trấn" nếu có; không có thì trả nguyên tên thay
-    // vì đoán bừa — tên nguyên vẹn vẫn đọc được, tên cắt sai thì không.
-    const khop = /(?:^|\s)(?:xã|phường|thị trấn)\s+(.+)$/iu.exec(org.name.trim());
-    return (khop?.[1] ?? org.name).trim() || undefined;
+    return communeNameFromUnitName(org.name);
   }
 
   private async orgOf(userId: string): Promise<string> {

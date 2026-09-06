@@ -9,6 +9,7 @@ Thư mục này gồm 2 phần: **quy tắc code bắt buộc** (commit trong re
 | File | Mô tả |
 |---|---|
 | [CODING-STANDARDS.md](CODING-STANDARDS.md) | **Bộ quy tắc code chuẩn (28 mục).** BẮT BUỘC đọc & tuân thủ. Mọi PR bị review theo bộ này. |
+| [english-identifiers/SKILL.md](english-identifiers/SKILL.md) | **Đặt tên bằng tiếng Anh** — chi tiết mục 2.1 kèm từ điển nghiệp vụ. Vừa là tài liệu cho người, vừa là skill cho AI. Có cổng chạy được: `pnpm lint:naming`. |
 
 **Áp dụng:**
 1. Đọc [CODING-STANDARDS.md](CODING-STANDARDS.md) trước khi viết dòng code đầu tiên.
@@ -20,6 +21,14 @@ Thư mục này gồm 2 phần: **quy tắc code bắt buộc** (commit trong re
 ## 2. Skill AI — CÀI VÀO MÁY (không nằm trong repo)
 
 > Skill là công cụ cho AI coding agent (Claude Code, Cursor, Codex...) — giúp code chuẩn hơn, debug tốt hơn, UI đẹp hơn. **Mỗi dev tự cài trên máy mình.** Skill KHÔNG commit vào repo (đã `.gitignore` `.agents/` và `.claude/`).
+
+> **Ngoại lệ:** [`english-identifiers`](english-identifiers/SKILL.md) là skill CỦA DỰ ÁN nên nằm trong repo. Nối nó vào Claude Code một lần:
+>
+> ```bash
+> ln -sfn ../../skills/english-identifiers .claude/skills/english-identifiers
+> ```
+>
+> Không nối cũng không sao — quy tắc đã nằm trong `AGENTS.md` (agent luôn đọc) và CI vẫn chặn.
 
 ### Yêu cầu trước khi cài
 - **Node.js** (đã có nếu chạy được dự án)

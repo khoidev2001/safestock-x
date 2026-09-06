@@ -34,42 +34,42 @@ export interface ReportSignal {
  *
  * Hai danh sách, vì bỏ dấu tiếng Việt làm nhiều từ đổi nghĩa:
  *
- *   `coDau`    — so trên câu GIỮ NGUYÊN DẤU. Dành cho những từ mà bỏ dấu là đụng
+ *   `withDiacritics`    — so trên câu GIỮ NGUYÊN DẤU. Dành cho những từ mà bỏ dấu là đụng
  *                một từ thường gặp: "bão" ↔ "báo" (báo cáo), "cháy" ↔ "chảy"
  *                (nước chảy), "giông" ↔ "giống", "lũ" ↔ "lu". Câu "xin báo cáo
  *                tình hình sáng nay" từng bị nhận thành một cơn bão đúng vì chỗ này.
- *   `khongDau` — so trên câu đã bỏ dấu, cho những cụm không đụng ai. Đây cũng là
+ *   `withoutDiacritics` — so trên câu đã bỏ dấu, cho những cụm không đụng ai. Đây cũng là
  *                đường bắt được lời kể gõ không dấu, kiểu "chay nha", "toc mai".
  */
-const DAU_HIEU: ReadonlyArray<{
+const INCIDENT_SIGNS: ReadonlyArray<{
   type: IncidentType;
-  coDau: readonly string[];
-  khongDau: readonly string[];
+  withDiacritics: readonly string[];
+  withoutDiacritics: readonly string[];
 }> = [
   {
     type: IncidentType.FIRE,
-    coDau: ["cháy"],
-    khongDau: ["hoa hoan", "boc chay", "chay nha", "chay rung"],
+    withDiacritics: ["cháy"],
+    withoutDiacritics: ["hoa hoan", "boc chay", "chay nha", "chay rung"],
   },
   {
     type: IncidentType.LANDSLIDE,
-    coDau: [],
-    khongDau: ["sat lo", "lo dat", "sut lun", "truot dat"],
+    withDiacritics: [],
+    withoutDiacritics: ["sat lo", "lo dat", "sut lun", "truot dat"],
   },
   {
     type: IncidentType.FLOOD,
-    coDau: ["lũ"],
-    khongDau: ["ngap", "lut", "trieu cuong", "nuoc dang", "nuoc len", "mua lon"],
+    withDiacritics: ["lũ"],
+    withoutDiacritics: ["ngap", "lut", "trieu cuong", "nuoc dang", "nuoc len", "mua lon"],
   },
   {
     type: IncidentType.STORM,
-    coDau: ["bão", "giông"],
-    khongDau: ["loc xoay", "gio giat", "toc mai"],
+    withDiacritics: ["bão", "giông"],
+    withoutDiacritics: ["loc xoay", "gio giat", "toc mai"],
   },
   {
     type: IncidentType.ISOLATION,
-    coDau: [],
-    khongDau: ["co lap", "chia cat", "mac ket", "khong ra duoc"],
+    withDiacritics: [],
+    withoutDiacritics: ["co lap", "chia cat", "mac ket", "khong ra duoc"],
   },
 ];
 
@@ -81,7 +81,7 @@ const DAU_HIEU: ReadonlyArray<{
  *
  * "55 trẻ em" cố ý KHÔNG tính: đó là một phần của tổng số người, không phải tổng.
  */
-const SO_NGUOI = /(\d[\d.,]*)\s*(người|nguoi|nhân khẩu|nhan khau|hộ dân|ho dan)/iu;
+const AFFECTED_PEOPLE = /(\d[\d.,]*)\s*(người|nguoi|nhân khẩu|nhan khau|hộ dân|ho dan)/iu;
 
 export function readReportSignal(
   reportText: string,
@@ -90,39 +90,39 @@ export function readReportSignal(
   const text = reportText?.trim() ?? "";
   if (!text) return { incidentType: null, affectedPeople: null, locationName: null };
   return {
-    incidentType: doLoaiThienTai(text),
-    affectedPeople: doSoNguoi(text),
+    incidentType: readIncidentType(text),
+    affectedPeople: readAffectedPeople(text),
     locationName: findHamletInReport(text, hamlets)?.name ?? null,
   };
 }
 
-function doLoaiThienTai(text: string): string | null {
-  const giuDau = tachTu(text);
-  const boDau = normalizeHamletName(text);
-  for (const { type, coDau, khongDau } of DAU_HIEU) {
+function readIncidentType(text: string): string | null {
+  const keptDiacritics = splitWords(text);
+  const strippedDiacritics = normalizeHamletName(text);
+  for (const { type, withDiacritics, withoutDiacritics } of INCIDENT_SIGNS) {
     const found =
-      coDau.some((khoa) => chuaCumTron(giuDau, tachTu(khoa))) ||
-      khongDau.some((khoa) => chuaCumTron(boDau, normalizeHamletName(khoa)));
+      withDiacritics.some((keyword) => containsWholePhrase(keptDiacritics, splitWords(keyword))) ||
+      withoutDiacritics.some((keyword) => containsWholePhrase(strippedDiacritics, normalizeHamletName(keyword)));
     if (found) return type;
   }
   return null;
 }
 
 /** Giữ nguyên dấu, chỉ hạ chữ thường và biến mọi thứ không phải chữ/số thành khoảng trắng. */
-function tachTu(value: string): string {
+function splitWords(value: string): string {
   return value
     .toLocaleLowerCase("vi")
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
 }
 
-function doSoNguoi(text: string): number | null {
-  const matched = SO_NGUOI.exec(text);
+function readAffectedPeople(text: string): number | null {
+  const matched = AFFECTED_PEOPLE.exec(text);
   if (!matched) return null;
   // Dấu chấm và phẩy trong tiếng Việt là dấu phân nhóm hàng nghìn ("1.200 người"),
   // không phải dấu thập phân — bỏ hết rồi mới đọc số.
-  const so = Number.parseInt(matched[1].replace(/[.,]/g, ""), 10);
-  return Number.isFinite(so) && so > 0 ? so : null;
+  const parsed = Number.parseInt(matched[1].replace(/[.,]/g, ""), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
 /**
@@ -131,7 +131,7 @@ function doSoNguoi(text: string): number | null {
  * "lu" nằm gọn trong "luon", "lua", "lung tung"; so kiểu chứa chuỗi thì một câu
  * nhắc "lúa" thành ra báo lũ. Cùng lý do với `hamlet-in-report`.
  */
-function chuaCumTron(haystack: string, phrase: string): boolean {
+function containsWholePhrase(haystack: string, phrase: string): boolean {
   if (!phrase) return false;
   const pattern = new RegExp(`(?:^| )${phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?: |$)`);
   return pattern.test(haystack);

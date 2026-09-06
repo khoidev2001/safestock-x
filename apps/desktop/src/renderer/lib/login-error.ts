@@ -17,8 +17,8 @@
  *    gọi ra Internet, gặp Cloudflare, và nhận về đúng một mã lỗi — không nói gì
  *    về chuyện nó đã đi nhầm đường.
  */
-export function thongBaoDangNhapLoi(error: Error, host: string, password: string): string {
-  const goc = error.message;
+export function describeLoginError(error: Error, host: string, password: string): string {
+  const baseMessage = error.message;
 
   // Sai 5 lần là backend khoá 15 phút, và trong 15 phút đó MẬT KHẨU ĐÚNG CŨNG BỊ
   // TỪ CHỐI. Đây là chỗ duy nhất mà thử lại ngay là việc chắc chắn vô ích, nên
@@ -30,20 +30,20 @@ export function thongBaoDangNhapLoi(error: Error, host: string, password: string
     );
   }
 
-  const themVao: string[] = [];
+  const hints: string[] = [];
 
   if (password !== password.trim()) {
-    themVao.push(
+    hints.push(
       "Mật khẩu đang có khoảng trắng ở đầu hoặc cuối — xoá ô mật khẩu rồi gõ lại bằng tay.",
     );
   }
 
-  const dichVu = host.trim().toLowerCase();
-  if (dichVu.includes("ungphonhanh.life")) {
-    themVao.push("Đang gọi ra Internet. Khi máy chủ chạy ngay trên máy này, điền localhost:3100.");
+  const hostname = host.trim().toLowerCase();
+  if (hostname.includes("ungphonhanh.life")) {
+    hints.push("Đang gọi ra Internet. Khi máy chủ chạy ngay trên máy này, điền localhost:3100.");
   }
 
   // Luôn nói rõ đã gọi vào đâu: cùng một câu "sai mật khẩu" có thể đến từ một máy
   // chủ hoàn toàn khác với máy người dùng đang nghĩ tới.
-  return [goc, ...themVao, `(đã gọi tới ${host.trim() || "localhost:3100"})`].join(" ");
+  return [baseMessage, ...hints, `(đã gọi tới ${host.trim() || "localhost:3100"})`].join(" ");
 }

@@ -13,16 +13,16 @@ import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from "expo-av";
  * là tốn vài trăm mili giây, và mười thông báo dồn về là mười tài nguyên âm thanh
  * chưa kịp giải phóng.
  */
-let chuong: Audio.Sound | null = null;
-let dangNap: Promise<Audio.Sound | null> | null = null;
+let bell: Audio.Sound | null = null;
+let loading: Promise<Audio.Sound | null> | null = null;
 
 /** To hơn tiếng của web một chút vì điện thoại thường nằm trong túi áo. */
-const AM_LUONG = 0.85;
+const VOLUME = 0.85;
 
-async function napChuong(): Promise<Audio.Sound | null> {
-  if (chuong) return chuong;
-  if (dangNap) return dangNap;
-  dangNap = (async () => {
+async function loadBell(): Promise<Audio.Sound | null> {
+  if (bell) return bell;
+  if (loading) return loading;
+  loading = (async () => {
     try {
       // Điện thoại để ở chế độ im lặng vẫn phải nghe được: đây là chuông báo cứu
       // hộ, không phải tiếng nhạc nền. `playsInSilentModeIOS` là công tắc duy
@@ -37,20 +37,20 @@ async function napChuong(): Promise<Audio.Sound | null> {
       // `require` một tệp tài nguyên trả về số (id asset) khi đóng gói cho điện
       // thoại, nhưng trả về object trên bản web của React Native. Lấy kiểu ngay từ
       // chữ ký của createAsync để khỏi phải chọn bừa một trong hai.
-      const nguon = require("./assets/notification-bell.wav") as Parameters<
+      const source = require("./assets/notification-bell.wav") as Parameters<
         typeof Audio.Sound.createAsync
       >[0];
-      const { sound } = await Audio.Sound.createAsync(nguon, { volume: AM_LUONG });
-      chuong = sound;
+      const { sound } = await Audio.Sound.createAsync(source, { volume: VOLUME });
+      bell = sound;
       return sound;
     } catch {
       // Máy không có đầu ra âm thanh, hoặc quyền bị chặn. Thẻ thông báo vẫn hiện.
       return null;
     } finally {
-      dangNap = null;
+      loading = null;
     }
   })();
-  return dangNap;
+  return loading;
 }
 
 /**
@@ -59,9 +59,9 @@ async function napChuong(): Promise<Audio.Sound | null> {
  * Luôn tua về đầu trước khi phát: hai thông báo về sát nhau mà không tua thì lần
  * thứ hai bắt đầu từ chỗ tiếng trước đang ngân, nghe như bị nuốt mất.
  */
-export async function phatTiengThongBao(): Promise<void> {
+export async function playNotificationSound(): Promise<void> {
   try {
-    const sound = await napChuong();
+    const sound = await loadBell();
     if (!sound) return;
     await sound.setPositionAsync(0);
     await sound.playAsync();
@@ -71,9 +71,9 @@ export async function phatTiengThongBao(): Promise<void> {
 }
 
 /** Giải phóng khi đăng xuất — giữ tài nguyên âm thanh sống mãi là rò rỉ. */
-export async function giaiPhongTiengThongBao(): Promise<void> {
-  const sound = chuong;
-  chuong = null;
+export async function releaseNotificationSound(): Promise<void> {
+  const sound = bell;
+  bell = null;
   if (!sound) return;
   try {
     await sound.unloadAsync();

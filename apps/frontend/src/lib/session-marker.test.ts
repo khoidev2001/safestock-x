@@ -1,62 +1,62 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 
-import { coTheConPhien, danhDauCoPhien, xoaDauPhien } from "./session-marker";
+import { maySessionExist, markSessionPresent, clearSessionMarker } from "./session-marker";
 
-function gaLuuTru(hong = false) {
-  const kho = new Map<string, string>();
+function fakeStorage(broken = false) {
+  const store = new Map<string, string>();
   (globalThis as { window?: unknown }).window = {
     localStorage: {
       getItem: (k: string) => {
-        if (hong) throw new Error("bi chan");
-        return kho.get(k) ?? null;
+        if (broken) throw new Error("bi chan");
+        return store.get(k) ?? null;
       },
       setItem: (k: string, v: string) => {
-        if (hong) throw new Error("bi chan");
-        kho.set(k, v);
+        if (broken) throw new Error("bi chan");
+        store.set(k, v);
       },
       removeItem: (k: string) => {
-        if (hong) throw new Error("bi chan");
-        kho.delete(k);
+        if (broken) throw new Error("bi chan");
+        store.delete(k);
       },
     },
   };
 }
 
-beforeEach(() => gaLuuTru());
+beforeEach(() => fakeStorage());
 
 test("chưa đăng nhập lần nào thì KHÔNG khôi phục phiên", () => {
   // Đây là cả lý do tồn tại của module: gọi khôi phục lúc này chỉ nhận 401 và in
   // một dòng đỏ trong Console, làm người xem tưởng app đang hỏng.
-  assert.equal(coTheConPhien(), false);
+  assert.equal(maySessionExist(), false);
 });
 
 test("đăng nhập xong thì lần mở trang sau mới thử khôi phục", () => {
-  danhDauCoPhien();
+  markSessionPresent();
 
-  assert.equal(coTheConPhien(), true);
+  assert.equal(maySessionExist(), true);
 });
 
 test("đăng xuất thì xoá dấu", () => {
-  danhDauCoPhien();
-  xoaDauPhien();
+  markSessionPresent();
+  clearSessionMarker();
 
-  assert.equal(coTheConPhien(), false);
+  assert.equal(maySessionExist(), false);
 });
 
 test("chạy phía máy chủ (không có window) không được ném", () => {
   delete (globalThis as { window?: unknown }).window;
 
-  assert.equal(coTheConPhien(), false);
-  assert.doesNotThrow(() => danhDauCoPhien());
-  assert.doesNotThrow(() => xoaDauPhien());
+  assert.equal(maySessionExist(), false);
+  assert.doesNotThrow(() => markSessionPresent());
+  assert.doesNotThrow(() => clearSessionMarker());
 });
 
 test("trình duyệt chặn lưu trữ thì vẫn thử khôi phục, không đá người đang đăng nhập ra", () => {
   // Thà thừa một lượt gọi mạng còn hơn buộc người có phiên hợp lệ đăng nhập lại.
-  gaLuuTru(true);
+  fakeStorage(true);
 
-  assert.equal(coTheConPhien(), true);
-  assert.doesNotThrow(() => danhDauCoPhien());
-  assert.doesNotThrow(() => xoaDauPhien());
+  assert.equal(maySessionExist(), true);
+  assert.doesNotThrow(() => markSessionPresent());
+  assert.doesNotThrow(() => clearSessionMarker());
 });

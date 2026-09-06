@@ -1,5 +1,6 @@
 import { INestApplication, ValidationPipe } from "@nestjs/common";
 import { randomUUID } from "crypto";
+import * as bcrypt from "bcryptjs";
 import { Test } from "@nestjs/testing";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
@@ -18,6 +19,12 @@ describe("Mission report flow (E2E)", () => {
   let reporterUserId: string;
   let reporterWarehouseId: string;
   const fixturePrefix = "E2E_REPORT_FLOW:";
+  // ADMIN riêng của bộ test, KHÔNG mượn tài khoản seed: mật khẩu seed đổi được
+  // bất cứ lúc nào trên máy chạy thật, và khi nó đổi thì cả suite chết ở bước
+  // lấy token với đúng một dòng 401 chẳng nói lên điều gì về luồng đang test.
+  const adminEmail = `e2e-report-flow-admin-${randomUUID()}@example.test`;
+  const adminPassword = `${randomUUID()}-${randomUUID()}`;
+  let adminUserId: string | undefined;
   const fixtureReports = new Set<string>();
 
   const incidentPoint = { lat: 13.3721, lng: 108.6123 };
@@ -95,12 +102,22 @@ describe("Mission report flow (E2E)", () => {
     http = request(app.getHttpServer());
     await cleanupFixtures();
 
-    adminToken = await login("admin", "admin123@");
     // Người giữ kho thôn kiêm luôn việc báo tình huống của thôn mình.
     reporterToken = await login("longchau", "truongthon123");
     const reporter = await prisma.user.findUniqueOrThrow({
       where: { email: "longchau" },
     });
+    const admin = await prisma.user.create({
+      data: {
+        organizationId: reporter.organizationId,
+        email: adminEmail,
+        passwordHash: await bcrypt.hash(adminPassword, 10),
+        fullName: "Điều phối E2E report flow",
+        role: "ADMIN",
+      },
+    });
+    adminUserId = admin.id;
+    adminToken = await login(adminEmail, adminPassword);
     reporterUserId = reporter.id;
     reporterWarehouseId = reporter.warehouseId!;
   });
@@ -112,6 +129,7 @@ describe("Mission report flow (E2E)", () => {
 
   afterAll(async () => {
     if (prisma) await cleanupFixtures();
+    if (prisma && adminUserId) await prisma.user.deleteMany({ where: { id: adminUserId } });
     if (app) await app.close();
   });
 

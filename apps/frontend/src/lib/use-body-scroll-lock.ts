@@ -18,16 +18,16 @@ export function useBodyScrollLock(active: boolean): void {
     if (!active || typeof document === "undefined") return;
 
     const body = document.body;
-    const overflowCu = body.style.overflow;
-    const paddingCu = body.style.paddingRight;
-    const beRongThanhCuon = window.innerWidth - document.documentElement.clientWidth;
+    const previousOverflow = body.style.overflow;
+    const previousPaddingRight = body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
 
     body.style.overflow = "hidden";
-    if (beRongThanhCuon > 0) body.style.paddingRight = `${beRongThanhCuon}px`;
+    if (scrollbarWidth > 0) body.style.paddingRight = `${scrollbarWidth}px`;
 
     return () => {
-      body.style.overflow = overflowCu;
-      body.style.paddingRight = paddingCu;
+      body.style.overflow = previousOverflow;
+      body.style.paddingRight = previousPaddingRight;
     };
   }, [active]);
 }

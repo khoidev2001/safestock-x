@@ -16,9 +16,9 @@
  * thì im lặng bỏ qua — thẻ thông báo vẫn hiện, chỉ là không kèm tiếng.
  */
 
-let boTron: AudioContext | null = null;
+let sharedContext: AudioContext | null = null;
 
-function layBoTron(): AudioContext | null {
+function getAudioContext(): AudioContext | null {
   if (typeof window === "undefined") return null;
   const Constructor =
     window.AudioContext ??
@@ -27,8 +27,8 @@ function layBoTron(): AudioContext | null {
   // Dùng lại một context duy nhất: mỗi lần `new AudioContext()` là một tài
   // nguyên âm thanh mới, mở vài chục cái trong một buổi trực là trình duyệt
   // ngừng cấp thêm và từ đó không còn tiếng nào nữa.
-  if (!boTron) boTron = new Constructor();
-  return boTron;
+  if (!sharedContext) sharedContext = new Constructor();
+  return sharedContext;
 }
 
 /**
@@ -44,46 +44,46 @@ function layBoTron(): AudioContext | null {
  * hợp tệp WAV bên app điện thoại — hai nền tảng phải kêu giống nhau, nếu không thì
  * cùng một việc mà mỗi máy báo một kiểu.
  */
-const BOI_AM: ReadonlyArray<{ tiLe: number; bienDo: number; tocDoTat: number }> = [
-  { tiLe: 1.0, bienDo: 1.0, tocDoTat: 3.0 },
-  { tiLe: 2.0, bienDo: 0.55, tocDoTat: 4.2 },
-  { tiLe: 2.76, bienDo: 0.35, tocDoTat: 5.5 },
-  { tiLe: 3.87, bienDo: 0.22, tocDoTat: 7.0 },
-  { tiLe: 5.43, bienDo: 0.12, tocDoTat: 9.0 },
+const OVERTONES: ReadonlyArray<{ ratio: number; amplitude: number; decayRate: number }> = [
+  { ratio: 1.0, amplitude: 1.0, decayRate: 3.0 },
+  { ratio: 2.0, amplitude: 0.55, decayRate: 4.2 },
+  { ratio: 2.76, amplitude: 0.35, decayRate: 5.5 },
+  { ratio: 3.87, amplitude: 0.22, decayRate: 7.0 },
+  { ratio: 5.43, amplitude: 0.12, decayRate: 9.0 },
 ];
 
-const TAN_SO_GOC = 880;
+const BASE_FREQUENCY_HZ = 880;
 /** To hơn bản cũ (0,12) một chút theo yêu cầu, vẫn đủ nhẹ để nghe cả buổi trực. */
-const DO_TO = 0.22;
-const NGAN_GIAY = 1.1;
+const VOLUME = 0.22;
+const RING_SECONDS = 1.1;
 
-export function phatTiengThongBao() {
+export function playNotificationSound() {
   try {
-    const ctx = layBoTron();
+    const ctx = getAudioContext();
     if (!ctx) return;
     // Context bị treo khi tab chạy nền; đánh thức lại trước khi phát.
     if (ctx.state === "suspended") void ctx.resume();
-    const batDau = ctx.currentTime;
-    const tongBienDo = BOI_AM.reduce((tong, boi) => tong + boi.bienDo, 0);
+    const startTime = ctx.currentTime;
+    const totalAmplitude = OVERTONES.reduce((sum, overtone) => sum + overtone.amplitude, 0);
 
-    for (const { tiLe, bienDo, tocDoTat } of BOI_AM) {
-      const nguon = ctx.createOscillator();
-      const cuongDo = ctx.createGain();
-      nguon.type = "sine";
-      nguon.frequency.value = TAN_SO_GOC * tiLe;
+    for (const { ratio, amplitude, decayRate } of OVERTONES) {
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.value = BASE_FREQUENCY_HZ * ratio;
 
-      const dinh = (DO_TO * bienDo) / tongBienDo;
+      const peak = (VOLUME * amplitude) / totalAmplitude;
       // Vào trong 2 mili giây cho ra tiếng GÕ. Vào chậm hơn thì nghe như tiếng
       // sáo: cùng cao độ nhưng mất hẳn cảm giác có vật bị đánh vào.
-      cuongDo.gain.setValueAtTime(0.0001, batDau);
-      cuongDo.gain.exponentialRampToValueAtTime(dinh, batDau + 0.002);
+      gain.gain.setValueAtTime(0.0001, startTime);
+      gain.gain.exponentialRampToValueAtTime(peak, startTime + 0.002);
       // Tắt theo hàm mũ, mỗi bồi âm một tốc độ — bồi âm cao rụng trước, để lại
       // đuôi ngân ở nốt gốc.
-      cuongDo.gain.exponentialRampToValueAtTime(0.0001, batDau + Math.min(NGAN_GIAY, 6 / tocDoTat));
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + Math.min(RING_SECONDS, 6 / decayRate));
 
-      nguon.connect(cuongDo).connect(ctx.destination);
-      nguon.start(batDau);
-      nguon.stop(batDau + NGAN_GIAY);
+      oscillator.connect(gain).connect(ctx.destination);
+      oscillator.start(startTime);
+      oscillator.stop(startTime + RING_SECONDS);
     }
   } catch {
     // Trình duyệt chặn phát tự động, hoặc thiết bị không có đầu ra âm thanh.

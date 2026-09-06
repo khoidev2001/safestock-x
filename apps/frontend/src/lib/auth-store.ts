@@ -7,10 +7,16 @@ export interface AuthUser {
   fullName: string;
   phone?: string | null;
   notificationEmail?: string | null;
+  /** Có giá trị = email đã xác minh bằng mã 6 số và đủ điều kiện nhận cảnh báo. */
+  notificationEmailVerifiedAt?: string | null;
   avatarUrl?: string | null;
   unitName?: string | null;
+  /** Tên xã trần ("Đồng Xuân"), backend rút từ tên đơn vị đầy đủ. */
+  communeName?: string | null;
   warehouseName?: string | null;
   role: UserRole;
+  /** ADMIN cấp cao: thêm quyền tạo/xoá tài khoản quản trị, mọi thứ khác giống ADMIN. */
+  isSuperAdmin?: boolean;
   warehouseId?: string | null; // trưởng thôn: scope 1 kho; null = toàn xã
 }
 

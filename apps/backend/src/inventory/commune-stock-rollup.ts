@@ -45,15 +45,15 @@ export interface CommuneStockRow {
  * là nuôi thêm một chỗ để lệch, mà lệch thì chỉ lộ ra lúc đối chiếu cuối kỳ.
  */
 export function communeStockRollup(batches: BatchForRollup[]): CommuneStockRow[] {
-  const theoSku = new Map<string, CommuneStockRow & { _kho: Map<string, WarehouseShare> }>();
+  const bySku = new Map<string, CommuneStockRow & { _warehouses: Map<string, WarehouseShare> }>();
 
   for (const b of batches) {
-    const conLai = Math.max(0, b.quantity - b.onLoan);
-    if (conLai === 0) continue;
+    const available = Math.max(0, b.quantity - b.onLoan);
+    if (available === 0) continue;
 
-    let dong = theoSku.get(b.itemSku);
-    if (!dong) {
-      dong = {
+    let row = bySku.get(b.itemSku);
+    if (!row) {
+      row = {
         itemSku: b.itemSku,
         itemName: b.itemName,
         unit: b.unit,
@@ -61,31 +61,31 @@ export function communeStockRollup(batches: BatchForRollup[]): CommuneStockRow[]
         atCentral: 0,
         atHamlets: 0,
         byWarehouse: [],
-        _kho: new Map(),
+        _warehouses: new Map(),
       };
-      theoSku.set(b.itemSku, dong);
+      bySku.set(b.itemSku, row);
     }
 
-    const phan = dong._kho.get(b.warehouseId) ?? {
+    const share = row._warehouses.get(b.warehouseId) ?? {
       warehouseId: b.warehouseId,
       warehouseName: b.warehouseName,
       kind: b.warehouseKind,
       quantity: 0,
     };
-    phan.quantity += conLai;
-    dong._kho.set(b.warehouseId, phan);
+    share.quantity += available;
+    row._warehouses.set(b.warehouseId, share);
 
-    dong.total += conLai;
-    if (b.warehouseKind === "CENTRAL") dong.atCentral += conLai;
-    else dong.atHamlets += conLai;
+    row.total += available;
+    if (b.warehouseKind === "CENTRAL") row.atCentral += available;
+    else row.atHamlets += available;
   }
 
-  return [...theoSku.values()]
-    .map(({ _kho, ...dong }) => ({
-      ...dong,
+  return [...bySku.values()]
+    .map(({ _warehouses, ...row }) => ({
+      ...row,
       // Kho nhiều hàng nhất lên trước: người đang tìm chỗ lấy hàng đọc dòng đầu là
       // biết gọi ai, không phải quét hết danh sách.
-      byWarehouse: [...(_kho as Map<string, WarehouseShare>).values()].sort(
+      byWarehouse: [...(_warehouses as Map<string, WarehouseShare>).values()].sort(
         (a, b) => b.quantity - a.quantity || a.warehouseName.localeCompare(b.warehouseName, "vi"),
       ),
     }))
@@ -127,12 +127,12 @@ export interface WarehouseStock {
  * trong dữ liệu đầu vào — đó là giới hạn đã biết của cách tính từ lô hàng.
  */
 export function communeStockByWarehouse(batches: BatchForRollup[]): WarehouseStock[] {
-  const theoKho = new Map<string, WarehouseStock & { _sku: Map<string, WarehouseStockItem> }>();
+  const byWarehouseId = new Map<string, WarehouseStock & { _sku: Map<string, WarehouseStockItem> }>();
 
   for (const b of batches) {
-    let kho = theoKho.get(b.warehouseId);
-    if (!kho) {
-      kho = {
+    let warehouse = byWarehouseId.get(b.warehouseId);
+    if (!warehouse) {
+      warehouse = {
         warehouseId: b.warehouseId,
         warehouseName: b.warehouseName,
         kind: b.warehouseKind,
@@ -141,29 +141,29 @@ export function communeStockByWarehouse(batches: BatchForRollup[]): WarehouseSto
         items: [],
         _sku: new Map(),
       };
-      theoKho.set(b.warehouseId, kho);
+      byWarehouseId.set(b.warehouseId, warehouse);
     }
 
-    const conLai = Math.max(0, b.quantity - b.onLoan);
-    if (conLai === 0) continue;
+    const available = Math.max(0, b.quantity - b.onLoan);
+    if (available === 0) continue;
 
-    const mon = kho._sku.get(b.itemSku) ?? {
+    const item = warehouse._sku.get(b.itemSku) ?? {
       itemSku: b.itemSku,
       itemName: b.itemName,
       unit: b.unit,
       quantity: 0,
     };
-    mon.quantity += conLai;
-    kho._sku.set(b.itemSku, mon);
-    kho.totalUnits += conLai;
+    item.quantity += available;
+    warehouse._sku.set(b.itemSku, item);
+    warehouse.totalUnits += available;
   }
 
-  return [...theoKho.values()]
-    .map(({ _sku, ...kho }) => {
+  return [...byWarehouseId.values()]
+    .map(({ _sku, ...warehouse }) => {
       const items = [...(_sku as Map<string, WarehouseStockItem>).values()].sort(
         (a, b) => b.quantity - a.quantity || a.itemName.localeCompare(b.itemName, "vi"),
       );
-      return { ...kho, items, itemCount: items.length };
+      return { ...warehouse, items, itemCount: items.length };
     })
     .sort((a, b) => {
       if (a.kind !== b.kind) return a.kind === "CENTRAL" ? -1 : 1;

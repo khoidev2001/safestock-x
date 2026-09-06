@@ -105,11 +105,11 @@ Script khác khi cần: `create-iot-account.ts` (tạo lại tài khoản app Io
 
 | Nơi làm việc | Thiết bị | Tài khoản | Mật khẩu |
 |---|---|---|---|
-| Quản trị xã | Máy tính, web | `admin` | `admin123@` |
+| Quản trị xã | Máy tính, web | `superadmindongxuan` | `admin123` |
 | Kho trung tâm | Máy tính, web | `staff` | `staff123` |
 | Kho trung tâm | Máy tính, app IoT | `iot` | `iot123456` |
 | Kho thôn (17 kho) | Điện thoại | `<tênthôn>` | `truongthon123` |
-| Lực lượng hiện trường | Điện thoại | `rescue` | `rescue123` |
+| Đội cứu hộ | Điện thoại | `rescue` | `rescue123` |
 
 **Vì sao một tài khoản một thiết bị:** `login()` VÀ `refresh()` đều tăng
 `user.tokenVersion`, mà đó là một số duy nhất cho mỗi tài khoản chứ không phải cho

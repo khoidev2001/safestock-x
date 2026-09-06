@@ -7,7 +7,7 @@ import {
   Platform,
   Pressable,
   SafeAreaView,
-  StatusBar as ThanhTrangThaiHeDieuHanh,
+  StatusBar as RNStatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -17,6 +17,8 @@ import { useNetInfo } from "@react-native-community/netinfo";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import {
   ApiError,
+  fetchMissions,
+  fetchWarehouseMaterialRequests,
   login,
   logout as revokeServerSession,
   refreshSession,
@@ -33,6 +35,8 @@ import { MonthlyReportScreen } from "./MonthlyReportScreen";
 import { c, styles } from "./styles";
 import { NotificationToasts } from "./NotificationToasts";
 import { useNotificationFeed, type NotificationFeed } from "./use-notification-feed";
+import { filterNotificationsByMissionNo } from "./notification-feed-state";
+import { missionWorkStage, type MissionWorkStage } from "./mission-state";
 import {
   initialTabForRole,
   tabsForRole,
@@ -40,16 +44,11 @@ import {
   type MobileTab,
   type WarehouseSection,
 } from "./dashboard-state";
-import { MissionsScreen } from "./MissionsScreen";
 import { clearStoredSession, loadStoredSession, saveStoredSession } from "./session-store";
 import { clearOfflineCache } from "./offline-cache";
-import {
-  assessDanger,
-  disasterOf,
-  formatShortTime,
-  kindIcon,
-  parseMissionSummary,
-} from "./disaster";
+import { formatShortTime, kindIcon, parseMissionSummary } from "./disaster";
+import { MissionListScreen } from "./MissionListScreen";
+import { MissionSummaryCard } from "./MissionSummaryCard";
 import { mobileRoleLabel } from "./role-labels";
 
 const brandLogo = require("./assets/brand/ung-pho-nhanh-logo.png");
@@ -67,8 +66,7 @@ const brandLogo = require("./assets/brand/ung-pho-nhanh-logo.png");
  * Chừa ở lớp ngoài cùng nên mọi màn hình được sửa một lần, không phải đi vá từng
  * cái — và cái tiếp theo viết ra cũng đúng sẵn.
  */
-const CHIEU_CAO_THANH_TRANG_THAI =
-  Platform.OS === "android" ? (ThanhTrangThaiHeDieuHanh.currentHeight ?? 0) : 0;
+const STATUS_BAR_HEIGHT = Platform.OS === "android" ? (RNStatusBar.currentHeight ?? 0) : 0;
 
 export default function App() {
   const [session, setSession] = useState<LoginResult | null>(null);
@@ -137,6 +135,19 @@ export default function App() {
     setSession(result);
   }
 
+  /**
+   * Ghi lại hồ sơ vừa đổi vào phiên đang mở, và vào phiên lưu trên máy.
+   *
+   * Không lưu thì số điện thoại vừa xác minh biến mất ngay khi thoát app —
+   * người dùng làm lại từ đầu và tưởng lần trước hỏng. Phiên lưu trên máy cũng
+   * chính là thứ dựng lại màn hình lúc mở app mà chưa có mạng.
+   */
+  async function handleProfileChanged(updated: AuthUser) {
+    setSession((current) => (current ? { ...current, user: updated } : current));
+    const stored = session ? { ...session, user: updated } : null;
+    if (stored) await saveStoredSession(stored);
+  }
+
   async function logout() {
     const userId = session?.user.id;
     const accessToken = session?.accessToken;
@@ -156,7 +167,7 @@ export default function App() {
 
   if (restoringSession) {
     return (
-      <SafeAreaView style={[styles.screen, { paddingTop: CHIEU_CAO_THANH_TRANG_THAI }]}>
+      <SafeAreaView style={[styles.screen, { paddingTop: STATUS_BAR_HEIGHT }]}>
         <StatusBar style="dark" backgroundColor={c.bg} />
         <View style={styles.center}>
           <Image
@@ -172,12 +183,17 @@ export default function App() {
   }
 
   return (
-    <SafeAreaView style={[styles.screen, { paddingTop: CHIEU_CAO_THANH_TRANG_THAI }]}>
+    <SafeAreaView style={[styles.screen, { paddingTop: STATUS_BAR_HEIGHT }]}>
       <StatusBar style="dark" backgroundColor={c.bg} />
       {!session ? (
         <LoginScreen onLogin={handleLogin} />
       ) : (
-        <MobileRoleShell token={session.accessToken} user={session.user} onLogout={logout} />
+        <MobileRoleShell
+          token={session.accessToken}
+          user={session.user}
+          onLogout={logout}
+          onProfileChanged={handleProfileChanged}
+        />
       )}
     </SafeAreaView>
   );
@@ -187,10 +203,12 @@ function MobileRoleShell({
   token,
   user,
   onLogout,
+  onProfileChanged,
 }: {
   token: string;
   user: AuthUser;
   onLogout: () => void;
+  onProfileChanged: (user: AuthUser) => void;
 }) {
   const tabs = tabsForRole(user.role);
   const warehouseSections = warehouseSectionsForRole(user.role);
@@ -261,13 +279,23 @@ function MobileRoleShell({
             token={token}
             userId={user.id}
             role={user.role}
+            warehouseId={user.warehouseId}
             missionId={missionFromList}
+            // Thông báo mới nhất của CHÍNH nhiệm vụ đang mở. Kho xuất hàng hay ký
+            // nhận xong là màn hình tự tải lại, người dùng không phải thoát ra rồi
+            // vào lại mới thấy — mà lúc đang đứng ở kho thì không ai nghĩ tới
+            // chuyện đó.
+            refreshSignal={
+              feed.items.find((item) => item.missionId === missionFromList)?.id ?? null
+            }
             onBack={() => setMissionFromList(null)}
           />
         ) : tab === "home" ? (
           <DashboardScreen token={token} user={user} view="home" />
         ) : tab === "warehouse" ? (
-          warehouseSection === "readiness" ? (
+          warehouseSection === "missions" ? (
+            <MissionListScreen token={token} user={user} onOpenMission={setMissionFromList} />
+          ) : warehouseSection === "readiness" ? (
             <DashboardScreen token={token} user={user} view="readiness" />
           ) : warehouseSection === "monthly-report" ? (
             <MonthlyReportScreen token={token} user={user} />
@@ -275,13 +303,23 @@ function MobileRoleShell({
             <InventoryScreen token={token} user={user} />
           )
         ) : tab === "missions" ? (
-          <MissionsScreen token={token} user={user} onOpenMission={setMissionFromList} />
+          <MissionListScreen token={token} user={user} onOpenMission={setMissionFromList} />
         ) : tab === "report" ? (
           <ReportScreen token={token} user={user} />
         ) : tab === "account" ? (
-          <AccountScreen user={user} onLogout={onLogout} />
+          <AccountScreen
+            token={token}
+            user={user}
+            onLogout={onLogout}
+            onProfileChanged={onProfileChanged}
+          />
         ) : (
-          <NotificationsScreen token={token} userId={user.id} user={user} feed={feed} />
+          <NotificationsScreen
+            token={token}
+            user={user}
+            feed={feed}
+            onOpenMission={setMissionFromList}
+          />
         )}
       </View>
       <View style={shellStyles.tabBar}>
@@ -324,9 +362,16 @@ function MobileRoleShell({
           );
         })}
       </View>
-      {/* Không nổi thông báo khi người dùng ĐANG đứng ở tab Thông báo: ở đó nó
-          đã tự chèn lên đầu danh sách kèm nhãn MỚI, nổi thêm chỉ là che mất
-          chính cái danh sách đang đọc. */}
+      {/* Không nổi thông báo khi người dùng ĐANG NHÌN VÀO danh sách thông báo: ở
+          đó nó đã tự chèn lên đầu kèm nhãn MỚI, nổi thêm chỉ là che mất chính cái
+          danh sách đang đọc.
+
+          Nhưng mở một nhiệm vụ TỪ danh sách đó thì không còn là đang đọc danh
+          sách nữa. Trước đây màn chi tiết mở ra bằng state riêng bên trong màn
+          Thông báo, nên vỏ app vẫn tưởng người dùng đứng ở danh sách và nuốt hết
+          thông báo nổi: kho báo đã xuất hàng mà người đang xem đúng nhiệm vụ đó
+          không thấy gì, phải thoát ra mới biết. Giờ chỉ có MỘT chỗ giữ "đang mở
+          nhiệm vụ nào", nên điều kiện này luôn đúng với thứ đang hiện trên màn. */}
       <NotificationToasts
         toasts={tab === "alerts" && !missionFromList ? [] : feed.toasts}
         onDismiss={feed.dismiss}
@@ -341,7 +386,7 @@ function tabLabel(tab: MobileTab): string {
     home: "Tổng quan",
     report: "Báo cáo",
     warehouse: "Quản lý kho",
-    missions: "Lệnh",
+    missions: "Nhiệm vụ",
     alerts: "Thông báo",
     account: "Tài khoản",
   }[tab];
@@ -350,6 +395,11 @@ function tabLabel(tab: MobileTab): string {
 /** Tên mục con trong tab Quản lý kho. */
 function warehouseSectionLabel(section: WarehouseSection): string {
   return {
+    // Ghi rõ "Nhiệm vụ CỨU HỘ", không phải "Nhiệm vụ" trống không như thanh tab
+    // của đội cứu hộ. Trưởng thôn còn có việc của riêng mình — báo cáo kiểm kê,
+    // nhập xuất kho — nên một chữ "Nhiệm vụ" đứng cạnh chúng đọc ra như "việc phải
+    // làm nói chung". Thêm hai chữ là hết mơ hồ: đây là lệnh từ xã xuống.
+    missions: "Cứu hộ",
     readiness: "Sẵn sàng",
     inventory: "Kho",
     "monthly-report": "Kiểm kê",
@@ -382,6 +432,8 @@ function tabIcon(tab: MobileTab): IconName {
 
 function warehouseSectionIcon(section: WarehouseSection): IconName {
   return {
+    // Cùng hình với tab Nhiệm vụ của đội cứu hộ: hai vai nhìn vào cùng một thứ.
+    missions: "clipboard-text",
     readiness: "shield-check",
     inventory: "package-variant-closed",
     "monthly-report": "clipboard-list",
@@ -405,7 +457,11 @@ function tabColor(tab: MobileTab): string {
     home: c.primary,
     report: c.amber,
     warehouse: c.green,
-    missions: c.amber,
+    // XANH LÁ, không phải cam. Cam trong hệ màu này nghĩa là "đang chờ xử lý" —
+    // dùng cho tab Báo cáo, nơi người dùng gửi việc đi rồi ngồi đợi. Tab Nhiệm vụ
+    // thì ngược lại: đó là chỗ NHẬN việc và làm cho xong. Để cam thì hai tab cạnh
+    // nhau cùng màu và mất luôn tác dụng phân biệt bằng màu.
+    missions: c.green,
     alerts: c.red,
     account: c.muted,
   }[tab];
@@ -487,38 +543,29 @@ function LoginScreen({ onLogin }: { onLogin: (result: LoginResult) => Promise<vo
  */
 function NotificationsScreen({
   token,
-  userId,
   user,
   feed,
+  onOpenMission,
 }: {
   token: string;
-  userId: string;
   user: AuthUser;
   feed: NotificationFeed;
+  onOpenMission: (missionId: string) => void;
 }) {
   const { items, loading, error, cacheStoredAt, connected, newIds } = feed;
-  const [selectedMissionId, setSelectedMissionId] = useState<string | null>(null);
   const netInfo = useNetInfo();
-
-  if (selectedMissionId) {
-    return (
-      <MissionDetailScreen
-        token={token}
-        userId={userId}
-        role={user.role}
-        missionId={selectedMissionId}
-        onBack={() => setSelectedMissionId(null)}
-      />
-    );
-  }
+  const [missionQuery, setMissionQuery] = useState("");
+  const stages = useMissionStages(token, user.role, items[0]?.id ?? null);
+  const shown = filterNotificationsByMissionNo(items, missionQuery);
+  const searching = shown.length !== items.length || missionQuery.trim().length > 0;
 
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
         {/* `flex: 1` + `minWidth: 0` để khối chữ CO LẠI được.
             Thiếu hai thứ này thì cột trái giãn theo dòng chữ dài nhất và đè lên
-            khối bên phải — tên vai "Lực lượng hiện trường" dài gấp đôi các vai
-            khác nên chỉ tài khoản đó mới lộ lỗi, dễ lọt qua lúc thử. */}
+            khối bên phải. Lỗi chỉ lộ ở tài khoản có họ tên hoặc tên vai dài, nên
+            rất dễ lọt qua lúc thử bằng một tài khoản tên ngắn. */}
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text numberOfLines={1} style={styles.title}>
             Thông báo điều phối
@@ -534,6 +581,38 @@ function NotificationsScreen({
           <Text style={styles.pillText}>{connected ? "Đã kết nối" : "Mất kết nối"}</Text>
         </View>
       </View>
+
+      {/* Tìm theo SỐ HIỆU nhiệm vụ.
+          Người trực nhớ việc bằng số — "nhiệm vụ 193 sao rồi" — chứ không nhớ nó
+          nằm ở dòng thứ mấy. Sau một đêm bão, danh sách dài vài chục dòng và
+          cuộn tay tìm lại một số là việc vô vọng.
+          Chỉ hiện khi đã có thông báo: một ô tìm trên danh sách trống chỉ tổ làm
+          người dùng tưởng mình đang lọc mất thứ gì đó. */}
+      {items.length > 0 ? (
+        <View style={styles.searchBar}>
+          <MaterialCommunityIcons name="magnify" size={18} color={c.muted} />
+          <TextInput
+            style={styles.searchInput}
+            value={missionQuery}
+            onChangeText={setMissionQuery}
+            // Bàn phím số: từ khoá ở đây luôn là con số, mở sẵn bàn phím chữ là
+            // bắt người đang vội bấm thêm một nhát để chuyển.
+            keyboardType="number-pad"
+            placeholder="Tìm theo số nhiệm vụ (vd: 193)"
+            placeholderTextColor={c.muted}
+            accessibilityLabel="Tìm thông báo theo số hiệu nhiệm vụ"
+          />
+          {missionQuery.length > 0 ? (
+            <Pressable
+              onPress={() => setMissionQuery("")}
+              accessibilityRole="button"
+              accessibilityLabel="Xoá từ khoá"
+            >
+              <MaterialCommunityIcons name="close-circle" size={18} color={c.muted} />
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
 
       {cacheStoredAt || netInfo.isConnected === false ? (
         <View
@@ -581,16 +660,32 @@ function NotificationsScreen({
             Khi điều phối viên gửi nhiệm vụ, thông báo sẽ hiện ở đây ngay lập tức.
           </Text>
         </View>
+      ) : searching && shown.length === 0 ? (
+        /* Nói rõ đang LỌC chứ không phải hết thông báo: hai chuyện này nhìn
+           giống hệt nhau trên một danh sách trống. */
+        <View style={styles.center}>
+          <Text style={styles.emptyIcon}>🔍</Text>
+          <Text style={styles.emptyTitle}>Không có nhiệm vụ nào khớp</Text>
+          <Text style={styles.emptyText}>
+            Không có thông báo nào của nhiệm vụ số “{missionQuery}” trong {items.length} thông báo
+            đang có.
+          </Text>
+          <Pressable onPress={() => setMissionQuery("")} accessibilityRole="button">
+            <Text style={styles.linkText}>Xoá từ khoá</Text>
+          </Pressable>
+        </View>
       ) : (
         <FlatList
-          data={items}
+          data={shown}
           keyExtractor={(n) => n.id}
           contentContainerStyle={{ padding: 16 }}
           renderItem={({ item }) => (
             <Card
               item={item}
               isNew={newIds.has(item.id)}
-              onPress={item.missionId ? () => setSelectedMissionId(item.missionId!) : undefined}
+              role={user.role}
+              stage={item.missionId ? stages[item.missionId] : undefined}
+              onPress={item.missionId ? () => onOpenMission(item.missionId!) : undefined}
             />
           )}
         />
@@ -607,17 +702,95 @@ function NotificationsScreen({
 function Card({
   item,
   isNew,
+  role,
+  stage,
   onPress,
 }: {
   item: Notification;
   isNew: boolean;
+  role: string;
+  stage?: MissionWorkStage;
   onPress?: () => void;
 }) {
   const summary = item.missionId ? parseMissionSummary(item.body) : null;
   if (onPress && summary) {
-    return <MissionCard item={item} summary={summary} isNew={isNew} onPress={onPress} />;
+    return (
+      <MissionCard
+        item={item}
+        summary={summary}
+        isNew={isNew}
+        role={role}
+        stage={stage}
+        onPress={onPress}
+      />
+    );
   }
   return <InfoCard item={item} isNew={isNew} onPress={onPress} />;
+}
+
+/**
+ * Nhiệm vụ nào đang nằm ở mốc nào, tra theo id.
+ *
+ * Thông báo là một mẩu tin của quá khứ: nó ghi lại lúc kho được giao việc, chứ
+ * không biết mười phút sau kho đã xuất hàng. Thẻ muốn nói đúng việc còn phải làm
+ * thì phải hỏi lại trạng thái HIỆN TẠI.
+ *
+ * Mỗi vai hỏi một đường vì mỗi vai chỉ được thấy phần của mình: đội cứu hộ đọc
+ * danh sách nhiệm vụ của đội, kho thôn đọc phiếu vật tư của chính kho mình.
+ *
+ * Tải lại khi có thông báo mới nhất khác đi — một mẩu tin mới về gần như luôn
+ * đồng nghĩa có thứ gì đó vừa đổi trạng thái.
+ */
+function useMissionStages(
+  token: string,
+  role: string,
+  newestNotificationId: string | null,
+): Record<string, MissionWorkStage> {
+  const [stages, setStages] = useState<Record<string, MissionWorkStage>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadStages() {
+      try {
+        if (role === "RESCUE") {
+          const missions = await fetchMissions(token);
+          if (cancelled) return;
+          setStages(
+            Object.fromEntries(
+              missions.map((mission) => [
+                mission.id,
+                missionWorkStage(mission.status, mission.warehouseRequests),
+              ]),
+            ),
+          );
+          return;
+        }
+        const requests = await fetchWarehouseMaterialRequests(token);
+        if (cancelled) return;
+        const byMission = new Map<string, { status: string }[]>();
+        for (const request of requests) {
+          const list = byMission.get(request.missionId) ?? [];
+          list.push({ status: request.status });
+          byMission.set(request.missionId, list);
+        }
+        setStages(
+          Object.fromEntries(
+            [...byMission].map(([missionId, list]) => [missionId, missionWorkStage("", list)]),
+          ),
+        );
+      } catch {
+        // Không lấy được thì thẻ vẫn đọc được, chỉ thiếu dòng trạng thái. Đây là
+        // thông tin phụ của màn hình thông báo — báo lỗi ở đây chỉ tổ che mất
+        // chính những thông báo người dùng vào để đọc.
+      }
+    }
+    void loadStages();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, role, newestNotificationId]);
+
+  return stages;
 }
 
 function formatCacheTime(value: string): string {
@@ -630,58 +803,39 @@ function formatCacheTime(value: string): string {
       });
 }
 
-/** Thẻ nhiệm vụ nổi bật để Lực lượng hiện trường nắm bắt nhanh. */
+/**
+ * Thẻ nhiệm vụ trong hộp thông báo.
+ *
+ * Chỉ còn là lớp chuyển đổi: rút số hiệu, loại thiên tai và số người ra khỏi bản
+ * ghi thông báo rồi đưa cho thẻ dùng chung vẽ. Phần hình hài nằm ở
+ * `MissionSummaryCard`, để tab Nhiệm vụ và hộp Thông báo không bao giờ lệch nhau.
+ */
 function MissionCard({
   item,
   summary,
   isNew,
+  role,
+  stage,
   onPress,
 }: {
   item: Notification;
   summary: { type?: string; people: number };
   isNew: boolean;
+  role: string;
+  stage?: MissionWorkStage;
   onPress: () => void;
 }) {
-  const disaster = disasterOf(summary.type ?? "");
-  const danger = assessDanger(summary.type ?? "", summary.people);
-
   return (
-    <Pressable
+    <MissionSummaryCard
+      missionNo={item.missionNo}
+      incidentType={summary.type ?? ""}
+      affectedPeople={summary.people}
+      createdAt={item.createdAt}
+      isNew={isNew}
+      role={role}
+      stage={stage}
       onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${disaster.label}, ${danger.label}, ${summary.people} người gặp nạn`}
-      style={({ pressed }) => [
-        styles.missionCard,
-        isNew && styles.missionCardNew,
-        pressed && { opacity: 0.75 },
-      ]}
-    >
-      <View style={[styles.stripe, { backgroundColor: danger.stripe }]} />
-      <View style={styles.missionBody}>
-        <View style={styles.disasterRow}>
-          <Text style={styles.disasterIcon}>{disaster.icon}</Text>
-          <Text style={styles.disasterName}>{disaster.label}</Text>
-          {isNew ? (
-            <View style={styles.newBadge}>
-              <Text style={styles.newBadgeText}>MỚI</Text>
-            </View>
-          ) : null}
-          <View style={[styles.dangerBadge, { backgroundColor: danger.bg }]}>
-            <Text style={[styles.dangerBadgeText, { color: danger.color }]}>{danger.label}</Text>
-          </View>
-        </View>
-
-        <View style={styles.peopleRow}>
-          <Text style={styles.peopleNumber}>{summary.people}</Text>
-          <Text style={styles.peopleUnit}>người gặp nạn</Text>
-        </View>
-
-        <View style={styles.metaRow}>
-          <Text style={styles.metaTime}>🕐 {formatShortTime(item.createdAt)}</Text>
-          <Text style={styles.metaHint}>Xem chi tiết ›</Text>
-        </View>
-      </View>
-    </Pressable>
+    />
   );
 }
 
@@ -708,6 +862,12 @@ function InfoCard({
     >
       <Text style={styles.infoIcon}>{kindIcon(item.kind)}</Text>
       <View style={{ flex: 1 }}>
+        {/* Danh tính của việc, đặt TRÊN tiêu đề. Người trực chạy nhiều nhiệm vụ
+            cùng lúc: "Toàn bộ vật tư đã sẵn sàng" mà không nói của nhiệm vụ nào
+            thì họ phải mở từng nhiệm vụ ra dò xem cái nào vừa xong. */}
+        {item.missionNo != null ? (
+          <Text style={styles.infoMissionNo}>Nhiệm vụ số {item.missionNo}</Text>
+        ) : null}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <Text style={styles.infoTitle}>{item.title}</Text>
           {isNew ? (

@@ -114,7 +114,13 @@ export class AdvanceInterCommuneLoanDto {
   @IsIn(["APPROVED", "REJECTED", "CANCELLED", "ACTIVE", "PARTIALLY_RETURNED", "RETURNED"])
   to!: "APPROVED" | "REJECTED" | "CANCELLED" | "ACTIVE" | "PARTIALLY_RETURNED" | "RETURNED";
 
-  /** Lô vật tư dùng cho bước này; bắt buộc khi bước đó có đụng kho. */
+  /**
+   * Lô vật tư dùng cho bước này.
+   *
+   * Bỏ trống là bình thường: giao diện KHÔNG bắt người trực chép mã lô nữa, máy
+   * chủ tự chọn lô hạn gần nhất theo mã vật tư của khoản mượn. Chỉ truyền khi
+   * thật sự cần chỉ đúng một lô.
+   */
   @IsOptional()
   @IsString()
   batchId?: string;

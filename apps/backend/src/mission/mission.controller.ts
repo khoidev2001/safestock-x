@@ -3,13 +3,17 @@ import {
   Body,
   Controller,
   Get,
+  NotFoundException,
   Param,
   Post,
   Query,
   Request,
+  Res,
+  StreamableFile,
   UseGuards,
   ValidationPipe,
 } from "@nestjs/common";
+import type { Response } from "express";
 import { MissionStatus } from "@prisma/client";
 import { Permission } from "@safestock/shared-types";
 import { AuthenticatedRequest } from "../auth/authenticated-request";
@@ -34,7 +38,17 @@ import {
   ConfirmPickupDto,
 } from "./dto";
 import { IncidentInput } from "./mission.compute";
-import { MissionService } from "./mission.service";
+import {
+  MissionService,
+  type MissionListFilter,
+  type MissionListSort,
+  type MissionSearchField,
+} from "./mission.service";
+
+/** Giá trị hợp lệ cho hai tham số hiển thị; ngoài danh sách thì rơi về mặc định. */
+const MISSION_SORTS: MissionListSort[] = ["newest", "oldest", "most-people", "fewest-people"];
+const MISSION_FILTERS: MissionListFilter[] = ["all", "needs-action", "published"];
+const MISSION_SEARCH_FIELDS: MissionSearchField[] = ["text", "mission-no", "affected-people"];
 import { MissionCoordinationService } from "./mission-coordination.service";
 import { CoordinationAnalysisService } from "./coordination-analysis.service";
 import { WhatIfService } from "./what-if.service";
@@ -84,6 +98,10 @@ export class MissionController {
   @RequirePermission(Permission.INCIDENT_REPORT_SUBMIT)
   @Post("report")
   async report(@Request() req: AuthenticatedRequest, @Body() dto: SubmitReportDto) {
+    // Chữ HOẶC ghi âm — thiếu cả hai thì không có gì để điều phối đọc.
+    if (!dto.description?.trim() && !dto.audioBase64?.trim()) {
+      throw new BadRequestException("Cần mô tả tình huống hoặc gửi kèm file ghi âm.");
+    }
     const warehouseId = await this.missions.resolveReportWarehouseId(
       req.user.userId,
       req.user.warehouseId,
@@ -99,8 +117,43 @@ export class MissionController {
       userId: req.user.userId,
       requestId: dto.requestId,
       incidentPoint,
+      audio: dto.audioBase64
+        ? {
+            base64: dto.audioBase64,
+            // Lời khai định dạng của máy khách chỉ đi kèm cho đủ; backend vẫn tự
+            // nhận diện bằng byte đầu tệp và lấy kết quả của mình.
+            mimeType: dto.audioMimeType ?? "audio/wav",
+            durationMs: dto.audioDurationMs,
+          }
+        : undefined,
     });
     return { missionId: mission.id };
+  }
+
+  /**
+   * Bản ghi âm kèm theo một báo cáo, trả về đúng bytes đã nhận.
+   *
+   * Đường riêng chứ không nhét vào JSON chi tiết nhiệm vụ, cùng lý do với ảnh
+   * bằng chứng: người điều phối chỉ tải file khi thật sự muốn nghe, còn hộp thư
+   * thì mở được cả trên sóng yếu.
+   */
+  @RequirePermission(Permission.MISSION_VIEW)
+  @Get(":id/report-audio")
+  async reportAudio(
+    @Request() req: AuthenticatedRequest,
+    @Param("id") id: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const audio = await this.missions.getReportAudio(id, req.user.userId, req.user.warehouseId);
+    res.set({
+      "Content-Type": audio.mimeType,
+      "Content-Length": String(audio.byteSize),
+      // Lời kể đã gửi thì không đổi nữa: cache được, nhưng chỉ trong máy người đã
+      // có quyền nghe, không để proxy dùng chung giữ lại.
+      "Cache-Control": "private, max-age=86400",
+      "Content-Disposition": `inline; filename="bao-cao-${audio.id}"`,
+    });
+    return new StreamableFile(audio.data);
   }
 
   /**
@@ -166,6 +219,57 @@ export class MissionController {
       ? (status.split(",").filter((s) => s in MissionStatus) as MissionStatus[])
       : undefined;
     return this.missions.listMissions(statuses, req.user.userId, req.user.warehouseId);
+  }
+
+  /**
+   * Hộp nhiệm vụ có phân trang, lọc và sắp xếp — tất cả làm ở tầng SQL.
+   *
+   * Đặt TRƯỚC `@Get(":id")`: Nest so khớp theo thứ tự khai báo, để sau thì "inbox"
+   * bị đọc thành một id nhiệm vụ và route này không bao giờ chạy.
+   */
+  @RequirePermission(Permission.MISSION_VIEW)
+  @Get("inbox")
+  inbox(
+    @Request() req: AuthenticatedRequest,
+    @Query("page") page?: string,
+    @Query("pageSize") pageSize?: string,
+    @Query("sort") sort?: string,
+    @Query("filter") filter?: string,
+    @Query("search") search?: string,
+    @Query("searchField") searchField?: string,
+  ) {
+    return this.missions.listMissionsPage({
+      // Tham số lạ (người dùng sửa tay URL) rơi về mặc định thay vì ném lỗi: đây
+      // là cách hiển thị, không phải dữ liệu — hỏng nó không đáng chặn cả trang.
+      page: Number.parseInt(page ?? "", 10) || 1,
+      pageSize: Number.parseInt(pageSize ?? "", 10) || 15,
+      sort: MISSION_SORTS.includes(sort as MissionListSort) ? (sort as MissionListSort) : "newest",
+      filter: MISSION_FILTERS.includes(filter as MissionListFilter)
+        ? (filter as MissionListFilter)
+        : "all",
+      search,
+      searchField: MISSION_SEARCH_FIELDS.includes(searchField as MissionSearchField)
+        ? (searchField as MissionSearchField)
+        : "text",
+      actorUserId: req.user.userId,
+      role: req.user.role,
+      scopeWarehouseId: req.user.warehouseId,
+    });
+  }
+
+  /**
+   * Tra nhiệm vụ theo số hiệu — nguồn cho đường dẫn /missions/nhiem-vu-98.
+   *
+   * Cũng phải đứng TRƯỚC `@Get(":id")`, cùng lý do với route inbox.
+   */
+  @RequirePermission(Permission.MISSION_VIEW)
+  @Get("by-no/:missionNo")
+  byNo(@Request() req: AuthenticatedRequest, @Param("missionNo") missionNo: string) {
+    const parsed = Number.parseInt(missionNo, 10);
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      throw new NotFoundException("Không tìm thấy nhiệm vụ");
+    }
+    return this.missions.getMissionByNo(parsed, req.user.userId, req.user.warehouseId);
   }
 
   /** Lịch sử báo cáo text của chính trưởng thôn (cursor pagination). */
@@ -410,7 +514,7 @@ export class MissionController {
   @RequirePermission(Permission.MISSION_CREATE)
   @Post(":id/cancel")
   cancel(@Request() req: AuthenticatedRequest, @Param("id") id: string, @Body() dto: AdminNoteDto) {
-    return this.missions.cancelByAdmin(id, dto.note, req.user.warehouseId);
+    return this.missions.cancelByAdmin(id, dto.note, req.user.warehouseId, req.user.userId);
   }
 
   /** WAREHOUSE chuẩn bị + xuất kho (PENDING_WAREHOUSE → READY). */
@@ -441,7 +545,40 @@ export class MissionController {
       req.user.userId,
       dto.note,
       req.user.warehouseId,
+      dto.photos,
     );
+  }
+
+  /**
+   * Một ảnh bằng chứng của nhiệm vụ, trả về đúng bytes đã nhận.
+   *
+   * Đường riêng chứ không nhét ảnh vào JSON chi tiết nhiệm vụ: người xem chỉ mở
+   * ảnh khi thật sự muốn xem, còn trình duyệt thì cache được theo id — ảnh đã
+   * gửi rồi thì không bao giờ đổi nội dung nữa.
+   */
+  @RequirePermission(Permission.MISSION_VIEW)
+  @Get(":id/delivery-photos/:photoId")
+  async deliveryPhoto(
+    @Request() req: AuthenticatedRequest,
+    @Param("id") id: string,
+    @Param("photoId") photoId: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const photo = await this.missions.getDeliveryPhoto(
+      id,
+      photoId,
+      req.user.userId,
+      req.user.warehouseId,
+    );
+    res.set({
+      "Content-Type": photo.mimeType,
+      "Content-Length": String(photo.byteSize),
+      // Ảnh bằng chứng là dữ liệu điều hành: cache được nhưng chỉ trong máy người
+      // đã có quyền xem, không để proxy dùng chung giữ lại.
+      "Cache-Control": "private, max-age=86400",
+      "Content-Disposition": `inline; filename="bang-chung-${photo.id}"`,
+    });
+    return new StreamableFile(Buffer.from(photo.data));
   }
 
   // ---- helpers ----

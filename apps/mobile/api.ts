@@ -35,6 +35,15 @@ export interface Notification {
   read: boolean;
   createdAt: string;
   missionId?: string | null;
+  /**
+   * Số hiệu nhiệm vụ, máy chủ chép lại lúc gửi.
+   *
+   * `missionId` là cuid — đúng cho máy nhưng không đọc qua điện thoại được, mà
+   * người trực thì gọi nhau bằng "nhiệm vụ số 127". Có thể trống với thông báo
+   * không gắn nhiệm vụ (sự cố kho, readiness) và với bản ghi cũ trước khi máy chủ
+   * bắt đầu chép số hiệu.
+   */
+  missionNo?: number | null;
 }
 
 export interface WarehouseSummary {
@@ -299,10 +308,15 @@ export async function transcribe(
 export async function submitReport(
   token: string,
   input: {
-    description: string;
+    /** Bỏ trống được khi có `audioBase64` — báo cáo chỉ bằng giọng nói. */
+    description?: string;
     incidentLat?: number;
     incidentLng?: number;
     requestId?: string;
+    /** Bản ghi âm gửi kèm (base64 thuần). Máy chủ tự nhận diện định dạng. */
+    audioBase64?: string;
+    audioMimeType?: string;
+    audioDurationMs?: number;
   },
 ): Promise<{ missionId: string }> {
   const res = await request(apiUrl("/api/missions/report"), {
@@ -383,6 +397,8 @@ export interface MissionRequirement {
 
 export interface MissionDetail {
   id: string;
+  /** Số hiệu người trực gọi nhau — xem `missionNo` ở máy chủ, không bao giờ cấp lại. */
+  missionNo?: number | null;
   incidentType: string;
   affectedPeople: number;
   durationHours: number;
@@ -395,8 +411,63 @@ export interface MissionDetail {
   rejectionReason?: string | null;
   deliveryOutcome?: DeliveryOutcome | null;
   deliveryNote?: string | null;
+  /** Tên thôn đã xác minh lúc cơ quan điều phối lập phương án. */
+  hamletName?: string | null;
+  /** Lời kể gốc của trưởng thôn — người đi hiện trường đọc để hiểu tình hình. */
+  reportText?: string | null;
+  /** Toạ độ điểm gặp nạn; phương án đã phát hành thì luôn có. */
+  incidentLat?: number | null;
+  incidentLng?: number | null;
   requirements: MissionRequirement[];
   warehouseRequests?: WarehouseMaterialRequest[];
+  /** Ảnh bằng chứng đã gửi kèm lúc báo hoàn thành — chỉ phần mô tả, không có bytes. */
+  deliveryPhotos?: MissionDeliveryPhoto[];
+}
+
+/** Một ảnh bằng chứng đã lưu; bytes lấy riêng qua đường ảnh khi cần xem. */
+export interface MissionDeliveryPhoto {
+  id: string;
+  mimeType: string;
+  byteSize: number;
+  createdAt: string;
+}
+
+/**
+ * Một kho có góp hàng cho phương án, kèm tuyến kho → điểm nạn.
+ *
+ * Khớp `WarehouseEta` của backend (`GET /api/missions/:id/warehouse-routes`).
+ * Route đó CHỈ ĐỌC và chỉ cần `mission:view`, nên lực lượng hiện trường gọi được
+ * mà không đụng tới bước phân tích của cơ quan điều phối.
+ */
+export interface MissionWarehouseRoute {
+  id: string;
+  name: string;
+  kind: "CENTRAL" | "HAMLET";
+  distanceKm: number | null;
+  etaMinutes: number | null;
+  lat: number;
+  lng: number;
+  routeStatus: "ROUTED" | "ENGINE_UNAVAILABLE" | "ROUTE_NOT_FOUND" | "TIMEOUT";
+  routeGeometry: { type: "LineString"; coordinates: [number, number][] } | null;
+  contributions: { sku: string; itemName: string; quantity: number; unit: string }[];
+}
+
+/**
+ * Tuyến từ các kho có cấp hàng tới điểm gặp nạn.
+ *
+ * Trả mảng rỗng (không lỗi) khi nhiệm vụ chưa có điểm nạn hoặc chưa phân bổ được
+ * gì — màn hình vẫn phải hiện được phần còn lại.
+ */
+export async function fetchMissionWarehouseRoutes(
+  token: string,
+  missionId: string,
+): Promise<MissionWarehouseRoute[]> {
+  const res = await request(
+    apiUrl(`/api/missions/${encodeURIComponent(missionId)}/warehouse-routes`),
+    { headers: authHeader(token) },
+  );
+  if (!res.ok) throw await apiFailure(res, "Không tải được tuyến tới điểm gặp nạn");
+  return res.json();
 }
 
 export type DeliveryOutcome = "DELIVERED" | "PARTIAL" | "FAILED";
@@ -424,6 +495,17 @@ export interface WarehouseMaterialRequest {
 
 const authHeader = (token: string) => ({ Authorization: `Bearer ${token}` });
 
+/**
+ * Sửa hồ sơ của chính mình. Hiện chỉ dùng cho số điện thoại.
+ *
+ * `null` là xoá số. Gửi `null` chứ không gửi chuỗi rỗng: máy chủ phân biệt "bỏ
+ * trống" với "không đụng tới", còn chuỗi rỗng rơi vào luật kiểm định dạng và bị
+ * từ chối.
+ */
+export function updateOwnPhone(token: string, phone: string | null): Promise<AuthUser> {
+  return patchAuthorized(token, "/api/auth/me", { phone });
+}
+
 /** Chi tiết 1 nhiệm vụ (loại, số người, vật tư cần/cấp/thiếu, trạng thái). */
 export async function fetchMission(token: string, id: string): Promise<MissionDetail> {
   const res = await request(apiUrl(`/api/missions/${id}`), {
@@ -446,14 +528,56 @@ export async function fetchMissions(token: string): Promise<MissionDetail[]> {
   return res.json();
 }
 
-/** Báo kết quả giao; giao thất bại thì máy chủ tự hoàn vật tư về kho. */
+/**
+ * Báo kết quả giao; giao thất bại thì máy chủ tự hoàn vật tư về kho.
+ *
+ * `note` và `photos` đều tuỳ chọn: người vừa giao xong có thể chẳng còn gì để kể
+ * thêm, và chỗ có sóng để gửi ảnh không phải lúc nào cũng có. Ảnh gửi dạng base64
+ * thuần, máy chủ tự nhận diện định dạng từ byte đầu tệp.
+ */
 export async function completeMission(
   token: string,
   id: string,
   outcome: DeliveryOutcome,
   note?: string,
+  photos?: { dataBase64: string }[],
 ): Promise<unknown> {
-  return postAuthorized(token, `/api/missions/${id}/complete`, { outcome, note });
+  return postAuthorized(token, `/api/missions/${id}/complete`, {
+    outcome,
+    note,
+    photos: photos && photos.length > 0 ? photos : undefined,
+  });
+}
+
+/**
+ * Bytes một ảnh bằng chứng đã gửi, trả về data URI để gắn thẳng vào `<Image>`.
+ *
+ * Không đưa đường API vào `uri` được: đường ảnh đòi Bearer token, mà `<Image>`
+ * của bản web dựng ra thẻ `<img>` — thẻ đó không gửi header nào, nên sẽ nhận 401
+ * và hiện ảnh vỡ. Tải bằng `fetch` rồi đổi sang data URI thì cùng một đoạn mã
+ * chạy được cả trên web lẫn trên máy thật.
+ *
+ * Hạn chờ rộng hơn mặc định: ảnh hiện trường nặng vài trăm KB, còn người xem lại
+ * báo cáo thường đang ở đúng chỗ sóng yếu đã chụp nó.
+ */
+export async function fetchMissionDeliveryPhoto(
+  token: string,
+  missionId: string,
+  photoId: string,
+): Promise<string> {
+  const res = await request(
+    apiUrl(`/api/missions/${missionId}/delivery-photos/${photoId}`),
+    { headers: authHeader(token) },
+    30_000,
+  );
+  if (!res.ok) throw await apiFailure(res, "Không tải được ảnh bằng chứng");
+  const blob = await res.blob();
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Không đọc được ảnh bằng chứng"));
+    reader.onload = () => resolve(String(reader.result));
+    reader.readAsDataURL(blob);
+  });
 }
 
 export async function fetchWarehouseMaterialRequests(
@@ -521,33 +645,6 @@ async function mutateWarehouseMaterialRequest(
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.message ?? "Không cập nhật được yêu cầu vật tư");
-  }
-  return res.json();
-}
-
-/**
- * Lực lượng hiện trường gửi text hoặc transcript voice sau khi tự đọc/sửa và
- * bấm xác nhận. Không gửi audio thô, ảnh/video hoặc GPS liên tục.
- */
-export async function submitFieldUpdate(
-  token: string,
-  missionId: string,
-  input: {
-    requestId: string;
-    inputMode: "TEXT" | "VOICE_TRANSCRIPT";
-    confirmedText: string;
-    confirmedByUser: true;
-    clientCapturedAt?: string;
-  },
-): Promise<{ id: string; confirmedText: string }> {
-  const res = await request(apiUrl(`/api/missions/${missionId}/field-updates`), {
-    method: "POST",
-    headers: { ...authHeader(token), "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.message ?? "Không gửi được cập nhật hiện trường");
   }
   return res.json();
 }
@@ -926,6 +1023,20 @@ async function apiFailure(response: Response, fallback: string): Promise<ApiErro
   };
   const message = Array.isArray(data.message) ? data.message.join(". ") : data.message;
   return new ApiError(message ?? fallback, response.status);
+}
+
+async function patchAuthorized<T = unknown>(
+  token: string,
+  path: string,
+  body: unknown,
+): Promise<T> {
+  const response = await request(apiUrl(path), {
+    method: "PATCH",
+    headers: { ...authHeader(token), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw await apiFailure(response, "Chưa lưu được thay đổi");
+  return response.json();
 }
 
 async function postAuthorized<T = unknown>(token: string, path: string, body: unknown): Promise<T> {

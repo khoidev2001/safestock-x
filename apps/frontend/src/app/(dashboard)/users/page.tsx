@@ -13,7 +13,7 @@ export default function UsersPage() {
 
   // Trang quản trị tài khoản chỉ dành cho ADMIN; vai trò khác bị đưa về tổng quan.
   useEffect(() => {
-    if (hasHydrated && role && role !== "ADMIN") router.replace("/readiness");
+    if (hasHydrated && role && role !== "ADMIN") router.replace("/overall");
   }, [hasHydrated, role, router]);
 
   if (role !== "ADMIN") return null;

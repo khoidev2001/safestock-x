@@ -7,6 +7,8 @@ export interface AuthUser {
   email: string;
   role: UserRole;
   warehouseId?: string | null; // scope kho (trưởng thôn); null = toàn xã
+  /** Phiên đang gọi — để đăng xuất đúng thiết bị này, không đụng thiết bị khác. */
+  sessionId: string;
 }
 
 /** Request đã xác thực — thay cho `req: any` (CODING-STANDARDS §6.1). */

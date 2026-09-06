@@ -1,6 +1,6 @@
 import { IncidentType } from "@safestock/shared-types";
 import { buildTemplateNarrative, computeForecasts, scoreSeverity } from "../action-plan";
-import { IncidentInput } from "../mission.compute";
+import { countVulnerablePeople, IncidentInput } from "../mission.compute";
 
 const flood: IncidentInput = {
   incidentType: IncidentType.FLOOD,
@@ -19,6 +19,38 @@ const minor: IncidentInput = {
   elderly: 0,
   medicalSupportCases: 0,
 };
+
+describe("countVulnerablePeople", () => {
+  // Ca có thật đã hiện lên màn hình: báo 200 người, trong đó 50 trẻ em, 75 người già
+  // và 200 ca y tế — cộng thẳng ra 325, đông hơn cả số người gặp nạn.
+  it("không vượt quá tổng số người gặp nạn", () => {
+    expect(
+      countVulnerablePeople({
+        ...flood,
+        affectedPeople: 200,
+        children: 50,
+        elderly: 75,
+        medicalSupportCases: 200,
+      }),
+    ).toBe(200);
+  });
+
+  it("số liệu nhất quán thì vẫn là phép cộng ba nhóm", () => {
+    expect(countVulnerablePeople(flood)).toBe(18);
+  });
+
+  it("không nhóm nào thì bằng 0", () => {
+    expect(countVulnerablePeople(minor)).toBe(0);
+  });
+
+  it("số liệu tự mâu thuẫn thì giữ lấy nhóm đông nhất, không trả về 0", () => {
+    // Tổng số người khai thiếu (hoặc chưa khai) mà một nhóm đã đông hơn nó: cắt cứng
+    // ở tổng số người sẽ xoá sạch nhóm dễ tổn thương khỏi đánh giá tình huống.
+    expect(
+      countVulnerablePeople({ ...flood, affectedPeople: 0, children: 12, elderly: 4, medicalSupportCases: 0 }),
+    ).toBe(12);
+  });
+});
 
 describe("scoreSeverity", () => {
   it("lũ lớn + nhóm dễ tổn thương + thiếu vật tư → mức cao (4-5)", () => {
@@ -60,12 +92,14 @@ describe("computeForecasts", () => {
 });
 
 describe("buildTemplateNarrative (fallback)", () => {
-  it("luôn ra 3 giai đoạn + mục tiêu + câu hỏi", () => {
+  it("luôn ra mục tiêu + cảnh báo + câu hỏi", () => {
     const n = buildTemplateNarrative(flood, []);
-    expect(n.phases).toHaveLength(3);
-    expect(n.phases.map((p) => p.window)).toEqual(["0-2h", "2-6h", "6-24h"]);
     expect(n.objectives.length).toBeGreaterThan(0);
+    expect(n.warnings.length).toBeGreaterThan(0);
     expect(n.followUpQuestions.length).toBeGreaterThan(0);
+    // Phần chia việc theo giai đoạn đã bỏ khỏi kế hoạch cứu hộ — bản mẫu fallback
+    // cũng không được dựng lại, nếu không nó sẽ là chỗ duy nhất còn sinh ra khối đó.
+    expect(n).not.toHaveProperty("phases");
   });
 
   it("có shortage → cảnh báo nêu tên vật tư thiếu", () => {

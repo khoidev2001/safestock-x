@@ -89,11 +89,28 @@ async function main() {
   const password = (plain: string) => bcrypt.hashSync(plain, 10);
   await prisma.user.createMany({
     data: [
+      // Một xã có NHIỀU quản trị viên cùng duyệt nhiệm vụ để chia tải. Mỗi người
+      // một tài khoản và một tên thật, nhờ đó `Mission.approvedByUserId` mới trả
+      // lời được "phương án này ai chốt" — thứ phải truy được khi cần hỏi lại.
+      //
+      // Super admin seed sẵn đúng MỘT tài khoản và cả hệ thống chỉ có một: bậc này
+      // không tạo được từ giao diện (tài khoản không ai xoá được thì không nên đẻ ra
+      // bằng vài cú bấm) mà chỉ cấp bằng prisma:promote-super-admin. Quản trị xã thì
+      // có nhiều, do super admin tạo kèm bước xác minh email bằng mã 6 số; ở đây seed
+      // sẵn một người để bộ dữ liệu demo có đủ hai bậc ngay sau khi seed.
       {
         organizationId: organization.id,
-        email: "admin",
-        passwordHash: password("admin123@"),
-        fullName: "Quản trị hệ thống",
+        email: "superadmindongxuan",
+        passwordHash: password("admin123"),
+        fullName: "Nguyễn Khánh Trình",
+        role: "ADMIN",
+        isSuperAdmin: true,
+      },
+      {
+        organizationId: organization.id,
+        email: "admindongxuan",
+        passwordHash: password("admin123"),
+        fullName: "Trần Đình Khôi",
         role: "ADMIN",
       },
       {
@@ -107,7 +124,7 @@ async function main() {
         organizationId: organization.id,
         email: "rescue",
         passwordHash: password("rescue123"),
-        fullName: "Lực lượng hiện trường Đồng Xuân",
+        fullName: "Đội cứu hộ Đồng Xuân",
         role: "RESCUE",
       },
     ],
@@ -116,7 +133,7 @@ async function main() {
   const centralWarehouse = await prisma.warehouse.create({
     data: {
       organizationId: organization.id,
-      name: "Kho cứu trợ trung tâm Đồng Xuân",
+      name: "Kho xã Đồng Xuân",
       location: HOME_COMMUNE_WAREHOUSE_LOCATION.address,
       kind: "CENTRAL",
       communeId: COMMUNE_ID,

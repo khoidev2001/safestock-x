@@ -2,6 +2,8 @@ import { INestApplication, ValidationPipe } from "@nestjs/common";
 import { MissionStatus, Prisma } from "@prisma/client";
 import { Test } from "@nestjs/testing";
 import request from "supertest";
+import * as bcrypt from "bcryptjs";
+import { randomUUID } from "node:crypto";
 import { AppModule } from "../src/app.module";
 import { InventoryService } from "../src/inventory/inventory.service";
 import { PrismaService } from "../src/prisma/prisma.service";
@@ -29,6 +31,11 @@ describe("Mission prepare atomic (E2E PostgreSQL)", () => {
   let foreignBatch: { id: string; quantity: number };
   let foreignWarehouseId: string;
   let fixtureBatchIds: string[];
+  // ADMIN riêng của bộ test thay vì mượn tài khoản seed: mật khẩu seed đổi được
+  // trên máy chạy thật, và khi nó đổi thì cả suite chết ở bước lấy token.
+  const adminEmail = `e2e-prepare-atomic-admin-${randomUUID()}@example.test`;
+  const adminPassword = `${randomUUID()}-${randomUUID()}`;
+  let adminUserId: string | undefined;
   const fixtures: Fixture[] = [];
 
   beforeAll(async () => {
@@ -47,8 +54,22 @@ describe("Mission prepare atomic (E2E PostgreSQL)", () => {
       .send({ email: "staff", password: "staff123" })
       .expect(201);
     token = login.body.accessToken as string;
+    const staffUser = await prisma.user.findUniqueOrThrow({ where: { email: "staff" } });
+    const admin = await prisma.user.create({
+      data: {
+        organizationId: staffUser.organizationId,
+        email: adminEmail,
+        passwordHash: await bcrypt.hash(adminPassword, 10),
+        fullName: "Điều phối E2E prepare atomic",
+        role: "ADMIN",
+      },
+    });
+    adminUserId = admin.id;
     adminToken = (
-      await http.post("/api/auth/login").send({ email: "admin", password: "admin123@" }).expect(201)
+      await http
+        .post("/api/auth/login")
+        .send({ email: adminEmail, password: adminPassword })
+        .expect(201)
     ).body.accessToken as string;
     rescueToken = (
       await http
@@ -118,6 +139,9 @@ describe("Mission prepare atomic (E2E PostgreSQL)", () => {
   afterAll(async () => {
     await prisma.$transaction(async (tx) => {
       await tx.inventoryTransaction.deleteMany({ where: { batchId: { in: fixtureBatchIds } } });
+      // Kiểm kê trỏ tới lô bằng khoá ngoại: còn hàng nào ở đây thì xoá lô bên dưới
+      // vỡ ràng buộc và cả suite chết ở afterAll.
+      await tx.inventoryCount.deleteMany({ where: { batchId: { in: fixtureBatchIds } } });
       await tx.auditLog.deleteMany({ where: { entityId: { in: fixtureBatchIds } } });
       await tx.itemBatch.deleteMany({ where: { id: { in: fixtureBatchIds } } });
     });
@@ -125,6 +149,7 @@ describe("Mission prepare atomic (E2E PostgreSQL)", () => {
       readiness.recalculateWarehouse(warehouseId),
       readiness.recalculateWarehouse(foreignWarehouseId),
     ]);
+    if (adminUserId) await prisma.user.deleteMany({ where: { id: adminUserId } });
     await app.close();
   });
 

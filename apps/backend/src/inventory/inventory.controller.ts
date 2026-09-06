@@ -56,6 +56,34 @@ export class InventoryController {
     return this.inv.communeStock(id, req.user.warehouseId, req.user.userId);
   }
 
+  /** Lô sắp cạn của cả xã, kèm tên kho đang giữ. */
+  @Get("warehouses/:id/commune-low-stock")
+  communeLowStock(
+    @Request() req: AuthenticatedRequest,
+    @Param("id") id: string,
+    @Query("threshold") threshold?: string,
+  ) {
+    // Ngưỡng đến từ URL nên chặn hai đầu: số âm cắt sạch danh sách, còn số quá
+    // lớn biến bảng cảnh báo thành bảng liệt kê toàn bộ tồn kho.
+    const parsed = Number.parseInt(threshold ?? "", 10);
+    const limit = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 0), 1000) : 10;
+    return this.inv.communeLowStock(id, req.user.warehouseId, req.user.userId, limit);
+  }
+
+  /** Lô sắp hết hạn của cả xã, kèm tên kho đang giữ. */
+  @Get("warehouses/:id/commune-expiry")
+  communeExpiry(
+    @Request() req: AuthenticatedRequest,
+    @Param("id") id: string,
+    @Query("days") days?: string,
+  ) {
+    // Cửa sổ ngày đến từ URL nên phải chặn hai đầu: "0" cắt sạch cảnh báo, còn
+    // "9999" biến bảng cảnh báo thành bảng liệt kê toàn bộ hàng có hạn dùng.
+    const parsed = Number.parseInt(days ?? "", 10);
+    const windowDays = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 1), 365) : 30;
+    return this.inv.communeExpiry(id, req.user.warehouseId, req.user.userId, windowDays);
+  }
+
   @Get("warehouses/:id/batches-page")
   batchesPage(
     @Request() req: AuthenticatedRequest,

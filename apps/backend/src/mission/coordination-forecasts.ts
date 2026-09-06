@@ -69,14 +69,14 @@ export function buildCoordinationForecasts(weather: WeatherAlert | null): Foreca
       status: "COMPUTED" as const,
       risk: null,
       source,
-      explanation: moTaMoc(horizonHours, horizon, weather),
+      explanation: describeHorizon(horizonHours, horizon, weather),
     };
   });
 }
 
-function moTaMoc(hours: number, horizon: WeatherHorizon, weather: WeatherAlert): string {
-  const phan = [`Mưa ${hours} giờ: ${horizon.rainMm} mm`];
-  if (horizon.maxWindKph != null) phan.push(`gió mạnh nhất ${horizon.maxWindKph} km/h`);
-  if (hours === 72) phan.push(weather.alert ? "có cảnh báo" : "chưa có cảnh báo");
-  return `${phan.join("; ")}.`;
+function describeHorizon(hours: number, horizon: WeatherHorizon, weather: WeatherAlert): string {
+  const parts = [`Mưa ${hours} giờ: ${horizon.rainMm} mm`];
+  if (horizon.maxWindKph != null) parts.push(`gió mạnh nhất ${horizon.maxWindKph} km/h`);
+  if (hours === 72) parts.push(weather.alert ? "có cảnh báo" : "chưa có cảnh báo");
+  return `${parts.join("; ")}.`;
 }

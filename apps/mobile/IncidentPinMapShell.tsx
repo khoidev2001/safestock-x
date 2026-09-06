@@ -12,10 +12,26 @@ import { c } from "./styles";
  * giữ nguyên một bản: nút, chữ, cách hiện toạ độ và luật "bấm dấu ghim là bỏ" phải
  * giống hệt nhau ở hai nơi, người dùng chuyển qua lại không phải học lại.
  */
+/**
+ * Lệnh vỏ gửi XUỐNG trang Leaflet. `id` tăng dần mỗi lần phát để nền nhận ra
+ * "lệnh mới" — hai lần bỏ ghim liên tiếp có cùng `name`, không có `id` thì
+ * `useEffect` bên nền không chạy lại.
+ *
+ * Cố tình để tên lệnh dạng ngữ nghĩa chứ không phải đoạn JS: điện thoại chạy nó
+ * bằng `injectJavaScript`, còn Expo Web bằng `postMessage`, hai cách hoàn toàn
+ * khác nhau. Vỏ nói CẦN GÌ, mỗi nền tự lo cách nói xuống.
+ */
+export interface PinMapCommand {
+  id: number;
+  name: "clear";
+}
+
 export interface PinMapSurfaceProps {
   html: string;
   /** Chuỗi JSON trang Leaflet gửi ra. Vỏ tự parse; nền chỉ cần chuyển tiếp. */
   onMessage: (raw: string) => void;
+  /** Lệnh mới nhất cần chuyển xuống trang, hoặc null khi chưa có lệnh nào. */
+  command: PinMapCommand | null;
 }
 
 export function IncidentPinMapShell({
@@ -31,6 +47,7 @@ export function IncidentPinMapShell({
 }) {
   const [open, setOpen] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [command, setCommand] = useState<PinMapCommand | null>(null);
 
   /**
    * HTML dựng MỘT LẦN cho mỗi lượt mở, cố tình không phụ thuộc `point`.
@@ -60,46 +77,98 @@ export function IncidentPinMapShell({
     }
   }
 
+  /**
+   * Bỏ ghim: vừa xoá toạ độ ở vỏ, vừa bảo trang Leaflet gỡ dấu ghim.
+   *
+   * Thiếu vế thứ hai thì bản đồ vẫn hiện chấm đỏ và dòng "Đã ghim 13.374172,
+   * 109.103508 …" sau khi bấm — hai nửa cùng một màn hình nói hai điều trái ngược.
+   */
+  function clearPin() {
+    onChange(null);
+    setCommand((prev) => ({ id: (prev?.id ?? 0) + 1, name: "clear" }));
+  }
+
+  /**
+   * Bản đồ ghim là bước dễ bị lướt qua nhất trong màn báo cáo: nó nằm giữa hai
+   * việc bắt buộc (gõ/đọc mô tả và bấm gửi) nhưng bản thân lại không bắt buộc.
+   * Nên khối này phải TỰ NÓI nó là gì — biểu tượng ghim, khối màu, và đổi hẳn
+   * sang xanh lá khi đã ghim — thay vì trông như một dòng chữ xám nữa.
+   */
+  const pinned = point != null;
+  const accent = pinned ? c.green : c.primary;
+  const accentSoft = pinned ? "rgba(21,128,61,0.10)" : c.primarySoft;
+
   return (
-    <View style={{ marginTop: 12 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+    /* Cách nút "Gửi báo cáo" một khoảng rõ rệt: hai thứ này khác hẳn nhau về hệ
+       quả (ghim thì sửa được, gửi thì không), không được dính sát nhau. */
+    <View style={{ marginTop: 4, marginBottom: 24 }}>
+      <Text style={{ color: c.text, fontSize: 14, fontWeight: "700", marginBottom: 8 }}>
+        Ghim vị trí trên bản đồ
+      </Text>
+
+      <View style={{ flexDirection: "row", alignItems: "stretch", gap: 8 }}>
         <Pressable
           disabled={disabled}
           onPress={() => setOpen((v) => !v)}
+          accessibilityRole="button"
           style={{
             flex: 1,
-            borderWidth: 1,
-            borderColor: c.border,
-            borderRadius: 10,
-            paddingVertical: 11,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 12,
+            borderWidth: 1.5,
+            borderColor: accent,
+            borderRadius: 12,
+            paddingVertical: 12,
             paddingHorizontal: 12,
-            backgroundColor: c.surface,
+            backgroundColor: accentSoft,
             opacity: disabled ? 0.6 : 1,
           }}
         >
-          <Text style={{ color: c.text, fontWeight: "700", fontSize: 14 }}>
-            {open ? "Đóng bản đồ" : point ? "Sửa điểm đã ghim" : "Ghim vị trí trên bản đồ"}
-          </Text>
-          <Text style={{ color: c.muted, fontSize: 12, marginTop: 3 }}>
-            {point
-              ? `${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}`
-              : "Không bắt buộc — nhưng ghim thì cơ quan điều phối biết chính xác chỗ cần tới"}
-          </Text>
+          <View
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 19,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: accent,
+            }}
+          >
+            <Text style={{ fontSize: 19 }}>{pinned ? "✅" : "📍"}</Text>
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ color: accent, fontWeight: "700", fontSize: 15 }}>
+              {open ? "Đóng bản đồ" : pinned ? "Đã ghim — bấm để sửa" : "Bấm để ghim vị trí"}
+            </Text>
+            <Text style={{ color: pinned ? c.text : c.muted, fontSize: 12, marginTop: 3 }}>
+              {point
+                ? `${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}`
+                : "Không bắt buộc — nhưng ghim thì cơ quan điều phối biết chính xác chỗ cần tới"}
+            </Text>
+          </View>
         </Pressable>
         {point ? (
           <Pressable
             disabled={disabled}
-            onPress={() => onChange(null)}
+            onPress={clearPin}
+            accessibilityRole="button"
+            accessibilityLabel="Bỏ điểm đã ghim"
             style={{
-              borderWidth: 1,
-              borderColor: c.border,
-              borderRadius: 10,
-              paddingVertical: 11,
-              paddingHorizontal: 12,
-              backgroundColor: c.surface,
+              alignItems: "center",
+              justifyContent: "center",
+              borderWidth: 1.5,
+              borderColor: c.red,
+              borderRadius: 12,
+              paddingHorizontal: 14,
+              backgroundColor: "rgba(220,38,38,0.08)",
+              opacity: disabled ? 0.6 : 1,
             }}
           >
-            <Text style={{ color: c.red, fontWeight: "700", fontSize: 13 }}>Bỏ ghim</Text>
+            <Text style={{ fontSize: 16 }}>🗑️</Text>
+            <Text style={{ color: c.red, fontWeight: "700", fontSize: 11, marginTop: 2 }}>
+              Bỏ ghim
+            </Text>
           </Pressable>
         ) : null}
       </View>
@@ -109,14 +178,14 @@ export function IncidentPinMapShell({
           style={{
             height: 320,
             marginTop: 8,
-            borderRadius: 10,
+            borderRadius: 12,
             overflow: "hidden",
-            borderWidth: 1,
-            borderColor: c.border,
+            borderWidth: 1.5,
+            borderColor: accent,
             backgroundColor: "#e9edf2",
           }}
         >
-          {renderSurface({ html, onMessage: handleMessage })}
+          {renderSurface({ html, onMessage: handleMessage, command })}
         </View>
       ) : null}
 

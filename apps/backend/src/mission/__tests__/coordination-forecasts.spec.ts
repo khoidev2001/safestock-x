@@ -1,7 +1,7 @@
 import { buildCoordinationForecasts } from "../coordination-forecasts";
 import type { WeatherAlert } from "../../insights/weather";
 
-function thoiTiet(overrides: Partial<WeatherAlert> = {}): WeatherAlert {
+function weather(overrides: Partial<WeatherAlert> = {}): WeatherAlert {
   return {
     totalRainMm: 12.7,
     alert: false,
@@ -25,57 +25,57 @@ describe("buildCoordinationForecasts", () => {
   it("mốc 6, 12, 24 giờ dùng SỐ THẬT chứ không báo thiếu dữ liệu", () => {
     // Sáu giờ đầu là khung giờ quyết định của cả phương án. Trước đây ba mốc này
     // luôn ghi "chỉ có bản ghi 72 giờ" trong khi số liệu đã nằm sẵn cùng bản ghi.
-    const ra = buildCoordinationForecasts(thoiTiet());
+    const result = buildCoordinationForecasts(weather());
 
-    const sau = ra.find((x) => x.horizonHours === 6);
-    expect(sau?.status).toBe("COMPUTED");
-    expect(sau?.explanation).toContain("1.1 mm");
-    expect(ra.find((x) => x.horizonHours === 12)?.explanation).toContain("1.4 mm");
-    expect(ra.find((x) => x.horizonHours === 24)?.explanation).toContain("1.6 mm");
+    const sixHour = result.find((x) => x.horizonHours === 6);
+    expect(sixHour?.status).toBe("COMPUTED");
+    expect(sixHour?.explanation).toContain("1.1 mm");
+    expect(result.find((x) => x.horizonHours === 12)?.explanation).toContain("1.4 mm");
+    expect(result.find((x) => x.horizonHours === 24)?.explanation).toContain("1.6 mm");
   });
 
   it("mỗi mốc đều ghi nguồn và thời điểm lấy số liệu", () => {
-    const ra = buildCoordinationForecasts(thoiTiet());
+    const result = buildCoordinationForecasts(weather());
 
-    for (const dong of ra) {
-      expect(dong.source).toBe("open-meteo:2026-08-05T13:00:00.000Z");
+    for (const row of result) {
+      expect(row.source).toBe("open-meteo:2026-08-05T13:00:00.000Z");
     }
   });
 
   it("kèm gió mạnh nhất khi nguồn có trả về", () => {
-    expect(buildCoordinationForecasts(thoiTiet())[0].explanation).toContain("14.5 km/h");
+    expect(buildCoordinationForecasts(weather())[0].explanation).toContain("14.5 km/h");
   });
 
   it("chỉ mốc 72 giờ mới nói chuyện cảnh báo", () => {
-    const ra = buildCoordinationForecasts(thoiTiet({ alert: true }));
+    const result = buildCoordinationForecasts(weather({ alert: true }));
 
-    expect(ra.find((x) => x.horizonHours === 72)?.explanation).toContain("có cảnh báo");
-    expect(ra.find((x) => x.horizonHours === 6)?.explanation).not.toContain("cảnh báo");
+    expect(result.find((x) => x.horizonHours === 72)?.explanation).toContain("có cảnh báo");
+    expect(result.find((x) => x.horizonHours === 6)?.explanation).not.toContain("cảnh báo");
   });
 
   it("nguồn chỉ có số liệu ngày thì vẫn giữ được mốc 72 giờ", () => {
     // Tổng ba ngày là con số riêng, không suy ra từ chuỗi giờ — mất chuỗi giờ
     // không có nghĩa là mất luôn con số đã có.
-    const ra = buildCoordinationForecasts(thoiTiet({ horizons: [] }));
+    const result = buildCoordinationForecasts(weather({ horizons: [] }));
 
-    expect(ra.find((x) => x.horizonHours === 72)?.status).toBe("COMPUTED");
-    expect(ra.find((x) => x.horizonHours === 72)?.explanation).toContain("12.7 mm");
-    expect(ra.find((x) => x.horizonHours === 6)?.status).toBe("PENDING_DATA");
+    expect(result.find((x) => x.horizonHours === 72)?.status).toBe("COMPUTED");
+    expect(result.find((x) => x.horizonHours === 72)?.explanation).toContain("12.7 mm");
+    expect(result.find((x) => x.horizonHours === 6)?.status).toBe("PENDING_DATA");
   });
 
   it("không lấy được thời tiết thì KHÔNG bịa ra lượng mưa nào", () => {
-    const ra = buildCoordinationForecasts(null);
+    const result = buildCoordinationForecasts(null);
 
-    expect(ra).toHaveLength(4);
-    for (const dong of ra) {
-      expect(dong.status).toBe("UNAVAILABLE");
-      expect(dong.source).toBeNull();
-      expect(dong.explanation).toContain("không giả định");
+    expect(result).toHaveLength(4);
+    for (const row of result) {
+      expect(row.status).toBe("UNAVAILABLE");
+      expect(row.source).toBeNull();
+      expect(row.explanation).toContain("không giả định");
     }
   });
 
   it("luôn trả đủ bốn mốc theo đúng thứ tự", () => {
-    expect(buildCoordinationForecasts(thoiTiet()).map((x) => x.horizonHours)).toEqual([
+    expect(buildCoordinationForecasts(weather()).map((x) => x.horizonHours)).toEqual([
       6, 12, 24, 72,
     ]);
   });

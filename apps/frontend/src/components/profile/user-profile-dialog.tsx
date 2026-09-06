@@ -6,6 +6,7 @@ import { ColorIcon } from "@/components/shared/color-icon";
 import { useAuth } from "@/lib/auth-store";
 import { getProfile, updateProfile, type UpdateProfileInput } from "@/lib/profile-api";
 import { ProfileAvatarEditor } from "./profile-avatar-editor";
+import { NotificationEmailField } from "./notification-email-field";
 import { userRoleLabel } from "@safestock/shared-types";
 
 export function UserProfileDialog({
@@ -34,14 +35,11 @@ export function UserProfileDialog({
   const [form, setForm] = useState<UpdateProfileInput>({
     fullName: "",
     phone: null,
-    notificationEmail: null,
     avatarUrl: null,
   });
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [invalidField, setInvalidField] = useState<
-    "fullName" | "phone" | "notificationEmail" | null
-  >(null);
+  const [invalidField, setInvalidField] = useState<"fullName" | "phone" | null>(null);
 
   const mutation = useMutation({
     mutationFn: updateProfile,
@@ -73,7 +71,6 @@ export function UserProfileDialog({
     setForm({
       fullName: profile.fullName || "",
       phone: profile.phone ?? null,
-      notificationEmail: profile.notificationEmail ?? null,
       avatarUrl: profile.avatarUrl ?? null,
     });
     setError("");
@@ -100,7 +97,6 @@ export function UserProfileDialog({
     event.preventDefault();
     const fullName = form.fullName.trim();
     const phone = form.phone?.trim() || null;
-    const notificationEmail = form.notificationEmail?.trim().toLowerCase() || null;
     if (fullName.length < 2) {
       setInvalidField("fullName");
       return setError("Họ và tên phải có ít nhất 2 ký tự.");
@@ -109,14 +105,10 @@ export function UserProfileDialog({
       setInvalidField("phone");
       return setError("Số điện thoại chưa đúng định dạng.");
     }
-    if (notificationEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(notificationEmail)) {
-      setInvalidField("notificationEmail");
-      return setError("Email cá nhân chưa đúng định dạng.");
-    }
     setError("");
     setMessage("");
     setInvalidField(null);
-    mutation.mutate({ ...form, fullName, phone, notificationEmail });
+    mutation.mutate({ ...form, fullName, phone });
   }
 
   function logout() {
@@ -145,7 +137,9 @@ export function UserProfileDialog({
               Hồ sơ cá nhân
             </h2>
             <p className="mt-1 text-sm text-[var(--text-muted)]">
-              {profile?.role ? userRoleLabel(profile.role) : "Người dùng hệ thống"}
+              {profile?.role
+                ? userRoleLabel(profile.role, { isSuperAdmin: profile.isSuperAdmin })
+                : "Người dùng hệ thống"}
             </p>
           </div>
           <button
@@ -200,23 +194,6 @@ export function UserProfileDialog({
                 value={form.phone ?? ""}
               />
             </ProfileField>
-            <ProfileField hint="Dùng để nhận email cảnh báo sự cố." label="Email cá nhân">
-              <input
-                aria-describedby={
-                  invalidField === "notificationEmail" ? "profile-form-status" : undefined
-                }
-                aria-invalid={invalidField === "notificationEmail"}
-                autoComplete="email"
-                className="w-full rounded-md border bg-[var(--surface)] px-3"
-                disabled={mutation.isPending}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, notificationEmail: event.target.value }))
-                }
-                placeholder="ten@donvi.vn"
-                type="email"
-                value={form.notificationEmail ?? ""}
-              />
-            </ProfileField>
             <ProfileField
               hint={profile?.warehouseName ? `Kho phụ trách: ${profile.warehouseName}` : undefined}
               label="Đơn vị"
@@ -228,6 +205,23 @@ export function UserProfileDialog({
               />
             </ProfileField>
           </div>
+
+          <NotificationEmailField
+            canRemove={profile?.role !== "ADMIN"}
+            isOpen={isOpen}
+            onVerifiedChange={(state) => {
+              // Hồ sơ trong cache còn giữ email cũ thì header/nơi khác vẫn hiện sai
+              // ngay sau khi xác minh, nên đồng bộ lại luôn.
+              if (!profile) return;
+              const synced = {
+                ...profile,
+                notificationEmail: state.notificationEmail,
+                notificationEmailVerifiedAt: state.notificationEmailVerifiedAt,
+              };
+              updateCachedUser(synced);
+              queryClient.setQueryData(profileKey, synced);
+            }}
+          />
 
           <div aria-live="polite" className="min-h-6 text-sm" id="profile-form-status">
             {error || profileQuery.error ? (

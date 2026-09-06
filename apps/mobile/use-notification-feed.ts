@@ -9,7 +9,7 @@ import {
   pushToast,
   type ToastEntry,
 } from "./notification-feed-state";
-import { giaiPhongTiengThongBao, phatTiengThongBao } from "./notification-sound";
+import { releaseNotificationSound, playNotificationSound } from "./notification-sound";
 
 export interface NotificationFeed {
   items: Notification[];
@@ -47,7 +47,7 @@ export function useNotificationFeed(token: string, userId: string): Notification
   // được máy chủ gửi lại sau khi cập nhật.
   const toastSeq = useRef(0);
   /** Id các thông báo đã kêu chuông trong phiên này — không kêu lại lần hai. */
-  const daKeuRef = useRef<Set<string>>(new Set());
+  const chimedIdsRef = useRef<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setError(null);
@@ -109,9 +109,9 @@ export function useNotificationFeed(token: string, userId: string): Notification
       //
       // Đặt NGOÀI hàm cập nhật state: React gọi hàm đó hai lần ở chế độ dev để
       // bắt hàm không thuần, nên phát tiếng trong đó là chuông kêu đôi.
-      if (!daKeuRef.current.has(n.id)) {
-        daKeuRef.current.add(n.id);
-        void phatTiengThongBao();
+      if (!chimedIdsRef.current.has(n.id)) {
+        chimedIdsRef.current.add(n.id);
+        void playNotificationSound();
       }
       setItems((prev) => {
         const next = mergeNotification(prev, n);
@@ -137,7 +137,7 @@ export function useNotificationFeed(token: string, userId: string): Notification
       socketRef.current = null;
       setConnected(false);
       // Đăng xuất hoặc đổi tài khoản: trả lại tài nguyên âm thanh.
-      void giaiPhongTiengThongBao();
+      void releaseNotificationSound();
     };
   }, [token, userId]);
 

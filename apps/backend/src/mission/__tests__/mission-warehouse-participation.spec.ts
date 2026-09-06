@@ -42,6 +42,7 @@ function serviceWithPrisma(prisma: Record<string, unknown>, notifications = {}) 
     {} as never,
     {} as never,
     {} as never,
+    {} as never,
   );
 }
 
@@ -80,7 +81,30 @@ describe("MissionService warehouse participation", () => {
       },
       warehouse: {
         findUnique: jest.fn().mockResolvedValue({ organizationId: "org-1" }),
+        findMany: jest.fn().mockResolvedValue([
+          { id: "warehouse-a", name: "Kho A" },
+          { id: "warehouse-b", name: "Kho B" },
+        ]),
       },
+      // Đủ tồn và chưa ai đặt gạch → lượt đối chiếu trước khi phát hành không
+      // chặn, nên phần kiểm tra bên dưới vẫn nói đúng về việc tạo preparation.
+      itemBatch: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            quantity: 100,
+            item: { sku: "WATER-01" },
+            shelf: { zone: { warehouseId: "warehouse-a" } },
+            loans: [],
+          },
+          {
+            quantity: 100,
+            item: { sku: "WATER-01" },
+            shelf: { zone: { warehouseId: "warehouse-b" } },
+            loans: [],
+          },
+        ]),
+      },
+      missionWarehouseRequest: { findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn(async (fn: (client: typeof tx) => unknown) => fn(tx)),
     };
     const notifications = { pushPersisted: jest.fn() };
@@ -137,9 +161,13 @@ describe("MissionService warehouse participation", () => {
     };
     const service = serviceWithPrisma(prisma);
 
-    await expect(service.getMission("mission-1", "user-b", "warehouse-b")).resolves.toEqual(
-      multiWarehouseMission,
-    );
+    // `getMission` đổi `_count` thành cờ `hasCoordinationAnalysis` trước khi trả
+    // ra: client cần biết CÓ bản tham mưu hay chưa, không cần con số đếm.
+    const { _count, ...expected } = multiWarehouseMission;
+    await expect(service.getMission("mission-1", "user-b", "warehouse-b")).resolves.toEqual({
+      ...expected,
+      hasCoordinationAnalysis: false,
+    });
   });
 
   it("danh sách của kho gồm cả mission mà kho đó tham gia", async () => {

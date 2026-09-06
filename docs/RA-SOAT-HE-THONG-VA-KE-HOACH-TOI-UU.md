@@ -256,11 +256,13 @@ Mỗi bài test mới là thêm một dòng script dài vào `package.json`, và
 | `loan/inter-commune-loan.service.ts` | 8 |
 | `dashboard/inter-commune-loan-panel.tsx` | 8 |
 
-Ví dụ: `quyDoiChai`, `chaiTuLit`, `soChai`, `chaiCanCho`, `CHAI_MOI_LOC`, `LIT_MOI_CHAI_MAC_DINH`, `tenXaGui`, `theoKho`, `duLieu`, `laChoMuon`, `laBuocTra`, `beRongThanhCuon`, `banGhiGoc`, `moTaQuyDoi`, `ThanhTrangThaiHeDieuHanh`, `DangKhoiPhucPhien`, `thongBaoDangNhapLoi`.
+Ví dụ: `bottleBreakdown`, `bottlesFromLiters`, `soChai`, `bottlesNeededFor`, `BOTTLES_PER_PACK`, `DEFAULT_LITERS_PER_BOTTLE`, `tenXaGui`, `theoKho`, `duLieu`, `laChoMuon`, `laBuocTra`, `beRongThanhCuon`, `banGhiGoc`, `describeBottleBreakdown`, `ThanhTrangThaiHeDieuHanh`, `DangKhoiPhucPhien`, `thongBaoDangNhapLoi`.
 
 Bên Python: `_ham_nong_nhan_dang_giong_noi`, `_mo_hinh_qua_han`, `chay`.
 
-Ngoài ra một tệp có **tên tệp** tiếng Việt: [`prisma/sua-don-vi-nuoc.ts`](../apps/backend/prisma/sua-don-vi-nuoc.ts).
+Ngoài ra ba tệp có **tên tệp** tiếng Việt trong `apps/backend/prisma/`: `sua-don-vi-nuoc.ts`, `sua-tien-do-kho.ts`, `rasoat-cam-ket-ton-dong.ts`.
+
+> **Đã xử lý.** Toàn bộ định danh đã đổi sang tiếng Anh, ba tệp trên đổi thành [`fix-water-units.ts`](../apps/backend/prisma/fix-water-units.ts), [`fix-warehouse-progress.ts`](../apps/backend/prisma/fix-warehouse-progress.ts), [`audit-stale-commitments.ts`](../apps/backend/prisma/audit-stale-commitments.ts). Quy tắc nay có cổng chạy được: `pnpm lint:naming` + bước CI `Reject Vietnamese identifiers`, hướng dẫn ở [`skills/english-identifiers/SKILL.md`](../skills/english-identifiers/SKILL.md).
 
 Việc này trái với chuẩn đặt tên của chính dự án. Quy mô có giới hạn (62 tên), nên gom vào **một lượt đổi tên duy nhất** — làm rải rác sẽ không bao giờ xong.
 
@@ -393,7 +395,7 @@ Xếp theo **tần suất sử dụng thật lúc có tình huống**, không th
 
 | | Việc | Mục | Công |
 |---|---|---|---|
-| 19 | Đổi 62 định danh tiếng Việt + đổi tên `sua-don-vi-nuoc.ts` | K7 | 1 ngày |
+| 19 | ~~Đổi 62 định danh tiếng Việt + đổi tên `sua-don-vi-nuoc.ts`~~ **(xong)** | K7 | 1 ngày |
 | 20 | Bỏ `ItemBatch.status` và enum `ItemStatus` | G2 | 0,5 ngày |
 | 21 | Đổi tên route `/mission` thành `/dispatch` | G1 | 2 giờ |
 | 22 | Gộp tab `home` và `readiness`; ẩn thanh tab khi chỉ có một mục | G3, G4 | 0,5 ngày |
@@ -443,7 +445,7 @@ Ngoài ra, lượt hai kiểm chứng lại hai điều và **xác nhận hệ t
 
 Đây là phát hiện lớn nhất của lượt hai.
 
-`mission.workflow.ts` định nghĩa luồng hiện hành: `DRAFT → PENDING_WAREHOUSE → READY → COMPLETED`, cộng `CANCELLED`. Chú thích đầu tệp nói rõ: *"ADMIN phát hành phương án trực tiếp tới các kho; lực lượng hiện trường không tham gia bước phát hành."*
+`mission.workflow.ts` định nghĩa luồng hiện hành: `DRAFT → PENDING_WAREHOUSE → READY → COMPLETED`, cộng `CANCELLED`. Chú thích đầu tệp nói rõ: *"ADMIN phát hành phương án trực tiếp tới các kho; đội cứu hộ không tham gia bước phát hành."*
 
 Nhưng `mission.service.ts` **vẫn còn nguyên năm phương thức của luồng cũ**: `dispatch`, `confirmByRescue`, `rejectByRescue`, `deferByAdmin`, `resendByAdmin`. Cả năm đều gọi `guardTransition` tới các trạng thái **không có trong bảng chuyển tiếp**:
 

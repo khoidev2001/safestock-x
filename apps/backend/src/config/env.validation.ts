@@ -31,7 +31,12 @@ const SECRET_PLACEHOLDERS = new Set([
   "test",
   "todo",
 ]);
-const OPTIONAL_BOOLEAN_KEYS = ["SIMULATION_MUTATION_ENABLED", "AUTH_COOKIE_SECURE"] as const;
+const OPTIONAL_BOOLEAN_KEYS = [
+  "SIMULATION_MUTATION_ENABLED",
+  "AUTH_COOKIE_SECURE",
+  "MAIL_DEV_LOG_CODES",
+  "SMS_DEV_LOG_CODES",
+] as const;
 
 export function validateEnv(config: Record<string, unknown>): Record<string, unknown> {
   const errors: string[] = [];
@@ -61,6 +66,20 @@ export function validateEnv(config: Record<string, unknown>): Record<string, unk
 
   const corsError = validateCorsOrigins(config.CORS_ALLOWED_ORIGINS);
   if (corsError) errors.push(corsError);
+
+  // Mã xác minh in ra log là đường vòng chỉ dành cho lúc phát triển: ai đọc được log là
+  // xác minh hộ được hộp thư người khác. Ở production thì chặn ngay lúc boot, đừng để
+  // một dòng .env sót lại lặng lẽ hạ cấp cả tính năng "email phải có thật".
+  if (
+    String(config.NODE_ENV ?? "")
+      .trim()
+      .toLowerCase() === "production" &&
+    String(config.MAIL_DEV_LOG_CODES ?? "")
+      .trim()
+      .toLowerCase() === "true"
+  ) {
+    errors.push("MAIL_DEV_LOG_CODES=true chỉ dùng khi phát triển — bỏ biến này ở production");
+  }
 
   const bindAddress = textValue(config.BIND_ADDRESS);
   if (bindAddress && !isValidBindHost(bindAddress)) {

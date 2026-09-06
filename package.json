@@ -70,6 +70,7 @@
     "dev:all": "node scripts/dev-all.mjs",
     "docs:docx": "node scripts/md-to-docx.mjs docs/TOAN-BO-CHUC-NANG-VA-LUONG-NGHIEP-VU.md Toan-bo-chuc-nang-va-luong-nghiep-vu.docx \"Toàn bộ chức năng và luồng nghiệp vụ\" \"Tài liệu tham chiếu đầy đủ cho Ban giám khảo và người tiếp nhận hệ thống\"",
     "lint": "pnpm -r --if-present lint && eslint .",
+    "lint:naming": "node scripts/check-identifier-language.mjs",
     "lint:fix": "pnpm -r --if-present lint:fix && eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

@@ -8,6 +8,7 @@ describe("AuthService profile", () => {
     fullName: "Nguyễn Văn An",
     phone: "0912345678",
     notificationEmail: "an@example.com",
+    notificationEmailVerifiedAt: new Date("2026-09-01T02:00:00.000Z"),
     avatarUrl: null,
     role: "ADMIN",
     warehouseId: null,
@@ -37,10 +38,12 @@ describe("AuthService profile", () => {
       fullName: "Nguyễn Văn An",
       phone: "0912345678",
       notificationEmail: "an@example.com",
+      notificationEmailVerifiedAt: new Date("2026-09-01T02:00:00.000Z"),
       avatarUrl: null,
       role: "ADMIN",
       warehouseId: null,
       unitName: "Hội Chữ thập đỏ xã Đồng Xuân",
+      communeName: "Đồng Xuân",
       warehouseName: null,
     });
   });
@@ -49,7 +52,6 @@ describe("AuthService profile", () => {
     await service.updateProfile("user-1", {
       fullName: "  Nguyễn Văn An  ",
       phone: " 0912345678 ",
-      notificationEmail: " AN@EXAMPLE.COM ",
       avatarUrl: null,
     });
 
@@ -58,9 +60,20 @@ describe("AuthService profile", () => {
       data: {
         fullName: "Nguyễn Văn An",
         phone: "0912345678",
-        notificationEmail: "an@example.com",
         avatarUrl: null,
       },
+    });
+  });
+
+  it("không cho PATCH hồ sơ ghi thẳng email cảnh báo — phải qua luồng xác minh", async () => {
+    await service.updateProfile("user-1", {
+      fullName: "Nguyễn Văn An",
+      ...({ notificationEmail: "gia-mao@example.com" } as object),
+    });
+
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      data: { fullName: "Nguyễn Văn An", phone: undefined, avatarUrl: undefined },
     });
   });
 

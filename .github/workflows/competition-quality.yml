@@ -63,6 +63,13 @@ jobs:
       - name: Lint all workspaces
         run: pnpm lint
 
+      - name: Reject Vietnamese identifiers
+        # CODING-STANDARDS mục 2.1 bắt tên biến/hàm/class viết bằng tiếng Anh. Quy
+        # tắc chỉ nằm trong tài liệu thì trôi vào từng lượt sửa vội — lần rà trước
+        # đếm được hơn 60 tên đã lọt. Cổng này chặn ở đúng PR sinh ra chúng; chú
+        # thích và chuỗi hiển thị tiếng Việt không bị đụng tới.
+        run: pnpm lint:naming
+
       - name: Validate Prisma schema
         # `prisma validate` chỉ parse schema (không kết nối DB) nhưng vẫn cần
         # env("DATABASE_URL") resolve được, nếu không sẽ P1012. CI không có
@@ -98,6 +105,7 @@ jobs:
           pnpm --filter @safestock/frontend test:warehouse-progress
           pnpm --filter @safestock/frontend test:notification-routing
           pnpm --filter @safestock/frontend test:inter-commune-loan
+          pnpm --filter @safestock/frontend test:coordinate-input
           pnpm --filter @safestock/frontend build
 
       - name: Mobile state and dependency contracts

@@ -230,28 +230,21 @@ class ActionPlanRequest(BaseModel):
     context: str = Field(min_length=5, max_length=12000)
 
 
-class PhasePlan(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    window: Literal["0-2h", "2-6h", "6-24h"]
-    actions: List[str] = Field(min_length=2, max_length=4)
-
-
 class ActionPlanNarrative(BaseModel):
-    """Phần LLM VIẾT — chỉ định tính, không số liệu tồn kho."""
+    """Phần LLM VIẾT — chỉ định tính, không số liệu tồn kho.
+
+    KHÔNG còn khoá `phases`: bản chia việc theo ba khung 0-2h / 2-6h / 6-24h đã bỏ
+    khỏi kế hoạch cứu hộ. Ba khung đó cố định cho mọi tình huống nên nội dung sinh
+    ra lặp lại gần như nguyên văn giữa các nhiệm vụ, trong khi mục tiêu và cảnh báo
+    mới là phần bám vào tình huống thật. Bỏ luôn ở đây chứ không chỉ giấu trên giao
+    diện: còn trong schema là còn bắt mô hình viết, tốn thêm lượt sinh cho một khối
+    không ai đọc.
+    """
     model_config = ConfigDict(extra="forbid")
 
     objectives: List[str] = Field(min_length=3, max_length=5)  # mục tiêu 6h đầu
-    phases: List[PhasePlan] = Field(min_length=3, max_length=3)
     warnings: List[str] = Field(min_length=1)
     followUpQuestions: List[str] = Field(min_length=1)
-
-    @model_validator(mode="after")
-    def validate_phase_order(self) -> "ActionPlanNarrative":
-        expected = ["0-2h", "2-6h", "6-24h"]
-        if [phase.window for phase in self.phases] != expected:
-            raise ValueError(f"phases phải có đúng thứ tự: {expected}")
-        return self
 
 
 # ===== Chatbot hỏi-đáp kho (context injection) =====

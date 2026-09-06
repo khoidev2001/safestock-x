@@ -3,14 +3,10 @@
 import dynamic from "next/dynamic";
 import { CollapsiblePanel } from "@/components/shared/collapsible-panel";
 import { ColorIcon } from "@/components/shared/color-icon";
-import type { ActionPlan } from "@/lib/mission-api";
+import type { ActionPlan, MissionStatus } from "@/lib/mission-api";
 import type { LatLng } from "@/lib/geo";
-import {
-  LIT_MOI_CHAI_NUOC,
-  litTuChai,
-  moTaSoLuongVatTu,
-  WATER_BOTTLE_SKU,
-} from "@safestock/shared-types";
+import { describeItemQuantity } from "@safestock/shared-types";
+import { completedStepIndex } from "./workflow-progress";
 
 const IncidentMap = dynamic(() => import("./incident-map").then((m) => m.IncidentMap), {
   ssr: false,
@@ -32,7 +28,8 @@ interface DispatchStop {
   routed: boolean;
   /** Nhãn ngắn cho chặng đầu / chặng cuối. */
   note: string | null;
-  items: string;
+  /** Mỗi vật tư một dòng — gộp thành một câu thì kho góp bốn thứ đọc thành một khối chữ. */
+  items: string[];
 }
 
 function describeDispatchOrder(warehouses: ActionPlan["warehouses"]): DispatchStop[] {
@@ -42,9 +39,9 @@ function describeDispatchOrder(warehouses: ActionPlan["warehouses"]): DispatchSt
   const unrouted = warehouses.filter((w) => w.routeStatus !== "ROUTED" || w.distanceKm == null);
 
   const listItems = (w: ActionPlan["warehouses"][number]) =>
-    w.contributions
-      .map((item) => `${item.itemName} ${moTaSoLuongVatTu(item.sku, item.quantity, item.unit)}`)
-      .join(" · ");
+    w.contributions.map(
+      (item) => `${item.itemName} ${describeItemQuantity(item.sku, item.quantity, item.unit)}`,
+    );
 
   const stops: DispatchStop[] = routed.map((w, index) => ({
     id: w.id,
@@ -68,6 +65,19 @@ function describeDispatchOrder(warehouses: ActionPlan["warehouses"]): DispatchSt
   return stops;
 }
 
+/**
+ * Số lượng cho bảng cấp phát: chỉ số và đơn vị gốc, KHÔNG kèm quy đổi.
+ *
+ * Khác `describeItemQuantity` mà danh sách điều phối kho bên dưới dùng: chỗ đó là
+ * lệnh cho người đi lấy hàng, biết "300 lít" giúp họ ước được cần bao nhiêu chỗ trên
+ * xe. Bảng này là bảng đối chiếu bốn cột số cạnh nhau, thêm ngoặc quy đổi vào từng ô
+ * là mỗi hàng dài gấp đôi và cột "Vật tư" bị bóp đến mức tên vật tư vỡ làm ba dòng —
+ * trong khi con số cần so ở đây vẫn là số chai.
+ */
+function formatQuantity(quantity: number, unit: string): string {
+  return `${quantity.toLocaleString("vi")} ${unit}`;
+}
+
 /** Màu theo mức khẩn cấp 1-5 — trực quan, người chưa rành nghiệp vụ đọc được ngay. */
 const SEVERITY = [
   { label: "Rất thấp", color: "var(--color-ready)" },
@@ -80,12 +90,27 @@ const SEVERITY = [
 export function ActionPlanView({
   plan,
   incidentPoint,
+  status,
+  warehouseSlot,
 }: {
   plan: ActionPlan;
   incidentPoint?: LatLng | null;
+  /** Trạng thái nhiệm vụ — quyết định khối nào còn đáng mở sẵn. */
+  status: MissionStatus;
+  /** Khối "Chuẩn bị vật tư theo SKU", chèn ngay dưới phần điều phối kho. */
+  warehouseSlot?: React.ReactNode;
 }) {
   const sev = SEVERITY[Math.min(4, Math.max(0, plan.severityLevel - 1))];
   const dispatchOrder = describeDispatchOrder(plan.warehouses);
+  /**
+   * Việc đã rời khỏi bàn điều phối chưa.
+   *
+   * Đọc qua `completedStepIndex` thay vì liệt kê tay các status: thanh tiến trình
+   * ngay trên đầu trang đã dùng đúng hàm đó, nên khối nào đóng khối nào mở luôn
+   * khớp với bước đang sáng trên thanh. Liệt kê tay thì thêm một status mới vào
+   * luồng là hai nơi lệch nhau mà không ai để ý.
+   */
+  const atWarehouseStep = completedStepIndex(status) >= 0;
 
   return (
     <div className="space-y-4">
@@ -101,8 +126,18 @@ export function ActionPlanView({
         </div>
       )}
 
-      {/* 1. Đánh giá tình huống + mức khẩn cấp */}
+      {/* 1. Đánh giá tình huống + mức khẩn cấp
+
+          THU GỌN từ lúc việc sang tay kho. Khối này là căn cứ để người trực quyết
+          định duyệt hay không; duyệt xong rồi thì nó chỉ còn là hồ sơ, mà nó lại
+          đứng đầu trang nên mở sẵn là đẩy phần đang chạy — kho chuẩn bị tới đâu,
+          hiện trường đã đi chưa — xuống dưới màn hình.
+
+          `key` đổi theo cờ vì `CollapsiblePanel` chỉ đọc `defaultOpen` lúc dựng:
+          không có nó, phát hành xong khối vẫn nằm mở tới khi tải lại trang. */}
       <CollapsiblePanel
+        key={atWarehouseStep ? "da-sang-kho" : "con-o-dieu-phoi"}
+        defaultOpen={!atWarehouseStep}
         className="rounded-md border p-5"
         style={{ background: `color-mix(in oklch, ${sev.color} 8%, var(--surface))` }}
         icon={<ColorIcon name="warning" size={19} tone="red" />}
@@ -126,57 +161,61 @@ export function ActionPlanView({
         </ul>
         <div className="mt-3 flex gap-4 border-t pt-3 text-sm text-[var(--text-muted)]">
           <span>
-            Độ tin cậy: <b className="text-[var(--text)]">{plan.confidence}%</b>
-          </span>
-          <span>
             Đáp ứng kho: <b className="text-[var(--text)]">{plan.fulfillment}%</b>
           </span>
         </div>
       </CollapsiblePanel>
 
-      {/* 3. Phương án cấp phát vật tư */}
+      {/* 3. Phương án cấp phát vật tư — thu gọn ngay khi phát hành.
+          Bảng bốn cột Cần/Cấp/Thiếu là căn cứ để người trực quyết định có duyệt hay
+          không. Bấm duyệt xong là đã trả lời câu hỏi đó; từ đó trở đi việc nằm ở kho,
+          và thứ họ cần thấy là danh sách SKU phải xuất ngay bên dưới. Để bảng này mở
+          sẵn chỉ đẩy phần đang chạy xuống dưới màn hình. */}
       <Panel
+        key={atWarehouseStep ? "da-phat-hanh-cap-phat" : "con-nhap-cap-phat"}
+        defaultOpen={!atWarehouseStep}
         icon={<ColorIcon name="inventory" size={19} tone="orange" />}
         title="Phương án cấp phát"
       >
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          {/* Kẻ ô đầy đủ, không chỉ gạch ngang giữa các dòng.
+              Bốn cột số nằm sát nhau mà chỉ có gạch ngang thì mắt không biết con số
+              đang đọc thuộc cột nào — "150 chiếc  150 chiếc" đứng cạnh nhau trông
+              như một ô, phải dóng ngược lên hàng tiêu đề mới biết đâu là Cần đâu là
+              Cấp. Nền xám cho hàng tiêu đề để nó tách hẳn khỏi phần dữ liệu. */}
+          <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b text-left text-xs text-[var(--text-muted)]">
-                <th className="pb-2 pr-3 font-medium">Vật tư</th>
-                <th className="pb-2 pr-3 text-right font-medium">Cần</th>
-                <th className="pb-2 pr-3 text-right font-medium">Cấp</th>
-                <th className="pb-2 pr-3 text-right font-medium">Thiếu</th>
-                <th className="pb-2 font-medium">Lấy từ kho</th>
+              <tr className="bg-[var(--surface-2)] text-left text-xs text-[var(--text-muted)]">
+                <th className="border px-3 py-2 font-medium">Vật tư</th>
+                <th className="border px-3 py-2 text-right font-medium">Cần</th>
+                <th className="border px-3 py-2 text-right font-medium">Cấp</th>
+                <th className="border px-3 py-2 text-right font-medium">Thiếu</th>
+                <th className="border px-3 py-2 font-medium">Lấy từ kho</th>
               </tr>
             </thead>
             <tbody>
               {plan.allocations.map((a) => (
-                <tr key={a.sku} className="border-b last:border-0">
-                  <td className="py-2 pr-3 font-medium">
-                    {a.itemName}
-                    {a.sku === WATER_BOTTLE_SKU && (
-                      // Cỡ chai lấy từ hằng số dùng chung. Ghi tay "350 ml" ở đây từng
-                      // là chỗ duy nhất nói cỡ chai, nên đổi cỡ chai một nơi là màn hình
-                      // này nói một đằng còn phép tính chạy một nẻo.
-                      <span className="block text-xs font-normal text-[var(--text-muted)]">
-                        Cột Cần/Cấp/Thiếu tính theo CHAI {LIT_MOI_CHAI_NUOC.toLocaleString("vi")}{" "}
-                        lít · quy ra LÍT: cần {litTuChai(a.required).toLocaleString("vi")}, cấp được{" "}
-                        {litTuChai(a.allocated).toLocaleString("vi")}
-                      </span>
-                    )}
+                <tr key={a.sku}>
+                  <td className="border px-3 py-2 font-medium">{a.itemName}</td>
+                  {/* Đơn vị nằm NGAY TRONG ô số. Trước đây ba ô này là số trần,
+                      phải đọc một dòng chú thích riêng dưới tên vật tư mới biết đang
+                      đếm theo chai hay theo lít — mà dòng đó chỉ nói cho đúng hai ô
+                      Cần/Cấp, còn ô Thiếu thì người đọc tự suy. */}
+                  <td className="tabular whitespace-nowrap border px-3 py-2 text-right">
+                    {formatQuantity(a.required, a.unit)}
                   </td>
-                  <td className="tabular py-2 pr-3 text-right">{a.required}</td>
-                  <td className="tabular py-2 pr-3 text-right">{a.allocated}</td>
+                  <td className="tabular whitespace-nowrap border px-3 py-2 text-right">
+                    {formatQuantity(a.allocated, a.unit)}
+                  </td>
                   <td
-                    className="tabular py-2 pr-3 text-right font-semibold"
+                    className="tabular whitespace-nowrap border px-3 py-2 text-right font-semibold"
                     style={{
                       color: a.shortage > 0 ? "var(--color-critical)" : "var(--color-ready)",
                     }}
                   >
-                    {a.shortage > 0 ? a.shortage : "—"}
+                    {a.shortage > 0 ? formatQuantity(a.shortage, a.unit) : "—"}
                   </td>
-                  <td className="py-2 text-xs text-[var(--text-muted)]">
+                  <td className="border px-3 py-2 text-xs text-[var(--text-muted)]">
                     {a.fromWarehouses.join(", ") || "—"}
                   </td>
                 </tr>
@@ -186,14 +225,20 @@ export function ActionPlanView({
         </div>
       </Panel>
 
-      {/* Mục tiêu + điều phối kho trong một khối: mục tiêu nói phải đạt được gì
-          trong 6 giờ đầu, danh sách kho nói lấy hàng ở đâu và mất bao lâu để tới.
-          Đọc rời hai khối thì phải nhớ vế này để hiểu vế kia; ghép lại còn lấp
-          được khoảng trống bên trái khung bản đồ vuông. */}
-      {(plan.warehouses.length > 0 || plan.narrative.objectives.length > 0) && (
+      {/* Khối điều phối kho: đi kho nào, xa bao nhiêu, lấy những gì.
+          Tên khối nói đúng ba thứ nằm trong nó. Trước đây khối này còn gánh thêm
+          danh sách "Mục tiêu 6 giờ đầu" do AI viết, nên tiêu đề phải ghép hai vế
+          chẳng liên quan nhau — người đọc lướt tiêu đề không biết mở ra sẽ thấy
+          việc điều phối hay thấy một đoạn văn. */}
+      {plan.warehouses.length > 0 && (
         <Panel
+          // Cùng mốc với khối cấp phát. Khối này còn nặng nhất trang vì kèm bản đồ,
+          // nên mở sẵn sau khi phát hành là đẩy khối SKU ngay dưới nó ra khỏi tầm mắt
+          // — đúng khối mà kho cần bấm. Cần xem lại tuyến thì mở ra, một cú bấm.
+          key={atWarehouseStep ? "da-phat-hanh-dieu-phoi" : "con-nhap-dieu-phoi"}
+          defaultOpen={!atWarehouseStep}
           icon={<ColorIcon name="location" size={19} tone="blue" />}
-          title="Mục tiêu 6 giờ đầu và điều phối kho"
+          title="Điều phối kho: quãng đường và vật tư cần lấy"
         >
           {/* Danh sách kho bên trái, bản đồ bên phải.
               Xếp bản đồ nằm dưới thì nó chiếm trọn bề ngang, mà khung vuông nên
@@ -202,61 +247,18 @@ export function ActionPlanView({
               kho cùng lúc, đúng cặp thông tin người dùng đang so. */}
           <div className={incidentPoint ? "grid gap-4 lg:grid-cols-2" : undefined}>
             <div className="min-w-0">
-              {plan.narrative.objectives.length > 0 && (
-                <>
-                  <h4 className="flex items-center gap-2 text-sm font-semibold">
-                    <ColorIcon name="target" size={17} tone="blue" />
-                    Mục tiêu 6 giờ đầu
-                  </h4>
-                  <ol className="mb-4 mt-2 space-y-2">
-                    {plan.narrative.objectives.map((o, i) => (
-                      <li key={i} className="flex gap-3 text-sm">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-xs font-bold text-[var(--color-accent-fg)]">
-                          {i + 1}
-                        </span>
-                        <span>{o}</span>
-                      </li>
-                    ))}
-                  </ol>
-                </>
-              )}
-              {plan.warehouses.length > 0 && (
-                <h4 className="mb-2 text-sm font-semibold">
-                  Kho tham gia và thời gian tới điểm nạn
-                </h4>
-              )}
-              {/* auto-fill thay vì số cột cố định: cùng một danh sách phải vừa cột
-                  hẹp (khi có bản đồ bên cạnh) vừa cột rộng (khi không có), không
-                  phải đoán breakpoint cho từng trường hợp. */}
-              <div className="grid content-start gap-2 [grid-template-columns:repeat(auto-fill,minmax(170px,1fr))]">
-                {plan.warehouses.map((w) => (
-                  <div key={w.id} className="rounded-md border bg-[var(--surface-2)] p-3">
-                    <p className="text-sm font-medium">{w.name}</p>
-                    <p className="tabular mt-1 text-xs text-[var(--text-muted)]">
-                      {w.routeStatus === "ROUTED" && w.distanceKm != null
-                        ? `${w.distanceKm} km · ~${w.etaMinutes} phút`
-                        : `Chưa tính được tuyến (${w.routeStatus})`}
-                    </p>
-                    <ul className="mt-2 space-y-1 text-xs text-[var(--text-muted)]">
-                      {w.contributions.map((item) => (
-                        <li key={item.sku}>
-                          {item.itemName}: <b>{item.quantity.toLocaleString("vi")}</b> {item.unit}
-                          {item.sku === WATER_BOTTLE_SKU && (
-                            <span> ({litTuChai(item.quantity).toLocaleString("vi")} lít)</span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-              {/* Diễn giải bằng lời cho đúng bảng số ngay trên.
-                  Bảng thẻ cho biết kho nào góp gì, nhưng người điều hành còn cần
-                  biết ĐI THEO THỨ TỰ NÀO — thứ đó nằm ở cột quãng đường, phải tự
-                  so từng thẻ mới ra. Câu này nói thẳng ra, và là câu dựng từ chính
-                  số liệu đã tính chứ không phải AI viết thêm. */}
+              {/* MỘT danh sách duy nhất cho phần điều phối kho.
+                  Trước đây trên là lưới thẻ "Kho tham gia và thời gian tới điểm nạn",
+                  dưới là danh sách "Thứ tự lấy hàng" — hai khối kể đúng cùng một bộ
+                  số (tên kho, quãng đường, ETA, vật tư góp), chỉ khác cách xếp. Đọc
+                  hai lần cùng một thứ đã tốn màn hình, mà nguy hơn là chúng có thể
+                  nhìn như hai danh sách khác nhau khi số kho nhiều.
+
+                  Giữ lại bản CÓ THỨ TỰ vì nó nói thêm được điều lưới thẻ không nói:
+                  đi kho nào trước. Thứ tự đó nằm ở quãng đường, xem lưới thẻ thì
+                  phải tự so từng thẻ mới ra. */}
               {dispatchOrder.length > 0 && (
-                <div className="mt-3 rounded-md border border-dashed bg-[var(--surface-2)] p-3">
+                <div className="rounded-md border border-dashed bg-[var(--surface-2)] p-3">
                   <p className="text-sm font-semibold">Thứ tự lấy hàng (gần đến xa)</p>
                   <ol className="mt-2 space-y-2">
                     {dispatchOrder.map((stop, index) => (
@@ -264,7 +266,7 @@ export function ActionPlanView({
                         <span className="tabular w-5 shrink-0 text-right font-semibold text-[var(--text-muted)]">
                           {index + 1}.
                         </span>
-                        <span className="min-w-0">
+                        <div className="min-w-0">
                           <span className="font-medium">{stop.name}</span>
                           <span
                             className="tabular ml-2 text-xs"
@@ -279,10 +281,15 @@ export function ActionPlanView({
                               {stop.note}
                             </span>
                           ) : null}
-                          <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
-                            {stop.items}
-                          </span>
-                        </span>
+                          <ul className="mt-1 space-y-0.5 text-xs text-[var(--text-muted)]">
+                            {stop.items.map((item, i) => (
+                              <li key={i} className="flex gap-1.5">
+                                <span aria-hidden="true">–</span>
+                                <span>{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
                       </li>
                     ))}
                   </ol>
@@ -290,43 +297,44 @@ export function ActionPlanView({
               )}
             </div>
             {incidentPoint ? (
-              <IncidentMap warehouses={plan.warehouses} incidentPoint={incidentPoint} />
+              /* Bản đồ cao bằng đúng cột bên trái.
+                 Khung vuông mặc định lấy chiều cao từ BỀ NGANG cột, nên nó chẳng
+                 liên quan gì tới cột bên cạnh: danh sách dài thì bản đồ hụt một
+                 khoảng trống ở đáy, danh sách ngắn thì bản đồ thò ra. Ô lưới vốn
+                 đã được kéo cao bằng hàng, chỉ cần cho nó thành cột flex rồi để
+                 khung bản đồ ăn hết phần còn lại sau chú giải.
+
+                 `min-h` giữ sàn cho ca danh sách chỉ có một kho — lúc đó bản đồ
+                 co theo sẽ thấp tới mức không đọc được tuyến nào. */
+              <IncidentMap
+                warehouses={plan.warehouses}
+                incidentPoint={incidentPoint}
+                className="flex h-full flex-col gap-2"
+                frameClassName="relative isolate min-h-[320px] w-full flex-1 overflow-hidden rounded-md border"
+              />
             ) : null}
           </div>
         </Panel>
       )}
 
-      {/* 5. Phương án theo giai đoạn */}
-      <Panel
-        icon={<ColorIcon name="time" size={19} tone="amber" />}
-        title="Phương án theo giai đoạn"
-      >
-        <div className="space-y-3">
-          {plan.narrative.phases.map((ph) => (
-            <div key={ph.window} className="rounded-md border bg-[var(--surface-2)] p-3">
-              <div className="mb-2 inline-flex items-center gap-2 rounded-md bg-[var(--color-accent)] px-2.5 py-1 text-xs font-semibold text-[var(--color-accent-fg)]">
-                <ColorIcon name="time" size={15} tone="amber" />
-                {ph.window}
-              </div>
-              <ul className="space-y-1.5">
-                {ph.actions.map((a, i) => (
-                  <li key={i} className="flex gap-2 text-sm">
-                    <ColorIcon className="mt-0.5" name="success" size={17} tone="green" />
-                    <span>{a}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      </Panel>
+      {/* 4. Chuẩn bị vật tư theo SKU — việc của kho, đứng ngay dưới bảng điều phối
+          kho vì nó chính là danh sách trong bảng đó chờ người bấm xuất. Khối do
+          `mission-view` dựng và truyền xuống: nó cần các mutation và quyền của
+          trang, còn ở đây chỉ quyết định NÓ ĐỨNG ĐÂU. */}
+      {warehouseSlot}
 
-      {/* 6 + 7. Cảnh báo + Dự báo (2 cột) */}
+      {/* 6 + 7. Cảnh báo + Dự báo (2 cột)
+
+          Hai khối này THU GỌN SẴN. Chúng là phần tham khảo — cảnh báo ghi rõ "chỉ
+          tham khảo", dự báo là xác suất — trong khi thứ quyết định việc duyệt nằm ở
+          các khối trên. Mở sẵn thì chúng đẩy nút duyệt xuống thêm gần một màn hình,
+          mà người trực phần lớn thời gian không cần tới. */}
       <div className="grid gap-4 md:grid-cols-2">
         <Panel
           icon={<ColorIcon name="warning" size={19} tone="red" />}
-          title="Cảnh báo"
+          title="Cảnh báo (chỉ tham khảo)"
           tone="var(--color-degraded)"
+          defaultOpen={false}
         >
           <ul className="space-y-2">
             {plan.narrative.warnings.map((w, i) => (
@@ -338,7 +346,11 @@ export function ActionPlanView({
           </ul>
         </Panel>
 
-        <Panel icon={<ColorIcon name="trendUp" size={19} tone="green" />} title="Dự báo">
+        <Panel
+          icon={<ColorIcon name="trendUp" size={19} tone="green" />}
+          title="Dự báo"
+          defaultOpen={false}
+        >
           <div className="space-y-3">
             {plan.forecasts.map((f) => (
               <div key={f.label}>
@@ -361,17 +373,6 @@ export function ActionPlanView({
           </div>
         </Panel>
       </div>
-
-      {/* 8. Câu hỏi bổ sung */}
-      <Panel icon={<ColorIcon name="help" size={19} tone="blue" />} title="Thông tin cần bổ sung">
-        <div className="flex flex-wrap gap-2">
-          {plan.narrative.followUpQuestions.map((q, i) => (
-            <span key={i} className="rounded-md border bg-[var(--surface-2)] px-3 py-1.5 text-sm">
-              {q}
-            </span>
-          ))}
-        </div>
-      </Panel>
     </div>
   );
 }
@@ -385,11 +386,14 @@ function Panel({
   icon,
   title,
   tone,
+  defaultOpen,
   children,
 }: {
   icon: React.ReactNode;
   title: string;
   tone?: string;
+  /** Bỏ trống là mở sẵn; đặt false cho khối chỉ xem khi cần. */
+  defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -398,6 +402,7 @@ function Panel({
       icon={icon}
       title={title}
       tone={tone}
+      defaultOpen={defaultOpen}
     >
       {children}
     </CollapsiblePanel>

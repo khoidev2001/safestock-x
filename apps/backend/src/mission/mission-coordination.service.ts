@@ -135,7 +135,7 @@ export class MissionCoordinationService {
         entityId: String(created.id),
         warehouseId: (await this.getMissionWarehouseId(missionId)) ?? undefined,
         correlationId: payload.requestId.trim(),
-        reason: "Lực lượng hiện trường đã xác nhận nội dung cập nhật",
+        reason: "Đội cứu hộ đã xác nhận nội dung cập nhật",
         metadata: {
           inputMode: payload.inputMode,
           confirmedTextLength: payload.confirmedText.trim().length,
@@ -214,7 +214,7 @@ export class MissionCoordinationService {
       entity: "MissionFieldUpdate",
       entityId: fieldUpdate.id,
       warehouseId: (await this.getMissionWarehouseId(missionId)) ?? undefined,
-      reason: "AI gắn nhãn evidence hiện trường để ADMIN xem xét",
+      reason: "AI gắn nhãn bằng chứng hiện trường để ADMIN xem xét",
       metadata: {
         kind: intent.kind,
         confidence: intent.confidence,
@@ -313,7 +313,7 @@ export class MissionCoordinationService {
       entityId: String(created.id),
       warehouseId: (await this.getMissionWarehouseId(missionId)) ?? undefined,
       correlationId: input.requestId?.trim(),
-      reason: "Lưu snapshot phân tích để truy vết phương án do con người xem xét",
+      reason: "Lưu bản chụp phân tích để truy vết phương án do con người xem xét",
       metadata: {
         kind: input.kind,
         fingerprint: input.fingerprint.trim(),

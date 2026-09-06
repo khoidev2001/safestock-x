@@ -18,7 +18,7 @@ chứng, trạng thái là **No-go tạm thời**, không phải Pass.
 ## 1. Phạm vi trình diễn đã chốt
 
 - Một tenant Đồng Xuân; kho trung tâm và kho thôn thuộc cùng tenant.
-- Bốn vai trò: REPORTER, ADMIN, WAREHOUSE, **Lực lượng hiện trường**
+- Bốn vai trò: REPORTER, ADMIN, WAREHOUSE, **Đội cứu hộ**
   (`RESCUE`). Không có phân công đội/cá nhân tự động.
 - Digital Twin chỉ áp dụng kho trung tâm. Simulator desktop tạo snapshot JSON
   mô phỏng sau nút **Xác nhận**; không tuyên bố đã kết nối cảm biến IoT thật.
@@ -113,7 +113,7 @@ Không tắt audit hoặc bỏ qua test để lấy trạng thái xanh.
 | 1:30–2:40 | ADMIN trên web | Mở phân tích AI/provenance, tạo Mission-to-Kit và xem allocation/readiness/thiếu hụt. |
 | 2:40–3:30 | ADMIN trên web | Mở What-if, so baseline/delta; nguồn ngoài xã nếu xuất hiện phải có nhãn chưa xác nhận. |
 | 3:30–4:30 | WAREHOUSE trên web | Mở inbox, prepare/fulfill đúng phần kho của mình. |
-| 4:30–5:20 | Lực lượng hiện trường trên APK | Mở mission từ notification/inbox ở chế độ CHỈ ĐỌC (không đổi trạng thái nhiệm vụ); gửi field update text/voice rồi xác nhận trước khi gửi. |
+| 4:30–5:20 | Đội cứu hộ trên APK | Mở mission từ notification/inbox ở chế độ CHỈ ĐỌC (không đổi trạng thái nhiệm vụ); gửi field update text/voice rồi xác nhận trước khi gửi. |
 | 5:20–6:20 | ADMIN trên web | Xem timeline, audit, readiness trước/sau và state cuối. |
 | 6:20–7:00 | Cả nhóm | F5 hoặc mở tab mới ở web, restart APK, xác nhận state/mission vẫn tìm lại được. |
 

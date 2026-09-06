@@ -1,7 +1,7 @@
 /**
  * Suy diễn thông tin "nắm bắt nhanh" cho Lực lượng hiện trường từ dữ liệu thật của backend.
  * Không gọi API — chỉ map/tô màu để làm nổi bật 3 thứ quan trọng nhất:
- * loại thiên tai · mức nguy hiểm · số người gặp nạn.
+ * loại thiên tai · độ gấp của việc cứu · số người gặp nạn.
  */
 
 export interface DisasterMeta {
@@ -31,6 +31,18 @@ export type DangerLevel = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
 
 export interface DangerMeta {
   level: DangerLevel;
+  /**
+   * Nhãn hiển thị: mức nguy của hiện trường, nói bằng giọng cứu hộ.
+   *
+   * Nhiệm vụ đã tới tay đội cứu hộ nghĩa là đã chốt phải đi cứu; thứ họ còn phải
+   * quyết là đi ngay hay đi sau khi xong chỗ đang nguy hơn. Nhãn kiểu
+   * "CẢNH BÁO"/"THEO DÕI" trả lời sai câu hỏi đó — nó nghe như được phép đứng
+   * nhìn thêm.
+   *
+   * Nhưng nhãn cũng KHÔNG được xếp hạng mạng người. Ba mức đầu là lời giục đi
+   * nhanh tới đâu, mức cuối tả tình hình chưa nguy tới tính mạng — không mức nào
+   * nói nhiệm vụ này kém quan trọng hơn nhiệm vụ kia.
+   */
   label: string;
   /** Màu chữ badge tương phản trên nền sáng. */
   color: string;
@@ -43,7 +55,7 @@ export interface DangerMeta {
 }
 
 /**
- * Chấm mức nguy hiểm từ loại thiên tai + số người gặp nạn.
+ * Chấm độ gấp của việc cứu từ loại thiên tai + số người gặp nạn.
  * Thang này là tín hiệu trực quan cho Lực lượng hiện trường, không phải kết luận của backend.
  */
 export function assessDanger(type: string, people: number): DangerMeta {
@@ -68,7 +80,7 @@ export function assessDanger(type: string, people: number): DangerMeta {
 const DANGER: Record<DangerLevel, DangerMeta> = {
   CRITICAL: {
     level: "CRITICAL",
-    label: "KHẨN CẤP",
+    label: "CỨU NGAY",
     color: "#B42318",
     bg: "rgba(239,68,68,0.16)",
     stripe: "#ef4444",
@@ -76,7 +88,7 @@ const DANGER: Record<DangerLevel, DangerMeta> = {
   },
   HIGH: {
     level: "HIGH",
-    label: "NGUY HIỂM",
+    label: "CỨU GẤP",
     color: "#B54708",
     bg: "rgba(249,115,22,0.16)",
     stripe: "#f97316",
@@ -84,15 +96,24 @@ const DANGER: Record<DangerLevel, DangerMeta> = {
   },
   MEDIUM: {
     level: "MEDIUM",
-    label: "CẢNH BÁO",
+    label: "CỨU SỚM",
     color: "#9A6700",
     bg: "rgba(245,158,11,0.16)",
     stripe: "#f59e0b",
     dangerous: false,
   },
   LOW: {
+    // Mức thấp nhất nói về TÌNH HÌNH, không về thứ tự người được cứu.
+    //
+    // "CỨU THEO LỊCH" thì vô nghĩa — hệ thống không có cái lịch nào để tra. Còn
+    // "CỨU SAU" thì tệ hơn: nó xếp hạng mạng người, đọc ra thành "chỗ này để
+    // đấy đã". Không nhiệm vụ nào ở đây là việc phụ; khác nhau chỉ là hiện
+    // trường đang nguy tới đâu.
+    //
+    // "CHƯA NGUY CẤP" nói đúng thứ ba mức trên nói, ở thể phủ định: chưa có ai
+    // đang trong tình thế nguy tới tính mạng. Vẫn đi cứu, chỉ là chưa phải chạy.
     level: "LOW",
-    label: "THEO DÕI",
+    label: "CHƯA NGUY CẤP",
     color: "#167A3D",
     bg: "rgba(34,197,94,0.16)",
     stripe: "#22c55e",

@@ -64,6 +64,7 @@ interface NotificationPersistence {
   mission: {
     findUnique(args: Record<string, unknown>): Promise<{
       warehouse: { organizationId: string };
+      missionNo?: number | null;
       incidentType?: string;
       affectedPeople?: number;
       location?: string | null;
@@ -208,16 +209,11 @@ export class NotificationService {
    * nội dung một thông báo đã gửi đi.
    */
   private async resolveIncidentContext(input: CreateNotification) {
-    // Xét CÓ NHẮC TỚI hay không, chứ không xét giá trị khác null: người gửi
-    // truyền thẳng `incidentType: null` là đang nói "thông báo này không gắn
-    // tình huống nào" — như báo cáo thô của trưởng thôn, nơi nhiệm vụ mới chỉ là
-    // chỗ trống (OTHER, 0 người). Đọc đè bằng số của nhiệm vụ lúc đó là dựng ra
-    // một con số không ai báo.
-    const daNoi = "incidentType" in input || "affectedPeople" in input || "locationName" in input;
-    if (daNoi || !input.missionId) return {};
+    if (!input.missionId) return {};
     const mission = await this.db.mission.findUnique({
       where: { id: input.missionId },
       select: {
+        missionNo: true,
         incidentType: true,
         affectedPeople: true,
         location: true,
@@ -226,7 +222,27 @@ export class NotificationService {
       },
     });
     if (!mission) return {};
+
+    // Số hiệu chép LUÔN, không qua cổng `alreadyDescribed` bên dưới.
+    //
+    // Nó là DANH TÍNH của nhiệm vụ, không phải một con số mô tả tình huống: người
+    // trực gọi nhau bằng "nhiệm vụ số 127" ngay cả khi báo cáo còn thô, chưa có
+    // loại thiên tai lẫn số người. Chặn nó cùng nhóm kia là những thông báo cần
+    // danh tính nhất — báo cáo mới từ hiện trường — lại là những thông báo không
+    // có số hiệu.
+    const missionNo = { missionNo: mission.missionNo ?? null };
+
+    // Xét CÓ NHẮC TỚI hay không, chứ không xét giá trị khác null: người gửi
+    // truyền thẳng `incidentType: null` là đang nói "thông báo này không gắn
+    // tình huống nào" — như báo cáo thô của trưởng thôn, nơi nhiệm vụ mới chỉ là
+    // chỗ trống (OTHER, 0 người). Đọc đè bằng số của nhiệm vụ lúc đó là dựng ra
+    // một con số không ai báo.
+    const alreadyDescribed =
+      "incidentType" in input || "affectedPeople" in input || "locationName" in input;
+    if (alreadyDescribed) return missionNo;
+
     return {
+      ...missionNo,
       incidentType: mission.incidentType ?? null,
       affectedPeople: mission.affectedPeople ?? null,
       locationName: mission.hamletName ?? mission.location ?? null,

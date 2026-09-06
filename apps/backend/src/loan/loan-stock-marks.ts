@@ -35,14 +35,14 @@ export interface StockMark {
  * hàng nào rời chỗ, đưa vào là bịa ra một khoản nợ chưa tồn tại.
  */
 export function stockMarksFromLoans(loans: LoanLike[]): StockMark[] {
-  const theoSku = new Map<string, StockMark>();
+  const bySku = new Map<string, StockMark>();
 
   for (const loan of loans) {
     if (loan.status !== "ACTIVE" && loan.status !== "PARTIALLY_RETURNED") continue;
-    const conNo = Math.max(0, loan.quantity - loan.returnedQuantity);
-    if (conNo === 0) continue;
+    const outstanding = Math.max(0, loan.quantity - loan.returnedQuantity);
+    if (outstanding === 0) continue;
 
-    const mark = theoSku.get(loan.itemSku) ?? {
+    const mark = bySku.get(loan.itemSku) ?? {
       itemSku: loan.itemSku,
       itemName: loan.itemName,
       unit: loan.unit,
@@ -50,11 +50,11 @@ export function stockMarksFromLoans(loans: LoanLike[]): StockMark[] {
       borrowedIn: 0,
       peers: [],
     };
-    if (loan.direction === "OUTGOING") mark.lentOut += conNo;
-    else mark.borrowedIn += conNo;
+    if (loan.direction === "OUTGOING") mark.lentOut += outstanding;
+    else mark.borrowedIn += outstanding;
     if (!mark.peers.includes(loan.peerCommuneName)) mark.peers.push(loan.peerCommuneName);
-    theoSku.set(loan.itemSku, mark);
+    bySku.set(loan.itemSku, mark);
   }
 
-  return [...theoSku.values()].sort((a, b) => a.itemName.localeCompare(b.itemName, "vi"));
+  return [...bySku.values()].sort((a, b) => a.itemName.localeCompare(b.itemName, "vi"));
 }

@@ -1,5 +1,6 @@
-import { useAuth } from "./auth-store";
-import { coTheConPhien, danhDauCoPhien, xoaDauPhien } from "./session-marker";
+import { useAuth, type AuthUser } from "./auth-store";
+import { maySessionExist, markSessionPresent, clearSessionMarker } from "./session-marker";
+import { askPeersForSession, publishSession, publishSignOut } from "./session-channel";
 
 function resolveApiBase(): string {
   const configuredBase = process.env.NEXT_PUBLIC_API_URL;
@@ -87,8 +88,31 @@ async function handle<T>(response: Response): Promise<T> {
   return data as T;
 }
 
-async function tryRefresh(): Promise<boolean> {
-  const { setAuth } = useAuth.getState();
+/**
+ * Lượt gia hạn đang chạy dở của TAB NÀY.
+ *
+ * Refresh token dùng một lần: bắn hai lượt gia hạn song song thì lượt sau chắc
+ * chắn hỏng và kéo cả phiên đi theo. Mà một trang thường gọi nhiều API cùng lúc,
+ * nên khi access token hết hạn là dính đúng cảnh đó. Ai tới sau thì đứng chờ kết
+ * quả của lượt đang chạy, không mở lượt mới.
+ */
+let refreshInFlight: Promise<boolean> | null = null;
+
+function tryRefresh(): Promise<boolean> {
+  refreshInFlight ??= requestRefresh().finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
+}
+
+/** Nhận một phiên (tự gia hạn hoặc xin từ tab khác) vào bộ nhớ của tab này. */
+export function adoptSharedSession(token: string, user: AuthUser): void {
+  useAuth.getState().setAuth(token, user);
+  markSessionPresent();
+}
+
+async function requestRefresh(): Promise<boolean> {
+  const previousToken = useAuth.getState().token;
 
   try {
     const response = await fetch(`${BASE}/api/auth/refresh`, {
@@ -100,15 +124,23 @@ async function tryRefresh(): Promise<boolean> {
       },
     });
     if (!response.ok) {
+      // Có thể chỉ là thua một cuộc đua: tab khác vừa xoay refresh token xong và
+      // đang cầm token mới. Hỏi trước khi kết luận là hết phiên.
+      const peer = await askPeersForSession();
+      if (peer && peer.token !== previousToken) {
+        adoptSharedSession(peer.token, peer.user);
+        return true;
+      }
       // Cookie đã hết hạn hoặc bị thu hồi: xoá dấu để lần mở trang sau không gọi
       // lại một lượt chắc chắn hỏng nữa.
-      xoaDauPhien();
+      clearSessionMarker();
       return false;
     }
 
     const data = await response.json();
-    setAuth(data.accessToken, data.user);
-    danhDauCoPhien();
+    adoptSharedSession(data.accessToken, data.user);
+    // Chia cho các tab khác luôn, để không tab nào phải tự đi xoay token lần nữa.
+    publishSession(data.accessToken, data.user);
     return true;
   } catch {
     return false;
@@ -118,7 +150,17 @@ async function tryRefresh(): Promise<boolean> {
 export async function restoreWebSession(): Promise<boolean> {
   // Chưa từng đăng nhập trên máy này thì không có gì để khôi phục. Gọi vẫn chỉ
   // nhận 401, mà lại in một dòng đỏ trong Console làm người xem tưởng app hỏng.
-  if (!coTheConPhien()) return false;
+  if (!maySessionExist()) return false;
+
+  // Tab khác đang mở và còn phiên thì xin dùng chung: nhanh hơn một vòng mạng, và
+  // quan trọng hơn là không xoay refresh token — mở tab thứ hai không được phép
+  // làm phiền tab thứ nhất.
+  const peer = await askPeersForSession();
+  if (peer) {
+    adoptSharedSession(peer.token, peer.user);
+    return true;
+  }
+
   return tryRefresh();
 }
 
@@ -132,7 +174,10 @@ export async function closeWebSession(): Promise<void> {
     });
   } finally {
     useAuth.getState().clear();
-    xoaDauPhien();
+    clearSessionMarker();
+    // Đăng xuất là ý muốn của người dùng, không phải sự cố của riêng tab này:
+    // các tab còn lại phải ra theo, chứ không ngồi lại với một token đã bị thu hồi.
+    publishSignOut();
   }
 }
 

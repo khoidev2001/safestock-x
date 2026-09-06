@@ -1,5 +1,6 @@
 import { Type } from "class-transformer";
 import {
+  ArrayMaxSize,
   Equals,
   IsEnum,
   IsISO8601,
@@ -16,6 +17,7 @@ import {
   ValidateNested,
 } from "class-validator";
 import { DeliveryOutcome } from "@prisma/client";
+import { MAX_DELIVERY_PHOTOS } from "./delivery-photos";
 import { IncidentType } from "@safestock/shared-types";
 
 /** Nhập tình huống bằng text (voice ở UI → text → gọi endpoint này). */
@@ -50,7 +52,22 @@ export class AdminNoteDto {
   note?: string;
 }
 
-/** Lực lượng hiện trường xác nhận kết quả giao (READY → COMPLETED) — kèm ghi chú tuỳ chọn. */
+/** Một ảnh bằng chứng gửi kèm lúc báo kết quả: base64 thuần hoặc data URL. */
+export class DeliveryPhotoDto {
+  @IsString()
+  // Trần ký tự tính theo base64 của một ảnh 5MB (~4/3 lần) cộng phần đầu data URL.
+  // Chặn ở đây để thân quá khổ bị loại trước khi tốn công giải mã.
+  @MaxLength(7_000_000)
+  dataBase64!: string;
+}
+
+/**
+ * Lực lượng hiện trường xác nhận kết quả giao (READY → COMPLETED).
+ *
+ * Ghi chú VÀ ảnh đều tuỳ chọn. Người vừa lội nước về tới nơi có thể chẳng còn gì
+ * để kể thêm ngoài "đã giao xong" — bắt nhập cho đủ ô chỉ đẻ ra những dòng ghi
+ * chú vô nghĩa, trong khi thứ thật sự cần ghi nhận là nhiệm vụ đã đóng.
+ */
 export class CompleteMissionDto {
   @IsIn(Object.values(DeliveryOutcome))
   outcome!: DeliveryOutcome;
@@ -58,6 +75,12 @@ export class CompleteMissionDto {
   @IsOptional()
   @IsString()
   note?: string;
+
+  @IsOptional()
+  @ArrayMaxSize(MAX_DELIVERY_PHOTOS)
+  @ValidateNested({ each: true })
+  @Type(() => DeliveryPhotoDto)
+  photos?: DeliveryPhotoDto[];
 }
 
 export class WarehouseRequestNoteDto {
@@ -217,9 +240,21 @@ class IncidentCoordinatesDto {
  * (gõ tay hoặc voice→text). KHÔNG parse ở đây; admin mở tin trên web mới phân tích.
  */
 export class SubmitReportDto extends IncidentCoordinatesDto {
+  /**
+   * Lời kể bằng chữ. KHÔNG bắt buộc khi có `audioBase64`.
+   *
+   * Người đứng giữa vùng ngập, một tay cầm ô một tay cầm điện thoại, gõ được vài
+   * chữ là may. Bắt gõ tối thiểu năm ký tự trong khi họ đã nói xong cả đoạn vào
+   * micro là dựng thêm một rào chắn ngay lúc họ ít rảnh tay nhất — và cái rào ấy
+   * chỉ đẻ ra những báo cáo ghi "aaaaa" cho qua.
+   *
+   * Controller kiểm: phải có ÍT NHẤT một trong hai (chữ hoặc ghi âm).
+   */
+  @IsOptional()
   @IsString()
   @MinLength(5)
-  description!: string;
+  @MaxLength(5000)
+  description?: string;
 
   // Kho tiếp nhận (tuỳ chọn) — mặc định lấy theo scope trưởng thôn hoặc kho tổng xã.
   @IsOptional()
@@ -232,6 +267,33 @@ export class SubmitReportDto extends IncidentCoordinatesDto {
   @MinLength(1)
   @MaxLength(128)
   requestId?: string;
+
+  /**
+   * Bản ghi âm gửi kèm, base64 (KHÔNG có tiền tố `data:`).
+   *
+   * Tách hẳn khỏi đường `transcribe`: đường kia đổi giọng nói thành chữ rồi vứt
+   * file đi. Chữ nhận dạng ra có thể sai tên thôn, sai số người — mà đó đúng là
+   * hai thứ quyết định điều bao nhiêu xe đi đâu. Giữ lại file để người điều phối
+   * nghe thẳng lời người báo rồi tự điền.
+   *
+   * Trần 12MB base64 ≈ 9MB tệp: quá một phút WAV 16kHz mono thì đây không còn
+   * là lời kể hiện trường nữa, mà body parser cũng chỉ nhận tới 25MB.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(12_000_000)
+  audioBase64?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  audioMimeType?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(600_000)
+  audioDurationMs?: number;
 }
 
 /**

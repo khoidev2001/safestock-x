@@ -11,7 +11,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
  * gì đó nhấp nháy nhưng không kịp đọc, nên nó gây khó chịu chứ không trấn an
  * được ai. Thà giữ đủ một nhịp thở của dấu hiệu còn hơn.
  */
-const TOI_THIEU_MS = 420;
+const MIN_VISIBLE_MS = 420;
 
 /**
  * Chốt chặn cuối: dù có chuyện gì thì cũng không khoá giao diện quá chừng này.
@@ -21,14 +21,14 @@ const TOI_THIEU_MS = 420;
  * dựng trang — mà không có chốt này thì người dùng ngồi trước một màn hình
  * không bấm được gì và chỉ còn cách tải lại trang.
  */
-const TOI_DA_MS = 8000;
+const MAX_WAIT_MS = 8000;
 
 export interface TabTransition {
   /** Đang chờ trang đích dựng xong: khoá chuột và hiện khối chờ. */
-  dangChuyen: boolean;
+  isNavigating: boolean;
   /** Tab đang được chuyển tới — dùng để tô sáng đúng tab người dùng vừa bấm. */
-  dichDen: string | null;
-  chuyenTab: (path: string) => void;
+  destination: string | null;
+  goToTab: (path: string) => void;
 }
 
 /**
@@ -46,36 +46,36 @@ export interface TabTransition {
 export function useTabTransition(): TabTransition {
   const router = useRouter();
   const pathname = usePathname();
-  const [dichDen, setDichDen] = useState<string | null>(null);
+  const [destination, setDestination] = useState<string | null>(null);
   const [, startTransition] = useTransition();
-  const batDauLuc = useRef(0);
-  const roiTu = useRef<string | null>(null);
+  const startedAt = useRef(0);
+  const leftFrom = useRef<string | null>(null);
 
-  const chuyenTab = useCallback(
+  const goToTab = useCallback(
     (path: string) => {
       // Đang đứng sẵn ở đó thì không có gì để chờ; hiện khối chờ lúc này chỉ làm
       // trang nháy một cái rồi trả lại đúng nội dung cũ.
       if (path === pathname) return;
-      batDauLuc.current = Date.now();
-      roiTu.current = pathname;
-      setDichDen(path);
+      startedAt.current = Date.now();
+      leftFrom.current = pathname;
+      setDestination(path);
       startTransition(() => router.push(path));
     },
     [pathname, router],
   );
 
   useEffect(() => {
-    if (!dichDen || pathname === roiTu.current) return;
-    const conLai = Math.max(0, TOI_THIEU_MS - (Date.now() - batDauLuc.current));
-    const hen = setTimeout(() => setDichDen(null), conLai);
-    return () => clearTimeout(hen);
-  }, [pathname, dichDen]);
+    if (!destination || pathname === leftFrom.current) return;
+    const remaining = Math.max(0, MIN_VISIBLE_MS - (Date.now() - startedAt.current));
+    const timer = setTimeout(() => setDestination(null), remaining);
+    return () => clearTimeout(timer);
+  }, [pathname, destination]);
 
   useEffect(() => {
-    if (!dichDen) return;
-    const hen = setTimeout(() => setDichDen(null), TOI_DA_MS);
-    return () => clearTimeout(hen);
-  }, [dichDen]);
+    if (!destination) return;
+    const timer = setTimeout(() => setDestination(null), MAX_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [destination]);
 
-  return { dangChuyen: dichDen !== null, dichDen, chuyenTab };
+  return { isNavigating: destination !== null, destination, goToTab };
 }

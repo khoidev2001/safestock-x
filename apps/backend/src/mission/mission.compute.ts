@@ -12,6 +12,33 @@ export interface IncidentInput {
   medicalSupportCases: number;
 }
 
+/**
+ * Số người thuộc nhóm dễ tổn thương của một tình huống.
+ *
+ * KHÔNG phải phép cộng ba ô. Trẻ em, người già và ca y tế là ba lát cắt CHỒNG NHAU
+ * của cùng một đám người: một đứa trẻ đang cần hỗ trợ y tế được đếm ở cả ô "trẻ em"
+ * lẫn ô "ca y tế". Cộng thẳng thì một người bị tính hai ba lần, và con số vọt qua cả
+ * tổng số người gặp nạn — báo cáo 200 người mà đánh giá tình huống ghi "có 325 người
+ * thuộc nhóm dễ tổn thương" là ca có thật, không ai đọc mà tin được nữa.
+ *
+ * Không có dữ liệu nào nói ba nhóm chồng nhau bao nhiêu, nên chỉ chốt được hai đầu:
+ * - TRẦN là tổng số người gặp nạn — nhóm dễ tổn thương là tập con của đám người đó;
+ * - SÀN là nhóm đông nhất — nhóm ấy có thật, dù nó nằm gọn trong nhóm khác đi nữa.
+ *
+ * Sàn chỉ có tác dụng khi số liệu tự mâu thuẫn (một nhóm khai đông hơn cả tổng số
+ * người). Với số liệu nhất quán thì nhóm đông nhất luôn nhỏ hơn trần, nên công thức
+ * rút về đúng "cộng ba ô rồi cắt ở tổng số người".
+ */
+export function countVulnerablePeople(incident: IncidentInput): number {
+  const sum = incident.children + incident.elderly + incident.medicalSupportCases;
+  const largestGroup = Math.max(
+    incident.children,
+    incident.elderly,
+    incident.medicalSupportCases,
+  );
+  return Math.max(largestGroup, Math.min(sum, incident.affectedPeople));
+}
+
 /** Nhu cầu 1 loại vật tư. */
 export interface Requirement {
   sku: string;
@@ -126,6 +153,9 @@ export function overallFulfillment(allocations: Allocation[]): number {
 
 function basisValue(norm: NormRule, incident: IncidentInput, days: number): number {
   switch (norm.basis) {
+    // Đồ dùng chung của cả chuyến: hệ số chính là số lượng, không nhân với ai.
+    case "PER_MISSION":
+      return 1;
     case "PER_PERSON":
       return incident.affectedPeople;
     case "PER_ADULT":
@@ -149,9 +179,9 @@ function basisValue(norm: NormRule, incident: IncidentInput, days: number): numb
  * Không có distanceKm (tương thích cũ) coi như bằng nhau → chỉ FEFO.
  */
 function byNearestThenFefo(a: AvailableBatch, b: AvailableBatch): number {
-  const da = a.distanceKm ?? Number.POSITIVE_INFINITY;
-  const db = b.distanceKm ?? Number.POSITIVE_INFINITY;
-  if (da !== db) return da - db;
+  const distanceA = a.distanceKm ?? Number.POSITIVE_INFINITY;
+  const distanceB = b.distanceKm ?? Number.POSITIVE_INFINITY;
+  if (distanceA !== distanceB) return distanceA - distanceB;
   const expiry = byExpiryFefo(a, b);
   if (expiry !== 0) return expiry;
   return `${a.warehouseId ?? ""}:${a.batchId}`.localeCompare(`${b.warehouseId ?? ""}:${b.batchId}`);

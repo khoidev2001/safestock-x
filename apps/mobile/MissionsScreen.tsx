@@ -1,33 +1,23 @@
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { notify } from "./dialog";
-import {
-  completeMission,
-  fetchMissions,
-  type AuthUser,
-  type DeliveryOutcome,
-  type MissionDetail,
-} from "./api";
+import { disasterOf } from "./disaster";
+import { completeMission, fetchMissions, type AuthUser, type MissionDetail } from "./api";
 import {
   fieldForceActionsFor,
   isMissionOpen,
+  DELIVERY_OUTCOME_LABEL,
   missionStatusLabel,
   sortMissionsForFieldForce,
 } from "./mission-state";
 import { readOfflineCache, writeOfflineCache } from "./offline-cache";
 import { c, styles } from "./styles";
 
-const OUTCOME_LABEL: Record<DeliveryOutcome, string> = {
-  DELIVERED: "Giao đủ",
-  PARTIAL: "Giao một phần",
-  FAILED: "Không giao được",
-};
-
 /**
- * Danh sách lệnh của lực lượng hiện trường.
+ * Danh sách nhiệm vụ của lực lượng hiện trường.
  *
  * Đây là màn mở đầu sau khi đăng nhập: việc chính của họ là biết mình đang có
- * lệnh nào, chứ không phải đi tìm trong danh sách thông báo.
+ * nhiệm vụ nào, chứ không phải đi tìm trong danh sách thông báo.
  */
 export function MissionsScreen({
   token,
@@ -104,7 +94,7 @@ export function MissionsScreen({
   function askOutcome(missionId: string) {
     Alert.alert("Kết quả giao", "Chọn đúng tình hình thực tế tại điểm giao.", [
       {
-        text: OUTCOME_LABEL.DELIVERED,
+        text: DELIVERY_OUTCOME_LABEL.DELIVERED,
         onPress: () =>
           void runAction(
             missionId,
@@ -113,7 +103,7 @@ export function MissionsScreen({
           ),
       },
       {
-        text: OUTCOME_LABEL.PARTIAL,
+        text: DELIVERY_OUTCOME_LABEL.PARTIAL,
         onPress: () =>
           void runAction(
             missionId,
@@ -122,7 +112,7 @@ export function MissionsScreen({
           ),
       },
       {
-        text: OUTCOME_LABEL.FAILED,
+        text: DELIVERY_OUTCOME_LABEL.FAILED,
         onPress: () =>
           void runAction(
             missionId,
@@ -140,12 +130,12 @@ export function MissionsScreen({
         {/* Co lại được để không đè lên nút bên phải — xem ghi chú ở App.tsx. */}
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text numberOfLines={1} style={styles.title}>
-            Lệnh điều phối
+            Danh sách nhiệm vụ
           </Text>
           <Text numberOfLines={1} style={styles.subtitle}>
             {loading
               ? "Đang tải…"
-              : `${missions.filter((m) => isMissionOpen(m.status)).length} lệnh đang mở`}
+              : `${missions.filter((m) => isMissionOpen(m.status)).length} nhiệm vụ đang cần cứu hộ`}
           </Text>
         </View>
       </View>
@@ -173,19 +163,33 @@ export function MissionsScreen({
         }
       >
         {!loading && missions.length === 0 ? (
-          <Text style={local.empty}>Chưa có lệnh nào được giao cho đội.</Text>
+          <Text style={local.empty}>Chưa có nhiệm vụ nào được giao cho đội.</Text>
         ) : null}
 
         {missions.map((mission) => {
           const actions = offline ? [] : fieldForceActionsFor(mission.status);
           const busy = busyId === mission.id;
+          const disaster = disasterOf(mission.incidentType);
           return (
             <View key={mission.id} style={local.card}>
               <Pressable onPress={() => onOpenMission(mission.id)} accessibilityRole="button">
-                <Text style={local.cardTitle}>{mission.incidentType}</Text>
-                <Text style={local.cardMeta}>
-                  {mission.location ?? "Chưa ghi địa điểm"} · {mission.affectedPeople} người
-                </Text>
+                {/* Số hiệu đứng trên cùng. Đội đi hiện trường nhận lệnh qua bộ đàm
+                    và điện thoại, ở đó việc chỉ có một cái tên: "nhiệm vụ số 127".
+                    Không có số trên thẻ thì họ phải đối chiếu bằng tên thiên tai và
+                    số người — mà một đợt lũ sinh ra cả chục nhiệm vụ giống hệt nhau
+                    ở hai dữ kiện đó. */}
+                {mission.missionNo != null ? (
+                  <Text style={local.cardMissionNo}>Nhiệm vụ số {mission.missionNo}</Text>
+                ) : null}
+                <View style={local.cardTitleRow}>
+                  <Text numberOfLines={1} style={local.cardTitle}>
+                    {disaster.icon} {disaster.label}
+                  </Text>
+                  <Text numberOfLines={1} style={local.cardPeople}>
+                    {mission.affectedPeople} người gặp nạn
+                  </Text>
+                </View>
+                <Text style={local.cardMeta}>{missionPlaceLabel(mission)}</Text>
                 <View style={local.statusRow}>
                   <View
                     style={[
@@ -216,6 +220,23 @@ export function MissionsScreen({
   );
 }
 
+/**
+ * Địa điểm hiển thị trên card.
+ *
+ * Trưởng thôn ghim được toạ độ điểm gặp nạn ngay trong báo cáo; khi có ghim thì
+ * người đi hiện trường cần biết "đã có điểm để tới", chứ tên hành chính lúc đó
+ * không thêm thông tin gì. Không có ghim thì lùi về tên thôn — đó là mức định vị
+ * gần nhất còn lại.
+ */
+function missionPlaceLabel(mission: MissionDetail): string {
+  if (mission.incidentLat != null && mission.incidentLng != null) {
+    return "Địa điểm đã được định vị";
+  }
+  const hamlet = mission.hamletName?.trim();
+  if (hamlet) return `Thôn: ${hamlet}`;
+  return mission.location?.trim() || "Chưa ghi địa điểm";
+}
+
 const local = StyleSheet.create({
   list: { padding: 16, gap: 12, paddingBottom: 32 },
   card: {
@@ -226,8 +247,25 @@ const local = StyleSheet.create({
     padding: 14,
     gap: 8,
   },
-  cardTitle: { color: c.text, fontSize: 16, fontWeight: "700" },
-  cardMeta: { color: c.muted, fontSize: 13, marginTop: 2 },
+  cardTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  cardMissionNo: {
+    color: c.muted,
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+    marginBottom: 2,
+  },
+  cardTitle: { color: c.text, fontSize: 16, fontWeight: "700", flexShrink: 1 },
+  // Số người gặp nạn là con số quyết định đi bao nhiêu xe, bao nhiêu người —
+  // đứng cùng hàng với tên thiên tai để đọc được cả hai trong một lần liếc.
+  cardPeople: { color: c.red, fontSize: 15, fontWeight: "800" },
+  cardMeta: { color: c.text, fontSize: 13, fontWeight: "600", marginTop: 2 },
   statusRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   statusText: { color: c.text, fontSize: 13, fontWeight: "600" },

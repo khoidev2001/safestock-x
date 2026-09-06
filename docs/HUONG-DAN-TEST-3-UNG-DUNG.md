@@ -40,9 +40,9 @@ Kiểm tra backend sống: `GET http://localhost:3100/api/health` phải trả
 
 | Tài khoản | Mật khẩu | Vai |
 |---|---|---|
-| `admin` | `admin123@` | Quản trị xã |
+| `superadmindongxuan` | `admin123` | Quản trị xã |
 | `staff` | `staff123` | Phụ trách kho trung tâm |
-| `rescue` | `rescue123` | Lực lượng hiện trường |
+| `rescue` | `rescue123` | Đội cứu hộ |
 | `{tênthôn}` | `truongthon123` | Phụ trách kho thôn — ví dụ `phuson@`, `longchau@`, `triemduc@` |
 
 Hệ thống chỉ còn **ba vai**. Vai "trưởng thôn" riêng đã bị bỏ: người giữ kho thôn
@@ -95,7 +95,7 @@ việc đối chiếu tồn và quyết định cho mượn thuộc người gi�
 
 ### 2.3. Desktop
 
-Đăng nhập bằng **`admin`** — chỉ vai này có quyền bơm số liệu mô phỏng. Đăng nhập
+Đăng nhập bằng **`superadmindongxuan`** — chỉ vai này có quyền bơm số liệu mô phỏng. Đăng nhập
 bằng `staff@` sẽ vào được nhưng không gửi được snapshot.
 
 ---
@@ -116,9 +116,9 @@ thống.
 gửi — hệ thống không tự gửi thẳng bản nhận dạng, vì máy nghe nhầm giữa mưa gió là
 chuyện bình thường.
 
-**Kiểm chéo:** đăng nhập `admin` trên web, vào **Sự cố**, thấy báo cáo vừa gửi.
+**Kiểm chéo:** đăng nhập `superadmindongxuan` trên web, vào **Sự cố**, thấy báo cáo vừa gửi.
 
-### Bước 2 — Xã lập và phát hành phương án *(web, tài khoản `admin`)*
+### Bước 2 — Xã lập và phát hành phương án *(web, tài khoản `superadmindongxuan`)*
 
 1. Vào **Điều phối cứu hộ**, mở báo cáo vừa nhận.
 2. Nhập thông tin sự việc (loại, số người, thời lượng) để AI đề xuất phương án.
@@ -191,7 +191,7 @@ chờ kiểm tra. Trộn hàng hỏng vào tồn tốt nghĩa là lần sau cấ
 #### Kiểm kê tháng
 
 1. `staff@` vào **Kiểm kê**, lập phiếu, nhập số đếm **theo từng lô**, gửi.
-2. `admin` vào **Báo cáo tháng**, duyệt.
+2. `superadmindongxuan` vào **Báo cáo tháng**, duyệt.
 
 **Kỳ vọng:** khi một mã có nhiều lô, báo cáo **phải ghi rõ đếm được ở lô nào** —
 hệ thống từ chối số tổng. Đoán hộ ở đây là đoán hộ hạn dùng của hàng cứu trợ.
@@ -241,7 +241,7 @@ chỉ thấy hàng trên kệ.
 
 ### 4.3. Desktop — cảm biến và chuông
 
-Đăng nhập `admin`, host `localhost:3100`.
+Đăng nhập `superadmindongxuan`, host `localhost:3100`.
 
 #### Chuông theo ngưỡng
 
@@ -354,7 +354,7 @@ không đụng dữ liệu mẫu.
 - [ ] Điện thoại đăng nhập được, badge **LIVE** sáng
 - [ ] Đã mở trước các màn định trình diễn để có bản lưu ngoại tuyến
 - [ ] **Chưa đăng xuất** trên điện thoại (đăng xuất xoá bản lưu)
-- [ ] Desktop đăng nhập `admin`, chuông kêu thử một lần rồi tắt
+- [ ] Desktop đăng nhập `superadmindongxuan`, chuông kêu thử một lần rồi tắt
 - [ ] Chạy trọn luồng mục 3 một lượt
 - [ ] Máy chạy backend đã cắm nguồn, tắt chế độ ngủ
 - [ ] Có sẵn 4G dự phòng cho máy chủ — mất Internet ở máy chủ là hỏng cả buổi

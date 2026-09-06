@@ -38,6 +38,7 @@ function makeService() {
     {} as never,
     {} as never,
     {} as never,
+    {} as never,
   );
   return { service, prisma, mission, missionRequirement, notifications };
 }
@@ -240,6 +241,7 @@ describe("MissionService organization scope", () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
     );
     return { service, prisma, mission, notifications };
   }
@@ -368,6 +370,7 @@ describe("MissionService reporter history", () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
     );
 
     await expect(service.listOwnReports("reporter-1", undefined, "cursor-1", 999)).resolves.toEqual(
@@ -405,6 +408,7 @@ describe("MissionService reporter history", () => {
     };
     const service = new MissionService(
       prisma as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,
@@ -481,6 +485,7 @@ describe("MissionService publish atomicity", () => {
       prisma as never,
       {} as never,
       notifications as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,

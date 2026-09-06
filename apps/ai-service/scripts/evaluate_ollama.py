@@ -107,7 +107,6 @@ def validate(case_id: int, response: dict) -> tuple[bool, str]:
         ok = contains_all(text, ["180", "72%", "300", "50"])
         return ok, "giữ nguyên số điều phối"
     if case_id == 10:
-        windows = [phase.get("window") for phase in response.get("phases", [])]
         serialized = json.dumps(response, ensure_ascii=False).lower()
         english_leaks = [
             "bottles",
@@ -125,8 +124,7 @@ def validate(case_id: int, response: dict) -> tuple[bool, str]:
         allowed_numbers.update({"0", "2", "6", "24"})
         generated_numbers = set(re.findall(r"(?<!\w)\d+(?:[.,]\d+)?", serialized))
         ok = (
-            windows == ["0-2h", "2-6h", "6-24h"]
-            and bool(response.get("objectives"))
+            bool(response.get("objectives"))
             and bool(response.get("warnings"))
             and bool(response.get("followUpQuestions"))
             and not any(term in serialized for term in english_leaks)

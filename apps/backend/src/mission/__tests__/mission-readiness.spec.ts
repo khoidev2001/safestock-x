@@ -50,3 +50,58 @@ describe("assessMissionReadiness", () => {
     expect(result.blockers[0].reasons).toContain("Lô hiện có nằm trên kệ bị khóa");
   });
 });
+
+describe("assessMissionReadiness — lý do cho loại thiếu MỘT PHẦN", () => {
+  const partiallyShort = [
+    {
+      sku: "LIFE-ADULT",
+      itemName: "Áo phao người lớn",
+      unit: "chiếc",
+      required: 100,
+      allocated: 13,
+      shortage: 87,
+      batches: [],
+    },
+  ];
+
+  it("giữ lại lý do đã tính thay vì vứt đi", () => {
+    // Ca thật đã lên màn hình: mười mấy kho đang có áo phao, phương án chỉ lấy được
+    // 13 cái, và người trực không được nói cho biết vì sao.
+    const assessment = assessMissionReadiness(
+      partiallyShort,
+      new Map([
+        [
+          "LIFE-ADULT",
+          ["Kho xã Đồng Xuân: còn 120 nhưng đã hứa 314 cho nhiệm vụ khác chưa xuất"],
+        ],
+      ]),
+    );
+
+    expect(assessment.blockers).toHaveLength(1);
+    expect(assessment.blockers[0].reasons[0]).toContain("đã hứa 314");
+  });
+
+  it("thiếu một phần vẫn ĐIỀU PHỐI ĐƯỢC — có lý do không có nghĩa là bị chặn", () => {
+    const assessment = assessMissionReadiness(partiallyShort);
+
+    expect(assessment.status).toBe("NEEDS_ACTION");
+  });
+
+  it("loại lấy được 0 xếp TRƯỚC, vì câu báo lỗi điều phối đọc blockers[0]", () => {
+    const assessment = assessMissionReadiness([
+      ...partiallyShort,
+      {
+        sku: "TORCH-01",
+        itemName: "Đèn pin",
+        unit: "chiếc",
+        required: 10,
+        allocated: 0,
+        shortage: 10,
+        batches: [],
+      },
+    ]);
+
+    expect(assessment.status).toBe("NOT_DISPATCHABLE");
+    expect(assessment.blockers[0].sku).toBe("TORCH-01");
+  });
+});

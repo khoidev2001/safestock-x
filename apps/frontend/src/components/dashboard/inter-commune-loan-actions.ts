@@ -12,8 +12,14 @@ export type InterCommuneStatus =
 export interface LoanAction {
   to: InterCommuneStatus;
   label: string;
-  /** Bước này có chuyển hàng nên phải chọn lô trước khi bấm. */
-  needsBatch: boolean;
+  /**
+   * Bước này có chuyển hàng thật, tức kho sẽ cộng hoặc trừ ngay khi bấm.
+   *
+   * KHÔNG còn dùng để bắt nhập mã lô — máy chủ tự chọn lô theo nguyên tắc hạn
+   * gần xuất trước. Giữ lại vì giao diện phải nói trước cho người bấm biết nút
+   * nào chỉ đổi trạng thái trên sổ và nút nào làm hàng rời kho.
+   */
+  movesStock: boolean;
   /** Nhập được số lượng trả từng phần. */
   needsQuantity?: boolean;
   tone: "primary" | "danger" | "neutral";
@@ -40,7 +46,7 @@ export function loanActions(
         {
           to: "PARTIALLY_RETURNED",
           label: direction === "OUTGOING" ? "Ghi nhận nhận lại" : "Ghi nhận đã trả",
-          needsBatch: true,
+          movesStock: true,
           needsQuantity: true,
           tone: "primary",
         },
@@ -49,35 +55,35 @@ export function loanActions(
     return [];
   }
 
-  const laBenChoMuon = direction === "OUTGOING";
+  const isLender = direction === "OUTGOING";
   switch (status) {
     case "REQUESTED":
-      return laBenChoMuon
+      return isLender
         ? [
-            { to: "APPROVED", label: "Đồng ý cho mượn", needsBatch: true, tone: "primary" },
-            { to: "REJECTED", label: "Từ chối", needsBatch: false, tone: "danger" },
+            { to: "APPROVED", label: "Đồng ý cho mượn", movesStock: true, tone: "primary" },
+            { to: "REJECTED", label: "Từ chối", movesStock: false, tone: "danger" },
           ]
-        : [{ to: "CANCELLED", label: "Huỷ yêu cầu", needsBatch: false, tone: "neutral" }];
+        : [{ to: "CANCELLED", label: "Huỷ yêu cầu", movesStock: false, tone: "neutral" }];
     case "APPROVED":
-      return laBenChoMuon
+      return isLender
         ? [
             {
               to: "CANCELLED",
               label: "Thu hồi, bên kia không nhận",
-              needsBatch: true,
+              movesStock: true,
               tone: "neutral",
             },
           ]
-        : [{ to: "ACTIVE", label: "Xác nhận đã nhận hàng", needsBatch: true, tone: "primary" }];
+        : [{ to: "ACTIVE", label: "Xác nhận đã nhận hàng", movesStock: true, tone: "primary" }];
     case "ACTIVE":
     case "PARTIALLY_RETURNED":
-      return laBenChoMuon
+      return isLender
         ? []
         : [
             {
               to: "PARTIALLY_RETURNED",
               label: "Ghi nhận đã trả",
-              needsBatch: true,
+              movesStock: true,
               needsQuantity: true,
               tone: "primary",
             },

@@ -355,10 +355,16 @@ export function DashboardScreen({
       ) : null}
       {error && snapshot ? <Text style={local.inlineError}>{error}</Text> : null}
 
+      {/* `flexGrow: 0` KHÔNG phải trang trí: ScrollView của react-native-web mặc
+          định là `flexGrow: 1`, nên hàng chip nằm trong màn hình `flex: 1` sẽ
+          phình ra chiếm hết chỗ trống theo chiều dọc. Cộng với `alignItems`
+          mặc định là `stretch`, mỗi chip cao bằng cả vùng đó — mà `borderRadius:
+          999` biến nó thành một hình bầu dục to bằng nửa màn hình. */}
       {user.role === "ADMIN" && warehouseOptions.length > 1 ? (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          style={local.chipScroller}
           contentContainerStyle={local.warehouseChips}
         >
           {warehouseOptions.map((warehouse) => (
@@ -454,10 +460,10 @@ function HomeDashboard({ snapshot }: { snapshot: DashboardSnapshot }) {
             {/* Mỗi câu một dòng, không phải một đoạn liền: bản tin gộp bốn mảng
                 vận hành (sẵn sàng, mưa, tồn kho, sự cố) nên đọc đoạn liền phải tự
                 dò câu nào nói chuyện gì. Cắt bằng hàm dùng chung với web. */}
-            {splitBriefingSentences(snapshot.briefing.narrative).map((cau) => (
-              <View key={cau} style={local.aiLine}>
+            {splitBriefingSentences(snapshot.briefing.narrative).map((sentence) => (
+              <View key={sentence} style={local.aiLine}>
                 <Text style={local.aiBullet}>–</Text>
-                <Text style={local.aiNarrative}>{cau}</Text>
+                <Text style={local.aiNarrative}>{sentence}</Text>
               </View>
             ))}
             {snapshot.briefing.priorities.slice(0, 3).map((priority) => (
@@ -760,7 +766,9 @@ const local = StyleSheet.create({
   offlineTitle: { color: c.amber, fontSize: 13, fontWeight: "800" },
   offlineText: { color: c.muted, fontSize: 12, marginTop: 3 },
   inlineError: { color: c.amber, fontSize: 12, marginBottom: 12 },
-  warehouseChips: { gap: 8, paddingBottom: 12 },
+  /** Xem ghi chú ở `InventoryScreen`: ScrollView web mặc định `flexGrow: 1`. */
+  chipScroller: { flexGrow: 0, flexShrink: 0 },
+  warehouseChips: { alignItems: "center", gap: 8, paddingBottom: 12 },
   warehouseChip: {
     borderWidth: 1,
     borderColor: c.border,

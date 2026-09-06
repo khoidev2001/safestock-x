@@ -153,7 +153,7 @@ Các file chính: `apps/ai-service/semantic.py`, `main.py`,
 ### Cập nhật 2026-07-29 sau review PR #13
 
 - Local tiếp tục là nền chính; không merge/pull toàn bộ PR #13.
-- `RESCUE`/Lực lượng hiện trường đã chuyển về đúng phạm vi chỉ đọc phương án,
+- `RESCUE`/Đội cứu hộ đã chuyển về đúng phạm vi chỉ đọc phương án,
   nhận thông báo và gửi cập nhật text/voice đã tự xác nhận. Public route/UI
   confirm, reject, defer, resend và complete không còn thuộc workflow mới.
 - Bản đồ dùng một bộ nhãn semantic có ưu tiên/chống va chạm cho kho, xã và POI;

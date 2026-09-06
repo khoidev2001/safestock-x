@@ -36,6 +36,27 @@ describe("validateEnv", () => {
     );
   });
 
+  it("MAIL_DEV_LOG_CODES sai kiểu boolean → ném lỗi thay vì âm thầm bỏ qua", () => {
+    expect(() => validateEnv({ ...valid, MAIL_DEV_LOG_CODES: "1" })).toThrow(
+      /MAIL_DEV_LOG_CODES/,
+    );
+  });
+
+  it("MAIL_DEV_LOG_CODES=true ở production → chặn ngay lúc boot", () => {
+    expect(() =>
+      validateEnv({
+        ...valid,
+        NODE_ENV: "production",
+        CORS_ALLOWED_ORIGINS: "https://ungphonhanh.life",
+        MAIL_DEV_LOG_CODES: "true",
+      }),
+    ).toThrow(/chỉ dùng khi phát triển/);
+  });
+
+  it("MAIL_DEV_LOG_CODES=true khi phát triển thì hợp lệ", () => {
+    expect(() => validateEnv({ ...valid, MAIL_DEV_LOG_CODES: "true" })).not.toThrow();
+  });
+
   it("gom nhiều lỗi cùng lúc", () => {
     expect(() => validateEnv({})).toThrow(
       /DATABASE_URL[\s\S]*JWT_ACCESS_SECRET[\s\S]*JWT_REFRESH_SECRET/,

@@ -83,31 +83,135 @@ model Organization {
 }
 
 model User {
-  id                      String                        @id @default(cuid())
-  organizationId          String
-  organization            Organization                  @relation(fields: [organizationId], references: [id])
-  email                   String                        @unique
-  passwordHash            String
-  fullName                String
-  phone                   String?
-  notificationEmail       String?
-  avatarUrl               String?
-  role                    UserRole                      @default(WAREHOUSE)
-  // Tăng khi đăng nhập, refresh hoặc logout để thu hồi toàn bộ JWT cũ của tài khoản.
-  tokenVersion            Int                           @default(0)
+  id                          String                        @id @default(cuid())
+  organizationId              String
+  organization                Organization                  @relation(fields: [organizationId], references: [id])
+  email                       String                        @unique
+  passwordHash                String
+  fullName                    String
+  phone                       String?
+  notificationEmail           String?
+  // Chỉ email đã xác minh bằng mã 6 số mới được nhận cảnh báo sự cố.
+  notificationEmailVerifiedAt DateTime?
+  avatarUrl                   String?
+  role                        UserRole                      @default(WAREHOUSE)
+  // Super admin = ADMIN kèm quyền quản trị tài khoản cấp cao. CỐ TÌNH không tách
+  // thành một giá trị UserRole mới: mọi tính năng còn lại phải giống hệt ADMIN
+  // (thông báo lọc theo recipientRole, ROLE_PERMISSIONS, luồng nhiệm vụ, app mobile),
+  // thêm role mới là super admin rơi ra khỏi tất cả những chỗ đó cùng một lúc.
+  isSuperAdmin                Boolean                       @default(false)
+  // GIỮ LẠI cho tương thích, KHÔNG còn dùng để xoay refresh token.
+  //
+  // Số xoay giờ nằm ở từng phiên (`UserSession.tokenVersion`). Đếm ở mức người
+  // dùng chỉ đúng khi mỗi người có duy nhất một thiết bị: web gia hạn phiên là
+  // refresh token của điện thoại chết theo, dù hai bên là hai phiên độc lập.
+  tokenVersion                Int                           @default(0)
+  // Số thứ tự PHIÊN — đòn bẩy "thu hồi TẤT CẢ", không phải "đăng nhập lần nữa".
+  //
+  // Chỉ tăng khi thật sự cần đá mọi thiết bị ra cùng lúc: đổi mật khẩu, đổi
+  // quyền, hoặc người dùng chủ động thoát khỏi mọi nơi. ĐĂNG NHẬP MỚI KHÔNG
+  // TĂNG SỐ NÀY — đăng nhập trên web không phải là lý do để đuổi cái điện thoại
+  // đang cầm trong tay ra ngoài, mà đó chính là chuyện đã xảy ra khi luồng đăng
+  // nhập còn tăng nó.
+  sessionVersion              Int                           @default(0)
   // Scope kho: null = phụ trách toàn xã (kho tổng); có giá trị = trưởng thôn CHỈ quản kho này.
-  warehouseId             String?
-  warehouse               Warehouse?                    @relation(fields: [warehouseId], references: [id])
-  createdAt               DateTime                      @default(now())
-  transactions            InventoryTransaction[]
-  reports                 MonthlyStockReport[]
-  missionPreparations     MissionWarehousePreparation[]
-  missionRequestsAccepted MissionWarehouseRequest[]     @relation("MissionWarehouseRequestAcceptedBy")
-  missionRequestsPrepared MissionWarehouseRequest[]     @relation("MissionWarehouseRequestPreparedBy")
-  missionRequestsPickedUp MissionWarehouseRequest[]     @relation("MissionWarehouseRequestPickedUpBy")
-  analysisSnapshots       MissionAnalysisSnapshot[]     @relation("MissionAnalysisActor")
-  fieldUpdates            MissionFieldUpdate[]          @relation("MissionFieldUpdateActor")
-  sensorSubmissions       SensorSubmission[]
+  warehouseId                 String?
+  warehouse                   Warehouse?                    @relation(fields: [warehouseId], references: [id])
+  createdAt                   DateTime                      @default(now())
+  transactions                InventoryTransaction[]
+  reports                     MonthlyStockReport[]
+  missionPreparations         MissionWarehousePreparation[]
+  missionRequestsAccepted     MissionWarehouseRequest[]     @relation("MissionWarehouseRequestAcceptedBy")
+  missionRequestsPrepared     MissionWarehouseRequest[]     @relation("MissionWarehouseRequestPreparedBy")
+  missionRequestsPickedUp     MissionWarehouseRequest[]     @relation("MissionWarehouseRequestPickedUpBy")
+  analysisSnapshots           MissionAnalysisSnapshot[]     @relation("MissionAnalysisActor")
+  missionsApproved            Mission[]                     @relation("MissionApprovedBy")
+  fieldUpdates                MissionFieldUpdate[]          @relation("MissionFieldUpdateActor")
+  sensorSubmissions           SensorSubmission[]
+  emailVerifications          EmailVerification[]
+  phoneVerifications          PhoneVerification[]
+  sessions                    UserSession[]
+}
+
+/// Một lần đăng nhập trên MỘT thiết bị. Web và điện thoại của cùng một người là
+/// hai dòng khác nhau, xoay refresh token độc lập.
+///
+/// Vì sao cần bảng riêng: xoay refresh token đòi một bộ đếm tăng dần để phát hiện
+/// token bị lấy cắp dùng lại. Bộ đếm ấy trước đây nằm trên chính người dùng, nên
+/// hai thiết bị dùng chung một bộ đếm và giành nhau — thiết bị nào gia hạn trước
+/// thì token của thiết bị kia thành cũ và bị chối. Mỗi phiên một bộ đếm thì cả
+/// hai cùng xoay được, mà tính chất "một refresh token chỉ dùng đúng một lần" vẫn
+/// còn nguyên trong phạm vi từng phiên.
+model UserSession {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Số xoay của RIÊNG phiên này.
+  tokenVersion Int       @default(0)
+  createdAt    DateTime  @default(now())
+  // Lượt gia hạn gần nhất — để biết phiên nào còn sống mà dọn phiên bỏ quên.
+  lastUsedAt   DateTime  @default(now())
+  // Thu hồi bằng cách ĐÁNH DẤU chứ không xoá dòng: còn đọc được là phiên này đã
+  // bị chấm dứt lúc nào, thay vì một khoảng trống không giải thích được.
+  revokedAt    DateTime?
+
+  @@index([userId])
+  @@index([userId, revokedAt])
+}
+
+// Mã 6 số dùng cho hai việc khác nhau, tách bằng `purpose` để mã xin cho việc này
+// không xác minh hộ được việc kia.
+enum EmailVerificationPurpose {
+  NOTIFICATION_EMAIL // email cảnh báo của chính người đang đăng nhập
+  ADMIN_ACCOUNT // email của tài khoản ADMIN mà super admin đang tạo
+  PASSWORD_RESET // đặt lại mật khẩu khi quên, gửi tới email đã xác minh của tài khoản
+}
+
+// Mã 6 số xác minh email cá nhân nhận cảnh báo. Lưu hash chứ không lưu mã trần:
+// đọc được DB vẫn không tự xác minh hộ được email của người khác.
+model EmailVerification {
+  id         String                   @id @default(cuid())
+  userId     String
+  user       User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email      String
+  purpose    EmailVerificationPurpose @default(NOTIFICATION_EMAIL)
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int                      @default(0)
+  consumedAt DateTime?
+  // Chỉ đóng dấu khi mã được nhập ĐÚNG. Khác consumedAt: mã bị thay bằng mã mới hoặc
+  // bị huỷ cũng có consumedAt. Hạn mức chống spam chỉ đếm mã KHÔNG có verifiedAt —
+  // xác minh trót lọt nghĩa là người nhận có thật, không phải hành vi cần chặn.
+  verifiedAt DateTime?
+  createdAt  DateTime                 @default(now())
+
+  @@index([userId, purpose, createdAt])
+}
+
+// Mã 6 số gửi tới SỐ ĐIỆN THOẠI, để chốt rằng số vừa nhập là số người dùng cầm máy.
+//
+// Bảng riêng chứ không dùng chung EmailVerification: cột ở đó tên là `email` và mọi chỗ
+// đọc nó đều hiểu là hộp thư. Nhét số điện thoại vào đấy thì mọi truy vấn sau này đều
+// phải nhớ "trừ trường hợp purpose là số điện thoại" — một cái bẫy đặt sẵn.
+//
+// Số điện thoại là thứ người trực gọi khi cần chi viện gấp. Số gõ nhầm một chữ trông y
+// hệt số đúng, và chỉ lộ ra vào đúng lúc không ai còn thời gian tra lại — nên số chỉ
+// được ghi vào hồ sơ sau khi mã gửi tới chính máy đó được nhập lại.
+model PhoneVerification {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Số đã chuẩn hoá (chỉ chữ số và dấu + đầu), đúng dạng đã gửi tin nhắn tới.
+  phone      String
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  consumedAt DateTime?
+  // Chỉ đóng dấu khi mã được nhập ĐÚNG — hạn mức chống spam chỉ đếm mã chưa xác minh.
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, createdAt])
 }
 
 enum WarehouseKind {
@@ -503,6 +607,13 @@ enum MissionWarehouseRequestStatus {
 // Nhiệm vụ cứu hộ — sinh từ tình huống, gồm nhu cầu + phương án phân bổ.
 model Mission {
   id                    String                        @id @default(cuid())
+  /// Số hiệu để người trực gọi tên nhiệm vụ với nhau ("nhiệm vụ số 12").
+  ///
+  /// `id` là cuid — đúng cho máy, nhưng không ai đọc qua điện thoại được. Số hiệu
+  /// lấy từ sequence của Postgres nên KHÔNG BAO GIỜ cấp lại số đã dùng: xoá nhiệm
+  /// vụ số 5 rồi tạo mới thì cái mới là số 6, không phải số 5. Đánh số lại theo vị
+  /// trí trong danh sách sẽ khiến hai người nói "số 5" mà chỉ hai việc khác nhau.
+  missionNo             Int                           @unique @default(autoincrement())
   warehouseId           String
   warehouse             Warehouse                     @relation("MissionSourceWarehouse", fields: [warehouseId], references: [id])
   incidentType          String
@@ -530,16 +641,73 @@ model Mission {
   createdByUserId       String?
   reportRequestId       String? // khóa retry do client gửi, chỉ có ý nghĩa trong scope người báo
   approvedByUserId      String?
+  /// Người bấm "Duyệt và phát hành". Một xã có nhiều quản trị viên cùng duyệt để
+  /// chia tải, nên phải truy được ai đã chốt phương án nào — người trực cần biết
+  /// gọi ai khi phải hỏi lại. Trước đây chỉ lưu id trần, không tra ra được tên.
+  approvedBy            User?                         @relation("MissionApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
   createdAt             DateTime                      @default(now())
   approvedAt            DateTime?
   requirements          MissionRequirement[]
   warehousePreparations MissionWarehousePreparation[]
   warehouseRequests     MissionWarehouseRequest[]
   analysisSnapshots     MissionAnalysisSnapshot[]
+  deliveryPhotos        MissionDeliveryPhoto[]
+  reportAudio           MissionReportAudio?
   fieldUpdates          MissionFieldUpdate[]
 
   @@unique([createdByUserId, reportRequestId])
   @@index([hamletId])
+}
+
+/// Ảnh bằng chứng lực lượng hiện trường gửi kèm lúc báo hoàn thành nhiệm vụ.
+///
+/// Bytes nằm ở Supabase Storage, bảng này chỉ giữ khoá vật thể. Ảnh là thứ NẶNG
+/// và KHÔNG BAO GIỜ được truy vấn theo nội dung, nên để trong Postgres là bắt mọi
+/// bản pg_dump hằng ngày phải cõng lại toàn bộ tập ảnh — một nhiệm vụ vài tấm,
+/// vài trăm nhiệm vụ là bản sao lưu phình lên hàng GB trong khi phần dữ liệu thật
+/// sự cần khôi phục nhanh chỉ vài chục MB.
+///
+/// `data` là đường lui cho máy chưa cấu hình SUPABASE_URL (máy dev, máy chấm thi
+/// chạy ngoại tuyến): thà nặng DB còn hơn mất tính năng vì thiếu một biến môi
+/// trường. Mỗi hàng chỉ có ĐÚNG MỘT trong hai.
+/// Bản ghi âm trưởng thôn gửi kèm báo cáo tình huống.
+///
+/// Vì sao BẢNG RIÊNG chứ không thêm cột vào `Mission`: hộp nhiệm vụ đọc mission
+/// theo lô, không chọn cột. Một cột bytes nằm trên `Mission` là mỗi lượt mở hộp
+/// thư kéo theo cả tập file ghi âm — kể cả lượt của người chỉ liếc trạng thái
+/// trên điện thoại giữa vùng sóng yếu. Giống hệt lý do `MissionDeliveryPhoto`
+/// đứng riêng.
+///
+/// MỘT báo cáo chỉ có MỘT bản ghi âm: đây là lời kể của người báo, không phải
+/// tập bằng chứng. Muốn nói thêm thì gửi báo cáo mới.
+model MissionReportAudio {
+  id         String   @id @default(cuid())
+  missionId  String   @unique
+  mission    Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  data       Bytes
+  /// Định dạng lấy từ máy khách nhưng đã lọc qua danh sách cho phép ở backend.
+  mimeType   String
+  byteSize   Int
+  /// Độ dài tính bằng mili giây, để hiện "0:42" trước khi tải file về nghe.
+  durationMs Int?
+  createdAt  DateTime @default(now())
+}
+
+model MissionDeliveryPhoto {
+  id               String   @id @default(cuid())
+  missionId        String
+  mission          Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  /// Khoá vật thể trên kho ảnh ngoài (Supabase Storage). Có giá trị này thì `data` rỗng.
+  storageKey       String?
+  /// Bytes lưu thẳng trong DB — chỉ dùng khi CHƯA cấu hình kho ảnh ngoài (máy dev).
+  data             Bytes?
+  /// Định dạng nhận diện từ byte đầu tệp lúc nhận, không lấy theo lời khai máy khách.
+  mimeType         String
+  byteSize         Int
+  uploadedByUserId String?
+  createdAt        DateTime @default(now())
+
+  @@index([missionId])
 }
 
 /// Immutable evidence of a human-reviewed coordination analysis. It captures
@@ -819,6 +987,16 @@ model Notification {
   organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   recipientRole  UserRole // gửi theo role (WAREHOUSE/RESCUE/ADMIN)
   missionId      String?
+  /// Số hiệu nhiệm vụ, chép lại tại thời điểm gửi.
+  ///
+  /// Người trực gọi nhau bằng "nhiệm vụ số 127", không ai đọc cuid qua điện thoại.
+  /// Thẻ thông báo phải nói được số đó thì người nhận mới biết tin này thuộc việc
+  /// nào trong mấy việc đang chạy cùng lúc.
+  ///
+  /// Chép lại chứ không đọc ngược sang Mission lúc hiện thẻ: mỗi thẻ sẽ là một
+  /// lượt gọi mạng, và thông báo của nhiệm vụ đã xoá sẽ mất luôn danh tính. Cùng
+  /// lý do với `incidentType` / `affectedPeople` ngay dưới đây.
+  missionNo      Int?
   warehouseId    String?
   kind           NotificationKind
   title          String

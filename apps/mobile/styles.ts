@@ -82,6 +82,20 @@ export const styles = StyleSheet.create({
     fontSize: 15,
     marginBottom: 18,
   },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    backgroundColor: c.surfaceAlt,
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 12,
+  },
+  searchInput: { flex: 1, color: c.text, fontSize: 15, paddingVertical: 10 },
   button: {
     width: "100%",
     backgroundColor: c.primary,
@@ -112,18 +126,27 @@ export const styles = StyleSheet.create({
   stripe: { width: 6 },
   missionBody: { flex: 1, padding: 14 },
 
-  // Hàng trên: icon + tên thiên tai (trái) · badge nguy hiểm (phải)
+  // Hàng trên: icon + số hiệu nhiệm vụ (trái) · số người gặp nạn (phải)
   disasterRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   disasterIcon: { fontSize: 26 },
   disasterName: { color: c.text, fontSize: 18, fontWeight: "800", flex: 1 },
 
-  dangerBadge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
-  dangerBadgeText: { fontSize: 12, fontWeight: "900", letterSpacing: 0.5 },
-
-  // Số người gặp nạn — con số lớn nhất trên card
-  peopleRow: { flexDirection: "row", alignItems: "flex-end", gap: 8, marginTop: 12 },
-  peopleNumber: { color: c.text, fontSize: 40, fontWeight: "900", lineHeight: 44 },
-  peopleUnit: { color: c.muted, fontSize: 14, fontWeight: "600", marginBottom: 6 },
+  // Nền đỏ đặc, chữ trắng: đây là con số quy mô của việc, phải đọc được từ xa
+  // trong lúc liếc qua danh sách chứ không phải đọc kỹ mới thấy.
+  peopleBadge: {
+    backgroundColor: c.red,
+    flexShrink: 0,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  peopleBadgeText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
+  stageRow: { marginTop: 12, gap: 2 },
+  /** Mức nguy trên thẻ danh sách — cùng chữ, cùng màu với thẻ đầu màn chi tiết. */
+  cardDanger: { fontSize: 12, fontWeight: "900", letterSpacing: 0.8, marginTop: 8 },
+  cardPlace: { color: c.muted, fontSize: 13, fontWeight: "600", marginTop: 4 },
+  stageText: { color: c.text, fontSize: 24, fontWeight: "900", lineHeight: 30 },
+  stageDisaster: { color: c.muted, fontSize: 14, fontWeight: "600" },
 
   // Hàng dưới: thời gian (trái) · hành động (phải)
   metaRow: {
@@ -140,6 +163,14 @@ export const styles = StyleSheet.create({
 
   newBadge: { backgroundColor: c.amber, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
   newBadgeText: { color: "#0f172a", fontSize: 10, fontWeight: "800" },
+  /** Nhãn "vừa xem": xám nhạt, KHÔNG tranh chỗ với nhãn MỚI vốn màu nổi. */
+  viewedBadge: {
+    backgroundColor: c.surfaceAlt,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  viewedBadgeText: { color: c.muted, fontSize: 10, fontWeight: "900", letterSpacing: 0.5 },
 
   // ===== Thẻ thông báo thường (không gắn nhiệm vụ) =====
   infoCard: {
@@ -160,6 +191,9 @@ export const styles = StyleSheet.create({
   infoCardNew: { borderColor: c.amber, borderWidth: 1.5 },
   infoIcon: { fontSize: 22 },
   infoTitle: { color: c.text, fontSize: 15, fontWeight: "700", flex: 1 },
+  // Số hiệu nhiệm vụ trên thẻ thông báo: nhỏ và mờ hơn tiêu đề vì nó là nhãn
+  // định danh, không phải nội dung — nhưng vẫn phải đọc được trước khi đọc tiêu đề.
+  infoMissionNo: { color: c.muted, fontSize: 11, fontWeight: "800", marginBottom: 2 },
   infoBody: { color: c.muted, fontSize: 14, lineHeight: 20, marginTop: 4 },
   infoTime: { color: c.muted, fontSize: 12, marginTop: 8 },
 
@@ -187,7 +221,11 @@ export const styles = StyleSheet.create({
     padding: 18,
     marginBottom: 16,
   },
+  /** Số hiệu nhiệm vụ ở đầu thẻ — cùng vai trò "danh tính" như trên thẻ danh sách. */
+  heroMissionNo: { color: c.text, fontSize: 15, fontWeight: "900", marginBottom: 6 },
   heroTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  /** Việc phải làm theo vai — cùng câu chữ với `stageText` của thẻ danh sách. */
+  heroStage: { color: c.text, fontSize: 20, fontWeight: "900", marginTop: 6 },
   heroDanger: { fontSize: 15, fontWeight: "900", letterSpacing: 1 },
   heroDisaster: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 12 },
   heroIcon: { fontSize: 34 },
@@ -383,6 +421,39 @@ export const styles = StyleSheet.create({
   micButtonText: { color: c.amber, fontSize: 15, fontWeight: "700" },
   micButtonTextRecording: { color: c.text, fontSize: 15, fontWeight: "700" },
   micHint: { color: c.muted, fontSize: 12, marginBottom: 16, textAlign: "center" },
+  /**
+   * Nút ghi âm ĐÍNH KÈM: viền xanh, khác hẳn nút nhận dạng viền cam ngay trên.
+   *
+   * Hai nút micro nằm cạnh nhau mà cùng màu thì người dùng đọc thành hai cách
+   * bấm cho cùng một việc, rồi bấm nhầm — mà bấm nhầm ở đây là báo cáo gửi đi
+   * không có tiếng nói nào kèm theo.
+   */
+  attachButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: c.primary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    marginBottom: 8,
+  },
+  attachButtonText: { color: c.primary, fontSize: 15, fontWeight: "700" },
+  attachedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: c.green,
+    backgroundColor: "rgba(34,197,94,0.12)",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  attachedText: { color: c.text, fontSize: 13, fontWeight: "700" },
+  attachedRemove: { color: c.red, fontSize: 13, fontWeight: "700" },
   voiceError: { color: c.red, fontSize: 13, marginBottom: 12, textAlign: "center" },
   // Xác nhận gửi thành công.
   successBox: {
