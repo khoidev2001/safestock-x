@@ -14,19 +14,19 @@ test("đoạn ghi rỗng không làm vỡ phép chia", () => {
 });
 
 test("giọng nói bình thường vượt xa ngưỡng", () => {
-  const mau = new Float32Array(16_000);
-  for (let i = 0; i < mau.length; i++) mau[i] = Math.sin(i / 8) * 0.3;
+  const samples = new Float32Array(16_000);
+  for (let i = 0; i < samples.length; i++) samples[i] = Math.sin(i / 8) * 0.3;
 
-  assert.ok(measureRms(mau) > SILENCE_RMS * 10);
+  assert.ok(measureRms(samples) > SILENCE_RMS * 10);
 });
 
 test("giọng nói NHỎ vẫn qua được ngưỡng", () => {
   // Micro rẻ tiền và micro máy ảo thu rất nhỏ. Đặt ngưỡng cao là chặn nhầm người
   // có nói thật rồi bảo họ đi đổi thiết bị — sai còn tệ hơn không báo gì.
-  const mau = new Float32Array(16_000);
-  for (let i = 0; i < mau.length; i++) mau[i] = Math.sin(i / 8) * 0.01;
+  const samples = new Float32Array(16_000);
+  for (let i = 0; i < samples.length; i++) samples[i] = Math.sin(i / 8) * 0.01;
 
-  assert.ok(measureRms(mau) > SILENCE_RMS);
+  assert.ok(measureRms(samples) > SILENCE_RMS);
 });
 
 test("ngưỡng khớp với ngưỡng phía AI service", () => {

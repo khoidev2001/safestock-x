@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { splitBriefingSentences } from "@safestock/shared-types";
 import { ColorIcon } from "@/components/shared/color-icon";
 import {
@@ -17,6 +18,30 @@ import {
 } from "@/lib/insights-api";
 
 /** Theo dõi vận hành thường ngày: dự báo, hết hạn, cân bằng, thời tiết và báo cáo tháng. */
+
+/**
+ * Màu nền riêng cho từng khối.
+ *
+ * Sáu khối trước đây cùng một nền trắng, cùng một viền xám, xếp thành hai cột ba
+ * hàng. Cuộn tới giữa trang là không còn biết mình đang đọc khối nào, và khi cần
+ * quay lại "chỗ nói về mưa" thì phải đọc lại tiêu đề từng khối. Mỗi khối một sắc
+ * nền nhạt thì mắt nhớ được VỊ TRÍ theo màu, không phải theo chữ.
+ *
+ * Màu chọn theo NGHĨA chứ không theo thứ tự cho đẹp: mưa xanh dương, thiếu hàng
+ * cam, hết hạn đỏ, điều chuyển tím, tổng kết tháng xanh lá, bản tin AI hổ phách
+ * — trùng với màu biểu tượng của chính khối đó nên hai thứ không nói ngược nhau.
+ *
+ * Đậm 5–6% là cố ý: đủ để phân biệt hai khối cạnh nhau, chưa tới mức nền chen
+ * vào những chip trạng thái đỏ/vàng nằm trong khối — chúng mới là thứ phải nổi.
+ */
+const SECTION_TONE = {
+  briefing: "oklch(0.72 0.15 70)",
+  weather: "oklch(0.58 0.13 245)",
+  forecast: "var(--color-degraded)",
+  expiry: "var(--color-critical)",
+  rebalance: "oklch(0.56 0.14 295)",
+  monthly: "var(--color-ready)",
+} as const;
 
 // Cắt câu nằm ở gói dùng chung để web và điện thoại hiện GIỐNG nhau.
 export { splitBriefingSentences };
@@ -74,11 +99,11 @@ function DailyBriefingCard({ warehouseId }: { warehouseId: string }) {
   });
 
   return (
-    <Panel>
+    <Panel tone={SECTION_TONE.briefing}>
       <div className="flex items-start justify-between gap-3">
         <Header
           icon={<ColorIcon name="magic" size={20} tone="amber" />}
-          tone="var(--color-accent)"
+          tone={SECTION_TONE.briefing}
           title="Bản tin đầu ngày"
         />
         {/* Chỉ báo khi KHÔNG phải AI viết. Trường hợp bình thường thì nhãn "AI
@@ -91,7 +116,7 @@ function DailyBriefingCard({ warehouseId }: { warehouseId: string }) {
         )}
       </div>
       {briefing.isLoading ? (
-        <p className="mt-4 text-sm text-[var(--text-muted)]">Đang tổng hợp tình hình vận hành…</p>
+        <BriefingAnalyzing />
       ) : briefing.isError || !briefing.data ? (
         <p className="mt-4 text-sm text-[var(--color-critical)]">
           Chưa tạo được bản tin. Vui lòng kiểm tra kết nối LAN.
@@ -122,6 +147,88 @@ function DailyBriefingCard({ warehouseId }: { warehouseId: string }) {
         </>
       )}
     </Panel>
+  );
+}
+
+/**
+ * Các bước mô hình đang làm, hiện lần lượt trong lúc chờ bản tin.
+ *
+ * Đây KHÔNG phải tiến trình thật đọc từ máy chủ — máy chủ chỉ trả về khi viết
+ * xong, không có chiều báo giữa chừng. Nhưng thứ tự bốn bước này là thứ tự thật
+ * mà `insights.service` chạy, nên câu chữ không nói dối về việc gì đang diễn ra,
+ * chỉ không nói chính xác đang ở bước nào.
+ */
+const ANALYZING_STEPS = [
+  "Đang đọc tồn kho và phiếu xuất nhập gần đây…",
+  "Đang đối chiếu dự báo mưa 72 giờ…",
+  "Đang rà nhiệm vụ và sự cố còn mở…",
+  "Đang soạn bản tin và xếp thứ tự ưu tiên…",
+];
+
+/**
+ * Khối chờ của bản tin đầu ngày.
+ *
+ * Bản tin do mô hình chạy trong mạng nội bộ viết, mất từ vài giây tới vài chục
+ * giây tuỳ máy. Một dòng "Đang tổng hợp…" đứng im suốt quãng đó đọc ra là treo:
+ * người trực bỏ đi chỗ khác rồi quay lại, hoặc tải lại trang — vừa mất bản đang
+ * viết dở, vừa xếp thêm một lượt gọi mô hình nữa vào hàng đợi.
+ *
+ * Dừng ở bước cuối chứ KHÔNG quay vòng: quay lại bước một sau khi đã báo "đang
+ * soạn bản tin" là nói ngược, và người đọc nhận ra ngay đó là hoạt ảnh trang trí.
+ * Đứng ở bước cuối thì vẫn đúng — nó đúng là việc cuối cùng máy đang làm.
+ */
+function BriefingAnalyzing() {
+  const [step, setStep] = useState(0);
+
+  useEffect(() => {
+    if (step >= ANALYZING_STEPS.length - 1) return;
+    const timer = setTimeout(() => setStep((current) => current + 1), 2200);
+    return () => clearTimeout(timer);
+  }, [step]);
+
+  return (
+    <div aria-busy="true" className="mt-4">
+      {/* `aria-live=polite`: người dùng trình đọc màn hình cũng cần biết máy đang
+          chạy chứ không đứng, nhưng không được cắt ngang câu họ đang nghe. */}
+      <p
+        aria-live="polite"
+        className="flex items-center gap-2 text-sm font-medium text-[var(--text-muted)]"
+      >
+        <span aria-hidden="true" className="analyzing-mark inline-flex">
+          <ColorIcon name="magic" size={16} tone="amber" />
+        </span>
+        {ANALYZING_STEPS[step]}
+      </p>
+
+      {/* Vạch chữ giả dựng đúng hình hài bản tin thật: bốn gạch đầu dòng rồi tới
+          khối ưu tiên. Chỗ chờ mà giống chỗ sắp hiện ra thì lúc nội dung về,
+          trang không nhảy. */}
+      <div className="mt-4 space-y-2.5" aria-hidden="true">
+        {[92, 78, 85, 64].map((width, index) => (
+          <div
+            className="analyzing-line h-3"
+            key={width}
+            style={
+              { width: `${width}%`, "--sweep-delay": `${index * 120}ms` } as React.CSSProperties
+            }
+          />
+        ))}
+      </div>
+      <div className="mt-4 space-y-2.5 border-t pt-3" aria-hidden="true">
+        {[70, 56].map((width, index) => (
+          <div
+            className="analyzing-line h-3"
+            key={width}
+            style={
+              {
+                width: `${width}%`,
+                "--sweep-delay": `${(index + 4) * 120}ms`,
+              } as React.CSSProperties
+            }
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -173,10 +280,10 @@ function WeatherHorizons({ horizons }: { horizons: WeatherAlert["horizons"] }) {
 function WeatherDemandCard({ data }: { data: WarehouseInsights }) {
   const risks = data.weatherDemand.filter((item) => item.atRisk);
   return (
-    <Panel>
+    <Panel tone={SECTION_TONE.weather}>
       <Header
         icon={<ColorIcon name="weather" size={20} tone="blue" />}
-        tone="var(--color-accent)"
+        tone={SECTION_TONE.weather}
         title="Thời tiết và nhu cầu theo mưa"
       />
       {!data.weatherAlert ? (
@@ -284,10 +391,10 @@ function ForecastCard({ forecast }: { forecast: ForecastItem[] }) {
   const critical = sorted.filter((f) => f.lowStock);
 
   return (
-    <Panel>
+    <Panel tone={SECTION_TONE.forecast}>
       <Header
         icon={<ColorIcon name="inventory" size={20} tone="orange" />}
-        tone="var(--color-accent)"
+        tone={SECTION_TONE.forecast}
         title="Nguy cơ thiếu hàng"
       />
       <p className="mt-1 text-sm text-[var(--text-muted)]">
@@ -346,9 +453,9 @@ function DaysLeftBadge({ item }: { item: ForecastItem }) {
   if (center <= 0) {
     label = "Đã cạn";
   } else {
-    const lo = item.daysLeftLow != null ? Math.floor(item.daysLeftLow) : center;
-    const hi = item.daysLeftHigh != null ? Math.ceil(item.daysLeftHigh) : center;
-    label = hi > lo ? `~${lo}–${hi} ngày` : `~${center} ngày`;
+    const low = item.daysLeftLow != null ? Math.floor(item.daysLeftLow) : center;
+    const high = item.daysLeftHigh != null ? Math.ceil(item.daysLeftHigh) : center;
+    label = high > low ? `~${low}–${high} ngày` : `~${center} ngày`;
   }
   return (
     <span
@@ -380,10 +487,10 @@ function ConfidenceChip({ value, hasRate }: { value: number; hasRate: boolean })
 function ExpiryCard({ data }: { data: WarehouseInsights }) {
   const alerts = data.expiryAlerts;
   return (
-    <Panel>
+    <Panel tone={SECTION_TONE.expiry}>
       <Header
         icon={<ColorIcon name="time" size={20} tone="amber" />}
-        tone="var(--color-accent)"
+        tone={SECTION_TONE.expiry}
         title="Hạn dùng trong 30 ngày tới"
       />
       <p className="mt-1 text-sm text-[var(--text-muted)]">
@@ -427,10 +534,10 @@ function ExpiryCard({ data }: { data: WarehouseInsights }) {
 function RebalanceCard({ data }: { data: WarehouseInsights }) {
   const items = data.rebalance;
   return (
-    <Panel>
+    <Panel tone={SECTION_TONE.rebalance}>
       <Header
         icon={<ColorIcon name="transfer" size={20} tone="blue" />}
-        tone="var(--color-accent)"
+        tone={SECTION_TONE.rebalance}
         title="Đề xuất điều chuyển"
       />
       <p className="mt-1 text-sm text-[var(--text-muted)]">
@@ -467,11 +574,11 @@ function MonthlyReportCard({ warehouseId }: { warehouseId: string }) {
   });
 
   return (
-    <Panel>
+    <Panel tone={SECTION_TONE.monthly}>
       <div className="flex items-center justify-between gap-3">
         <Header
           icon={<ColorIcon name="report" size={20} tone="green" />}
-          tone="var(--color-accent)"
+          tone={SECTION_TONE.monthly}
           title="Nhận xét tháng"
         />
         <button
@@ -564,8 +671,22 @@ function rank(f: ForecastItem): number {
   return f.daysLeft;
 }
 
-function Panel({ children }: { children: React.ReactNode }) {
-  return <section className="rounded-md border bg-[var(--surface)] p-5">{children}</section>;
+function Panel({ children, tone }: { children: React.ReactNode; tone?: string }) {
+  return (
+    <section
+      className="rounded-md border p-5"
+      style={
+        tone
+          ? {
+              background: `color-mix(in oklch, ${tone} 6%, var(--surface))`,
+              borderColor: `color-mix(in oklch, ${tone} 28%, var(--border))`,
+            }
+          : { background: "var(--surface)" }
+      }
+    >
+      {children}
+    </section>
+  );
 }
 
 function Header({ icon, title, tone }: { icon: React.ReactNode; title: string; tone: string }) {

@@ -54,7 +54,7 @@ export function AssistantChat({
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const renderedAlertIds = useRef<Set<string>>(new Set());
-  const boHuyRef = useRef<AbortController | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const alerts = useIncidentAlerts((s) => s.alerts);
 
   /**
@@ -64,58 +64,59 @@ export function AssistantChat({
    * bong bóng cuối. Kiểm `role` trước khi sửa vì cảnh báo sự cố có thể chen vào
    * giữa lúc đang chảy — sửa nhầm là xoá mất cảnh báo.
    */
-  function capNhatBongBongCuoi(text: string, dispatchFrom?: string) {
+  function updateLastBubble(text: string, dispatchFrom?: string) {
     setTurns((currentTurns) => {
-      const cuoi = currentTurns.length - 1;
+      const lastIndex = currentTurns.length - 1;
       if (
-        cuoi < 0 ||
-        currentTurns[cuoi].role !== "assistant" ||
-        currentTurns[cuoi].kind === "alert"
+        lastIndex < 0 ||
+        currentTurns[lastIndex].role !== "assistant" ||
+        currentTurns[lastIndex].kind === "alert"
       ) {
         return [...currentTurns, { role: "assistant", text, dispatchFrom }];
       }
-      const capNhat = [...currentTurns];
-      capNhat[cuoi] = { ...capNhat[cuoi], text, dispatchFrom };
-      return capNhat;
+      const updated = [...currentTurns];
+      updated[lastIndex] = { ...updated[lastIndex], text, dispatchFrom };
+      return updated;
     });
     scrollToLatest();
   }
 
   const ask = useMutation({
     mutationFn: async (question: string) => {
-      boHuyRef.current?.abort();
-      const boHuy = new AbortController();
-      boHuyRef.current = boHuy;
+      abortRef.current?.abort();
+      const abortController = new AbortController();
+      abortRef.current = abortController;
 
       // KHÔNG đặt sẵn bong bóng rỗng: `capNhatBongBongCuoi` tự thêm khi mẩu chữ
       // đầu tiên về. Bong bóng rỗng đứng cạnh dòng "đang phân tích" là một ô trắng
       // trơ ra không rõ nghĩa, mà lúc AI chết thì nó nằm lại vĩnh viễn.
-      let cau = "";
-      let khanCap = false;
-      let loi: string | null = null;
+      let answer = "";
+      let isEmergency = false;
+      let errorText: string | null = null;
 
-      for await (const manh of streamAssistant(warehouseId, question, boHuy.signal)) {
-        if (manh.emergency) khanCap = true;
-        if (manh.error) {
-          loi = manh.error;
+      for await (const chunk of streamAssistant(warehouseId, question, abortController.signal)) {
+        if (chunk.emergency) isEmergency = true;
+        if (chunk.error) {
+          errorText = chunk.error;
           continue;
         }
         // `replace` THAY trọn câu chứ không nối thêm: lớp chống bịa số ở ai-service
         // chỉ chốt được sau khi đọc hết, nên nó gửi lại nguyên câu đã kiểm.
-        if (manh.replace !== undefined) cau = manh.replace;
-        else if (manh.delta) cau += manh.delta;
+        if (chunk.replace !== undefined) answer = chunk.replace;
+        else if (chunk.delta) answer += chunk.delta;
         else continue;
-        capNhatBongBongCuoi(cau, khanCap ? question : undefined);
+        updateLastBubble(answer, isEmergency ? question : undefined);
       }
 
-      const cauCuoi = cau.trim() || loi || "Trợ lý AI tạm thời không phản hồi. Thử lại sau.";
-      capNhatBongBongCuoi(cauCuoi, khanCap ? question : undefined);
-      if (compact && isLongResponse(cauCuoi)) onLongResponse?.();
+      const finalAnswer =
+        answer.trim() || errorText || "Trợ lý AI tạm thời không phản hồi. Thử lại sau.";
+      updateLastBubble(finalAnswer, isEmergency ? question : undefined);
+      if (compact && isLongResponse(finalAnswer)) onLongResponse?.();
     },
     onError: (error) => {
       // Người dùng tự bỏ ngang thì không phải lỗi, đừng dán câu báo lỗi vào mặt họ.
       if (error instanceof DOMException && error.name === "AbortError") return;
-      capNhatBongBongCuoi(getAssistantErrorMessage(error));
+      updateLastBubble(getAssistantErrorMessage(error));
     },
   });
 
@@ -125,7 +126,7 @@ export function AssistantChat({
 
   // Rời màn hình giữa lúc đang chảy thì cắt luôn: mô hình chạy trên card dùng
   // chung, sinh chữ cho một khung đã đóng là lấy mất chỗ của lượt hỏi kế tiếp.
-  useEffect(() => () => boHuyRef.current?.abort(), []);
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   // Trộn cảnh báo AI (sự cố mới đã giải thích) thành bong bóng chủ động; dedupe theo id.
   useEffect(() => {
@@ -225,7 +226,8 @@ export function AssistantChat({
           title="Gửi câu hỏi"
           type="submit"
         >
-          <ColorIcon name="send" size={18} tone="blue" />
+          {/* Nền nút gửi là màu nhấn đặc — hình lấy màu chữ của nút. */}
+          <ColorIcon mono name="send" size={18} />
           {compact ? null : "Gửi"}
         </button>
       </form>
@@ -325,7 +327,8 @@ function ChatBubble({ turn, onDispatch }: { turn: ChatTurn; onDispatch: (text: s
             onClick={() => onDispatch(turn.dispatchFrom as string)}
             className="mt-3 inline-flex items-center gap-2 rounded-md bg-[var(--color-accent)] px-3 py-2 text-xs font-semibold text-[var(--color-accent-fg)] transition hover:brightness-95 active:translate-y-px"
           >
-            <ColorIcon name="mission" size={15} tone="orange" />
+            {/* Nút cũng tô kín màu nhấn — hình một màu theo màu chữ của nút. */}
+            <ColorIcon mono name="mission" size={15} />
             Mở điều phối cứu hộ cho tình huống này
           </button>
         ) : null}

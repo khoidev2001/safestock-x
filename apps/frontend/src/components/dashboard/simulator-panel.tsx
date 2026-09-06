@@ -2,6 +2,7 @@
 
 import { CollapsiblePanel } from "@/components/shared/collapsible-panel";
 import { ColorIcon } from "@/components/shared/color-icon";
+import { SENSOR_EVENT_LABEL } from "@/lib/incident-labels";
 import type { SensorTimelineEvent, VirtualDevice } from "@/lib/dashboard-api";
 
 interface SimulatorPanelProps {
@@ -32,24 +33,6 @@ function deviceIconName(type: string) {
   if (type === "CAMERA_AI") return "simulator" as const;
   return "wifiOff" as const;
 }
-
-const eventTypeLabels: Record<string, string> = {
-  TEMP_READING: "Ghi nhận nhiệt độ",
-  TEMPERATURE_HIGH: "Nhiệt độ vượt ngưỡng",
-  HUMID_READING: "Ghi nhận độ ẩm",
-  HUMIDITY_HIGH: "Độ ẩm vượt ngưỡng",
-  WEIGHT_CHANGED: "Khối lượng thay đổi",
-  SIGNAL_UNSTABLE: "Tín hiệu không ổn định",
-  DOOR_OPEN: "Cửa được mở",
-  DOOR_CLOSE: "Cửa đã đóng",
-  RFID_DETECTED: "Phát hiện vật tư qua cổng RFID",
-  GATEWAY_OFFLINE: "Bộ kết nối mất liên lạc",
-  GATEWAY_ONLINE: "Bộ kết nối hoạt động trở lại",
-  VISION_DETECTION: "Camera phát hiện thay đổi",
-  SMOKE_READING: "Ghi nhận nồng độ khói",
-  POWER_OFF: "Mất nguồn điện",
-  POWER_ON: "Nguồn điện hoạt động trở lại",
-};
 
 const deviceCodeLabels: Record<string, string> = {
   temp: "Cảm biến nhiệt độ",
@@ -187,7 +170,7 @@ export function SimulatorPanel({ devices, timeline, isLoading }: SimulatorPanelP
                 <div>
                   <p className="font-medium">
                     {formatDeviceName(event.device.code, event.device.type)} ·{" "}
-                    {eventTypeLabels[event.eventType] ?? "Cập nhật cảm biến"}
+                    {SENSOR_EVENT_LABEL[event.eventType] ?? "Cập nhật cảm biến"}
                   </p>
                   <p className="tabular text-xs text-[var(--text-muted)]">
                     {formatEventDetail(event)}

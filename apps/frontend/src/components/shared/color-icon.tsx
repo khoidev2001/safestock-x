@@ -1,6 +1,7 @@
 import {
   Alarm,
   AddUser,
+  AllApplication,
   ArrowRight,
   Attention,
   Audit,
@@ -12,8 +13,8 @@ import {
   Clipboard,
   Close,
   CloseWifi,
-  Dashboard,
   Delete,
+  DocSuccess,
   Down,
   Earth,
   Edit,
@@ -25,6 +26,8 @@ import {
   FullScreenOne,
   HeavyRain,
   Help,
+  HelmetOne,
+  Home,
   Inspection,
   Key,
   Left,
@@ -39,6 +42,7 @@ import {
   OffScreenOne,
   PeopleSafe,
   Peoples,
+  PeoplesTwo,
   PhoneCall,
   Pin,
   PreviewClose,
@@ -74,13 +78,19 @@ const icons = {
   audit: Audit,
   blocked: Attention,
   close: Close,
-  dashboard: Dashboard,
+  // Bốn ô vuông rời — hình quy ước của một trang tổng quan. `Dashboard` của thư
+  // viện là mặt đồng hồ tốc độ: nó nói "đo lường", không nói "tất cả mọi thứ ở
+  // đây". Khoá này CHỈ tab Tổng quan dùng nên đổi thẳng, không cần khoá mới.
+  dashboard: AllApplication,
   delete: Delete,
   down: Down,
   document: FileText,
   edit: Edit,
   expand: FullScreenOne,
   help: Help,
+  // Mũ bảo hộ (安全帽), không phải mũ thể thao — đây là đội đi hiện trường.
+  helmet: HelmetOne,
+  house: Home,
   incident: Alarm,
   // Bốn loại thiên tai có hình riêng: thẻ thông báo phải nhận ra được là việc gì
   // trước khi người trực kịp đọc chữ.
@@ -100,7 +110,14 @@ const icons = {
   location: Pin,
   message: Message,
   mission: Lifebuoy,
+  // Ba người đứng cùng nhau: điều phối cứu hộ là điều NGƯỜI, không phải điều
+  // vật tư. Khoá riêng chứ không đổi `mission`, vì phao cứu sinh còn dùng ở
+  // dòng thời gian hiện trường, trợ lý và các bước của quy trình nhiệm vụ.
+  rescueTeam: PeoplesTwo,
   packageCheck: CheckOne,
+  // Tờ việc có dấu tích: một nhiệm vụ là danh sách việc phải làm xong, không
+  // phải một kiện hàng đã kiểm. Khoá riêng vì `packageCheck` còn ở bảng vật tư.
+  taskList: DocSuccess,
   packageSearch: FileSearch,
   phone: PhoneCall,
   passwordHide: PreviewClose,
@@ -161,11 +178,25 @@ export type ColorIconTone = keyof typeof palettes;
 
 export function ColorIcon({
   className,
+  mono = false,
   name,
   size = 20,
   tone = "blue",
 }: {
   className?: string;
+  /**
+   * Vẽ một màu theo màu chữ của thẻ cha (`currentColor`), thay cho bảng bốn màu.
+   *
+   * Dùng khi hình nằm trên NỀN ĐẶC — nút màu nhấn, huy hiệu màu. Bảng bốn màu
+   * được chọn để nổi trên nền trắng: nét đậm xanh navy, ruột xanh dương, nền
+   * trong hình gần như trắng. Đặt nguyên bảng đó lên một nút xanh lá đặc thì cả
+   * bốn màu đều xỉn lại thành một mảng chìm nghỉm — đúng thứ nhìn thấy ở nút gửi
+   * và nút mở trợ lý.
+   *
+   * Một màu thì lấy đúng `--color-accent-fg` (gần như trắng) mà nút đã đặt sẵn,
+   * nên hình luôn tương phản với nền, kể cả khi màu nhấn đổi sau này.
+   */
+  mono?: boolean;
   name: ColorIconName;
   size?: number;
   tone?: ColorIconTone;
@@ -176,10 +207,10 @@ export function ColorIcon({
     <Icon
       aria-hidden="true"
       className={`shrink-0 ${className ?? ""}`}
-      fill={[...palettes[tone]]}
+      fill={mono ? "currentColor" : [...palettes[tone]]}
       size={size}
       strokeWidth={3}
-      theme="multi-color"
+      theme={mono ? "outline" : "multi-color"}
     />
   );
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { login, logout, logoutServer, setBase, type AuthUser } from "./lib/api";
-import { thongBaoDangNhapLoi } from "./lib/login-error";
+import { describeLoginError } from "./lib/login-error";
 import {
   acknowledgeAlarm,
   firstWarehouse,
@@ -255,7 +255,7 @@ export function App() {
       setAuthed(false);
       setUser(null);
       setWarehouse(null);
-      setLoginError(thongBaoDangNhapLoi(error as Error, host, password));
+      setLoginError(describeLoginError(error as Error, host, password));
     } finally {
       setBusy(false);
     }

@@ -47,79 +47,57 @@ export function ReadinessOverview(props: ReadinessOverviewProps) {
 
   return (
     <section className="space-y-4">
-      <div className="grid gap-4 lg:grid-cols-[minmax(320px,0.8fr)_minmax(0,1.2fr)]">
-        <div className="app-panel p-5">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex min-w-0 items-start gap-3">
-              <span className="mt-0.5" style={{ color: tone }}>
-                <StatusIcon status={readiness.operationalStatus} />
-              </span>
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-[var(--text-muted)]">Kết luận hiện tại</p>
-                <h2 className="mt-1 text-xl font-semibold" style={{ color: tone }}>
-                  {getOperationalStatusLabel(readiness.operationalStatus)}
-                </h2>
-              </div>
-            </div>
-            <span className="shrink-0 text-xs text-[var(--text-muted)]">
-              Chỉ số theo dõi {Math.round(readiness.referenceScore ?? readiness.score)}/100
-            </span>
-          </div>
+      {/*
+        KHÔNG có khối "Kết luận hiện tại" ở đây nữa.
 
-          <div className="mt-5 border-t pt-4">
-            {readiness.blockers.length > 0 ? (
-              <div className="space-y-3">
-                {readiness.blockers.map((blocker) => (
-                  <div key={blocker.code}>
-                    <p className="text-sm font-semibold">{blocker.title}</p>
-                    <p className="mt-1 text-sm text-[var(--text-muted)]">
-                      {blocker.reasons.join(" ") || "Cần xác minh tại kho."}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-[var(--text-muted)]">
-                Chưa ghi nhận vấn đề nào ngăn cản việc điều phối.
-              </p>
-            )}
-          </div>
+        Nó từng nói ba thứ, và cả ba đều đã có chỗ khác trên cùng trang này: điểm
+        chặn điều phối nằm ở dải đỏ đầu trang (đầy đủ hơn, kèm lý do), còn kết
+        luận và chỉ số theo dõi thì bảng sáu tiêu chí ngay dưới đây tự nói ra —
+        mỗi tiêu chí kèm trạng thái riêng, chi tiết hơn hẳn một dòng tổng.
 
-          <div className="mt-5 flex items-center justify-between gap-3 border-t pt-4">
-            <span className="text-xs text-[var(--text-muted)]">
-              {formatUpdatedAt(readiness.computedAt)}
-            </span>
-            <RefreshButton compact {...props} />
-          </div>
-        </div>
-
-        <div className="app-panel p-5">
-          <h3 className="text-sm font-semibold">Việc cần làm</h3>
-          {actions.length > 0 ? (
-            <ol className="mt-4 space-y-3">
-              {actions.map((action, index) => (
-                <li className="flex gap-3 text-sm" key={`${action}-${index}`}>
-                  <span className="tabular flex size-6 shrink-0 items-center justify-center rounded-md bg-[var(--surface-2)] text-xs font-semibold">
-                    {index + 1}
-                  </span>
-                  <span className="pt-0.5">{action}</span>
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <p className="mt-3 text-sm text-[var(--text-muted)]">
-              Chưa có việc bắt buộc phải xử lý.
-            </p>
-          )}
-        </div>
+        Nút cập nhật và mốc thời gian tính toán theo về bảng ấy: đó mới là thứ
+        thật sự đổi sau khi bấm.
+      */}
+      <div className="app-panel p-5">
+        <h3 className="text-sm font-semibold">Việc cần làm</h3>
+        {actions.length > 0 ? (
+          <ol className="mt-4 space-y-3">
+            {actions.map((action, index) => (
+              <li className="flex gap-3 text-sm" key={`${action}-${index}`}>
+                <span className="tabular flex size-6 shrink-0 items-center justify-center rounded-md bg-[var(--surface-2)] text-xs font-semibold">
+                  {index + 1}
+                </span>
+                <span className="pt-0.5">{action}</span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="mt-3 text-sm text-[var(--text-muted)]">Chưa có việc bắt buộc phải xử lý.</p>
+        )}
       </div>
 
       <div className="app-panel overflow-hidden">
-        <div className="border-b px-5 py-4">
-          <h3 className="text-sm font-semibold">Chi tiết theo 6 tiêu chí</h3>
-          <p className="mt-1 text-xs text-[var(--text-muted)]">
-            Chỉ số giúp theo dõi biến động; kết luận điều phối luôn đi kèm lý do cụ thể.
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 border-b px-5 py-4">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h3 className="text-sm font-semibold">Chi tiết theo 6 tiêu chí</h3>
+              {/* Kết luận chung và chỉ số gộp về đây, cạnh chính bảng sinh ra
+                  chúng — đọc một dòng tổng rồi mới xuống từng tiêu chí. */}
+              <span className="text-sm font-semibold" style={{ color: tone }}>
+                {getOperationalStatusLabel(readiness.operationalStatus)}
+              </span>
+              <span className="tabular text-xs text-[var(--text-muted)]">
+                Chỉ số theo dõi {Math.round(readiness.referenceScore ?? readiness.score)}/100
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              Chỉ số giúp theo dõi biến động; kết luận điều phối luôn đi kèm lý do cụ thể.
+            </p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              {formatUpdatedAt(readiness.computedAt)}
+            </p>
+          </div>
+          <RefreshButton compact {...props} />
         </div>
         <div className="divide-y">
           {readiness.dimensions.map((dimension) => (
@@ -143,12 +121,6 @@ export function ReadinessOverview(props: ReadinessOverviewProps) {
       </div>
     </section>
   );
-}
-
-function StatusIcon({ status }: { status: OperationalStatus }) {
-  if (status === "READY") return <ColorIcon name="success" size={26} tone="green" />;
-  if (status === "NOT_DISPATCHABLE") return <ColorIcon name="blocked" size={26} tone="red" />;
-  return <ColorIcon name="warning" size={26} tone="amber" />;
 }
 
 function StatusBadge({ status }: { status: OperationalStatus }) {

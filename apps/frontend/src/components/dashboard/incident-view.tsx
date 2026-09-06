@@ -9,24 +9,7 @@ import {
   type IncidentSummary,
 } from "@/lib/dashboard-api";
 import { Pagination, usePagination } from "@/components/shared/pagination";
-
-const SEVERITY: Record<string, { label: string; color: string }> = {
-  LOW: { label: "Thấp", color: "var(--color-ready)" },
-  MEDIUM: { label: "Trung bình", color: "var(--color-attention)" },
-  HIGH: { label: "Cao", color: "var(--color-degraded)" },
-  CRITICAL: { label: "Nghiêm trọng", color: "var(--color-critical)" },
-};
-
-const KIND_LABEL: Record<string, string> = {
-  SUSPECTED_LOSS: "Nghi thất thoát",
-  SENSOR_FAULT: "Lỗi cảm biến",
-  BAD_STORAGE: "Bảo quản kém",
-  FIRE_RISK: "Nghi cháy",
-  POWER_OUTAGE: "Mất điện",
-  MISPLACED_ITEM: "Vật tư sai vị trí",
-  STAT_ANOMALY: "Bất thường cảm biến",
-  PREDICTIVE_WARNING: "Cảnh báo sớm",
-};
+import { INCIDENT_KIND_LABEL, incidentSeverity } from "@/lib/incident-labels";
 
 export function IncidentView({ warehouseId }: { warehouseId: string }) {
   const queryClient = useQueryClient();
@@ -95,7 +78,7 @@ function IncidentCard({
   onResolve: () => void;
   busy: boolean;
 }) {
-  const sev = SEVERITY[incident.severity] ?? SEVERITY.MEDIUM;
+  const sev = incidentSeverity(incident.severity);
   const isOpen = incident.state === "OPEN";
   const isResolved = incident.state === "RESOLVED";
   const explanation = incident.explanation ?? null;
@@ -111,7 +94,7 @@ function IncidentCard({
           <div>
             <p className="font-semibold">{incident.title}</p>
             <p className="mt-0.5 text-sm text-[var(--text-muted)]">
-              {KIND_LABEL[incident.kind] ?? incident.kind} · độ tin cậy{" "}
+              {INCIDENT_KIND_LABEL[incident.kind] ?? incident.kind} · độ tin cậy{" "}
               {Math.round(incident.confidence * 100)}%
             </p>
             <p className="mt-1 text-xs text-[var(--text-muted)]">

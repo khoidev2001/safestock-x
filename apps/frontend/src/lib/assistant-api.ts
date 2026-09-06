@@ -50,25 +50,25 @@ export async function* streamAssistant(
   });
 
   const doc = response.body!.getReader();
-  const boGiaiMa = new TextDecoder();
-  let conLai = "";
+  const decoder = new TextDecoder();
+  let pending = "";
 
   try {
     for (;;) {
       const { done, value } = await doc.read();
       if (done) break;
-      conLai += boGiaiMa.decode(value, { stream: true });
+      pending += decoder.decode(value, { stream: true });
 
       // Mẩu cuối chưa chắc trọn một sự kiện — giữ lại chờ khối sau.
-      const cacPhan = conLai.split("\n\n");
-      conLai = cacPhan.pop() ?? "";
-      for (const phan of cacPhan) {
-        const dong = phan.trim();
-        if (!dong.startsWith("data:")) continue;
-        const than = dong.slice(5).trim();
-        if (than === "[DONE]") return;
+      const parts = pending.split("\n\n");
+      pending = parts.pop() ?? "";
+      for (const part of parts) {
+        const line = part.trim();
+        if (!line.startsWith("data:")) continue;
+        const body = line.slice(5).trim();
+        if (body === "[DONE]") return;
         try {
-          yield JSON.parse(than) as AssistantChunk;
+          yield JSON.parse(body) as AssistantChunk;
         } catch {
           // Một mẩu hỏng thì bỏ qua, đừng làm đứt cả câu trả lời đang chạy dở.
         }
