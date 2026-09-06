@@ -20,6 +20,7 @@ describe("NotificationService organization scope", () => {
       mission: {
         findUnique: jest.fn().mockResolvedValue({
           warehouse: { organizationId: "org-a" },
+          missionNo: 127,
           incidentType: "FLOOD",
           affectedPeople: 190,
           location: "Long Bình",
@@ -43,6 +44,7 @@ describe("NotificationService organization scope", () => {
 
     expect(prisma.notification.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
+        missionNo: 127,
         incidentType: "FLOOD",
         affectedPeople: 190,
         locationName: "Long Bình",
@@ -64,12 +66,29 @@ describe("NotificationService organization scope", () => {
       incidentType: null,
     });
 
-    expect(prisma.mission.findUnique).not.toHaveBeenCalledWith(
-      expect.objectContaining({ select: expect.objectContaining({ affectedPeople: true }) }),
-    );
+    // Soi DỮ LIỆU ĐÃ GHI, không soi câu truy vấn. Service vẫn phải đọc nhiệm vụ
+    // để lấy SỐ HIỆU — số hiệu là danh tính, luôn chép; thứ bị cấm đọc đè là ba
+    // trường mô tả tình huống.
     const data = prisma.notification.create.mock.calls[0][0].data;
     expect(data.affectedPeople).toBeUndefined();
     expect(data.locationName).toBeUndefined();
+  });
+
+  it("báo cáo thô KHÔNG có tình huống nhưng VẪN có số hiệu nhiệm vụ", async () => {
+    // Đây đúng là loại thông báo cần danh tính nhất: điều phối mở ra để xử lý một
+    // việc cụ thể. Chặn số hiệu cùng nhóm với ba trường mô tả là thẻ mất luôn tên gọi.
+    const { prisma, service } = makeService();
+
+    await service.create({
+      recipientRole: "ADMIN" as never,
+      kind: "INCIDENT_REPORTED" as never,
+      title: "Báo cáo mới từ trưởng thôn",
+      body: "Ngập ngang gối ở đầu thôn",
+      missionId: "mission-1",
+      incidentType: null,
+    });
+
+    expect(prisma.notification.create.mock.calls[0][0].data.missionNo).toBe(127);
   });
 
   it("lists only notifications for the authenticated user's organization and role", async () => {

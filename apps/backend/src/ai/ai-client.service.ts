@@ -79,20 +79,20 @@ export class AiClientService {
    * ai-service và nó gửi `replace` khi cần thay cả câu.
    */
   async *assistantStream(question: string, snapshot: string): AsyncGenerator<string> {
-    const huy = new AbortController();
-    let dongHo: NodeJS.Timeout | undefined;
-    const datLaiDongHo = () => {
-      if (dongHo) clearTimeout(dongHo);
-      dongHo = setTimeout(() => huy.abort(), STREAM_IDLE_TIMEOUT_MS);
+    const abort = new AbortController();
+    let idleTimer: NodeJS.Timeout | undefined;
+    const resetIdleTimer = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => abort.abort(), STREAM_IDLE_TIMEOUT_MS);
     };
 
-    datLaiDongHo();
+    resetIdleTimer();
     try {
       const res = await fetch(`${this.baseUrl}/assistant/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question, snapshot }),
-        signal: huy.signal,
+        signal: abort.signal,
       });
       if (!res.ok || !res.body) {
         throw new HttpException(
@@ -101,22 +101,22 @@ export class AiClientService {
         );
       }
 
-      const boGiaiMa = new TextDecoder();
-      let conLai = "";
-      for await (const khoi of res.body as unknown as AsyncIterable<Uint8Array>) {
-        datLaiDongHo();
-        conLai += boGiaiMa.decode(khoi, { stream: true });
+      const decoder = new TextDecoder();
+      let pending = "";
+      for await (const chunk of res.body as unknown as AsyncIterable<Uint8Array>) {
+        resetIdleTimer();
+        pending += decoder.decode(chunk, { stream: true });
         // SSE ngăn cách bằng dòng trống. Mẩu cuối chưa trọn thì GIỮ LẠI chờ khối
         // sau — cắt giữa một sự kiện là đưa ra JSON hỏng.
-        const cacPhan = conLai.split("\n\n");
-        conLai = cacPhan.pop() ?? "";
-        for (const phan of cacPhan) {
-          const dong = phan.trim();
-          if (dong.startsWith("data:")) yield dong.slice(5).trim();
+        const parts = pending.split("\n\n");
+        pending = parts.pop() ?? "";
+        for (const part of parts) {
+          const line = part.trim();
+          if (line.startsWith("data:")) yield line.slice(5).trim();
         }
       }
     } finally {
-      if (dongHo) clearTimeout(dongHo);
+      if (idleTimer) clearTimeout(idleTimer);
     }
   }
 

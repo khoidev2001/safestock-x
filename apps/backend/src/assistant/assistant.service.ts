@@ -91,18 +91,18 @@ export class AssistantService {
       }
     }
 
-    let coChu = false;
+    let hasText = false;
     try {
-      for await (const suKien of this.ai.assistantStream(question, JSON.stringify(snapshot))) {
-        if (suKien === "[DONE]") break;
-        if (suKien.includes('"delta"')) coChu = true;
-        yield suKien;
+      for await (const event of this.ai.assistantStream(question, JSON.stringify(snapshot))) {
+        if (event === "[DONE]") break;
+        if (event.includes('"delta"')) hasText = true;
+        yield event;
       }
     } catch {
       // Đứt giữa chừng: đã có chữ trên màn hình thì đừng xoá đi, người đọc mất
       // luôn phần đã đọc. Chưa có chữ nào mới được phép thay bằng đường lui.
       const fallback = emergency ? resolveEmergencyAnswer(question) : null;
-      if (!coChu && fallback) yield JSON.stringify({ delta: fallback });
+      if (!hasText && fallback) yield JSON.stringify({ delta: fallback });
       else yield JSON.stringify({ error: "Trợ lý AI tạm thời không phản hồi. Thử lại sau." });
     }
   }

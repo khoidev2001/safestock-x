@@ -224,6 +224,9 @@ export class IncidentService {
       where: {
         organizationId: warehouse.organizationId,
         notificationEmail: { not: null },
+        // Chỉ email đã xác minh bằng mã 6 số: cảnh báo sự cố không được rơi vào
+        // một địa chỉ gõ sai rồi không ai đọc.
+        notificationEmailVerifiedAt: { not: null },
         OR: [
           { role: UserRole.ADMIN },
           { role: UserRole.RESCUE },

@@ -65,10 +65,10 @@ export class AssistantController {
     res.flushHeaders?.();
 
     try {
-      for await (const suKien of this.assistant.askStream(id, dto.question)) {
+      for await (const event of this.assistant.askStream(id, dto.question)) {
         // Người dùng đóng tab thì dừng gọi mô hình, đừng sinh chữ cho hư không.
         if (res.writableEnded || res.destroyed) return;
-        res.write(`data: ${suKien}\n\n`);
+        res.write(`data: ${event}\n\n`);
       }
     } catch (error) {
       const message =
