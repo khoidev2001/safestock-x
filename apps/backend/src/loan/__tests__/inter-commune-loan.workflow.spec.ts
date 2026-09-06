@@ -13,12 +13,12 @@ import {
 
 describe("máy trạng thái mượn liên xã", () => {
   it("chỉ bên CHO MƯỢN mới quyết được yêu cầu", () => {
-    const tu = allowedTransitions("REQUESTED");
+    const fromRequested = allowedTransitions("REQUESTED");
 
-    expect(tu.find((t) => t.to === "APPROVED")?.by).toBe("LENDER");
-    expect(tu.find((t) => t.to === "REJECTED")?.by).toBe("LENDER");
+    expect(fromRequested.find((t) => t.to === "APPROVED")?.by).toBe("LENDER");
+    expect(fromRequested.find((t) => t.to === "REJECTED")?.by).toBe("LENDER");
     // Bên đi mượn chỉ rút lại yêu cầu của chính mình.
-    expect(tu.find((t) => t.to === "CANCELLED")?.by).toBe("BORROWER");
+    expect(fromRequested.find((t) => t.to === "CANCELLED")?.by).toBe("BORROWER");
   });
 
   it("chỉ bên ĐI MƯỢN mới xác nhận đã nhận và mới ghi trả", () => {
@@ -29,10 +29,10 @@ describe("máy trạng thái mượn liên xã", () => {
   it("đã đồng ý mà bên kia không tới lấy thì thu hồi được", () => {
     // Không có đường này thì hàng nằm treo vĩnh viễn ngoài sổ: kho đã trừ mà
     // chẳng ai đang giữ.
-    const thuHoi = findTransition("APPROVED", "CANCELLED");
+    const recall = findTransition("APPROVED", "CANCELLED");
 
-    expect(thuHoi?.by).toBe("LENDER");
-    expect(thuHoi?.stock).toBe("ADD");
+    expect(recall?.by).toBe("LENDER");
+    expect(recall?.stock).toBe("ADD");
   });
 
   it("ba trạng thái kết thúc không đi tiếp được nữa", () => {
@@ -56,42 +56,42 @@ describe("máy trạng thái mượn liên xã", () => {
 
   describe("kho bên nào đổi — chỗ dễ sai nhất", () => {
     it("đồng ý cho mượn: TRỪ kho bên cho mượn, KHÔNG đụng kho bên mượn", () => {
-      const buoc = findTransition("REQUESTED", "APPROVED")!;
+      const step = findTransition("REQUESTED", "APPROVED")!;
 
-      expect(stockEffect("OUTGOING", buoc)).toBe("DEDUCT");
+      expect(stockEffect("OUTGOING", step)).toBe("DEDUCT");
       // Hàng chưa tới tay bên mượn. Cộng lúc này là kho hiện số mình chưa cầm.
-      expect(stockEffect("INCOMING", buoc)).toBe("NONE");
+      expect(stockEffect("INCOMING", step)).toBe("NONE");
     });
 
     it("xác nhận đã nhận: CỘNG kho bên mượn, kho bên cho mượn không đổi nữa", () => {
-      const buoc = findTransition("APPROVED", "ACTIVE")!;
+      const step = findTransition("APPROVED", "ACTIVE")!;
 
-      expect(stockEffect("INCOMING", buoc)).toBe("ADD");
+      expect(stockEffect("INCOMING", step)).toBe("ADD");
       // Bên cho mượn đã trừ từ bước trước; trừ tiếp là trừ hai lần.
-      expect(stockEffect("OUTGOING", buoc)).toBe("NONE");
+      expect(stockEffect("OUTGOING", step)).toBe("NONE");
     });
 
     it("ghi nhận đã trả: TRỪ kho bên mượn", () => {
-      const buoc = findTransition("ACTIVE", "RETURNED")!;
+      const step = findTransition("ACTIVE", "RETURNED")!;
 
-      expect(stockEffect("INCOMING", buoc)).toBe("DEDUCT");
-      expect(stockEffect("OUTGOING", buoc)).toBe("NONE");
+      expect(stockEffect("INCOMING", step)).toBe("DEDUCT");
+      expect(stockEffect("OUTGOING", step)).toBe("NONE");
     });
 
     it("thu hồi khi bên kia không nhận: hoàn lại kho bên cho mượn", () => {
-      const buoc = findTransition("APPROVED", "CANCELLED")!;
+      const step = findTransition("APPROVED", "CANCELLED")!;
 
-      expect(stockEffect("OUTGOING", buoc)).toBe("ADD");
-      expect(stockEffect("INCOMING", buoc)).toBe("NONE");
+      expect(stockEffect("OUTGOING", step)).toBe("ADD");
+      expect(stockEffect("INCOMING", step)).toBe("NONE");
     });
 
     it("từ chối và huỷ yêu cầu KHÔNG đụng kho bên nào", () => {
-      for (const buoc of [
+      for (const step of [
         findTransition("REQUESTED", "REJECTED")!,
         findTransition("REQUESTED", "CANCELLED")!,
       ]) {
-        expect(stockEffect("OUTGOING", buoc)).toBe("NONE");
-        expect(stockEffect("INCOMING", buoc)).toBe("NONE");
+        expect(stockEffect("OUTGOING", step)).toBe("NONE");
+        expect(stockEffect("INCOMING", step)).toBe("NONE");
       }
     });
 
@@ -100,14 +100,14 @@ describe("máy trạng thái mượn liên xã", () => {
       // nào đó khai thiếu hoặc khai sai `by` thì kho sẽ đổi ở nhầm xã. Kiểm
       // chính `by` mới là kiểm; so hai chiều của stockEffect thì luôn đúng theo
       // định nghĩa của hàm và không bao giờ đỏ.
-      const moiBuoc = (
+      const steps = (
         ["REQUESTED", "APPROVED", "ACTIVE", "PARTIALLY_RETURNED"] as InterCommuneStatus[]
       ).flatMap((s) => allowedTransitions(s));
 
-      expect(moiBuoc.length).toBeGreaterThan(0);
-      for (const buoc of moiBuoc) {
-        expect(["LENDER", "BORROWER"]).toContain(buoc.by);
-        expect(["DEDUCT", "ADD", "NONE"]).toContain(buoc.stock);
+      expect(steps.length).toBeGreaterThan(0);
+      for (const step of steps) {
+        expect(["LENDER", "BORROWER"]).toContain(step.by);
+        expect(["DEDUCT", "ADD", "NONE"]).toContain(step.stock);
       }
     });
 
@@ -115,19 +115,19 @@ describe("máy trạng thái mượn liên xã", () => {
       // Cho mượn → nhận → trả: kho bên cho mượn trừ 1 lần, kho bên mượn cộng rồi
       // trừ. Kết thúc, cả hai kho phải về đúng như trước — trừ đúng phần hàng
       // đang nằm ở bên cho mượn chờ nhận lại.
-      const vong = [
+      const cycle = [
         findTransition("REQUESTED", "APPROVED")!,
         findTransition("APPROVED", "ACTIVE")!,
         findTransition("ACTIVE", "RETURNED")!,
       ];
-      const diem = (huong: "OUTGOING" | "INCOMING") =>
-        vong.reduce((tong, buoc) => {
-          const e = stockEffect(huong, buoc);
-          return tong + (e === "ADD" ? 1 : e === "DEDUCT" ? -1 : 0);
+      const netEffect = (direction: "OUTGOING" | "INCOMING") =>
+        cycle.reduce((sum, step) => {
+          const e = stockEffect(direction, step);
+          return sum + (e === "ADD" ? 1 : e === "DEDUCT" ? -1 : 0);
         }, 0);
 
-      expect(diem("INCOMING")).toBe(0); // bên mượn: cộng rồi trừ → hoà
-      expect(diem("OUTGOING")).toBe(-1); // bên cho mượn: đã đưa đi, chờ nhận lại
+      expect(netEffect("INCOMING")).toBe(0); // bên mượn: cộng rồi trừ → hoà
+      expect(netEffect("OUTGOING")).toBe(-1); // bên cho mượn: đã đưa đi, chờ nhận lại
     });
   });
 
@@ -160,11 +160,11 @@ describe("trả từng phần", () => {
   });
 
   it("trả làm nhiều lần vẫn cộng dồn đúng", () => {
-    let da = 0;
-    for (const lan of [50, 50, 50]) da = statusAfterReturn(200, da, lan).totalReturned;
+    let returned = 0;
+    for (const amount of [50, 50, 50]) returned = statusAfterReturn(200, returned, amount).totalReturned;
 
-    expect(da).toBe(150);
-    expect(statusAfterReturn(200, da, 50).status).toBe("RETURNED");
+    expect(returned).toBe(150);
+    expect(statusAfterReturn(200, returned, 50).status).toBe("RETURNED");
   });
 
   it("CHẶN trả nhiều hơn số đã mượn", () => {
@@ -208,14 +208,14 @@ describe("bản ghi ghi tay: kho đổi theo hướng hàng thật sự đi", ()
   });
 
   it("một vòng ghi tay trọn vẹn đưa kho về đúng như trước", () => {
-    const diem = (huong: "OUTGOING" | "INCOMING") => {
-      const diem1 = manualEntryStockEffect(huong);
-      const diem2 = manualStockEffect(huong, "RETURNED");
-      const so = (e: string) => (e === "ADD" ? 1 : e === "DEDUCT" ? -1 : 0);
-      return so(diem1) + so(diem2);
+    const netEffect = (direction: "OUTGOING" | "INCOMING") => {
+      const entryEffect = manualEntryStockEffect(direction);
+      const returnEffect = manualStockEffect(direction, "RETURNED");
+      const sign = (e: string) => (e === "ADD" ? 1 : e === "DEDUCT" ? -1 : 0);
+      return sign(entryEffect) + sign(returnEffect);
     };
 
-    expect(diem("OUTGOING")).toBe(0);
-    expect(diem("INCOMING")).toBe(0);
+    expect(netEffect("OUTGOING")).toBe(0);
+    expect(netEffect("INCOMING")).toBe(0);
   });
 });

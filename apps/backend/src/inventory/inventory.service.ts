@@ -11,8 +11,10 @@ import { TransactionType } from "@safestock/shared-types";
 import { PrismaService } from "../prisma/prisma.service";
 import { ReadinessService } from "../readiness/readiness.service";
 import { lockLoanBatch, lockLoanTableForApproval } from "../loan/loan-table-lock";
-import { moTaQuyDoi } from "./bottle-units";
+import { describeBottleBreakdown } from "./bottle-units";
 import { communeStockByWarehouse, communeStockRollup } from "./commune-stock-rollup";
+// Hàm THUẦN, không kéo theo provider nào của module Insights.
+import { computeExpiryAlerts } from "../insights/expiry-alert";
 import { sumOutstanding } from "./loan-math";
 import { transferInventoryInTx } from "./inventory-transfer";
 import { mutationFingerprint, withMutationIdempotency } from "./mutation-idempotency";
@@ -212,19 +214,19 @@ export class InventoryService {
   ) {
     await assertActorCanAccessWarehouse(this.prisma, actorUserId, scopeWarehouseId, warehouseId);
 
-    const kho = await this.prisma.warehouse.findUnique({
+    const warehouse = await this.prisma.warehouse.findUnique({
       where: { id: warehouseId },
       select: { organizationId: true, kind: true },
     });
-    if (!kho) throw new NotFoundException("Không tìm thấy kho");
-    if (kho.kind !== "CENTRAL") {
+    if (!warehouse) throw new NotFoundException("Không tìm thấy kho");
+    if (warehouse.kind !== "CENTRAL") {
       throw new ForbiddenException("Chỉ kho tổng mới xem được tồn kho toàn xã");
     }
 
     const batches = await this.prisma.itemBatch.findMany({
       where: {
         circulation: "IN_STOCK",
-        shelf: { zone: { warehouse: { organizationId: kho.organizationId } } },
+        shelf: { zone: { warehouse: { organizationId: warehouse.organizationId } } },
       },
       select: {
         quantity: true,
@@ -243,18 +245,18 @@ export class InventoryService {
       },
     });
 
-    const duLieu =
+    const rollupInput =
       // Lô chưa xếp lên kệ thì chưa thuộc kho nào — bỏ ra thay vì đoán. Điều kiện
       // truy vấn đã lọc rồi, nhưng kiểu dữ liệu vẫn cho phép rỗng và một ngày nào
       // đó điều kiện ấy sẽ đổi.
       batches.flatMap((b) => {
-        const kho = b.shelf?.zone.warehouse;
-        if (!kho) return [];
+        const batchWarehouse = b.shelf?.zone.warehouse;
+        if (!batchWarehouse) return [];
         return [
           {
-            warehouseId: kho.id,
-            warehouseName: kho.name,
-            warehouseKind: kho.kind,
+            warehouseId: batchWarehouse.id,
+            warehouseName: batchWarehouse.name,
+            warehouseKind: batchWarehouse.kind,
             itemSku: b.item.sku,
             itemName: b.item.name,
             unit: b.item.category.unit,
@@ -270,17 +272,176 @@ export class InventoryService {
     // nhiêu" và "thôn này đang có những gì". Tách thành hai đường gọi là đọc lô
     // hàng hai lần cho cùng một màn hình, và mở ra khả năng hai con số lệch nhau
     // khi kho thay đổi giữa hai lượt gọi.
-    const byWarehouse = communeStockByWarehouse(duLieu);
+    const byWarehouse = communeStockByWarehouse(rollupInput);
     return {
-      byItem: communeStockRollup(duLieu),
+      byItem: communeStockRollup(rollupInput),
       // Kèm câu quy đổi cho hàng đếm theo chai: người phụ trách xe cần lốc,
       // người tính định mức cần lít, người đứng ở kệ cần chai. Hiện sẵn cả ba
       // thì không ai phải nhẩm giữa lúc đang vội.
-      byWarehouse: byWarehouse.map((kho) => ({
-        ...kho,
-        items: kho.items.map((mon) =>
-          mon.unit === "chai" ? { ...mon, conversion: moTaQuyDoi(mon.quantity) } : mon,
+      byWarehouse: byWarehouse.map((warehouse) => ({
+        ...warehouse,
+        items: warehouse.items.map((item) =>
+          item.unit === "chai" ? { ...item, conversion: describeBottleBreakdown(item.quantity) } : item,
         ),
+      })),
+    };
+  }
+
+  /**
+   * Lô sắp cạn của TOÀN XÃ, kèm tên kho đang giữ.
+   *
+   * Cùng lý do với `communeExpiry`: bảng tồn của một kho không nói được lô đang
+   * cạn nằm ở thôn nào, mà "kho nào" mới là thứ quyết định cho xe chạy đi đâu.
+   *
+   * Ngưỡng nhận vào từ ngoài chứ không chôn cứng ở đây, để màn hình và máy chủ
+   * không giữ hai con số khác nhau cho cùng một chữ "còn ít".
+   */
+  async communeLowStock(
+    warehouseId: string,
+    scopeWarehouseId: string | null | undefined,
+    actorUserId: string,
+    threshold = 10,
+  ) {
+    await assertActorCanAccessWarehouse(this.prisma, actorUserId, scopeWarehouseId, warehouseId);
+
+    const warehouse = await this.prisma.warehouse.findUnique({
+      where: { id: warehouseId },
+      select: { organizationId: true, kind: true },
+    });
+    if (!warehouse) throw new NotFoundException("Không tìm thấy kho");
+    if (warehouse.kind !== "CENTRAL") {
+      throw new ForbiddenException("Chỉ kho tổng mới xem được tồn kho toàn xã");
+    }
+
+    const batches = await this.prisma.itemBatch.findMany({
+      where: {
+        circulation: "IN_STOCK",
+        quantity: { lte: threshold },
+        shelf: { zone: { warehouse: { organizationId: warehouse.organizationId } } },
+      },
+      orderBy: { quantity: "asc" },
+      select: {
+        id: true,
+        batchCode: true,
+        quantity: true,
+        item: { select: { name: true, sku: true, category: { select: { unit: true } } } },
+        shelf: {
+          select: {
+            code: true,
+            zone: {
+              select: { name: true, warehouse: { select: { id: true, name: true } } },
+            },
+          },
+        },
+      },
+    });
+
+    return {
+      threshold,
+      items: batches.flatMap((batch) => {
+        // Lô chưa xếp lên kệ thì chưa thuộc kho nào — bỏ ra thay vì đoán, giống
+        // hệt cách `communeStock` và `communeExpiry` xử lý.
+        const batchWarehouse = batch.shelf?.zone.warehouse;
+        if (!batchWarehouse) return [];
+        return [
+          {
+            batchId: batch.id,
+            batchCode: batch.batchCode,
+            sku: batch.item.sku,
+            itemName: batch.item.name,
+            unit: batch.item.category.unit,
+            quantity: batch.quantity,
+            warehouseId: batchWarehouse.id,
+            warehouseName: batchWarehouse.name,
+            zoneName: batch.shelf?.zone.name ?? null,
+            shelfCode: batch.shelf?.code ?? null,
+          },
+        ];
+      }),
+    };
+  }
+
+  /**
+   * Lô sắp hết hạn của TOÀN XÃ, kèm tên kho đang giữ.
+   *
+   * Khác `insights.expiryAlerts` ở phạm vi: cái kia đọc đúng một kho, nên bảng
+   * cảnh báo ở kho tổng không bao giờ nhìn thấy thùng lương khô sắp hỏng nằm
+   * dưới thôn. Mà hàng dưới thôn mới là hàng dễ quên nhất — không ai đi qua kệ
+   * đó mỗi ngày.
+   *
+   * Dùng chung ĐÚNG bộ điều kiện phạm vi với `communeStock` (cùng tổ chức, chỉ
+   * kho tổng gọi được): hai đường trả về cùng một tập hàng hoá, cho một đường
+   * rộng hơn đường kia là mở quyền qua ngách sau.
+   */
+  async communeExpiry(
+    warehouseId: string,
+    scopeWarehouseId: string | null | undefined,
+    actorUserId: string,
+    windowDays = 30,
+    now = new Date(),
+  ) {
+    await assertActorCanAccessWarehouse(this.prisma, actorUserId, scopeWarehouseId, warehouseId);
+
+    const warehouse = await this.prisma.warehouse.findUnique({
+      where: { id: warehouseId },
+      select: { organizationId: true, kind: true },
+    });
+    if (!warehouse) throw new NotFoundException("Không tìm thấy kho");
+    if (warehouse.kind !== "CENTRAL") {
+      throw new ForbiddenException("Chỉ kho tổng mới xem được hạn dùng toàn xã");
+    }
+
+    const batches = await this.prisma.itemBatch.findMany({
+      where: {
+        circulation: "IN_STOCK",
+        expiryDate: { not: null },
+        // Lô đã hết sạch không còn là cảnh báo — nó chỉ là một dòng sổ. Để lại
+        // thì bảng đầy những lô 0 đơn vị và đẩy lô còn hàng xuống dưới màn hình.
+        quantity: { gt: 0 },
+        shelf: { zone: { warehouse: { organizationId: warehouse.organizationId } } },
+      },
+      select: {
+        id: true,
+        quantity: true,
+        expiryDate: true,
+        item: { select: { sku: true, name: true, category: { select: { unit: true } } } },
+        shelf: {
+          select: { zone: { select: { warehouse: { select: { id: true, name: true } } } } },
+        },
+      },
+    });
+
+    const alerts = computeExpiryAlerts(
+      batches.flatMap((batch) => {
+        // Lô chưa xếp lên kệ thì chưa thuộc kho nào — bỏ ra thay vì đoán, giống
+        // hệt cách `communeStock` xử lý.
+        const batchWarehouse = batch.shelf?.zone.warehouse;
+        if (!batchWarehouse || !batch.expiryDate) return [];
+        return [
+          {
+            batchId: batch.id,
+            sku: batch.item.sku,
+            itemName: batch.item.name,
+            warehouseId: batchWarehouse.id,
+            warehouseName: batchWarehouse.name,
+            quantity: batch.quantity,
+            expiryDate: batch.expiryDate,
+          },
+        ];
+      }),
+      now,
+      windowDays,
+    );
+
+    // Đơn vị đi kèm từng dòng: "12" không nói được là 12 thùng hay 12 kg, mà đây
+    // là con số người trực dùng để quyết định có kịp phát hết trước hạn không.
+    const unitBySku = new Map(batches.map((b) => [b.item.sku, b.item.category.unit]));
+    return {
+      windowDays,
+      items: alerts.map((alert) => ({
+        ...alert,
+        unit: unitBySku.get(alert.sku) ?? "",
+        expiryDate: alert.expiryDate.toISOString(),
       })),
     };
   }

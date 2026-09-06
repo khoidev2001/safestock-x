@@ -192,8 +192,8 @@ export function manualStockEffect(
   direction: InterCommuneDirection,
   to: InterCommuneStatus,
 ): "DEDUCT" | "ADD" | "NONE" {
-  const laBuocTra = to === "RETURNED" || to === "PARTIALLY_RETURNED";
-  if (laBuocTra) return direction === "OUTGOING" ? "ADD" : "DEDUCT";
+  const isReturnStep = to === "RETURNED" || to === "PARTIALLY_RETURNED";
+  if (isReturnStep) return direction === "OUTGOING" ? "ADD" : "DEDUCT";
   // Các bước còn lại của bản ghi ghi tay không chuyển hàng: khoản đã ở ACTIVE
   // ngay từ lúc tạo, nên không còn bước duyệt hay xác nhận nhận nào nữa.
   return "NONE";
