@@ -1,9 +1,9 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { useEffect } from "react";
 import { ColorIcon } from "@/components/shared/color-icon";
-import { getNavItem } from "@/lib/dashboard-nav";
 import { useWarehouse } from "@/lib/use-warehouse";
+import { usePageHeading } from "@/lib/page-heading-store";
 
 interface DashboardPageProps {
   /**
@@ -13,6 +13,17 @@ interface DashboardPageProps {
   children: (warehouseId: string) => React.ReactNode;
   /** true nếu trang không cần chờ warehouseId (ví dụ: nhật ký toàn xã). */
   standalone?: boolean;
+  /**
+   * Thay tiêu đề lấy từ menu bằng tiêu đề của chính bản ghi đang mở.
+   *
+   * Trang danh sách thì tên menu là đúng ("Nhiệm vụ"), nhưng trang chi tiết mà
+   * vẫn đội cái tên đó thì phần chữ to nhất màn hình không nói được gì — người
+   * dùng phải cuộn xuống mới biết mình đang mở bản ghi nào.
+   */
+  title?: string;
+  subtitle?: string;
+  /** Chỗ cho lối quay lại, nằm TRÊN tiêu đề — đường thoát phải thấy trước tiên. */
+  topSlot?: React.ReactNode;
 }
 
 /**
@@ -20,18 +31,37 @@ interface DashboardPageProps {
  * và báo lỗi khi không tải được dữ liệu kho. Thay cho PageHeading + điều kiện
  * warehouseId từng nằm rải rác trong page.tsx cũ.
  */
-export function DashboardPage({ children, standalone = false }: DashboardPageProps) {
-  const pathname = usePathname();
-  const nav = getNavItem(pathname);
+export function DashboardPage({
+  children,
+  standalone = false,
+  title,
+  subtitle,
+  topSlot,
+}: DashboardPageProps) {
   const warehouseQuery = useWarehouse();
   const warehouseId = warehouseQuery.data?.id;
 
+  /**
+   * Đẩy tiêu đề lên thanh tiêu đề của khung dashboard.
+   *
+   * Chỉ đẩy phần GHI ĐÈ: trang tĩnh không truyền gì thì thanh tiêu đề tự tra
+   * theo path. Dọn lúc rời trang, nếu không tiêu đề "Nhiệm vụ số 103" còn treo
+   * lại khi người dùng đã sang tab khác.
+   */
+  const setHeading = usePageHeading((state) => state.setHeading);
+  const clearHeading = usePageHeading((state) => state.clearHeading);
+  useEffect(() => {
+    if (title === undefined && subtitle === undefined) {
+      clearHeading();
+      return;
+    }
+    setHeading({ title, subtitle });
+    return () => clearHeading();
+  }, [title, subtitle, setHeading, clearHeading]);
+
   return (
     <div className="space-y-5">
-      <PageHeading
-        subtitle={nav?.subtitle ?? ""}
-        title={nav?.title ?? ""}
-      />
+      {topSlot}
 
       {warehouseQuery.isError ? (
         <WarehouseError />
@@ -42,23 +72,6 @@ export function DashboardPage({ children, standalone = false }: DashboardPagePro
       ) : (
         <WarehouseLoading />
       )}
-    </div>
-  );
-}
-
-function PageHeading({
-  subtitle,
-  title,
-}: {
-  subtitle: string;
-  title: string;
-}) {
-  return (
-    <div className="border-b pb-5">
-      <div>
-        <h1 className="text-2xl font-semibold md:text-3xl">{title}</h1>
-        <p className="mt-2 max-w-3xl text-base text-[var(--text-muted)]">{subtitle}</p>
-      </div>
     </div>
   );
 }

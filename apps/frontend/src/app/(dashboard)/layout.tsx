@@ -10,9 +10,10 @@ import { FloatingAssistant } from "@/components/assistant/floating-assistant";
 import { useIncidentAlertsBridge } from "@/components/assistant/use-incident-alerts";
 import { advanceInterCommuneLoan, getOpenIncidents } from "@/lib/dashboard-api";
 import { useAuth } from "@/lib/auth-store";
+import { useTabTransition } from "@/lib/use-tab-transition";
 import { useWarehouse } from "@/lib/use-warehouse";
 import { NotificationToasts, type ToastItem } from "@/components/shared/notification-toasts";
-import { phatTiengThongBao } from "@/lib/notification-sound";
+import { playNotificationSound } from "@/lib/notification-sound";
 import { BrandLoader } from "@/components/shared/brand-loader";
 import { useMissionFocus } from "@/lib/mission-focus-store";
 import { missionDeepLink } from "@/lib/mission-inbox-state";
@@ -27,6 +28,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const user = useAuth((state) => state.user);
   const hasHydrated = useAuth((state) => state.hasHydrated);
   const warehouseQuery = useWarehouse();
+  /*
+    Khối chờ chuyển tab do LAYOUT giữ, không phải shell.
+    
+    Thẻ thông báo nổi cũng mở nhiệm vụ, mà nó dựng ở đây — nằm ngoài shell nên
+    không với tới context shell phát ra. Trước đây nó đẩy trang bằng `router.push`
+    trần: bấm xong màn hình đứng im vài giây trong lúc trang nhiệm vụ tải dữ liệu
+    và dựng bản đồ, y hệt cảm giác bấm hụt.
+  */
+  const transition = useTabTransition();
   const warehouseId = warehouseQuery.data?.id;
 
   useEffect(() => {
@@ -66,7 +76,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // và nhờ lượt hỏi định kỳ, nên không ai để ý là có gì đó sai.
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   /** Id các thông báo đã kêu chuông trong phiên này — không kêu lại lần hai. */
-  const daKeuRef = useRef<Set<string>>(new Set());
+  const chimedIdsRef = useRef<Set<string>>(new Set());
 
   /**
    * Trả lời yêu cầu mượn NGAY TRÊN THẺ thông báo.
@@ -80,30 +90,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
    * một thẻ thông báo nhỏ xíu là ép quyết định về lô trong ba giây, mà chọn nhầm
    * lô thì trừ nhầm hàng thật.
    */
-  const traLoiYeuCauMuon = useCallback(
-    async (loanId: string, dongY: boolean) => {
+  const decideLoanRequest = useCallback(
+    async (loanId: string, approve: boolean) => {
       await advanceInterCommuneLoan(loanId, {
-        to: dongY ? "APPROVED" : "REJECTED",
-        reason: dongY ? undefined : "Từ chối từ thông báo",
+        to: approve ? "APPROVED" : "REJECTED",
+        reason: approve ? undefined : "Từ chối từ thông báo",
       });
       queryClient.invalidateQueries({ queryKey: ["inter-commune-loans"] });
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      if (dongY) router.push("/loan");
+      if (approve) transition.goToTab("/loan");
     },
-    [queryClient, router],
+    [queryClient, transition],
   );
-  const boToast = useCallback((id: string) => {
+  const dismissToast = useCallback((id: string) => {
     setToasts((current) => current.filter((item) => item.id !== id));
   }, []);
   const focusMission = useMissionFocus((s) => s.focusMission);
-  const moNhiemVu = useCallback(
+  const openMission = useCallback(
     (item: ToastItem) => {
-      boToast(item.id);
+      dismissToast(item.id);
       if (!item.missionId) return;
       focusMission(item.missionId);
-      router.push(missionDeepLink(item.missionId));
+      transition.goToTab(missionDeepLink(item.missionId));
     },
-    [boToast, focusMission, router],
+    [dismissToast, focusMission, transition],
   );
 
   useEffect(() => {
@@ -121,9 +131,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       // Đặt ngoài hàm cập nhật state chứ không đặt trong: React gọi hàm cập nhật
       // hai lần ở chế độ dev để bắt hàm không thuần, nên phát tiếng trong đó là
       // chuông kêu đôi — nghe như có hai việc trong khi chỉ có một.
-      if (daKeuRef.current.has(payload.id)) return;
-      daKeuRef.current.add(payload.id);
-      phatTiengThongBao();
+      if (chimedIdsRef.current.has(payload.id)) return;
+      chimedIdsRef.current.add(payload.id);
+      playNotificationSound();
       setToasts((current) => {
         if (current.some((item) => item.id === payload.id)) return current;
         // Giữ tối đa bốn thẻ. Nhiều hơn thì chồng kín màn hình và che mất đúng
@@ -136,6 +146,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             title: payload.title as string,
             body: payload.body ?? "",
             missionId: payload.missionId ?? null,
+            missionNo: payload.missionNo ?? null,
             loanId: payload.loanId ?? null,
             incidentType: payload.incidentType ?? null,
             affectedPeople: payload.affectedPeople ?? null,
@@ -154,7 +165,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Đang khôi phục phiên: PHẢI hiện gì đó. Trước đây trả `null`, tức là màn hình
   // trắng trơn suốt lượt gọi khôi phục — người dùng không biết app đang chạy hay
   // đã hỏng, và phản xạ đầu tiên là tải lại trang, làm mọi thứ bắt đầu lại.
-  if (!hasHydrated) return <DangKhoiPhucPhien />;
+  if (!hasHydrated) return <RestoringSession />;
   // Không có phiên thì đang bị đẩy sang trang đăng nhập; đừng loé lên khung
   // dashboard rỗng trong lúc chuyển.
   if (!token) return null;
@@ -163,14 +174,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     // vùng nội dung bị ẩn trong lúc chuyển tab, mà cảnh báo sự cố thì không được
     // phép chớp tắt chỉ vì người dùng vừa bấm sang tab khác.
     <DashboardShell
+      transition={transition}
       overlays={
         <>
           {warehouseId ? <FloatingAssistant warehouseId={warehouseId} /> : null}
           <NotificationToasts
             items={toasts}
-            onDecideLoan={traLoiYeuCauMuon}
-            onDismiss={boToast}
-            onOpen={moNhiemVu}
+            onDecideLoan={decideLoanRequest}
+            onDismiss={dismissToast}
+            onOpen={openMission}
           />
         </>
       }
@@ -181,7 +193,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   );
 }
 
-function DangKhoiPhucPhien() {
+function RestoringSession() {
   // Cùng một khối chờ với lúc chuyển tab: người dùng học nhịp thở của dấu hiệu
   // một lần rồi nhận ra nó ở mọi chỗ phải chờ, thay vì mỗi chỗ một kiểu quay.
   return <BrandLoader className="min-h-[100dvh]" label="Đang mở phiên làm việc…" />;

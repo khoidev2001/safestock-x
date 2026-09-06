@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { matchNavRoute } from "./nav-route-match";
 
 const TABS = [
-  { path: "/readiness" },
+  { path: "/overall" },
   { path: "/mission" },
   { path: "/missions", subPaths: ["/mission/"] },
   { path: "/inventory" },

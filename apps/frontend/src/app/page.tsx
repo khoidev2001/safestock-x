@@ -15,7 +15,7 @@ export default function RootPage() {
 
   useEffect(() => {
     if (!hasHydrated) return;
-    router.replace(token ? "/readiness" : "/login");
+    router.replace(token ? "/overall" : "/login");
   }, [hasHydrated, token, router]);
 
   return null;

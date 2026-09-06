@@ -30,19 +30,19 @@ export interface NavItem {
  */
 export const navItems: NavItem[] = [
   {
-    path: "/readiness",
+    path: "/overall",
     label: "Tổng quan",
     icon: "dashboard",
     tone: "green",
     group: "Điều hành",
     requiredPermission: Permission.READINESS_VIEW,
-    title: "Tình trạng sẵn sàng",
-    subtitle: "Theo dõi khả năng vận hành, các vướng mắc và việc cần xử lý.",
+    title: "Tổng quan",
+    subtitle: "Toàn bộ những công việc quan trọng trong ứng dụng.",
   },
   {
     path: "/mission",
     label: "Điều phối cứu hộ",
-    icon: "mission",
+    icon: "rescueTeam",
     tone: "orange",
     group: "Điều hành",
     // MISSION_CREATE chứ không phải MISSION_VIEW.
@@ -60,8 +60,8 @@ export const navItems: NavItem[] = [
   {
     path: "/missions",
     label: "Nhiệm vụ",
-    icon: "packageCheck",
-    tone: "blue",
+    icon: "taskList",
+    tone: "amber",
     group: "Điều hành",
     // Trang riêng của từng nhiệm vụ (`/mission/<id>`) thuộc về tab này, dù đường
     // dẫn của nó trông như con của tab Điều phối ở ngay trên.
@@ -144,7 +144,7 @@ export const navItems: NavItem[] = [
     path: "/simulator",
     label: "Cảm biến thử nghiệm",
     icon: "simulator",
-    tone: "amber",
+    tone: "orange",
     group: "Quản trị",
     requiredPermission: Permission.SIMULATION_VIEW,
     title: "Cảm biến thử nghiệm",
