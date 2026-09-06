@@ -14,24 +14,24 @@ import * as bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
-const TEN_XA = "Xuân Thọ";
+const COMMUNE_NAME = "Xuân Thọ";
 const EMAIL = "admin.xuantho";
-const MAT_KHAU = "admin123@";
+const PASSWORD = "admin123@";
 
 async function main() {
   const org = await prisma.organization.upsert({
     where: { id: "org-xuan-tho" },
-    update: { name: `Hội Chữ thập đỏ xã ${TEN_XA}` },
-    create: { id: "org-xuan-tho", name: `Hội Chữ thập đỏ xã ${TEN_XA}` },
+    update: { name: `Hội Chữ thập đỏ xã ${COMMUNE_NAME}` },
+    create: { id: "org-xuan-tho", name: `Hội Chữ thập đỏ xã ${COMMUNE_NAME}` },
   });
 
-  const kho = await prisma.warehouse.upsert({
+  const warehouse = await prisma.warehouse.upsert({
     where: { id: "kho-trung-tam-xuan-tho" },
     update: {},
     create: {
       id: "kho-trung-tam-xuan-tho",
       organizationId: org.id,
-      name: `Kho cứu trợ trung tâm ${TEN_XA}`,
+      name: `Kho xã ${COMMUNE_NAME}`,
       kind: "CENTRAL",
       communeId: "xa-xuan-tho",
       lat: 13.4102,
@@ -39,30 +39,30 @@ async function main() {
     },
   });
 
-  const khu = await prisma.warehouseZone.upsert({
+  const zone = await prisma.warehouseZone.upsert({
     where: { id: "khu-a-xuan-tho" },
     update: {},
-    create: { id: "khu-a-xuan-tho", warehouseId: kho.id, code: "A", name: "Khu A" },
+    create: { id: "khu-a-xuan-tho", warehouseId: warehouse.id, code: "A", name: "Khu A" },
   });
-  const ke = await prisma.shelf.upsert({
+  const shelf = await prisma.shelf.upsert({
     where: { id: "ke-a1-xuan-tho" },
     update: {},
-    create: { id: "ke-a1-xuan-tho", zoneId: khu.id, code: "A1" },
+    create: { id: "ke-a1-xuan-tho", zoneId: zone.id, code: "A1" },
   });
 
   // Dùng lại đúng vật tư của xã kia: mượn liên xã chỉ có nghĩa khi hai bên cùng
   // một mã vật tư, nếu không thì con số trao đổi cho nhau không so được.
-  const vatTu = await prisma.item.findMany({
+  const items = await prisma.item.findMany({
     where: { sku: { in: ["WATER-01", "LIFE-ADULT", "FIRSTAID-01"] } },
     select: { id: true, sku: true, name: true },
   });
-  for (const item of vatTu) {
+  for (const item of items) {
     await prisma.itemBatch.upsert({
       where: { itemId_batchCode: { itemId: item.id, batchCode: `${item.sku}-XUAN-THO` } },
       update: {},
       create: {
         itemId: item.id,
-        shelfId: ke.id,
+        shelfId: shelf.id,
         batchCode: `${item.sku}-XUAN-THO`,
         quantity: 500,
       },
@@ -71,11 +71,11 @@ async function main() {
 
   const user = await prisma.user.upsert({
     where: { email: EMAIL },
-    update: { passwordHash: bcrypt.hashSync(MAT_KHAU, 10), role: UserRole.ADMIN },
+    update: { passwordHash: bcrypt.hashSync(PASSWORD, 10), role: UserRole.ADMIN },
     create: {
       email: EMAIL,
-      fullName: `Quản trị xã ${TEN_XA}`,
-      passwordHash: bcrypt.hashSync(MAT_KHAU, 10),
+      fullName: `Quản trị xã ${COMMUNE_NAME}`,
+      passwordHash: bcrypt.hashSync(PASSWORD, 10),
       role: UserRole.ADMIN,
       organizationId: org.id,
     },
@@ -83,9 +83,9 @@ async function main() {
   });
 
   console.log(`Xã: ${org.name}  (org ${org.id})`);
-  console.log(`Kho: ${kho.name}`);
-  console.log(`Vật tư: ${vatTu.length} mã, mỗi mã 500 đơn vị`);
-  console.log(`Tài khoản: ${user.email} / ${MAT_KHAU}  (${user.role})`);
+  console.log(`Kho: ${warehouse.name}`);
+  console.log(`Vật tư: ${items.length} mã, mỗi mã 500 đơn vị`);
+  console.log(`Tài khoản: ${user.email} / ${PASSWORD}  (${user.role})`);
 }
 
 main()

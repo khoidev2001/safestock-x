@@ -24,12 +24,12 @@ const MISSION_EXPORT_NOTE = {
 
 async function main() {
   const before = {
-    nhiemVu: await prisma.mission.count(),
-    suCo: await prisma.incident.count(),
-    loSoLieu: await prisma.sensorSubmission.count(),
-    suKienCamBien: await prisma.sensorEvent.count(),
-    thongBao: await prisma.notification.count(),
-    thuCanhBao: await prisma.alertEmailOutbox.count(),
+    missions: await prisma.mission.count(),
+    incidents: await prisma.incident.count(),
+    sensorSubmissions: await prisma.sensorSubmission.count(),
+    sensorEvents: await prisma.sensorEvent.count(),
+    notifications: await prisma.notification.count(),
+    alertEmails: await prisma.alertEmailOutbox.count(),
   };
   console.log("Truoc khi don:", before);
 
@@ -75,18 +75,18 @@ async function main() {
   });
 
   const after = {
-    nhiemVu: await prisma.mission.count(),
-    suCo: await prisma.incident.count(),
-    loSoLieu: await prisma.sensorSubmission.count(),
-    suKienCamBien: await prisma.sensorEvent.count(),
-    thongBao: await prisma.notification.count(),
-    thuCanhBao: await prisma.alertEmailOutbox.count(),
+    missions: await prisma.mission.count(),
+    incidents: await prisma.incident.count(),
+    sensorSubmissions: await prisma.sensorSubmission.count(),
+    sensorEvents: await prisma.sensorEvent.count(),
+    notifications: await prisma.notification.count(),
+    alertEmails: await prisma.alertEmailOutbox.count(),
     // Đối chiếu: những thứ PHẢI còn nguyên.
-    kho: await prisma.warehouse.count(),
-    thietBi: await prisma.virtualDevice.count(),
-    loHang: await prisma.itemBatch.count(),
-    thonDaGhim: await prisma.hamlet.count({ where: { lat: { not: null } } }),
-    taiKhoan: await prisma.user.count(),
+    warehouses: await prisma.warehouse.count(),
+    devices: await prisma.virtualDevice.count(),
+    batches: await prisma.itemBatch.count(),
+    pinnedHamlets: await prisma.hamlet.count({ where: { lat: { not: null } } }),
+    users: await prisma.user.count(),
   };
   console.log("Sau khi don:", after);
 }

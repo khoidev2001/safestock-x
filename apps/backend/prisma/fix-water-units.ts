@@ -10,37 +10,37 @@
  *
  * Chạy lại nhiều lần được: đã đúng rồi thì không đụng tới.
  *
- * Chạy: pnpm --filter @safestock/backend exec ts-node prisma/sua-don-vi-nuoc.ts
+ * Chạy: pnpm --filter @safestock/backend exec ts-node prisma/fix-water-units.ts
  */
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  const truoc = await prisma.itemCategory.findMany({
+  const categories = await prisma.itemCategory.findMany({
     where: { name: "Nước uống" },
     select: { id: true, name: true, unit: true },
   });
-  if (truoc.length === 0) {
+  if (categories.length === 0) {
     console.log("Không tìm thấy danh mục 'Nước uống' — không có gì để sửa.");
     return;
   }
 
-  for (const dm of truoc) {
-    if (dm.unit === "chai") {
-      console.log(`"${dm.name}" đã là "chai" — bỏ qua.`);
+  for (const category of categories) {
+    if (category.unit === "chai") {
+      console.log(`"${category.name}" đã là "chai" — bỏ qua.`);
       continue;
     }
-    await prisma.itemCategory.update({ where: { id: dm.id }, data: { unit: "chai" } });
-    console.log(`"${dm.name}": "${dm.unit}" → "chai" (số lượng giữ nguyên)`);
+    await prisma.itemCategory.update({ where: { id: category.id }, data: { unit: "chai" } });
+    console.log(`"${category.name}": "${category.unit}" → "chai" (số lượng giữ nguyên)`);
   }
 
-  const ton = await prisma.itemBatch.aggregate({
+  const stock = await prisma.itemBatch.aggregate({
     where: { item: { category: { name: "Nước uống" } }, circulation: "IN_STOCK" },
     _sum: { quantity: true },
   });
-  const chai = ton._sum.quantity ?? 0;
-  console.log(`Tồn: ${chai} chai = ${Math.floor(chai / 12)} lốc lẻ ${chai % 12} = ${chai * 5} lít`);
+  const bottles = stock._sum.quantity ?? 0;
+  console.log(`Tồn: ${bottles} chai = ${Math.floor(bottles / 12)} lốc lẻ ${bottles % 12} = ${bottles * 5} lít`);
 }
 
 main()

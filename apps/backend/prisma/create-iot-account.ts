@@ -1,11 +1,12 @@
 /**
  * Tài khoản riêng cho app IoT (Simulator cảm biến).
  *
- * VÌ SAO PHẢI CÓ: `login()` và `refresh()` đều tăng `user.tokenVersion`, mà đó là
- * MỘT số duy nhất cho mỗi tài khoản chứ không phải cho mỗi thiết bị. Dùng chung
- * `admin` ở cả web lẫn app thì bên nào đăng nhập sau sẽ vô hiệu hoá khoá của bên
- * kia: web đăng nhập → app IoT rớt phiên trong vòng 15 phút (hết hạn access
- * token), số liệu đã chỉnh nằm lại hàng chờ và không bao giờ gửi đi.
+ * VÌ SAO PHẢI CÓ: `login()` tăng `user.sessionVersion`, mà đó là MỘT số duy nhất
+ * cho mỗi tài khoản chứ không phải cho mỗi thiết bị. Dùng chung `admin` ở cả web
+ * lẫn app thì bên nào ĐĂNG NHẬP sau sẽ vô hiệu hoá khoá của bên kia: web đăng
+ * nhập → app IoT rớt phiên trong vòng 15 phút (hết hạn access token), số liệu đã
+ * chỉnh nằm lại hàng chờ và không bao giờ gửi đi. (Gia hạn phiên — `refresh()` —
+ * thì không sao: nó chỉ xoay `tokenVersion`, không đụng tới phiên bên kia.)
  *
  * Đây không phải cách lách. App IoT là một THIẾT BỊ, không phải người vận hành
  * đang ngồi ở web — cho nó danh tính riêng là đúng, và nhật ký cũng phân biệt

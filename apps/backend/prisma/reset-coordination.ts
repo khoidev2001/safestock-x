@@ -77,7 +77,7 @@ async function main() {
     // Doi chieu: nhung thu PHAI con nguyen.
     warehouse: await prisma.warehouse.count(),
     itemBatch: await prisma.itemBatch.count(),
-    hamletDaGhim: await prisma.hamlet.count({ where: { lat: { not: null } } }),
+    pinnedHamlets: await prisma.hamlet.count({ where: { lat: { not: null } } }),
     user: await prisma.user.count(),
   };
   console.log("Sau khi don:", after);
