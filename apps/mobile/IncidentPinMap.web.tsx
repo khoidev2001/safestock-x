@@ -34,8 +34,16 @@ export function IncidentPinMap({
   );
 }
 
-function IframeSurface({ html, onMessage }: PinMapSurfaceProps) {
+function IframeSurface({ html, onMessage, command }: PinMapSurfaceProps) {
   const frameRef = useRef<HTMLIFrameElement | null>(null);
+
+  // Chiều ngược lại của kênh trên: trang cha không với tay vào trong iframe được
+  // nên gửi lệnh bằng postMessage; trang Leaflet có sẵn trình xử lý dịch lại thành
+  // lời gọi `__pinMapCommand`.
+  useEffect(() => {
+    if (!command) return;
+    frameRef.current?.contentWindow?.postMessage(JSON.stringify({ command: command.name }), "*");
+  }, [command]);
 
   useEffect(() => {
     function handle(event: MessageEvent) {

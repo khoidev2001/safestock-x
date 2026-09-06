@@ -1,5 +1,6 @@
+import { useEffect, useRef } from "react";
 import { WebView } from "react-native-webview";
-import { IncidentPinMapShell } from "./IncidentPinMapShell";
+import { IncidentPinMapShell, type PinMapSurfaceProps } from "./IncidentPinMapShell";
 import { type PinnedPoint } from "./incident-pin-map-html";
 
 export { type PinnedPoint } from "./incident-pin-map-html";
@@ -32,19 +33,35 @@ export function IncidentPinMap({
       point={point}
       onChange={onChange}
       disabled={disabled}
-      renderSurface={({ html, onMessage }) => (
-        <WebView
-          originWhitelist={["*"]}
-          source={{ html }}
-          // Bản đồ cần kéo/thả và pinch: để ScrollView của màn báo cáo giành cử chỉ
-          // thì bấm ghim được nhưng không di chuyển được bản đồ.
-          nestedScrollEnabled
-          javaScriptEnabled
-          domStorageEnabled
-          setBuiltInZoomControls={false}
-          onMessage={(event) => onMessage(event.nativeEvent.data)}
-        />
-      )}
+      renderSurface={(props) => <WebViewSurface {...props} />}
+    />
+  );
+}
+
+function WebViewSurface({ html, onMessage, command }: PinMapSurfaceProps) {
+  const webViewRef = useRef<WebView | null>(null);
+
+  // Lệnh của vỏ chạy thẳng trong trang. `true;` ở cuối là bắt buộc trên iOS:
+  // injectJavaScript cảnh báo nếu đoạn mã trả về giá trị không tuần tự hoá được.
+  useEffect(() => {
+    if (!command) return;
+    webViewRef.current?.injectJavaScript(
+      `window.__pinMapCommand && window.__pinMapCommand(${JSON.stringify(command.name)}); true;`,
+    );
+  }, [command]);
+
+  return (
+    <WebView
+      ref={webViewRef}
+      originWhitelist={["*"]}
+      source={{ html }}
+      // Bản đồ cần kéo/thả và pinch: để ScrollView của màn báo cáo giành cử chỉ
+      // thì bấm ghim được nhưng không di chuyển được bản đồ.
+      nestedScrollEnabled
+      javaScriptEnabled
+      domStorageEnabled
+      setBuiltInZoomControls={false}
+      onMessage={(event) => onMessage(event.nativeEvent.data)}
     />
   );
 }
