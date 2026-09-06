@@ -8,6 +8,20 @@
 - Không lặp lại cùng một kiểm tra nếu chưa có thay đổi mới ảnh hưởng đến nó.
 - Nếu chưa chạy kiểm tra nào, ghi rõ `Not run` và lý do trong báo cáo.
 
+## Đặt tên — bắt buộc
+
+**Mọi định danh MUST viết bằng tiếng Anh**: biến, tham số, hàm, class, interface,
+type, enum, hằng số, field database/API, tên tệp, tên script npm. Không dùng tiếng
+Việt không dấu (`soLuongTon`, `ke_hoach`, `tenKho`, `KHO_MOI_TRANG`).
+
+Tiếng Việt **giữ nguyên** ở chú thích, chuỗi hiển thị cho người dùng, và dữ liệu
+nghiệp vụ (regex bắt lời kể, tên thôn trong seed). Ranh giới: tên do lập trình viên
+đặt thì tiếng Anh, chữ người dùng đọc hoặc gõ vào thì tiếng Việt.
+
+Chi tiết, từ điển nghiệp vụ và cách đặt tên test: [`skills/english-identifiers/SKILL.md`](skills/english-identifiers/SKILL.md).
+Tự kiểm bằng `pnpm lint:naming` trước khi báo xong; CI cũng chặn ở bước
+`Reject Vietnamese identifiers`.
+
 ## Chỉ chạy kiểm tra nặng khi
 
 - Người dùng yêu cầu rõ; hoặc

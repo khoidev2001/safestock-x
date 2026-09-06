@@ -2,7 +2,7 @@
 
 **Câu hỏi màn này trả lời:** *Làm sao báo nhanh nhất cái tôi vừa thấy?*
 
-**Vai dùng:** Phụ trách kho (kiêm trưởng thôn), Lực lượng hiện trường · **Tệp hiện tại:** `ReportScreen.tsx`
+**Vai dùng:** Phụ trách kho (kiêm trưởng thôn), Đội cứu hộ · **Tệp hiện tại:** `ReportScreen.tsx`
 
 ---
 

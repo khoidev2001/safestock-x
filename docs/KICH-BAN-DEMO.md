@@ -28,13 +28,13 @@ Ba mức thời lượng:
 
 |               | Màn hình            | Tài khoản                        | Mật khẩu        | Vai                         |
 | ------------- | --------------------- | ---------------------------------- | ----------------- | --------------------------- |
-| **M1**  | Chrome thường       | `admin`                          | `admin123@`     | Quản trị xã Đồng Xuân |
+| **M1**  | Chrome thường       | `superadmindongxuan`                          | `admin123`     | Quản trị xã Đồng Xuân |
 | **M2**  | Chrome ẩn danh       | `staff`         | `staff123`      | Phụ trách kho trung tâm  |
-| **M3**  | BrowserOS             | `admin.xuantho` | `admin123@`     | Quản trị xã Xuân Thọ   |
+| **M3**  | BrowserOS             | `admin.xuantho` | `admin123`     | Quản trị xã Xuân Thọ   |
 | **Đ1** | Điện thoại ảo S23 | `rescue`        | `rescue123`     | Đội hiện trường        |
 | **Đ2** | Điện thoại thật   | `longchau`      | `truongthon123` | Trưởng thôn Long Châu   |
 
-Tài khoản quản trị là **`admin`** trần, không phải email.
+Tài khoản quản trị là **`superadmindongxuan`** trần, không phải email.
 
 ---
 
@@ -82,7 +82,7 @@ Sau lệnh này: 0 nhiệm vụ, 0 sự cố, 0 thông báo, tồn kho về đú
 
 | BẤM                                          | ĐỌC                                                                                                                                               |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Mở`localhost:3200`, đăng nhập `admin` | *"Hệ thống có ba vai: quản trị xã, phụ trách kho, lực lượng hiện trường."*                                                          |
+| Mở`localhost:3200`, đăng nhập `superadmindongxuan` | *"Hệ thống có ba vai: quản trị xã, phụ trách kho, đội cứu hộ."*                                                          |
 | Chỉ thanh bên trái                         | *"Mỗi vai thấy một bộ tab khác nhau. Trưởng thôn không xem được tồn kho thôn khác — đó là chủ ý, không phải thiếu sót."* |
 
 ## 1.2 Tab **Tổng quan**

@@ -28,7 +28,7 @@
 | Ứng dụng | Người dùng | Nền tảng |
 |---|---|---|
 | Web vận hành và điều hành (13 màn hình nghiệp vụ) | Quản trị xã, phụ trách kho trung tâm | Trình duyệt trên máy tính |
-| Ứng dụng Android (bản phát hành `0.5.0`) | Trưởng thôn kiêm phụ trách kho thôn, lực lượng hiện trường | Điện thoại Android |
+| Ứng dụng Android (bản phát hành `0.5.0`) | Trưởng thôn kiêm phụ trách kho thôn, đội cứu hộ | Điện thoại Android |
 | Ứng dụng IoT trên máy tính (bản sao số của kho) | Người trực kho trung tâm | Windows (Electron) |
 | Dịch vụ trí tuệ nhân tạo chạy tại chỗ | Toàn hệ thống | Máy chủ đặt tại xã |
 
@@ -99,7 +99,7 @@ Hệ quả: nhân rộng cho hàng nghìn xã chỉ là dựng thêm một bản
    ĐIỆN THOẠI (Android 0.5.0)          MÁY TÍNH (Web)         MÁY TÍNH KHO (Electron)
    ├─ Trưởng thôn / kho thôn           ├─ Quản trị xã          └─ App IoT: cảm biến,
    │  kho · kiểm kê · báo cáo          ├─ Kho trung tâm           chuông tại chỗ,
-   └─ Lực lượng hiện trường            └─ 13 màn nghiệp vụ        hàng chờ bền vững
+   └─ Đội cứu hộ            └─ 13 màn nghiệp vụ        hàng chờ bền vững
       lệnh · ký nhận · báo tình huống
               │                              │                          │
               └──────────────┬───────────────┴──────────────────────────┘
@@ -157,7 +157,7 @@ Hệ thống có **ba vai** và **29 quyền hạt mịn** dạng `tài-nguyên:
 |---|---|---|
 | **Quản trị xã** (ADMIN) | Phân tích tình huống, lập và duyệt phương án, quản lý tài khoản, hậu kiểm, giám sát toàn xã | Không dùng tài khoản quản trị thay cho actor thật trong thao tác nghiệp vụ |
 | **Phụ trách kho** (WAREHOUSE) | Vận hành kho được giao: nhập, xuất, chuyển, kiểm kê, mượn – trả, chuẩn bị hàng cho nhiệm vụ; kiêm việc báo tình huống của thôn mình | Không đọc/ghi kho ngoài phạm vi được giao; không lập hoặc duyệt phương án |
-| **Lực lượng hiện trường** (RESCUE) | Xem lệnh và tuyến, ký nhận đã lấy hàng, xác nhận đã giao, gửi cập nhật hiện trường đã tự xác nhận, báo tình huống mới thấy | Không có nghiệp vụ kho, không tự duyệt phương án, không mô phỏng cảm biến |
+| **Đội cứu hộ** (RESCUE) | Xem lệnh và tuyến, ký nhận đã lấy hàng, xác nhận đã giao, gửi cập nhật hiện trường đã tự xác nhận, báo tình huống mới thấy | Không có nghiệp vụ kho, không tự duyệt phương án, không mô phỏng cảm biến |
 
 **Vai trò AI:** không có. Đây là lớp nền tất định, cố ý không để AI chạm vào.
 
@@ -353,7 +353,7 @@ Mô hình kiểm soát là **hậu kiểm**, không phải duyệt hai bước c
 
 **Cách hoạt động.** Quản trị xã tạo tài khoản, chọn vai và kho phụ trách, đặt lại mật khẩu, đổi địa chỉ thư nhận cảnh báo cho từng người. Mỗi người tự sửa được họ tên, số điện thoại, thư nhận cảnh báo và ảnh đại diện của mình, không sửa được vai hay phạm vi kho.
 
-Trong bộ dữ liệu chuẩn của xã Đồng Xuân có **20 tài khoản**: 1 quản trị xã, 1 lực lượng hiện trường, 18 phụ trách kho (1 kho trung tâm + 17 kho thôn). Tên đăng nhập của kho thôn chính là tên thôn bỏ dấu viết liền, nên nhìn là biết ai giữ kho nào.
+Trong bộ dữ liệu chuẩn của xã Đồng Xuân có **20 tài khoản**: 1 quản trị xã, 1 đội cứu hộ, 18 phụ trách kho (1 kho trung tâm + 17 kho thôn). Tên đăng nhập của kho thôn chính là tên thôn bỏ dấu viết liền, nên nhìn là biết ai giữ kho nào.
 
 **Vai trò AI:** không có.
 
@@ -562,8 +562,8 @@ Bốn ràng buộc an toàn:
 | Tiếp nhận yêu cầu | Kho | Xác nhận đã đọc và nhận việc |
 | Báo thiếu / sai | Kho | Nếu kho không đủ hoặc số liệu sai thì báo ngược lên; quản trị duyệt lại số |
 | Xác nhận xuất vật tư | Kho | Tồn kho trừ thật ngay lúc này, kèm phiếu xuất và nhật ký |
-| Ký nhận đã lấy hàng | Lực lượng hiện trường | Ký nhận số lượng thực nhận |
-| Xác nhận đã giao | Lực lượng hiện trường | Ghi kết quả: đủ / một phần / không giao được, kèm lý do |
+| Ký nhận đã lấy hàng | Đội cứu hộ | Ký nhận số lượng thực nhận |
+| Xác nhận đã giao | Đội cứu hộ | Ghi kết quả: đủ / một phần / không giao được, kèm lý do |
 | Xem xét lại | Quản trị | Duyệt phần chênh lệch mà kho báo lên |
 
 **Ba cơ chế bảo vệ, mỗi cơ chế sửa một lỗi có thật:**
@@ -787,7 +787,7 @@ Toàn bộ mã nguồn nằm trong một kho mã hợp nhất (monorepo) quản 
 
 ## 4. Cách vận hành trong thực tế
 
-**Triển khai một xã** cần: 01 máy tính hoặc máy chủ (CPU phổ thông, 16 GB RAM; có card đồ họa 6 GB thì mô hình chạy nhanh, không có thì vẫn chạy được nhưng chậm hơn), Wi-Fi nội bộ, điện thoại Android cho trưởng thôn và lực lượng hiện trường.
+**Triển khai một xã** cần: 01 máy tính hoặc máy chủ (CPU phổ thông, 16 GB RAM; có card đồ họa 6 GB thì mô hình chạy nhanh, không có thì vẫn chạy được nhưng chậm hơn), Wi-Fi nội bộ, điện thoại Android cho trưởng thôn và đội cứu hộ.
 
 **Các dịch vụ chạy nền** dưới dạng tác vụ hệ thống, tự khởi động cùng máy. Trước mỗi buổi diễn tập hoặc mỗi ca trực quan trọng, một kịch bản kiểm tra sẵn sàng chạy một lần và in ra bảng trạng thái của **10 hạng mục**: Docker, PostgreSQL, Redis, máy tính tuyến OSRM, mô hình ngôn ngữ đang thường trú, backend, web, dịch vụ AI, cổng vào, và **hai đường AI được hâm nóng bằng lời gọi thật** (gửi một giây tiếng vào nhận dạng giọng nói và một câu vào bóc tách tình huống). Trả lời được nghĩa là lát nữa bấm micro sẽ ra chữ — kiểm tra bằng lời gọi thật chứ không chỉ hỏi trạng thái.
 
@@ -846,7 +846,7 @@ Toàn bộ mã nguồn nằm trong một kho mã hợp nhất (monorepo) quản 
 - **Tối thiểu hóa dữ liệu:** chỉ họ tên, số điện thoại, thư điện tử, vai trò và kho phụ trách.
 - **Không lưu bản ghi âm thô** — chỉ văn bản đã được chính người nói xác nhận.
 - **Không nhận ảnh hoặc video hiện trường**, không nhận diện khuôn mặt, không thị giác máy tính.
-- **Không theo dõi vị trí liên tục** của lực lượng hiện trường.
+- **Không theo dõi vị trí liên tục** của đội cứu hộ.
 - Người dùng tự sửa được hồ sơ của mình nhưng không tự đổi được vai hay phạm vi kho.
 - Ứng dụng máy tính bật chế độ hộp cát và cách ly ngữ cảnh; bản phát hành không nhúng sẵn thông tin đăng nhập.
 - Danh sách kiểm tra an toàn vận hành: không mở cổng cơ sở dữ liệu, hàng đợi, dịch vụ AI và máy chủ mô hình ra Internet; không đưa mật khẩu mẫu vào hệ thống thật; không đưa tệp cấu hình, khóa và bản sao lưu vào kho mã.

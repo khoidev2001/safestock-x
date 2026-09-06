@@ -150,7 +150,7 @@ Mở giao diện: **http://localhost:3200**
 
 | Tài khoản | Mật khẩu | Vai trò / phạm vi |
 |---|---|---|
-| `admin` | `admin123@` | ADMIN — toàn xã, bản đồ, người dùng, lập Mission |
+| `superadmindongxuan` | `admin123` | ADMIN — toàn xã, bản đồ, người dùng, lập Mission |
 | `staff` | `staff123` | Vận hành kho trung tâm |
 | `rescue` | `rescue123` | Đội cứu hộ |
 | `longchau` | `truongthon123` | Kho thôn Long Châu, kiêm báo cáo tình huống của thôn mình |
@@ -163,11 +163,11 @@ Mở giao diện: **http://localhost:3200**
 
 ## 5. Smoke test 10 phút (làm trước mỗi buổi demo)
 
-Đăng nhập `admin` rồi lần lượt:
+Đăng nhập `superadmindongxuan` rồi lần lượt:
 
 | ID | Thao tác | Kết quả đạt |
 |---|---|---|
-| S01 | Đăng nhập `admin` | Vào dashboard, kho mặc định **Kho cứu trợ trung tâm Đồng Xuân** |
+| S01 | Đăng nhập `superadmindongxuan` | Vào dashboard, kho mặc định **Kho xã Đồng Xuân** |
 | S02 | Mở **Tổng quan** | Trạng thái vận hành + 6 mặt đánh giá + lý do + hành động |
 | S03 | Mở **Kho vật tư** | Có lô, vị trí kệ, số lượng, tình trạng, hạn dùng |
 | S04 | Mở **Ngày thường** | Dự báo 17 mặt hàng + cảnh báo hạn dùng |

@@ -32,7 +32,7 @@ Vai dùng ứng dụng nhiều nhất.
 
 **Thay đổi so với bản hiện tại:** gộp hai tab `home` và `readiness` thành một. Cả hai đang render từ cùng một component chỉ khác tham số `view` — người dùng thấy hai tab nhưng thực chất là một màn hình. Sau khi gộp còn 5 tab, đúng giới hạn thiết kế của thanh tab.
 
-### 1.2. Lực lượng hiện trường — 3 tab
+### 1.2. Đội cứu hộ — 3 tab
 
 ```
 Đăng nhập
@@ -77,7 +77,7 @@ Cao **56 dp + `insets.top`**. Nền `surface`, viền dưới 1 dp `border`.
 - **Trái:** tiêu đề màn (`title-lg`) và dòng phụ (`caption`) — dòng phụ là **tên kho đang xem**, không phải tên người dùng. Tên kho là thông tin người dùng cần liếc thấy liên tục; tên mình thì họ đã biết.
 - **Phải:** ảnh đại diện 32 dp (mở Hồ sơ) và chuông thông báo có huy hiệu.
 
-Cả hai dòng chữ dùng `numberOfLines={1}` và khối chữ có `flex: 1, minWidth: 0`. Bản hiện tại đã ghi nhận đúng lỗi này trong chú thích: thiếu `minWidth: 0` thì cột trái giãn theo dòng chữ dài nhất và đè lên phần bên phải — và chỉ tài khoản có tên vai dài ("Lực lượng hiện trường") mới lộ lỗi, nên dễ lọt lúc thử.
+Cả hai dòng chữ dùng `numberOfLines={1}` và khối chữ có `flex: 1, minWidth: 0`. Bản hiện tại đã ghi nhận đúng lỗi này trong chú thích: thiếu `minWidth: 0` thì cột trái giãn theo dòng chữ dài nhất và đè lên phần bên phải — và chỉ tài khoản có tên vai dài ("Đội cứu hộ") mới lộ lỗi, nên dễ lọt lúc thử.
 
 ### 2.2. Biến thể màn con — có nút quay lại
 
@@ -238,4 +238,4 @@ Dùng `react-native-safe-area-context`, **không dùng `SafeAreaView` của Reac
 - [ ] Vùng neo đáy bám lên trên bàn phím ở mọi biểu mẫu
 - [ ] Quản trị xã không thấy thanh tab
 - [ ] Deep link từ thông báo dựng được ngăn xếp có nút Back hợp lệ
-- [ ] Tiêu đề dài không đè lên phần bên phải thanh tiêu đề (thử với vai "Lực lượng hiện trường")
+- [ ] Tiêu đề dài không đè lên phần bên phải thanh tiêu đề (thử với vai "Đội cứu hộ")

@@ -538,7 +538,7 @@ thích về dải excluded TCP của Windows (profile demo giữ port riêng đ�
   `SAFESTOCK_RUNTIME=demo` cổng 3110 — không đụng stack vận hành 3100):**
   - **Desktop simulator (Electron `apps/desktop`, chạy từ bản build `out/` thật):**
     đăng nhập admin tới host `127.0.0.1:3110`, WebSocket báo *“Realtime đang chạy”*,
-    mở kho “Kho cứu trợ trung tâm Đồng Xuân”. **Luồng 1 — chỉnh tay:** kéo slider
+    mở kho “Kho xã Đồng Xuân”. **Luồng 1 — chỉnh tay:** kéo slider
     *Cảm biến nhiệt độ A* lên 46°C → nhật ký realtime nhận `temp_A = 46°C
     (TEMP_READING)`, điểm sẵn sàng tụt 94→89, cảnh báo *“Điều kiện bảo quản không
     đạt”* kèm giải thích AI *“nhiệt độ đạt 39.9°C, vượt ngưỡng an toàn 35°C”*.

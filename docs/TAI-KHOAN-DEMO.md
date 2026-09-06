@@ -7,7 +7,7 @@ lấy trực tiếp từ database sau khi seed, và **mọi mật khẩu đã đ
 > Đây là tài khoản **dữ liệu mẫu**, mật khẩu cố tình đơn giản để trình diễn. Không
 > dùng bộ này cho hệ thống vận hành thật, và không mở cổng công khai khi còn chúng.
 
-Hệ thống chỉ có **ba vai**: quản trị xã, phụ trách kho, lực lượng hiện trường. Vai
+Hệ thống chỉ có **ba vai**: quản trị xã, phụ trách kho, đội cứu hộ. Vai
 "trưởng thôn" riêng đã bị bỏ — người giữ kho thôn kiêm luôn việc báo tình huống của
 thôn mình.
 
@@ -21,13 +21,13 @@ theo thứ tự seed nên muốn biết ai giữ kho nào phải tra bảng.
 
 | Tài khoản | Mật khẩu | Vai | Phạm vi |
 |---|---|---|---|
-| `admin` | `admin123@` | Quản trị xã | Toàn xã |
-| `staff` | `staff123` | Phụ trách kho | Kho cứu trợ trung tâm Đồng Xuân |
-| `rescue` | `rescue123` | Lực lượng hiện trường | Toàn xã |
+| `superadmindongxuan` | `admin123` | Super admin — quản trị xã (Nguyễn Khánh Trình) | Toàn xã |
+| `staff` | `staff123` | Phụ trách kho | Kho xã Đồng Xuân |
+| `rescue` | `rescue123` | Đội cứu hộ | Toàn xã |
 | `iot` | `iot123456` | App IoT (giả lập cảm biến) | Kho trung tâm |
 
 Lưu ý mọi tài khoản đều đăng nhập bằng **tên đăng nhập trần**, không phải địa chỉ
-email — `admin`, `staff`, `longchau`, không kèm hậu tố tên miền.
+email — `superadmindongxuan`, `staff`, `longchau`, không kèm hậu tố tên miền.
 
 App IoT phải dùng **tài khoản riêng `iot@`**, không dùng chung `admin`. Mỗi lượt
 đăng nhập đều xoay khoá phiên của tài khoản đó, nên hai máy dùng chung một tài
@@ -41,10 +41,10 @@ thôn không có thiết bị, vận hành bằng điện thoại.
 
 | Nơi làm việc | Thiết bị | Tài khoản |
 |---|---|---|
-| Quản trị xã | Máy tính (web) | `admin` |
+| Quản trị xã | Máy tính (web) | `superadmindongxuan` |
 | **Kho trung tâm** | **Máy tính riêng**: web + app IoT | `staff@` cho web · `iot@` cho app IoT |
 | **Kho thôn** (17 kho) | **Điện thoại** | `<tênthôn>@` — trưởng thôn tự quản kho của mình |
-| Lực lượng hiện trường | Điện thoại | `rescue@` |
+| Đội cứu hộ | Điện thoại | `rescue@` |
 
 Vì sao kho trung tâm cần **hai** tài khoản trên cùng một máy: mỗi lượt đăng nhập
 xoay khoá phiên của tài khoản đó, nên web và app IoT dùng chung một tài khoản sẽ

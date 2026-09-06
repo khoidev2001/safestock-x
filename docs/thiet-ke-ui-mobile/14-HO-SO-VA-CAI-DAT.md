@@ -93,7 +93,7 @@ Chip màu, không phải chữ thường. Ba vai:
 |---|---|
 | `ADMIN` | Quản trị xã |
 | `WAREHOUSE` | Phụ trách kho |
-| `RESCUE` | Lực lượng hiện trường |
+| `RESCUE` | Đội cứu hộ |
 
 ### 3.3. Khối thông tin
 

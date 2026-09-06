@@ -73,7 +73,7 @@ thôn mình — vai "trưởng thôn" riêng đã bị bỏ vì tách hai tài k
 |---|---|---|
 | Quản trị xã | `ADMIN` | Cán bộ xã điều hành toàn bộ |
 | Phụ trách kho | `WAREHOUSE` | Người giữ kho trung tâm và 17 kho thôn |
-| Lực lượng hiện trường | `RESCUE` | Đội đi giao hàng, ứng cứu tại chỗ |
+| Đội cứu hộ | `RESCUE` | Đội đi giao hàng, ứng cứu tại chỗ |
 
 ### 2.1. Ma trận quyền đầy đủ
 
@@ -120,7 +120,7 @@ dùng chung cho cả backend lẫn web — một nguồn sự thật duy nhất,
 trực kho phải tắt được dù họ không có quyền bơm số liệu mô phỏng. Gộp hai quyền này
 làm một sẽ dẫn tới cảnh chuông kêu mà người đứng ngay cạnh không tắt được.
 
-**Lực lượng hiện trường có quyền báo tình huống.** Người đứng tại chỗ xảy ra sự việc
+**Đội cứu hộ có quyền báo tình huống.** Người đứng tại chỗ xảy ra sự việc
 phải báo được ngay, không phải gọi điện nhờ người khác nhập hộ.
 
 ### 2.3. Phạm vi kho (scope)
@@ -256,7 +256,7 @@ lỗi *"Không thể chuyển X → Y"*.
 
 > **Lưu ý quan trọng:** các trạng thái `PENDING_RESCUE`, `RESCUE_CONFIRMED`,
 > `REJECTED`, `DEFERRED`, `APPROVED`, `IN_PROGRESS` **vẫn còn trong schema nhưng không
-> còn được tạo mới**. Chúng là dấu vết của phiên bản trước, khi lực lượng hiện trường
+> còn được tạo mới**. Chúng là dấu vết của phiên bản trước, khi đội cứu hộ
 > phải bấm chấp nhận/từ chối trước lúc kho chuẩn bị. Luồng hiện tại: xã phát hành
 > phương án **thẳng tới kho**, hiện trường không tham gia bước phát hành nhưng vẫn là
 > người **đóng** nhiệm vụ. ADMIN vẫn huỷ được các bản ghi lịch sử đang ở trạng thái cũ.
@@ -989,7 +989,7 @@ App có **đúng hai giao diện**, chọn tự động lúc đăng nhập:
 | Vai | Các tab |
 |---|---|
 | `WAREHOUSE` (kho trung tâm và kho thôn) | Tổng quan · Sẵn sàng · Kho · Kiểm kê · Báo cáo · Thông báo |
-| `RESCUE` (lực lượng hiện trường) | Lệnh · Báo cáo · Thông báo — **không có nghiệp vụ kho** |
+| `RESCUE` (đội cứu hộ) | Lệnh · Báo cáo · Thông báo — **không có nghiệp vụ kho** |
 | `ADMIN` | Chỉ tab Kho |
 
 **Vì sao ADMIN trên điện thoại chỉ có tab Kho:** quản trị làm việc trên web; nếu đăng

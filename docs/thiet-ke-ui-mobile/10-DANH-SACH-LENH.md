@@ -2,13 +2,13 @@
 
 **Câu hỏi màn này trả lời:** *Tôi đang có việc gì phải làm?*
 
-**Vai dùng:** Lực lượng hiện trường · **Tệp hiện tại:** `MissionsScreen.tsx`
+**Vai dùng:** Đội cứu hộ · **Tệp hiện tại:** `MissionsScreen.tsx`
 
 ---
 
 ## 1. Bối cảnh
 
-Đây là **màn mở đầu sau khi đăng nhập** của lực lượng hiện trường, và chú thích trong mã nguồn hiện tại đã nêu đúng lý do: *việc chính của họ là biết mình đang có lệnh nào, chứ không phải đi tìm trong danh sách thông báo*.
+Đây là **màn mở đầu sau khi đăng nhập** của đội cứu hộ, và chú thích trong mã nguồn hiện tại đã nêu đúng lý do: *việc chính của họ là biết mình đang có lệnh nào, chứ không phải đi tìm trong danh sách thông báo*.
 
 Người dùng màn này đang ở ngoài hiện trường, có thể đang trên xe, trong mưa, và cần biết trong ba giây: **có việc gì cần làm ngay không**.
 
@@ -19,7 +19,7 @@ Người dùng màn này đang ở ngoài hiện trường, có thể đang trê
 ```
 ┌──────────────────────────────────────────┐
 │  Lệnh cứu hộ                  ⬤  🔔²     │
-│  Trần Văn B · Lực lượng hiện trường      │
+│  Trần Văn B · Đội cứu hộ      │
 ├──────────────────────────────────────────┤
 │                                          │
 │  CẦN LÀM NGAY                            │  ← nhóm 1
@@ -137,7 +137,7 @@ Con số này quan trọng hơn một nhãn gộp: người điều phối và n
 
 Chỉ hiện khi thao tác thực sự đi được. Nguyên tắc này đã có trong mã nguồn và phải giữ: *nút bấm vào là báo lỗi còn tệ hơn không có nút, nhất là với người đang đứng ngoài mưa*.
 
-Với lực lượng hiện trường, chỉ có **một** hành động: `READY` → "Báo kết quả giao".
+Với đội cứu hộ, chỉ có **một** hành động: `READY` → "Báo kết quả giao".
 
 ---
 

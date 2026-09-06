@@ -2,7 +2,7 @@
 
 **Câu hỏi màn này trả lời:** *Việc này là gì, lấy hàng ở đâu, và tôi phải bấm gì?*
 
-**Vai dùng:** Lực lượng hiện trường và Phụ trách kho — **hai giao diện khác nhau trên cùng một màn** · **Tệp hiện tại:** `MissionDetail.tsx`
+**Vai dùng:** Đội cứu hộ và Phụ trách kho — **hai giao diện khác nhau trên cùng một màn** · **Tệp hiện tại:** `MissionDetail.tsx`
 
 ---
 
@@ -12,14 +12,14 @@
 
 | Vai | Việc của họ | Phần quan trọng nhất |
 |---|---|---|
-| **Lực lượng hiện trường** | Đi giao và báo kết quả | Nắm bắt nhanh + danh sách vật tư + trợ lý hiện trường |
+| **Đội cứu hộ** | Đi giao và báo kết quả | Nắm bắt nhanh + danh sách vật tư + trợ lý hiện trường |
 | **Phụ trách kho** | Chuẩn bị và xuất hàng theo từng mã | **Bảng yêu cầu vật tư của kho mình** |
 
 Thứ tự các khối đảo theo vai: cái gì là việc của vai đó thì lên đầu.
 
 ---
 
-## 2. Bố cục — vai Lực lượng hiện trường
+## 2. Bố cục — vai Đội cứu hộ
 
 ```
 ┌──────────────────────────────────────────┐
@@ -190,7 +190,7 @@ Câu này nói rõ **vì sao** không đủ, không chỉ nói không đủ.
 
 ### 6.3. Báo thiếu
 
-Mở phiếu đáy, bắt buộc nhập lý do. Lý do hiện lại cho người điều phối và cho lực lượng hiện trường — nên nó phải cụ thể.
+Mở phiếu đáy, bắt buộc nhập lý do. Lý do hiện lại cho người điều phối và cho đội cứu hộ — nên nó phải cụ thể.
 
 ### 6.4. Tiến độ tổng
 

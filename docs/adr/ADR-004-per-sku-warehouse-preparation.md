@@ -22,7 +22,7 @@ Thiết kế từ PR #13 có `MissionWarehouseRequest`, nhưng thao tác ADMIN r
 status rồi update theo `id`. Nếu kho hoàn tất xuất giữa hai bước, update cũ có thể
 đưa `PREPARED` về `PENDING`, tạo khả năng xuất lặp.
 
-Lực lượng hiện trường cũng đã được chốt là actor chỉ đọc phương án và gửi cập nhật
+Đội cứu hộ cũng đã được chốt là actor chỉ đọc phương án và gửi cập nhật
 đã xác nhận. Ứng dụng không phân công đội/cá nhân và không yêu cầu lực lượng này
 xác nhận/từ chối/hoàn tất workflow.
 

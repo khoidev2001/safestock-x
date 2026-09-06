@@ -134,7 +134,7 @@ Bản hiện tại đặt bảy hành động vào một dải cuộn ngang. Cu�
 |---|---|---|
 | Phụ trách kho | Nhập · Xuất · Chuyển | Kiểm kê · Điều chỉnh · Báo tình trạng · Mượn · Mã QR |
 | Quản trị xã | Nhập · Xuất · Mã QR | — |
-| Lực lượng hiện trường | *(không có hành động kho)* | Mã QR |
+| Đội cứu hộ | *(không có hành động kho)* | Mã QR |
 
 Nút `⋯` mở phiếu đáy liệt kê hành động còn lại, mỗi hành động một hàng có biểu tượng và một dòng mô tả ngắn — dễ đọc hơn hẳn chip nhỏ trong dải cuộn.
 
@@ -294,5 +294,5 @@ Ghi chú liên hệ backend: phía máy chủ hiện chưa phân trang danh sác
 - [ ] Trống do lọc khác trống thật
 - [ ] Lô quá hạn hiện chữ "QUÁ HẠN" thay vì ngày
 - [ ] Không có cử chỉ vuốt nào gọi thao tác kho
-- [ ] Vai Lực lượng hiện trường không vào được màn này
+- [ ] Vai Đội cứu hộ không vào được màn này
 - [ ] Quản trị xã chỉ thấy Nhập, Xuất, Mã QR

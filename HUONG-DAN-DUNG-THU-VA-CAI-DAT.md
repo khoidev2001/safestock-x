@@ -129,7 +129,7 @@ Docker), Ollama cổng `11434`, và tùy chọn OSRM định tuyến offline c�
 > do lệnh seed tạo ra và **mọi mật khẩu đã được kiểm chứng bằng đăng nhập thật** qua
 > `POST /api/auth/login`.
 
-Hệ thống chỉ có **ba vai**: quản trị xã · phụ trách kho · lực lượng hiện trường.
+Hệ thống chỉ có **ba vai**: quản trị xã · phụ trách kho · đội cứu hộ.
 Người giữ kho thôn kiêm luôn việc báo tình huống của thôn mình.
 
 ### 3.1. Bốn tài khoản chính để trình diễn
@@ -137,8 +137,8 @@ Người giữ kho thôn kiêm luôn việc báo tình huống của thôn mình
 | Tài khoản | Mật khẩu | Vai | Phạm vi |
 |---|---|---|---|
 | `admin` | `admin123@` | Quản trị xã | Toàn xã |
-| `staff` | `staff123` | Phụ trách kho | Kho cứu trợ trung tâm Đồng Xuân |
-| `rescue` | `rescue123` | Lực lượng hiện trường | Toàn xã |
+| `staff` | `staff123` | Phụ trách kho | Kho xã Đồng Xuân |
+| `rescue` | `rescue123` | Đội cứu hộ | Toàn xã |
 | `iot` | `iot123456` | Thiết bị IoT (app desktop) | Kho trung tâm |
 
 **Lưu ý:** mọi tài khoản đều đăng nhập bằng **tên đăng nhập trần**, không phải một
@@ -171,7 +171,7 @@ trung tâm + 17 kho thôn) + 1 tài khoản thiết bị IoT.
 | Quản trị xã | Máy tính (web) | `admin` |
 | **Kho trung tâm** | Máy tính riêng: web **và** app IoT | `staff@` cho web · `iot@` cho app desktop |
 | **Kho thôn** (17 kho) | Điện thoại (APK) | `<tênthôn>@` |
-| Lực lượng hiện trường | Điện thoại (APK) | `rescue@` |
+| Đội cứu hộ | Điện thoại (APK) | `rescue@` |
 
 **Vì sao kho trung tâm cần hai tài khoản trên cùng một máy:** mỗi lượt đăng nhập xoay
 khóa phiên của tài khoản đó. Web và app IoT dùng chung một tài khoản sẽ đá nhau — web
@@ -218,7 +218,7 @@ buổi trình diễn; nếu S01–S05 chạy đúng thì hệ thống đang kh�
 
 | # | Mở màn hình | Phải thấy |
 |---|---|---|
-| S01 | Đăng nhập `admin` | Vào dashboard, kho mặc định **Kho cứu trợ trung tâm Đồng Xuân** |
+| S01 | Đăng nhập `admin` | Vào dashboard, kho mặc định **Kho xã Đồng Xuân** |
 | S02 | **Tổng quan** | Trạng thái vận hành + 6 mặt đánh giá + lý do + việc cần làm |
 | S03 | **Vật tư** | Danh sách lô, vị trí kệ, số lượng, tình trạng, hạn dùng |
 | S04 | **Theo dõi, dự báo** | Dự báo cho 17 mặt hàng + cảnh báo hạn dùng |
@@ -267,7 +267,7 @@ Thanh điều hướng chia ba nhóm; mục nào hiện ra phụ thuộc vai c�
 | Mục | Đường dẫn | Làm gì ở đây |
 |---|---|---|
 | Cảm biến thử nghiệm | `/simulator` | Theo dõi dữ liệu mô phỏng trước khi nối thiết bị thật |
-| Tài khoản | `/users` | Cấp quyền cho phụ trách kho, lực lượng hiện trường, quản trị |
+| Tài khoản | `/users` | Cấp quyền cho phụ trách kho, đội cứu hộ, quản trị |
 | Nhật ký | `/audit` | Tra cứu những thay đổi quan trọng đã thực hiện |
 
 Ngoài ra có **trợ lý AI dạng nút nổi** ở góc màn hình, dùng được ở mọi trang.
@@ -314,7 +314,7 @@ Vòng đời trạng thái: `DRAFT → PENDING_WAREHOUSE → READY → COMPLETED
 `CANCELLED` khi quản trị huỷ trước lúc có kho nào xuất vật tư. Gọi sai vai hoặc sai
 trạng thái đều bị máy chủ trả **403**.
 
-> Lực lượng hiện trường **không** tham gia bước phát hành: xã gửi phương án thẳng tới
+> Đội cứu hộ **không** tham gia bước phát hành: xã gửi phương án thẳng tới
 > kho. Các trạng thái `PENDING_RESCUE` / `REJECTED` còn trong schema là dấu vết của
 > phiên bản trước và không còn được tạo mới.
 
@@ -401,7 +401,7 @@ Internet (§1.2). Vì vậy app chỉ dùng được khi máy chủ demo đang b
 
 | Vai | Giao diện |
 |---|---|
-| Lực lượng hiện trường (`rescue@`) | Lệnh · Báo cáo · Cảnh báo — **không có** nghiệp vụ kho |
+| Đội cứu hộ (`rescue@`) | Lệnh · Báo cáo · Cảnh báo — **không có** nghiệp vụ kho |
 | Phụ trách kho (`staff@`, `<tênthôn>@`) | Nghiệp vụ kho đầy đủ, kiêm việc báo tình huống của thôn |
 
 Các việc đáng thử:

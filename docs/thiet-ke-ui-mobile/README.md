@@ -27,9 +27,9 @@ Sau đó là từng màn, mỗi file một màn:
 | 07 | Thao tác kho (7 phiếu) | Phụ trách kho, Quản trị xã | [07-THAO-TAC-KHO.md](07-THAO-TAC-KHO.md) |
 | 08 | Quét mã QR | Phụ trách kho, Quản trị xã | [08-QUET-MA-QR.md](08-QUET-MA-QR.md) |
 | 09 | Kiểm kê tháng | Phụ trách kho | [09-KIEM-KE-THANG.md](09-KIEM-KE-THANG.md) |
-| 10 | Danh sách lệnh | Lực lượng hiện trường | [10-DANH-SACH-LENH.md](10-DANH-SACH-LENH.md) |
-| 11 | Chi tiết lệnh | Lực lượng hiện trường, Phụ trách kho | [11-CHI-TIET-LENH.md](11-CHI-TIET-LENH.md) |
-| 12 | Báo tình huống | Phụ trách kho, Lực lượng hiện trường | [12-BAO-TINH-HUONG.md](12-BAO-TINH-HUONG.md) |
+| 10 | Danh sách lệnh | Đội cứu hộ | [10-DANH-SACH-LENH.md](10-DANH-SACH-LENH.md) |
+| 11 | Chi tiết lệnh | Đội cứu hộ, Phụ trách kho | [11-CHI-TIET-LENH.md](11-CHI-TIET-LENH.md) |
+| 12 | Báo tình huống | Phụ trách kho, Đội cứu hộ | [12-BAO-TINH-HUONG.md](12-BAO-TINH-HUONG.md) |
 | 13 | Thông báo | tất cả | [13-THONG-BAO.md](13-THONG-BAO.md) |
 | 14 | Hồ sơ và cài đặt | tất cả | [14-HO-SO-VA-CAI-DAT.md](14-HO-SO-VA-CAI-DAT.md) |
 
@@ -108,7 +108,7 @@ Bộ thiết kế này không chỉ vẽ lại giao diện — nó sửa bốn v
 Nêu rõ để tránh mở rộng phạm vi ngoài ý muốn:
 
 - **Không đổi nghiệp vụ.** Mọi màn giữ nguyên đúng các thao tác, trạng thái và quyền hiện có. Đây là việc làm lại lớp trình bày.
-- **Không thêm quyền mới cho vai nào.** Bảng phân quyền giữ nguyên: Lực lượng hiện trường không có nghiệp vụ kho, Quản trị xã trên điện thoại chỉ nhập/xuất tại kệ.
+- **Không thêm quyền mới cho vai nào.** Bảng phân quyền giữ nguyên: Đội cứu hộ không có nghiệp vụ kho, Quản trị xã trên điện thoại chỉ nhập/xuất tại kệ.
 - **Không mở ghi dữ liệu khi ngoại tuyến**, trừ một trường hợp duy nhất được đề xuất riêng ở [09-KIEM-KE-THANG.md](09-KIEM-KE-THANG.md) (đếm kiểm kê không đụng tồn cho tới lúc gửi).
 - **Không thiết kế cho iOS.** Bản phát hành hiện tại là Android. Tài liệu ghi chú chỗ nào cần điều chỉnh nếu sau này làm iOS, nhưng không thiết kế song song.
 

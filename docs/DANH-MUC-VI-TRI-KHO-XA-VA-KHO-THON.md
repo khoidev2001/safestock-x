@@ -22,7 +22,7 @@ Danh mục được tra cứu thủ công trên Google Maps ngày 28/07/2026.
 
 | Thuộc tính | Giá trị đã xác minh |
 |---|---|
-| Tên kho nghiệp vụ | Kho cứu trợ trung tâm Đồng Xuân |
+| Tên kho nghiệp vụ | Kho xã Đồng Xuân |
 | Địa điểm đặt kho | UBND Xã Đồng Xuân |
 | Loại địa điểm | Local government office |
 | Địa chỉ Google Maps | `94H3+7PR, La Hai, Đồng Xuân, Đắk Lắk, Việt Nam` |

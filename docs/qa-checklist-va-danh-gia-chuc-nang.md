@@ -52,7 +52,7 @@ Checklist ở Phần 4 chính là để đóng nốt 2 việc trên bằng tay.
 - **WAREHOUSE (Cán bộ kho)** — quản kho + **chuẩn bị/xuất theo phương án** (không lập kế hoạch).
   Có: inventory read/export/import/bulk/adjust/reconcile, `MISSION_FULFILL`, readiness,
   simulation:view, loan, warehouse:manage, notification, report:submit/view.
-- **RESCUE (Lực lượng hiện trường)** — **CHỈ ĐỌC** + gửi cập nhật hiện trường đã tự xác nhận. Chỉ
+- **RESCUE (Đội cứu hộ)** — **CHỈ ĐỌC** + gửi cập nhật hiện trường đã tự xác nhận. Chỉ
   `MISSION_VIEW`, `MISSION_FIELD_UPDATE`, `NOTIFICATION_VIEW`. Không được tạo/duyệt/xuất/phân tích.
 
 **Bất biến an toàn AI (phải luôn đúng khi test):** AI **không bao giờ** tự tính tồn kho, tự duyệt,
