@@ -407,6 +407,34 @@ export function getIncidents(warehouseId: string, state?: string): Promise<Incid
   const q = state ? `?state=${state}` : "";
   return apiFetch<IncidentSummary[]>(`/api/incidents/warehouses/${warehouseId}${q}`);
 }
+export interface IncidentEvidence {
+  id: string;
+  deviceCode: string;
+  eventType: string;
+  value: number;
+  occurredAt: string;
+  note: string | null;
+}
+
+export interface IncidentAction {
+  id: string;
+  action: string;
+  note: string | null;
+  createdAt: string;
+}
+
+/** Sự cố kèm bằng chứng cảm biến và lịch sử xử lý — dữ liệu của bảng chi tiết. */
+export interface IncidentTimeline extends IncidentSummary {
+  warehouseId: string;
+  resolvedAt: string | null;
+  evidence: IncidentEvidence[];
+  actions: IncidentAction[];
+}
+
+export function getIncidentTimeline(id: string): Promise<IncidentTimeline> {
+  return apiFetch<IncidentTimeline>(`/api/incidents/${id}/timeline`);
+}
+
 export const acknowledgeIncident = (id: string) =>
   apiFetch(`/api/incidents/${id}/acknowledge`, { method: "POST" });
 export const resolveIncident = (id: string, note?: string) =>
@@ -543,9 +571,15 @@ export interface AvailableItem {
 export const getAvailableItemsForLoan = () =>
   apiFetch<AvailableItem[]>("/api/loans/inter-commune/available-items");
 
+/**
+ * Đi tiếp một bước của khoản mượn liên xã.
+ *
+ * Không có `batchId`: máy chủ tự chọn lô hạn gần nhất theo mã vật tư của khoản
+ * mượn, nên giao diện không bắt người trực chép mã lô nữa.
+ */
 export const advanceInterCommuneLoan = (
   id: string,
-  body: { to: string; batchId?: string; quantity?: number; reason?: string },
+  body: { to: string; quantity?: number; reason?: string },
 ) =>
   apiFetch(`/api/loans/inter-commune/${id}/advance`, {
     method: "POST",
@@ -610,4 +644,58 @@ export interface CommuneStock {
 /** Tồn kho toàn xã: kho tổng cộng với hàng đang nằm ở các kho thôn. */
 export function getCommuneStock(warehouseId: string): Promise<CommuneStock> {
   return apiFetch<CommuneStock>(`/api/inventory/warehouses/${warehouseId}/commune-stock`);
+}
+
+export interface CommuneExpiryItem {
+  batchId: string;
+  sku: string;
+  itemName: string;
+  unit: string;
+  /** Kho đang giữ lô này — cả xã chứ không riêng kho tổng. */
+  warehouseId: string;
+  warehouseName: string;
+  quantity: number;
+  expiryDate: string;
+  /** Âm là ĐÃ quá hạn; 0 là hết hạn trong hôm nay. */
+  daysUntilExpiry: number;
+}
+
+export interface CommuneExpiry {
+  windowDays: number;
+  /** Gần hết hạn nhất đứng trước — máy chủ đã sắp sẵn. */
+  items: CommuneExpiryItem[];
+}
+
+export interface CommuneLowStockItem {
+  batchId: string;
+  batchCode: string;
+  sku: string;
+  itemName: string;
+  unit: string;
+  quantity: number;
+  /** Kho đang giữ lô này — cả xã chứ không riêng kho tổng. */
+  warehouseId: string;
+  warehouseName: string;
+  zoneName: string | null;
+  shelfCode: string | null;
+}
+
+export interface CommuneLowStock {
+  threshold: number;
+  /** Ít nhất đứng trước — máy chủ đã sắp sẵn. */
+  items: CommuneLowStockItem[];
+}
+
+/** Lô sắp cạn của cả xã, kèm tên kho đang giữ. */
+export function getCommuneLowStock(warehouseId: string, threshold = 10): Promise<CommuneLowStock> {
+  return apiFetch<CommuneLowStock>(
+    `/api/inventory/warehouses/${warehouseId}/commune-low-stock?threshold=${threshold}`,
+  );
+}
+
+/** Lô sắp hết hạn của cả xã, kèm tên kho đang giữ. */
+export function getCommuneExpiry(warehouseId: string, days = 30): Promise<CommuneExpiry> {
+  return apiFetch<CommuneExpiry>(
+    `/api/inventory/warehouses/${warehouseId}/commune-expiry?days=${days}`,
+  );
 }
