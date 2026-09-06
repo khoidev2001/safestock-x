@@ -5,10 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { BrandLoader } from "@/components/shared/brand-loader";
+import { ForgotPasswordDialog } from "@/components/auth/forgot-password-dialog";
 import { ColorIcon } from "@/components/shared/color-icon";
 import { BASE } from "@/lib/api";
 import { useAuth } from "@/lib/auth-store";
-import { danhDauCoPhien } from "@/lib/session-marker";
+import { markSessionPresent } from "@/lib/session-marker";
+import { publishSession } from "@/lib/session-channel";
 
 /**
  * Đăng nhập xong thì dừng lại chừng này ở màn hình "đã vào được" trước khi
@@ -20,9 +22,9 @@ import { danhDauCoPhien } from "@/lib/session-marker";
  * ràng cắt hẳn cái ngờ đó, và phần lớn thời gian chờ này trùng luôn với thời
  * gian trang kia đang dựng.
  */
-const NHIP_THANH_CONG_MS = 700;
+const SUCCESS_PAUSE_MS = 700;
 
-type TrangThai = "nhap" | "dang-gui" | "thanh-cong";
+type FormState = "idle" | "sending" | "success";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -31,13 +33,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
-  const [trangThai, setTrangThai] = useState<TrangThai>("nhap");
-  const dangBan = trangThai !== "nhap";
+  const [formState, setFormState] = useState<FormState>("idle");
+  const [isForgotOpen, setIsForgotOpen] = useState(false);
+  const isBusy = formState !== "idle";
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setError("");
-    setTrangThai("dang-gui");
+    setFormState("sending");
     try {
       const response = await fetch(`${BASE}/api/auth/login`, {
         method: "POST",
@@ -73,19 +76,22 @@ export default function LoginPage() {
       const data = await response.json();
       setAuth(data.accessToken, data.user);
       // Từ giờ máy này mới có cái để khôi phục ở những lần mở trang sau.
-      danhDauCoPhien();
-      // KHÔNG trả về trạng thái "nhap" ở đây: từ lúc này tấm thẻ chỉ còn việc
+      markSessionPresent();
+      // Đăng nhập thu hồi phiên cũ của tài khoản: tab nào đang mở phải nhận token
+      // mới ngay, không thì nó chạy tiếp với token vừa chết và bị đá ra ngoài.
+      publishSession(data.accessToken, data.user);
+      // KHÔNG trả về trạng thái "idle" ở đây: từ lúc này tấm thẻ chỉ còn việc
       // báo đã vào được rồi nhường chỗ cho bảng điều khiển. Mở khoá lại các ô
       // nhập giữa chừng chỉ mời người dùng bấm Đăng nhập lần thứ hai.
-      setTrangThai("thanh-cong");
-      setTimeout(() => router.push("/readiness"), NHIP_THANH_CONG_MS);
+      setFormState("success");
+      setTimeout(() => router.push("/overall"), SUCCESS_PAUSE_MS);
     } catch (err) {
       setError(
         err instanceof TypeError
           ? "Không thể kết nối đến hệ thống. Vui lòng kiểm tra máy chủ và thử lại."
           : (err as Error).message,
       );
-      setTrangThai("nhap");
+      setFormState("idle");
     }
   }
 
@@ -113,7 +119,7 @@ export default function LoginPage() {
             className="app-panel login-panel login-panel-enter w-full max-w-lg p-6 sm:p-7 md:p-9"
             onSubmit={submit}
           >
-            {trangThai === "dang-gui" ? <span aria-hidden className="login-progress" /> : null}
+            {formState === "sending" ? <span aria-hidden className="login-progress" /> : null}
 
             <div className="mb-7 flex justify-center">
               <Image
@@ -137,7 +143,7 @@ export default function LoginPage() {
               <input
                 autoComplete="username"
                 className="login-field h-11 rounded-md border px-3 outline-none transition focus:border-[var(--color-accent)] disabled:opacity-70"
-                disabled={dangBan}
+                disabled={isBusy}
                 id="email"
                 onChange={(event) => setEmail(event.target.value)}
                 value={email}
@@ -152,7 +158,7 @@ export default function LoginPage() {
                 <input
                   autoComplete="current-password"
                   className="login-field h-11 w-full rounded-md border px-3 pr-11 outline-none transition focus:border-[var(--color-accent)] disabled:opacity-70"
-                  disabled={dangBan}
+                  disabled={isBusy}
                   id="password"
                   onChange={(event) => setPassword(event.target.value)}
                   type={showPassword ? "text" : "password"}
@@ -162,7 +168,7 @@ export default function LoginPage() {
                   aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
                   aria-pressed={showPassword}
                   className="login-password-toggle absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center transition"
-                  disabled={dangBan}
+                  disabled={isBusy}
                   onClick={() => setShowPassword((current) => !current)}
                   type="button"
                 >
@@ -183,18 +189,29 @@ export default function LoginPage() {
 
             <button
               className="mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[var(--color-accent)] px-4 font-semibold text-[var(--color-accent-fg)] transition hover:brightness-95 active:translate-y-px disabled:opacity-60"
-              disabled={dangBan}
+              disabled={isBusy}
               type="submit"
             >
-              {dangBan ? (
+              {isBusy ? (
                 <ColorIcon className="animate-spin" name="loading" size={18} tone="green" />
               ) : null}
-              {trangThai === "thanh-cong"
+              {formState === "success"
                 ? "Đã đăng nhập"
-                : trangThai === "dang-gui"
+                : formState === "sending"
                   ? "Đang đăng nhập"
                   : "Đăng nhập"}
             </button>
+
+            <div className="mt-4 text-right">
+              <button
+                className="min-h-9 rounded-md px-2 text-sm font-semibold text-[var(--color-accent)] underline-offset-2 transition hover:underline disabled:opacity-60"
+                disabled={isBusy}
+                onClick={() => setIsForgotOpen(true)}
+                type="button"
+              >
+                Quên mật khẩu?
+              </button>
+            </div>
 
             <div className="mt-6 border-t pt-5 text-center">
               <Link
@@ -209,9 +226,9 @@ export default function LoginPage() {
             {/* Lớp phủ nằm TRONG tấm thẻ chứ không phủ cả trang: nó che đúng phần
                 đang bị khoá và để nguyên phần còn lại của màn hình, nên người
                 dùng vẫn thấy mình đang ở đâu. */}
-            {dangBan ? (
+            {isBusy ? (
               <div className="login-busy-veil">
-                {trangThai === "thanh-cong" ? (
+                {formState === "success" ? (
                   <>
                     <span className="login-success-mark">
                       <ColorIcon name="success" size={34} tone="green" />
@@ -229,6 +246,12 @@ export default function LoginPage() {
           </form>
         </section>
       </div>
+
+      <ForgotPasswordDialog
+        defaultLogin={email.trim()}
+        isOpen={isForgotOpen}
+        onClose={() => setIsForgotOpen(false)}
+      />
     </main>
   );
 }
