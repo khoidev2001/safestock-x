@@ -28,10 +28,13 @@ import {
 import {
   acceptWarehouseMaterialRequest,
   completeMission,
+  confirmHoldingReturn,
   fetchMission,
   fetchMissionDeliveryPhoto,
   fetchMissionWarehouseRoutes,
   fetchWarehouseMaterialRequests,
+  fetchOverlappingHoldings,
+  submitFieldDecisions,
   confirmWarehousePickup,
   prepareWarehouseMaterialRequest,
   reportWarehouseMaterialDiscrepancy,
@@ -39,8 +42,22 @@ import {
   type MissionDeliveryPhoto,
   type MissionDetail,
   type MissionWarehouseRoute,
+  type OverlappingHolding,
   type WarehouseMaterialRequest,
 } from "./api";
+import {
+  canTakeNone,
+  heldSummary,
+  isDecisionLocked,
+  minimumWarehouseQuantity,
+  PICKUP_DECISION_LABEL,
+  suggestDecision,
+  summarizeDecisions,
+  validateDecisions,
+  type DecisionDraft,
+  type DecisionRow,
+  type PickupDecision,
+} from "./rescue-decision-state";
 import { c, styles } from "./styles";
 import { assessDanger, disasterOf, formatLongTime } from "./disaster";
 import {
@@ -76,7 +93,9 @@ import {
   buildPickupPlan,
   formatTravel,
   pickupItemStatusLabel,
+  pickupReadinessHeadline,
   pickupStopStateLabel,
+  summarizePickupReadiness,
   type PickupStop,
 } from "./mission-pickup-plan";
 
@@ -141,8 +160,22 @@ export function MissionDetailScreen({
   const [resultPhotos, setResultPhotos] = useState<EvidencePhoto[]>([]);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [completing, setCompleting] = useState(false);
+  /** Lựa chọn đang gõ dở cho từng món ở bước chốt số cần lấy. */
+  const [decisionDrafts, setDecisionDrafts] = useState<Record<string, DecisionDraft>>({});
+  const [decisionBusy, setDecisionBusy] = useState(false);
+  const [overlapping, setOverlapping] = useState<OverlappingHolding[]>([]);
+  /**
+   * Đã trả vật tư về kho chưa — `null` là CHƯA TRẢ LỜI.
+   *
+   * Ba trạng thái chứ không phải hai. Mặc định "rồi" là mọi lần quên trả đều lặng
+   * lẽ thành "đã trả"; mặc định "chưa" là mọi chuyến giao hàng tiêu hao đều mọc ra
+   * một khoản nợ không có thật.
+   */
+  const [suppliesReturned, setSuppliesReturned] = useState<boolean | null>(null);
   const [fieldVoiceBusy, setFieldVoiceBusy] = useState(false);
   const [fieldRecording, setFieldRecording] = useState(false);
+  /** Khoản tạm giữ đang chờ máy chủ trả lời khi đội bấm "đã trả đủ về kho". */
+  const [returningHoldingId, setReturningHoldingId] = useState<string | null>(null);
   const [warehouseActionId, setWarehouseActionId] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [warehouseNotes, setWarehouseNotes] = useState<Record<string, string>>({});
@@ -209,6 +242,39 @@ export function MissionDetailScreen({
   useEffect(() => {
     load();
   }, [load]);
+
+  /**
+   * THỦ KHO bấm "đã trả đủ về kho" cho một khoản đội còn nợ.
+   *
+   * Tồn kho cộng lại ngay lúc này và bước "hoàn trả vật tư" đóng theo, nên hỏi
+   * lại một câu trước — và câu hỏi phải gọi đúng tên món, đúng số và đúng kho
+   * phải hoàn về, vì màn hình này có thể đang liệt kê bốn năm khoản của cùng một
+   * chuyến, hoàn về mấy kho khác nhau.
+   */
+  async function confirmReturn(holding: {
+    id: string;
+    itemName: string;
+    unit: string;
+    quantity: number;
+    warehouse: { name: string };
+  }) {
+    const agreed = await confirmAction({
+      title: "Đã trả đủ về kho?",
+      message: `Xác nhận đã nhận lại đủ ${holding.itemName} ${holding.quantity} ${holding.unit} tại ${holding.warehouse.name}. Tồn kho cộng lại ngay, bước hoàn trả vật tư của nhiệm vụ đóng lại, và điều phối nhận thông báo.`,
+      confirmLabel: "Đã nhận đủ",
+    });
+    if (!agreed) return;
+    setReturningHoldingId(holding.id);
+    try {
+      await confirmHoldingReturn(token, holding.id);
+      await load();
+      notify("Đã ghi nhận", "Vật tư đã được ghi là hoàn trả về kho.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không xác nhận được hoàn trả");
+    } finally {
+      setReturningHoldingId(null);
+    }
+  }
 
   // Bỏ qua lần chạy đầu: `load` ở trên vừa tải xong, gọi thêm là hai lượt mạng
   // cho cùng một lần mở màn.
@@ -300,10 +366,53 @@ export function MissionDetailScreen({
    * bằng chứng đều tuỳ chọn, nên nút luôn bấm được — thứ bắt buộc duy nhất là
    * người thật xác nhận việc đã xong.
    */
+  /**
+   * Gửi phần đội chốt: từng món lấy hết, lấy một phần, hay không cần lấy.
+   *
+   * Kiểm ngay trên máy trước khi gọi mạng. Người đang đứng ngoài mưa mà phải chờ
+   * một vòng mạng chập chờn chỉ để biết mình gõ thiếu một ô thì lần sau họ gõ bừa.
+   */
+  async function submitFieldDecisionForm() {
+    const checked = validateDecisions(decisionRows, decisionDrafts);
+    if (!checked.ok) {
+      setError(checked.message);
+      return;
+    }
+    const confirmed = await confirmAction({
+      title: "Xác nhận số cần lấy từ kho",
+      message: `${summarizeDecisions(decisionRows, checked.decisions)} Điều phối sẽ lập kế hoạch theo số này.`,
+      confirmLabel: "Gửi",
+    });
+    if (!confirmed) return;
+
+    setDecisionBusy(true);
+    setError(null);
+    try {
+      await submitFieldDecisions(token, missionId, checked.decisions);
+      await load();
+      notify("Đã gửi", "Điều phối đã nhận số vật tư cần lấy.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không gửi được số cần lấy");
+    } finally {
+      setDecisionBusy(false);
+    }
+  }
+
   async function submitDeliveryReport() {
+    // Bắt buộc trả lời. Người vừa đi hiện trường về là người DUY NHẤT biết hàng
+    // tái sử dụng đang ở trên xe hay đã về kho; đoán hộ họ là làm hỏng đúng con
+    // số mà cả sổ kho lẫn nhiệm vụ sau đều dựa vào.
+    if (suppliesReturned === null) {
+      setError("Cho biết đã hoàn trả vật tư về kho hay chưa trước khi đóng nhiệm vụ.");
+      return;
+    }
     const confirmed = await confirmAction({
       title: "Xác nhận đã hoàn thành",
-      message: `${deliveryReportSummary(resultText, resultPhotos.length)} Nhiệm vụ sẽ đóng lại và không sửa được nữa.`,
+      message: `${deliveryReportSummary(resultText, resultPhotos.length)} ${
+        suppliesReturned
+          ? "Vật tư đã hoàn trả về kho."
+          : "Vật tư tái sử dụng sẽ được ghi vào sổ đội đang giữ."
+      } Nhiệm vụ sẽ đóng lại và không sửa được nữa.`,
       confirmLabel: "Đã hoàn thành",
     });
     if (!confirmed) return;
@@ -317,11 +426,23 @@ export function MissionDetailScreen({
         "DELIVERED",
         resultText.trim() || undefined,
         resultPhotos.map((photo) => ({ dataBase64: photo.dataBase64 })),
+        {
+          returned: suppliesReturned,
+          // Không khai chi tiết thì máy chủ hiểu là còn giữ toàn bộ phần tái sử
+          // dụng đã ký nhận — và đó đúng là điều người bấm "chưa trả" đang nói.
+          heldItems: undefined,
+        },
       );
       setResultText("");
       setResultPhotos([]);
+      setSuppliesReturned(null);
       await load();
-      notify("Đã ghi nhận", "Nhiệm vụ đã đóng với kết quả giao đủ.");
+      notify(
+        "Đã ghi nhận",
+        suppliesReturned
+          ? "Nhiệm vụ đã đóng và vật tư đã hoàn trả."
+          : "Nhiệm vụ đã đóng. Phần vật tư chưa trả đã vào sổ đội đang giữ.",
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không gửi được báo cáo kết quả");
     } finally {
@@ -447,10 +568,7 @@ export function MissionDetailScreen({
    * Dừng ngay ở lỗi ĐẦU TIÊN. Chạy tiếp là giấu mất chỗ hỏng: người dùng thấy
    * "xong" trong khi một dòng đã trượt, mà chính dòng đó mới là dòng có chuyện.
    */
-  async function runBulkWarehouseAction(
-    kind: BulkActionKind,
-    rows: WarehouseMaterialRequest[],
-  ) {
+  async function runBulkWarehouseAction(kind: BulkActionKind, rows: WarehouseMaterialRequest[]) {
     setBulkBusy(true);
     setError(null);
     try {
@@ -506,6 +624,82 @@ export function MissionDetailScreen({
     () => buildPickupPlan(routes, mission?.warehouseRequests ?? []),
     [routes, mission?.warehouseRequests],
   );
+
+  /** Bản tham mưu kèm phần đội đang cầm sẵn của từng món. */
+  const decisionRows = useMemo<DecisionRow[]>(() => {
+    const heldBySku = new Map<string, number>();
+    for (const holding of overlapping) {
+      heldBySku.set(holding.sku, (heldBySku.get(holding.sku) ?? 0) + holding.quantity);
+    }
+    return (mission?.requirements ?? []).map((requirement) => ({
+      sku: requirement.sku,
+      itemName: requirement.itemName,
+      unit: requirement.unit,
+      required: requirement.required,
+      heldQuantity: heldBySku.get(requirement.sku) ?? 0,
+    }));
+  }, [mission?.requirements, overlapping]);
+
+  const needsFieldDecision =
+    fieldForce && !cacheStoredAt && mission?.status === "PENDING_FIELD_DECISION";
+
+  /**
+   * Những món đội đã ký nhận — danh sách để đối chiếu khi trả lời câu hoàn trả.
+   *
+   * Chỉ để ĐỌC. Món nào là tiêu hao (nước, lương khô) thì máy chủ tự loại khỏi sổ
+   * tạm giữ; máy không giữ cờ đó nên không đoán hộ ở đây.
+   */
+  const reusableHeldCandidates = useMemo(
+    () =>
+      (mission?.warehouseRequests ?? [])
+        .filter((request) => (request.pickedUpQuantity ?? 0) > 0)
+        .map((request) => ({
+          sku: request.sku,
+          itemName: request.itemName,
+          unit: request.unit,
+          quantity: request.pickedUpQuantity ?? 0,
+        })),
+    [mission?.warehouseRequests],
+  );
+
+  /**
+   * Tải phần đội đang giữ, và gợi ý sẵn lựa chọn theo nó.
+   *
+   * Không có bước này thì người trả lời chỉ đoán, và kho lại soạn thêm đúng số
+   * hàng đang nằm trên xe của chính họ.
+   */
+  useEffect(() => {
+    if (!needsFieldDecision) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const rows = await fetchOverlappingHoldings(token, missionId);
+        if (!cancelled) setOverlapping(rows);
+      } catch {
+        // Không chặn màn hình vì không tra được sổ tạm giữ: người ta vẫn chốt số
+        // được bằng mắt, chỉ là mất phần gợi ý.
+        if (!cancelled) setOverlapping([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [needsFieldDecision, token, missionId]);
+
+  // Gợi ý sẵn khi danh sách đã đủ dữ kiện; không đè lên ô người dùng vừa sửa.
+  useEffect(() => {
+    if (!needsFieldDecision || decisionRows.length === 0) return;
+    setDecisionDrafts((current) => {
+      const next = { ...current };
+      let changed = false;
+      for (const row of decisionRows) {
+        if (next[row.sku]) continue;
+        next[row.sku] = suggestDecision(row);
+        changed = true;
+      }
+      return changed ? next : current;
+    });
+  }, [needsFieldDecision, decisionRows]);
 
   return (
     <View style={styles.screen}>
@@ -621,7 +815,31 @@ export function MissionDetailScreen({
                 </>
               ) : null}
 
-              <SuppliesSection requirements={mission.requirements} />
+              {/* Chốt số cần lấy đứng TRƯỚC mọi bảng vật tư khác — nó là việc
+              đang phải làm, và là chỗ duy nhất đội nói ra được rằng mình đang cầm
+              sẵn hàng từ chuyến trước. Nằm dưới như trước thì người mở nhiệm vụ ra
+              đọc hết bảng "cần mang" rồi mới gặp câu hỏi thật. */}
+              {needsFieldDecision ? (
+                <FieldDecisionPanel
+                  rows={decisionRows}
+                  drafts={decisionDrafts}
+                  busy={decisionBusy}
+                  onChange={(sku, draft) =>
+                    setDecisionDrafts((current) => ({
+                      ...current,
+                      [sku]: { ...current[sku], ...draft },
+                    }))
+                  }
+                  onSubmit={() => void submitFieldDecisionForm()}
+                />
+              ) : null}
+
+              {/* Đang phải chốt số thì ẩn hẳn "Vật tư cần mang".
+                  Hai bảng cùng liệt kê một danh sách vật tư đứng liền nhau, mà
+                  bảng trên nói số CẦN còn bảng dưới hỏi số PHẢI LẤY — người đang
+                  vội đọc bảng đầu tiên gặp được rồi trả lời theo nó. Bảng "cần
+                  mang" quay lại ngay sau khi gửi xong. */}
+              {needsFieldDecision ? null : <SuppliesSection requirements={mission.requirements} />}
 
               {role === "WAREHOUSE" && (mission.warehouseRequests?.length ?? 0) > 0 ? (
                 <WarehouseMaterialRequestPanel
@@ -662,6 +880,44 @@ export function MissionDetailScreen({
                   recording={fieldRecording}
                   voiceBusy={fieldVoiceBusy}
                   submitting={completing}
+                  suppliesReturned={suppliesReturned}
+                  onSuppliesReturnedChange={setSuppliesReturned}
+                  reusableItems={reusableHeldCandidates}
+                />
+              ) : null}
+
+              {/* Khoản còn nợ kho SAU KHI nhiệm vụ đã ĐÓNG.
+                  Đội bấm "chưa trả vật tư" lúc báo kết quả, và trước đây câu trả
+                  lời đó rơi vào hư không: sổ tạm giữ chỉ mở ở màn web của thủ kho,
+                  nên khoản nợ nằm đó cho tới đợt kiểm kê sau. Đặt ngay trong nhiệm
+                  vụ sinh ra nó thì cả hai bên nhìn cùng một danh sách.
+
+                  NÚT XÁC NHẬN chỉ có ở PHÍA KHO, và chỉ cho những khoản phải hoàn
+                  về chính kho mình. Cú bấm ấy cộng thẳng số hàng trở lại sổ, nên
+                  nó phải nằm ở người đang đứng cạnh cái kệ và đếm được hàng thật;
+                  đội cứu hộ đọc cùng danh sách nhưng chỉ để biết mình còn nợ gì và
+                  phải chở về đâu. Đây cũng là mốc DUY NHẤT đóng bước "hoàn trả vật
+                  tư" trên thanh tiến trình.
+
+                  BẮT BUỘC xét `status === "COMPLETED"` — tức là đội đã báo cáo kết
+                  quả và nhiệm vụ đã đóng. Lúc phát hành, phần đội đang cầm được
+                  CHUYỂN sang nhiệm vụ mới (`transferHeldSupplies`), nên một nhiệm
+                  vụ còn đang chờ kho vẫn đọc ra vài khoản HELD của chính nó — hiện
+                  khối ở đó là mời người ta ghi "đã về kho" cho đúng đống hàng sắp
+                  được mang đi giao. */}
+              {mission.status === "COMPLETED" ? (
+                <OutstandingHoldingsPanel
+                  holdings={(mission.supplyHoldings ?? []).filter(
+                    (holding) => holding.status === "HELD",
+                  )}
+                  // Kho nào xuất thì kho đó nhận lại: máy chủ đã chặn ở
+                  // `confirmHoldingReturn`, nên hiện nút cho khoản của kho khác
+                  // chỉ là một cái nút bấm vào để nhận lỗi.
+                  confirmableWarehouseId={
+                    role === "WAREHOUSE" && !cacheStoredAt ? (warehouseId ?? null) : null
+                  }
+                  busyId={returningHoldingId}
+                  onConfirm={(holding) => void confirmReturn(holding)}
                 />
               ) : null}
 
@@ -1147,6 +1403,229 @@ function Fact({ label, value }: { label: string; value: string }) {
  * Chỉ có một đường ra: đã hoàn thành. Chưa xong thì người ta còn ngoài đường,
  * không mở màn này ra để báo dở dang.
  */
+/**
+ * Chốt từng món phải lấy bao nhiêu từ kho.
+ *
+ * Ba nút chứ không phải một ô số: "lấy hết" và "gõ đúng con số bằng số cần" nhìn
+ * giống nhau lúc nhập nhưng khác hẳn lúc điều phối đọc lại — cái đầu là đồng ý
+ * với bản tham mưu, cái sau là một con số người ta tự nghĩ ra.
+ */
+function FieldDecisionPanel({
+  rows,
+  drafts,
+  busy,
+  onChange,
+  onSubmit,
+}: {
+  rows: DecisionRow[];
+  drafts: Record<string, DecisionDraft>;
+  busy: boolean;
+  onChange: (sku: string, draft: DecisionDraft) => void;
+  onSubmit: () => void;
+}) {
+  const allOptions: PickupDecision[] = ["TAKE_ALL", "TAKE_PARTIAL", "TAKE_NONE"];
+  return (
+    <View style={local.reportBox}>
+      <Text style={styles.reasonTitle}>Cần lấy bao nhiêu từ kho?</Text>
+      <Text style={[styles.emptyText, { textAlign: "left", marginBottom: 10 }]}>
+        Điều phối sẽ lập kế hoạch theo đúng số bạn chốt ở đây. Chỉ những món đội ĐANG GIỮ mới sửa
+        được số — phần còn lại lấy đúng theo bản tham mưu.
+      </Text>
+      {rows.map((row) => {
+        const draft = drafts[row.sku] ?? suggestDecision(row);
+        const held = heldSummary(row);
+        /*
+         * Món KHÔNG nằm trong sổ tạm giữ thì không có gì để chốt.
+         *
+         * Đội chỉ biết hơn điều phối đúng một điều: mình đang cầm sẵn những gì.
+         * Ở món họ không cầm gì cả thì con số của điều phối là con số duy nhất
+         * có căn cứ — mở ba nút và một ô số ở đó là mời người đang đứng ngoài
+         * mưa ước lượng lại một định mức tính theo số người, rồi kho soạn theo
+         * cái ước lượng ấy.
+         */
+        const locked = isDecisionLocked(row);
+        /*
+         * "Không cần lấy" chỉ hiện khi đội đang cầm ĐỦ cả phần cần.
+         *
+         * Giữ 1 trên 2 cuộn dây mà chọn "không cần lấy" thì kho không soạn cuộn
+         * nào, bản tham mưu vẫn ghi cần 2, và màn hình điều phối đọc ra "Không
+         * cần lấy từ kho · đội đang giữ 1 cuộn" — nghe như đã đủ. Nhiệm vụ thiếu
+         * đúng một cuộn và không dòng nào trên trang nói ra điều đó.
+         *
+         * Ẩn hẳn nút chứ không để bấm rồi báo lỗi: người đang đứng ngoài mưa
+         * không nên phải học luật bằng cách vi phạm nó.
+         */
+        const minimum = minimumWarehouseQuantity(row);
+        const options = canTakeNone(row)
+          ? allOptions
+          : allOptions.filter((option) => option !== "TAKE_NONE");
+        return (
+          <View key={row.sku} style={local.decisionRow}>
+            <View style={local.decisionHead}>
+              <Text style={[local.decisionName, { flexShrink: 1 }]}>
+                {row.itemName} — cần {row.required} {row.unit}
+              </Text>
+              {/* Số đang giữ nằm NGAY CẠNH tên món, không phải ở một dòng riêng
+                  bên dưới: đây là con số họ phải trừ đi khi gõ, nên nó cần đứng
+                  trong cùng một lần liếc với con số cần. */}
+              {row.heldQuantity > 0 ? (
+                <View style={local.heldTag}>
+                  <Text style={local.heldTagText}>
+                    Đang giữ {row.heldQuantity} {row.unit}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+            {held ? (
+              <Text style={[styles.emptyText, { textAlign: "left", marginBottom: 6 }]}>{held}</Text>
+            ) : null}
+            {locked ? (
+              <Text style={[styles.emptyText, { textAlign: "left" }]}>
+                Đội không giữ sẵn món này — lấy đúng {row.required} {row.unit} theo bản tham mưu.
+              </Text>
+            ) : (
+              <>
+                <View style={local.optionRow}>
+                  {options.map((option) => (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: draft.decision === option }}
+                      key={option}
+                      onPress={() => onChange(row.sku, { decision: option })}
+                      style={[local.option, draft.decision === option && local.optionActive]}
+                    >
+                      <Text
+                        style={
+                          draft.decision === option ? local.optionTextActive : local.optionText
+                        }
+                      >
+                        {PICKUP_DECISION_LABEL[option]}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                {draft.decision === "TAKE_PARTIAL" ? (
+                  <TextInput
+                    accessibilityLabel={`Số lượng cần lấy của ${row.itemName}`}
+                    keyboardType="number-pad"
+                    onChangeText={(value) => onChange(row.sku, { quantity: value })}
+                    // Nói rõ CẢ HAI đầu của khoảng hợp lệ. Chỉ ghi cận trên thì
+                    // người ta gõ 1 cho một dòng cần 5 mà đội mới giữ 1, rồi mới
+                    // biết mình sai sau khi bấm gửi.
+                    placeholder={
+                      minimum > 0
+                        ? `Số cần lấy (từ ${minimum} đến ${row.required - 1})`
+                        : `Số cần lấy (nhỏ hơn ${row.required})`
+                    }
+                    placeholderTextColor={c.muted}
+                    style={[styles.reasonInput, { marginTop: 8 }]}
+                    value={draft.quantity ?? ""}
+                  />
+                ) : null}
+              </>
+            )}
+          </View>
+        );
+      })}
+      <Pressable
+        accessibilityRole="button"
+        disabled={busy}
+        onPress={onSubmit}
+        style={[styles.actionButton, busy && { opacity: 0.6 }]}
+      >
+        <Text style={styles.actionButtonText}>
+          {busy ? "Đang gửi…" : "Gửi số cần lấy cho điều phối"}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+/**
+ * Vật tư của CHÍNH nhiệm vụ này mà đội còn cầm, chưa trả về kho.
+ *
+ * Hai vai cùng đọc một danh sách, nhưng chỉ MỘT vai bấm được. Thủ kho là người
+ * cộng lại tồn, nên nút nằm ở họ và chỉ ở những khoản phải hoàn về đúng kho mình.
+ * Đội cứu hộ đọc để biết mình còn nợ gì và phải chở về đâu — nếu giấu hẳn khỏi
+ * màn của họ thì bên đang cầm hàng lại là bên duy nhất không thấy khoản nợ.
+ *
+ * Chỉ vẽ khi thật sự còn nợ: một khối rỗng nói "không còn khoản nào" đứng cuối
+ * mỗi nhiệm vụ đã đóng chỉ dạy mắt bỏ qua đúng chỗ này, và tới lúc có nợ thật thì
+ * nó cũng bị lướt qua.
+ *
+ * Mỗi khoản MỘT nút. Một chuyến có thể lấy áo phao ở kho A và xuồng ở kho B; gộp
+ * thành một nút "đã trả hết" là ghi cả hai đã về trong khi xe mới ghé một kho.
+ */
+function OutstandingHoldingsPanel({
+  holdings,
+  confirmableWarehouseId,
+  busyId,
+  onConfirm,
+}: {
+  holdings: {
+    id: string;
+    itemName: string;
+    unit: string;
+    quantity: number;
+    warehouse: { id: string; name: string };
+  }[];
+  /**
+   * Kho của người đang xem — chỉ khoản hoàn về đúng kho này mới có nút.
+   *
+   * `null` nghĩa là người xem không bấm được khoản nào: đội cứu hộ, người điều
+   * phối, hoặc thủ kho đang ngoại tuyến.
+   */
+  confirmableWarehouseId: string | null;
+  busyId: string | null;
+  onConfirm: (holding: {
+    id: string;
+    itemName: string;
+    unit: string;
+    quantity: number;
+    warehouse: { name: string };
+  }) => void;
+}) {
+  if (holdings.length === 0) return null;
+  const canConfirmAny = holdings.some((holding) => holding.warehouse.id === confirmableWarehouseId);
+  return (
+    <View style={local.reportBox}>
+      <Text style={styles.reasonTitle}>Vật tư chưa hoàn trả ({holdings.length})</Text>
+      <Text style={[styles.emptyText, { textAlign: "left", marginBottom: 10 }]}>
+        {canConfirmAny
+          ? "Nhiệm vụ đã đóng nhưng đội còn giữ những khoản này. Nhận lại đủ hàng rồi bấm xác nhận — tồn kho cộng lại ngay lúc bấm."
+          : "Nhiệm vụ đã đóng nhưng đội còn giữ những khoản này. Chở về kho; người giữ kho bấm xác nhận sau khi đếm lại hàng."}
+      </Text>
+      {holdings.map((holding) => {
+        const confirmable = holding.warehouse.id === confirmableWarehouseId;
+        return (
+          <View key={holding.id} style={local.decisionRow}>
+            <Text style={local.decisionName}>
+              {holding.itemName} — {holding.quantity} {holding.unit}
+            </Text>
+            <Text
+              style={[styles.emptyText, { textAlign: "left", marginBottom: confirmable ? 8 : 0 }]}
+            >
+              Hoàn về {holding.warehouse.name}
+            </Text>
+            {confirmable ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={busyId !== null}
+                onPress={() => onConfirm(holding)}
+                style={[styles.actionButton, busyId !== null && { opacity: 0.6 }]}
+              >
+                <Text style={styles.actionButtonText}>
+                  {busyId === holding.id ? "Đang ghi nhận…" : "Đã trả đủ về kho"}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 function DeliveryReportPanel({
   text,
   onChangeText,
@@ -1160,6 +1639,9 @@ function DeliveryReportPanel({
   recording,
   voiceBusy,
   submitting,
+  suppliesReturned,
+  onSuppliesReturnedChange,
+  reusableItems,
 }: {
   text: string;
   onChangeText: (text: string) => void;
@@ -1173,6 +1655,10 @@ function DeliveryReportPanel({
   recording: boolean;
   voiceBusy: boolean;
   submitting: boolean;
+  /** `null` = chưa trả lời. Không có mặc định, xem chú thích ở nơi khai state. */
+  suppliesReturned: boolean | null;
+  onSuppliesReturnedChange: (value: boolean) => void;
+  reusableItems: { sku: string; itemName: string; unit: string; quantity: number }[];
 }) {
   const full = photos.length >= MAX_EVIDENCE_PHOTOS;
   return (
@@ -1182,6 +1668,53 @@ function DeliveryReportPanel({
         Kể lại kết quả tại điểm giao và chụp ảnh làm bằng chứng. Cả hai đều không bắt buộc — không
         có gì để ghi thì cứ bấm xác nhận.
       </Text>
+      {/* Câu hỏi hoàn trả — BẮT BUỘC, và đứng TRƯỚC ô kể chuyện.
+          Đây là thứ duy nhất trên màn này làm đổi sổ kho, nên nó không được nằm
+          lẫn dưới phần tuỳ chọn để người ta cuộn qua. */}
+      <View style={local.returnBox}>
+        <Text style={[styles.reasonTitle, { marginBottom: 4 }]}>
+          Đã hoàn trả vật tư về kho chưa?
+        </Text>
+        <Text style={[styles.emptyText, { textAlign: "left", marginBottom: 8 }]}>
+          Chỉ hỏi về vật tư tái sử dụng (áo phao, đèn pin…). Đồ đã phát cho dân thì không phải trả.
+        </Text>
+        {reusableItems.length > 0 ? (
+          <Text style={[styles.emptyText, { textAlign: "left", marginBottom: 8 }]}>
+            Đã ký nhận:{" "}
+            {reusableItems
+              .map((item) => `${item.itemName} ${item.quantity} ${item.unit}`)
+              .join("; ")}
+          </Text>
+        ) : null}
+        <View style={local.optionRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ selected: suppliesReturned === true }}
+            onPress={() => onSuppliesReturnedChange(true)}
+            style={[local.option, suppliesReturned === true && local.optionActive]}
+          >
+            <Text style={suppliesReturned === true ? local.optionTextActive : local.optionText}>
+              Đã trả về kho
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ selected: suppliesReturned === false }}
+            onPress={() => onSuppliesReturnedChange(false)}
+            style={[local.option, suppliesReturned === false && local.optionActive]}
+          >
+            <Text style={suppliesReturned === false ? local.optionTextActive : local.optionText}>
+              Chưa trả — đội còn giữ
+            </Text>
+          </Pressable>
+        </View>
+        {suppliesReturned === false ? (
+          <Text style={[styles.emptyText, { textAlign: "left", marginTop: 8 }]}>
+            Phần chưa trả sẽ vào sổ &quot;đội đang giữ&quot;. Kho xác nhận đã nhận lại thì tồn kho
+            mới được cộng lại.
+          </Text>
+        ) : null}
+      </View>
       <TextInput
         style={styles.reasonInput}
         value={text}
@@ -1579,9 +2112,64 @@ function PickupPlanSection({ stops, loading }: { stops: PickupStop[]; loading: b
         Kho gần điểm gặp nạn xếp trước. Tự di chuyển tới kho để nhận hàng; người giữ kho bấm xác
         nhận xuất kho sau khi bàn giao.
       </Text>
+      {/* Chỉ tóm tắt khi có TỪ HAI KHO trở lên. Một kho thì thẻ ngay bên dưới đã
+          nói đủ, và một khối tóm tắt lặp lại đúng một dòng chữ chỉ đẩy thẻ thật
+          xuống dưới màn hình. */}
+      {stops.length > 1 ? <PickupReadinessBanner stops={stops} /> : null}
       {stops.map((stop, index) => (
         <PickupStopCard key={stop.warehouseId} stop={stop} order={index + 1} />
       ))}
+    </View>
+  );
+}
+
+/**
+ * "Kho nào đã xuất xong, đi lấy được ngay" — đặt trên đầu danh sách điểm lấy hàng.
+ *
+ * Một phương án lớn huy động ba bốn kho và chúng không bao giờ soạn xong cùng
+ * lúc. Danh sách bên dưới xếp theo quãng đường, trả lời "đi đâu trước" nhưng
+ * không trả lời "giờ này đi được kho nào" — muốn biết thì phải mở từng thẻ, đọc
+ * nhãn trạng thái rồi tự nhớ trong đầu. Bốn kho là quá đủ để nhớ nhầm, mà nhớ
+ * nhầm ở đây là chạy tới nơi rồi ngồi chờ kho soạn hàng.
+ *
+ * Viết ra TÊN KHO chứ không chỉ đếm số: "2/3 kho đã xong" vẫn bắt người đọc quay
+ * lại dò từng thẻ xem hai kho nào — mà đó đúng là câu họ cần trước khi nổ máy.
+ */
+function PickupReadinessBanner({ stops }: { stops: PickupStop[] }) {
+  const readiness = summarizePickupReadiness(stops);
+  const headline = pickupReadinessHeadline(readiness);
+  const tone = headline.tone === "done" ? c.green : headline.tone === "ready" ? c.amber : c.muted;
+
+  return (
+    <View
+      style={{
+        backgroundColor: headline.tone === "waiting" ? c.surfaceAlt : `${tone}1A`,
+        borderWidth: 1,
+        borderColor: headline.tone === "waiting" ? c.border : tone,
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 10,
+        gap: 4,
+      }}
+      accessibilityRole="summary"
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+        <MaterialCommunityIcons
+          name={
+            headline.tone === "done"
+              ? "check-decagram"
+              : headline.tone === "ready"
+                ? "truck-check-outline"
+                : "clock-outline"
+          }
+          size={16}
+          color={tone}
+        />
+        <Text style={{ color: tone, fontSize: 13, fontWeight: "800", flex: 1, minWidth: 0 }}>
+          {headline.title}
+        </Text>
+      </View>
+      <Text style={{ color: c.text, fontSize: 12, lineHeight: 18 }}>{headline.detail}</Text>
     </View>
   );
 }
@@ -1793,6 +2381,49 @@ function SupplyCard({ req }: { req: MissionDetail["requirements"][number] }) {
 }
 
 const local = StyleSheet.create({
+  decisionRow: {
+    borderTopWidth: 1,
+    borderTopColor: c.border,
+    paddingTop: 12,
+    marginBottom: 12,
+  },
+  decisionName: { color: c.text, fontWeight: "600", marginBottom: 6 },
+  decisionHead: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  // Nhãn "đang giữ" phải BẮT MẮT hơn chữ thường quanh nó: nó là dữ kiện duy nhất
+  // đội có mà điều phối không có, và là lý do dòng này được phép sửa số.
+  heldTag: {
+    backgroundColor: c.amberSoft,
+    borderColor: c.amber,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  heldTagText: { color: c.amber, fontSize: 12, fontWeight: "800" },
+  returnBox: {
+    backgroundColor: c.surfaceAlt,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: c.border,
+    padding: 12,
+    marginBottom: 12,
+  },
+  optionRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  option: {
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  optionActive: { borderColor: c.primary, backgroundColor: c.primarySoft },
+  optionText: { color: c.muted, fontSize: 13 },
+  optionTextActive: { color: c.primary, fontSize: 13, fontWeight: "600" },
   doneBox: {
     backgroundColor: "rgba(21,128,61,0.08)",
     borderRadius: 12,

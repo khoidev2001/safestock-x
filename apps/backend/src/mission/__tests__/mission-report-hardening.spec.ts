@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from "@nestjs/common";
-import { MissionStatus, Prisma } from "@prisma/client";
+import { MissionStatus, PickupDecision, Prisma, RequirementSource } from "@prisma/client";
 import { plainToInstance } from "class-transformer";
 import { validate } from "class-validator";
 import { IncidentType } from "@safestock/shared-types";
@@ -24,6 +24,7 @@ function makeService() {
   };
   const missionRequirement = {
     deleteMany: jest.fn(),
+    upsert: jest.fn(),
   };
   const tx = { mission, missionRequirement };
   const prisma = {
@@ -87,22 +88,7 @@ describe("MissionService report planning invariants", () => {
     incidentLat: 13.37,
     incidentLng: 108.61,
   };
-  const plan = {
-    fulfillment: 100,
-    readinessSnapshot: { status: "DISPATCHABLE", blockers: [] },
-    allocations: [
-      {
-        sku: "RICE-01",
-        itemName: "Gạo",
-        required: 5,
-        allocated: 5,
-        shortage: 0,
-        unit: "kg",
-        batches: [],
-      },
-    ],
-    neighbors: [],
-  };
+  const quantities = [{ sku: "RICE-01", itemName: "Gạo", unit: "kg", required: 5 }];
 
   it("không sửa requirement khi conditional DRAFT claim thua dispatch", async () => {
     const state = makeService();
@@ -110,14 +96,16 @@ describe("MissionService report planning invariants", () => {
       .mockResolvedValueOnce(draft)
       .mockResolvedValueOnce({ ...draft, status: MissionStatus.PENDING_RESCUE });
     state.mission.updateMany.mockResolvedValue({ count: 0 });
-    jest.spyOn(state.service as never, "computePlan" as never).mockResolvedValue(plan as never);
+    jest
+      .spyOn(state.service as never, "computeRequirementQuantities" as never)
+      .mockResolvedValue(quantities as never);
 
     await expect(state.service.planFromReport(draft.id, incident)).rejects.toBeInstanceOf(
       BadRequestException,
     );
 
     expect(state.missionRequirement.deleteMany).not.toHaveBeenCalled();
-    expect(state.mission.update).not.toHaveBeenCalled();
+    expect(state.missionRequirement.upsert).not.toHaveBeenCalled();
   });
 
   it("claim trước khi thay requirement và xóa dữ liệu dẫn xuất cũ khi re-plan", async () => {
@@ -125,10 +113,12 @@ describe("MissionService report planning invariants", () => {
     const planned = { ...draft, requirements: [{ id: "requirement-1" }] };
     state.mission.findUnique.mockResolvedValueOnce(draft);
     state.mission.updateMany.mockResolvedValue({ count: 1 });
-    state.mission.update.mockResolvedValue({});
     state.mission.findUniqueOrThrow.mockResolvedValue(planned);
     state.missionRequirement.deleteMany.mockResolvedValue({ count: 1 });
-    jest.spyOn(state.service as never, "computePlan" as never).mockResolvedValue(plan as never);
+    state.missionRequirement.upsert.mockResolvedValue({});
+    jest
+      .spyOn(state.service as never, "computeRequirementQuantities" as never)
+      .mockResolvedValue(quantities as never);
 
     await expect(state.service.planFromReport(draft.id, incident)).resolves.toEqual(planned);
 
@@ -140,25 +130,57 @@ describe("MissionService report planning invariants", () => {
           explanation: null,
           incidentLat: draft.incidentLat,
           incidentLng: draft.incidentLng,
+          // Tính lại nhu cầu là bỏ phần chọn kho cũ: số lượng đổi thì kho nào
+          // xuất bao nhiêu cũng phải tính lại từ đầu.
+          allocationPlannedAt: null,
         }),
       }),
     );
     expect(state.mission.updateMany.mock.invocationCallOrder[0]).toBeLessThan(
-      state.missionRequirement.deleteMany.mock.invocationCallOrder[0],
+      state.missionRequirement.upsert.mock.invocationCallOrder[0],
     );
+  });
+
+  it("lượt tính lại định mức KHÔNG xoá món ADMIN tự thêm", async () => {
+    // Đây là chốt chặn hồi quy. Bản cũ chạy `deleteMany` cho cả nhiệm vụ rồi dựng
+    // lại từ định mức, nên mỗi lượt "Lưu và tính lại" xoá trắng phần ADMIN vừa
+    // soạn — và trên đường phát hành, xoá luôn quyết định của hiện trường.
+    const state = makeService();
+    state.mission.findUnique.mockResolvedValueOnce(draft);
+    state.mission.updateMany.mockResolvedValue({ count: 1 });
+    state.mission.findUniqueOrThrow.mockResolvedValue(draft);
+    state.missionRequirement.deleteMany.mockResolvedValue({ count: 0 });
+    state.missionRequirement.upsert.mockResolvedValue({});
+    jest
+      .spyOn(state.service as never, "computeRequirementQuantities" as never)
+      .mockResolvedValue(quantities as never);
+
+    await state.service.planFromReport(draft.id, incident);
+
+    // Chỉ được dọn dòng do ĐỊNH MỨC sinh ra mà định mức mới không còn nhắc tới.
+    expect(state.missionRequirement.deleteMany).toHaveBeenCalledWith({
+      where: {
+        missionId: draft.id,
+        source: RequirementSource.NORM,
+        sku: { notIn: ["RICE-01"] },
+      },
+    });
   });
 
   it("chặn phát hành report thô chưa có readiness và requirement", async () => {
     const state = makeService();
     state.mission.findUnique.mockResolvedValue({
       ...draft,
+      status: MissionStatus.FIELD_DECIDED,
+      // Đã lập kế hoạch rồi mà vẫn không có món nào: không còn gì để điều phối.
+      allocationPlannedAt: new Date("2026-09-08T00:00:00Z"),
       readinessAssessment: null,
       _count: { requirements: 0 },
       requirements: [],
       warehouse: { organizationId: "org-1" },
     });
 
-    await expect(state.service.approve(draft.id, undefined as never)).rejects.toThrow(
+    await expect(state.service.publishPlan(draft.id, undefined as never)).rejects.toThrow(
       "Chưa thể điều phối báo cáo chưa được lập phương án",
     );
 
@@ -181,20 +203,6 @@ describe("MissionService report planning invariants", () => {
       "Cần xác nhận địa điểm ứng phó",
     );
     expect(state.mission.update).not.toHaveBeenCalled();
-  });
-
-  it("chặn dispatch nhiệm vụ cũ chưa có điểm ứng phó", async () => {
-    const state = makeService();
-    state.mission.findUnique.mockResolvedValue({
-      ...draft,
-      incidentLat: null,
-      incidentLng: null,
-      readinessAssessment: { status: "DISPATCHABLE", blockers: [] },
-      _count: { requirements: 1 },
-    });
-
-    await expect(state.service.dispatch(draft.id)).rejects.toThrow("Cần xác nhận địa điểm ứng phó");
-    expect(state.mission.updateMany).not.toHaveBeenCalled();
   });
 });
 
@@ -269,43 +277,10 @@ describe("MissionService organization scope", () => {
     expect(state.prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it("blocks dispatching a mission from another organization before mutation", async () => {
-    const state = makeScopedService();
-
-    await expect(state.service.dispatch(foreignMission.id, "actor-1")).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
-    expect(state.prisma.$transaction).not.toHaveBeenCalled();
-    expect(state.notifications.pushPersisted).not.toHaveBeenCalled();
-  });
-
   it.each([
     [
       "approve",
-      () => stateForTransition().service.approve(foreignMission.id, "actor-1", "warehouse-owned"),
-    ],
-    [
-      "confirm",
-      () => stateForTransition().service.confirmByRescue(foreignMission.id, "warehouse-owned"),
-    ],
-    [
-      "reject",
-      () =>
-        stateForTransition().service.rejectByRescue(
-          foreignMission.id,
-          "khong du nguoi",
-          "warehouse-owned",
-        ),
-    ],
-    [
-      "defer",
-      () =>
-        stateForTransition().service.deferByAdmin(foreignMission.id, undefined, "warehouse-owned"),
-    ],
-    [
-      "resend",
-      () =>
-        stateForTransition().service.resendByAdmin(foreignMission.id, undefined, "warehouse-owned"),
+      () => stateForTransition().service.publishPlan(foreignMission.id, "actor-1", "warehouse-owned"),
     ],
     [
       "cancel",
@@ -329,12 +304,9 @@ describe("MissionService organization scope", () => {
 
   it("blocks generating a plan against a warehouse from another organization", async () => {
     const state = makeScopedService();
-    jest.spyOn(state.service as never, "computePlan" as never).mockResolvedValue({
-      fulfillment: 100,
-      readinessSnapshot: { status: "DISPATCHABLE", blockers: [] },
-      allocations: [],
-      neighbors: [],
-    } as never);
+    jest
+      .spyOn(state.service as never, "computeRequirementQuantities" as never)
+      .mockResolvedValue([] as never);
 
     await expect(
       state.service.generatePlan("warehouse-foreign", ownedIncident, "actor-1"),
@@ -436,7 +408,8 @@ describe("MissionService publish atomicity", () => {
     const missionState = {
       id: "mission-1",
       warehouseId: "warehouse-1",
-      status: MissionStatus.DRAFT,
+      status: MissionStatus.FIELD_DECIDED,
+      allocationPlannedAt: new Date("2026-09-08T00:00:00Z"),
       incidentType: IncidentType.FLOOD,
       affectedPeople: 5,
       incidentLat: 13.37,
@@ -444,7 +417,7 @@ describe("MissionService publish atomicity", () => {
       readinessAssessment: { status: "DISPATCHABLE", blockers: [] },
       _count: { requirements: 1 },
       warehouse: { organizationId: "organization-1" },
-      requirements: [{ allocations: [] }],
+      requirements: [{ allocations: [], pickupDecision: PickupDecision.TAKE_ALL }],
     };
     const persistedNotifications: object[] = [];
     const mission = {
@@ -491,11 +464,11 @@ describe("MissionService publish atomicity", () => {
       {} as never,
     );
 
-    await expect(service.approve(missionState.id, undefined as never)).rejects.toThrow(
+    await expect(service.publishPlan(missionState.id, undefined as never)).rejects.toThrow(
       "notification insert failed",
     );
 
-    expect(missionState.status).toBe(MissionStatus.DRAFT);
+    expect(missionState.status).toBe(MissionStatus.FIELD_DECIDED);
     expect(persistedNotifications).toEqual([]);
     expect(notifications.pushPersisted).not.toHaveBeenCalled();
   });

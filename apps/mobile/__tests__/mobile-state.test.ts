@@ -1,5 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import {
+  canTakeNone,
+  defaultHeldItems,
+  isDecisionLocked,
+  minimumWarehouseQuantity,
+  suggestDecision,
+  summarizeDecisions,
+  validateDecisions,
+} from "../rescue-decision-state";
 import { MAX_RECORDING_MS, selectRecordingBackend } from "../audio-platform-state";
 import { parseOfflineEnvelope, serializeOfflineEnvelope } from "../offline-cache-state";
 import {
@@ -23,6 +32,8 @@ import {
   missionStageNeedsAction,
   missionWorkStage,
   sortMissionsForFieldForce,
+  missionCompletionLabel,
+  groupMissionsForFieldForce,
 } from "../mission-state";
 import {
   MAX_EVIDENCE_PHOTOS,
@@ -36,7 +47,9 @@ import {
 import {
   buildPickupPlan,
   formatTravel,
+  pickupReadinessHeadline,
   pickupStopStateLabel,
+  summarizePickupReadiness,
   type PickupRequestInput,
   type PickupRouteInput,
 } from "../mission-pickup-plan";
@@ -48,6 +61,7 @@ import {
   mergeNotification,
   missionNoQuery,
   pushToast,
+  sortNotificationsNewestFirst,
   type ToastEntry,
 } from "../notification-feed-state";
 import { parseStoredSession, serializeSession } from "../session-state";
@@ -178,16 +192,18 @@ test("lực lượng hiện trường chỉ thấy nút khi thao tác thực s�
   }
 });
 
-test("việc cần làm ngay xếp lên đầu, việc đã đóng xuống cuối", () => {
+test("mới nhất lên đầu kể cả khi kho chưa soạn xong; việc đã đóng xuống cuối", () => {
   const sorted = sortMissionsForFieldForce([
     { id: "xong", status: "COMPLETED", createdAt: "2026-07-31T10:00:00.000Z" },
-    { id: "dang-cho-kho", status: "PENDING_WAREHOUSE", createdAt: "2026-07-31T09:00:00.000Z" },
+    { id: "vua-ve", status: "PENDING_WAREHOUSE", createdAt: "2026-07-31T09:00:00.000Z" },
     { id: "can-di-giao", status: "READY", createdAt: "2026-07-31T08:00:00.000Z" },
   ]);
 
+  // Lệnh vừa về đứng TRÊN lệnh đang chờ đi lấy hàng: người trực nghe chuông rồi
+  // mở tab Nhiệm vụ ra phải thấy ngay việc vừa tới, không phải cuộn đi tìm.
   assert.deepEqual(
     sorted.map((mission) => mission.id),
-    ["can-di-giao", "dang-cho-kho", "xong"],
+    ["vua-ve", "can-di-giao", "xong"],
   );
 });
 
@@ -426,18 +442,66 @@ test("hết giờ hoặc bấm đóng thì chỉ tắt đúng cái đó", () => 
   assert.deepEqual(dismissToast(stack, "z#9"), stack);
 });
 
-test("máy chủ gửi lại cùng một thông báo thì nó nổi lại, không nhân đôi trong danh sách", () => {
+test("thông báo mới nhất luôn nằm ở đầu danh sách", () => {
+  // Máy chủ trả về đúng thứ tự thì giữ nguyên; trả lộn xộn (hoặc bản lưu ngoại
+  // tuyến ghi từ một phiên khác) thì xếp lại, chứ không tin thứ tự nhận được.
+  const xepLai = sortNotificationsNewestFirst([
+    { id: "n-1", createdAt: "2026-09-06T18:00:00Z" },
+    { id: "n-3", createdAt: "2026-09-06T20:00:00Z" },
+    { id: "n-2", createdAt: "2026-09-06T19:00:00Z" },
+  ]);
+  assert.deepEqual(
+    xepLai.map((item) => item.id),
+    ["n-3", "n-2", "n-1"],
+  );
+
+  // Hai thông báo sinh ra trong cùng một transaction mang đúng một mốc giờ. Không
+  // có mốc phụ thì thứ tự giữa chúng đổi mỗi lượt vẽ lại.
+  const cungGio = sortNotificationsNewestFirst([
+    { id: "n-a", createdAt: "2026-09-06T18:00:00Z" },
+    { id: "n-b", createdAt: "2026-09-06T18:00:00Z" },
+  ]);
+  assert.deepEqual(
+    cungGio.map((item) => item.id),
+    ["n-b", "n-a"],
+  );
+
+  // Bản ghi thiếu giờ xuống CUỐI, không được coi là mốc 0 rồi chen vào giữa.
+  const thieuGio = sortNotificationsNewestFirst([
+    { id: "n-cu", createdAt: null },
+    { id: "n-moi", createdAt: "2026-09-06T18:00:00Z" },
+  ]);
+  assert.deepEqual(
+    thieuGio.map((item) => item.id),
+    ["n-moi", "n-cu"],
+  );
+});
+
+test("máy chủ gửi lại cùng một thông báo thì thay chỗ cái cũ, không nhân đôi", () => {
   // Backend cập nhật rồi đẩy lại (updateAndPush) vẫn giữ nguyên id.
   const list = [
-    { id: "n-2", title: "sau" },
-    { id: "n-1", title: "trước" },
+    { id: "n-2", title: "sau", createdAt: "2026-09-06T19:00:00Z" },
+    { id: "n-1", title: "trước", createdAt: "2026-09-06T18:00:00Z" },
   ];
-  const merged = mergeNotification(list, { id: "n-1", title: "trước · đã cập nhật" });
+  const merged = mergeNotification(list, {
+    id: "n-1",
+    title: "trước · đã cập nhật",
+    createdAt: "2026-09-06T18:00:00Z",
+  });
 
+  // Nội dung mới thay chỗ cũ, nhưng nó KHÔNG trèo lên trên `n-2` — thông báo đó
+  // thật sự mới hơn. Nhãn MỚI trên thẻ đủ để mắt bắt được bản vừa cập nhật.
   assert.deepEqual(merged, [
-    { id: "n-1", title: "trước · đã cập nhật" },
-    { id: "n-2", title: "sau" },
+    { id: "n-2", title: "sau", createdAt: "2026-09-06T19:00:00Z" },
+    { id: "n-1", title: "trước · đã cập nhật", createdAt: "2026-09-06T18:00:00Z" },
   ]);
+
+  // Còn thông báo THẬT SỰ mới thì lên đầu, kể cả khi socket đẩy về lúc danh sách
+  // đã có sẵn vài dòng.
+  assert.deepEqual(
+    mergeNotification(list, { id: "n-3", title: "vừa về", createdAt: "2026-09-06T20:00:00Z" })[0],
+    { id: "n-3", title: "vừa về", createdAt: "2026-09-06T20:00:00Z" },
+  );
 
   // Còn ở chồng thông báo nổi thì đó là HAI lượt hiện khác nhau, nên khoá khác
   // nhau — nếu dùng chung id làm khoá, lượt mới sẽ thừa hưởng bộ đếm 5 giây của
@@ -646,6 +710,79 @@ test("kho đã xuất đủ thì báo đã xuất kho, xuất một phần thì 
   assert.equal(pickupStopStateLabel(onlyOnePrepared).label, "Soạn xong 1/2");
 });
 
+test("nhiều kho cùng soạn: nói rõ kho nào xuất xong, kho nào còn chờ", () => {
+  const stops = buildPickupPlan(
+    [centralRoute, hamletRoute],
+    [
+      // Kho trung tâm soạn xong CẢ HAI dòng của nó — tới lấy được ngay.
+      pickupRequest({ sku: "WATER-01", status: "PREPARED", preparedQuantity: 620 }),
+      pickupRequest({
+        sku: "LIFE-ADULT",
+        itemName: "Áo phao người lớn",
+        unit: "chiếc",
+        status: "PREPARED",
+        preparedQuantity: 108,
+      }),
+      // Kho thôn mới tiếp nhận, chưa soạn.
+      pickupRequest({
+        warehouseId: "kho-thon",
+        sku: "LIFE-CHILD",
+        itemName: "Áo phao trẻ em",
+        unit: "chiếc",
+        status: "ACCEPTED",
+      }),
+    ],
+  );
+
+  const readiness = summarizePickupReadiness(stops);
+  assert.deepEqual(
+    readiness.readyNow.map((stop) => stop.warehouseId),
+    ["kho-trung-tam"],
+  );
+  assert.deepEqual(
+    readiness.preparing.map((stop) => stop.warehouseId),
+    ["kho-thon"],
+  );
+  assert.deepEqual(readiness.collected, []);
+
+  const headline = pickupReadinessHeadline(readiness);
+  assert.equal(headline.tone, "ready");
+  assert.equal(headline.title, "1/2 kho đã xuất xong — tới lấy được");
+  // TÊN kho phải nằm trong câu: đếm số vẫn bắt người đọc dò lại từng thẻ.
+  assert.ok(headline.detail.includes("Kho xã Đồng Xuân"));
+  assert.ok(headline.detail.includes("Kho thôn Long Châu"));
+});
+
+test("chưa kho nào soạn xong thì nói thẳng là đừng xuất phát", () => {
+  const stops = buildPickupPlan(
+    [centralRoute, hamletRoute],
+    [pickupRequest({ status: "ACCEPTED" })],
+  );
+  const headline = pickupReadinessHeadline(summarizePickupReadiness(stops));
+  assert.equal(headline.tone, "waiting");
+  assert.equal(headline.title, "Chưa kho nào soạn xong");
+});
+
+test("mọi kho đã ký nhận bàn giao thì không còn kho nào phải ghé", () => {
+  const stops = buildPickupPlan(
+    [hamletRoute],
+    [
+      pickupRequest({
+        warehouseId: "kho-thon",
+        sku: "LIFE-CHILD",
+        itemName: "Áo phao trẻ em",
+        unit: "chiếc",
+        status: "PICKED_UP",
+        preparedQuantity: 8,
+        pickedUpQuantity: 8,
+      }),
+    ],
+  );
+  const readiness = summarizePickupReadiness(stops);
+  assert.equal(readiness.collected.length, 1);
+  assert.equal(pickupReadinessHeadline(readiness).tone, "done");
+});
+
 test("chưa tính được tuyến thì nói thẳng, không in ra 0 km", () => {
   assert.equal(formatTravel(0.8, 6), "0.8 km · ~6 phút");
   assert.equal(formatTravel(null, null), "Chưa tính được quãng đường");
@@ -797,28 +934,269 @@ test("từ khoá rỗng thì giữ nguyên cả danh sách, không lọc mất g
   assert.deepEqual(filterMissionsByNo(missions, "19"), [{ missionNo: 19 }]);
 });
 
-test("nhiệm vụ vừa xem được ghim lên đầu, trên cả việc cần làm ngay", () => {
+test("nhiệm vụ vừa xem KHÔNG được che mất lệnh mới hơn", () => {
   const missions = [
     { id: "a", status: "READY", createdAt: "2026-09-06T18:00:00Z" },
     { id: "b", status: "PENDING_WAREHOUSE", createdAt: "2026-09-06T18:16:00Z" },
     { id: "c", status: "COMPLETED", createdAt: "2026-09-06T19:00:00Z" },
   ];
 
-  // Không ghim: việc cần làm ngay (READY) lên đầu, việc đã đóng xuống cuối.
+  // Không ghim: mới nhất trước, việc đã đóng xuống cuối.
   assert.deepEqual(
     sortMissionsForFieldForce(missions).map((m) => m.id),
-    ["a", "b", "c"],
+    ["b", "a", "c"],
   );
 
-  // Ghim nhiệm vụ vừa xem — kể cả khi nó đã đóng sổ, vì người dùng vừa rời khỏi nó.
+  // Ghim nhiệm vụ CŨ hơn: lệnh mới hơn vẫn đứng trên. Đây là chỗ trước đây sai —
+  // người trực xem một việc cũ rồi lệnh mới về bị chính cái ghim đó che mất.
+  assert.deepEqual(
+    sortMissionsForFieldForce(missions, { pinnedMissionId: "a" }).map((m) => m.id),
+    ["b", "a", "c"],
+  );
+
+  // Ghim một việc ĐÃ ĐÓNG cũng không kéo được nó lên trên việc đang chạy.
   assert.deepEqual(
     sortMissionsForFieldForce(missions, { pinnedMissionId: "c" }).map((m) => m.id),
-    ["c", "a", "b"],
+    ["b", "a", "c"],
   );
 
   // Ghim một id không còn trong danh sách thì thứ tự giữ nguyên như cũ.
   assert.deepEqual(
     sortMissionsForFieldForce(missions, { pinnedMissionId: "khong-ton-tai" }).map((m) => m.id),
-    ["a", "b", "c"],
+    ["b", "a", "c"],
   );
+
+  // Hai lệnh phát hành trong cùng một giây: cái vừa xem đứng trước. Đây là chỗ
+  // duy nhất cái ghim còn quyết định được điều gì.
+  const cungGio = [
+    { id: "x", status: "READY", createdAt: "2026-09-06T18:00:00Z" },
+    { id: "y", status: "READY", createdAt: "2026-09-06T18:00:00Z" },
+  ];
+  assert.deepEqual(
+    sortMissionsForFieldForce(cungGio, { pinnedMissionId: "x" }).map((m) => m.id),
+    ["x", "y"],
+  );
+});
+
+// ===== Chốt số vật tư cần lấy từ kho =====
+
+test("đang giữ đủ thì gợi ý sẵn là không cần lấy", () => {
+  // Bắt người đang đứng ngoài mưa tự tính "cần 30, đang có 30, vậy lấy 0" là chỗ
+  // đẻ ra số sai. Gợi ý sẵn, nhưng vẫn đổi lại được.
+  assert.deepEqual(
+    suggestDecision({
+      sku: "VEST-01",
+      itemName: "Áo phao",
+      unit: "chiếc",
+      required: 30,
+      heldQuantity: 30,
+    }),
+    { decision: "TAKE_NONE" },
+  );
+});
+
+test("đang giữ một phần thì gợi ý lấy nốt phần thiếu", () => {
+  assert.deepEqual(
+    suggestDecision({
+      sku: "VEST-01",
+      itemName: "Áo phao",
+      unit: "chiếc",
+      required: 30,
+      heldQuantity: 20,
+    }),
+    { decision: "TAKE_PARTIAL", quantity: "10" },
+  );
+});
+
+test("không giữ gì thì mặc định lấy hết từ kho", () => {
+  assert.deepEqual(
+    suggestDecision({
+      sku: "VEST-01",
+      itemName: "Áo phao",
+      unit: "chiếc",
+      required: 30,
+      heldQuantity: 0,
+    }),
+    { decision: "TAKE_ALL" },
+  );
+});
+
+test("chưa trả lời hết thì không gửi được, và câu báo phải chỉ đúng món", () => {
+  // Cả hai dòng đều phải là món ĐANG GIỮ: món không giữ đã bị khoá thành
+  // "lấy hết" và không còn ô nào để bỏ trống.
+  const rows = [
+    { sku: "VEST-01", itemName: "Áo phao", unit: "chiếc", required: 30, heldQuantity: 5 },
+    { sku: "LIGHT-01", itemName: "Đèn pin", unit: "chiếc", required: 10, heldQuantity: 2 },
+  ];
+  const result = validateDecisions(rows, { "VEST-01": { decision: "TAKE_ALL" } });
+  assert.equal(result.ok, false);
+  assert.match(result.ok === false ? result.message : "", /Đèn pin/);
+});
+
+test("lấy một phần phải kèm số hợp lệ và nhỏ hơn số cần", () => {
+  // Đội giữ 25/30 nên sàn là 5 — đủ rộng để bài này chỉ soi phần "số có hợp lệ
+  // không", không đụng tới luật phủ kín (đã có bài riêng bên dưới).
+  const rows = [
+    { sku: "VEST-01", itemName: "Áo phao", unit: "chiếc", required: 30, heldQuantity: 25 },
+  ];
+  for (const quantity of ["", "0", "abc", "2.5", "30", "40"]) {
+    const result = validateDecisions(rows, {
+      "VEST-01": { decision: "TAKE_PARTIAL", quantity },
+    });
+    assert.equal(result.ok, false, `phải chặn số "${quantity}"`);
+  }
+  const ok = validateDecisions(rows, { "VEST-01": { decision: "TAKE_PARTIAL", quantity: "10" } });
+  assert.deepEqual(ok, {
+    ok: true,
+    decisions: [{ sku: "VEST-01", decision: "TAKE_PARTIAL", quantity: 10 }],
+  });
+});
+
+test("tóm tắt nói đúng số sắp yêu cầu kho xuất", () => {
+  const rows = [
+    { sku: "VEST-01", itemName: "Áo phao", unit: "chiếc", required: 30, heldQuantity: 0 },
+    { sku: "LIGHT-01", itemName: "Đèn pin", unit: "chiếc", required: 10, heldQuantity: 10 },
+  ];
+  const summary = summarizeDecisions(rows, [
+    { sku: "VEST-01", decision: "TAKE_ALL" },
+    { sku: "LIGHT-01", decision: "TAKE_NONE" },
+  ]);
+  assert.equal(summary, "Áo phao 30 chiếc");
+
+  assert.equal(
+    summarizeDecisions(rows, [
+      { sku: "VEST-01", decision: "TAKE_NONE" },
+      { sku: "LIGHT-01", decision: "TAKE_NONE" },
+    ]),
+    "Không cần lấy vật tư nào từ kho.",
+  );
+});
+
+test("chưa trả vật tư thì mặc định là còn giữ TOÀN BỘ phần đã ký nhận", () => {
+  // Đoán thấp xuống là làm sổ đẹp bằng cách bỏ quên hàng.
+  assert.deepEqual(
+    defaultHeldItems([
+      { sku: "VEST-01", pickedUpQuantity: 8 },
+      { sku: "LIGHT-01", pickedUpQuantity: 0 },
+    ]),
+    [{ sku: "VEST-01", quantity: 8 }],
+  );
+});
+
+test("hiện trường có việc ở CẢ HAI đầu luồng, không chỉ lúc đóng nhiệm vụ", () => {
+  // Chốt số cần lấy xảy ra TRƯỚC khi kho động vào hàng; báo kết quả xảy ra sau
+  // khi hàng đã ra khỏi kho. Gộp hai việc là mất đúng chỗ con số được sửa.
+  assert.deepEqual(fieldForceActionsFor("PENDING_FIELD_DECISION"), ["decide"]);
+  assert.deepEqual(fieldForceActionsFor("READY"), ["complete"]);
+  assert.deepEqual(fieldForceActionsFor("FIELD_DECIDED"), []);
+});
+
+test("thẻ nhiệm vụ nói rõ còn nợ vật tư hay đã trả", () => {
+  assert.match(missionCompletionLabel([{ status: "HELD" }]), /chưa trả vật tư/);
+  assert.match(missionCompletionLabel([{ status: "RETURNED" }]), /đã hoàn vật tư/);
+  assert.match(missionCompletionLabel([]), /đã hoàn vật tư/);
+});
+
+test("chỉ món đội đang giữ mới được sửa số cần lấy", () => {
+  // Đội biết hơn điều phối đúng một điều: mình đang cầm sẵn những gì. Ở món họ
+  // không cầm gì, con số của điều phối là con số duy nhất có căn cứ.
+  assert.equal(
+    isDecisionLocked({
+      sku: "A",
+      itemName: "Áo phao",
+      unit: "chiếc",
+      required: 10,
+      heldQuantity: 0,
+    }),
+    true,
+  );
+  assert.equal(
+    isDecisionLocked({
+      sku: "A",
+      itemName: "Áo phao",
+      unit: "chiếc",
+      required: 10,
+      heldQuantity: 3,
+    }),
+    false,
+  );
+});
+
+test("món bị khoá tự chốt LẤY HẾT, không chặn lượt gửi vì thiếu câu trả lời", () => {
+  // Màn hình không vẽ ô nào cho món bị khoá, nên đọc `drafts` của nó là đọc một
+  // ô không tồn tại — và trước khi có luật này thì lượt gửi bị chặn ở đó.
+  const rows = [
+    { sku: "A", itemName: "Áo phao", unit: "chiếc", required: 10, heldQuantity: 0 },
+    { sku: "B", itemName: "Xuồng", unit: "chiếc", required: 2, heldQuantity: 2 },
+  ];
+  const checked = validateDecisions(rows, { B: { decision: "TAKE_NONE" } });
+  assert.equal(checked.ok, true);
+  if (!checked.ok) return;
+  assert.deepEqual(checked.decisions, [
+    { sku: "A", decision: "TAKE_ALL" },
+    { sku: "B", decision: "TAKE_NONE" },
+  ]);
+});
+
+test("tab nhiệm vụ của đội tách đang chạy / đã đóng còn nợ / đã đóng hẳn", () => {
+  const groups = groupMissionsForFieldForce([
+    { status: "READY" },
+    { status: "COMPLETED", supplyHoldings: [{ status: "HELD" }] },
+    { status: "COMPLETED", supplyHoldings: [{ status: "RETURNED" }] },
+    { status: "COMPLETED" },
+    { status: "CANCELLED" },
+  ]);
+  assert.equal(groups.active.length, 1);
+  assert.equal(groups.awaitingReturn.length, 1);
+  // Huỷ cũng là đã đóng và không nợ gì: nó thuộc ngăn "đã hoàn thành" chứ không
+  // được nằm lẫn với việc đang chạy.
+  assert.equal(groups.settled.length, 3);
+});
+
+test("giữ THIẾU thì không được chọn 'không cần lấy'", () => {
+  // Ca hỏng thật: cần 2 cuộn dây, đội giữ 1, chọn "không cần lấy". Kho không soạn
+  // cuộn nào, mà màn hình điều phối đọc ra "Không cần lấy từ kho · đội đang giữ
+  // 1 cuộn" — nghe như đã đủ, trong khi nhiệm vụ thiếu đúng một cuộn.
+  const short = {
+    sku: "ROPE",
+    itemName: "Dây cứu hộ 30 mét",
+    unit: "cuộn",
+    required: 2,
+    heldQuantity: 1,
+  };
+  assert.equal(minimumWarehouseQuantity(short), 1);
+  assert.equal(canTakeNone(short), false);
+
+  const result = validateDecisions([short], { ROPE: { decision: "TAKE_NONE" } });
+  assert.equal(result.ok, false);
+  assert.match(result.ok === false ? result.message : "", /ít nhất 1 cuộn/);
+});
+
+test("giữ ĐỦ thì 'không cần lấy' là câu trả lời hợp lệ", () => {
+  const covered = {
+    sku: "ROPE",
+    itemName: "Dây cứu hộ 30 mét",
+    unit: "cuộn",
+    required: 2,
+    heldQuantity: 2,
+  };
+  assert.equal(minimumWarehouseQuantity(covered), 0);
+  assert.equal(canTakeNone(covered), true);
+
+  const result = validateDecisions([covered], { ROPE: { decision: "TAKE_NONE" } });
+  assert.equal(result.ok, true);
+});
+
+test("lấy một phần cũng không được thấp hơn phần đội còn thiếu", () => {
+  // Cùng một lỗ hổng, chỉ khác cách gõ: cần 5, giữ 1, lấy 2 → vẫn hụt 2 mà không
+  // màn hình nào nói ra.
+  const row = { sku: "VEST", itemName: "Áo phao", unit: "chiếc", required: 5, heldQuantity: 1 };
+  assert.equal(minimumWarehouseQuantity(row), 4);
+
+  const tooLow = validateDecisions([row], { VEST: { decision: "TAKE_PARTIAL", quantity: "2" } });
+  assert.equal(tooLow.ok, false);
+  assert.match(tooLow.ok === false ? tooLow.message : "", /ít nhất 4 chiếc/);
+
+  const exact = validateDecisions([row], { VEST: { decision: "TAKE_PARTIAL", quantity: "4" } });
+  assert.equal(exact.ok, true);
 });

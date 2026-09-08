@@ -20,7 +20,7 @@ describe("coordination API controller contract", () => {
     analysis as never,
     whatIf as never,
     fieldAssistant as never,
-    {} as never,
+    {} as never, {} as never,
   );
   const request = { user: { userId: "admin-1", warehouseId: null } } as never;
 

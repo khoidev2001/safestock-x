@@ -7,6 +7,8 @@ import type {
 
 export type MissionStatus =
   | "DRAFT"
+  | "PENDING_FIELD_DECISION"
+  | "FIELD_DECIDED"
   | "PENDING_RESCUE"
   | "RESCUE_CONFIRMED"
   | "PENDING_WAREHOUSE"
@@ -16,13 +18,47 @@ export type MissionStatus =
   | "DEFERRED"
   | "CANCELLED";
 
+export type PickupDecision = "TAKE_ALL" | "TAKE_PARTIAL" | "TAKE_NONE";
+
+/** Vật tư đội cứu hộ đang cầm, chưa trả về kho. */
+export interface RescueHolding {
+  id: string;
+  sku: string;
+  itemName: string;
+  unit: string;
+  quantity: number;
+  status: "HELD" | "RETURNED";
+  heldSince: string;
+  returnedAt: string | null;
+  warehouse: { id: string; name: string };
+  mission: { id: string; missionNo: number; incidentType?: string };
+}
+
+/** Một món còn tồn khả dụng trong xã, để ADMIN thêm vào bản tham mưu. */
+export interface AddableItem {
+  sku: string;
+  itemName: string;
+  unit: string;
+  consumable: boolean;
+  available: number;
+}
+
 export interface MissionRequirement {
+  id?: string;
   sku: string;
   itemName: string;
   required: number;
   allocated: number;
   shortage: number;
   unit: string;
+  /** Nguồn dòng này: định mức sinh ra hay ADMIN tự thêm khi rà soát. */
+  source?: "NORM" | "ADMIN_ADDED";
+  /** Hiện trường quyết gì với món này; rỗng = chưa trả lời. */
+  pickupDecision?: PickupDecision | null;
+  /** Số phải lấy từ kho sau khi hiện trường chốt. */
+  warehouseQuantity?: number;
+  /** Số bù bằng vật tư đội đang giữ sẵn. */
+  heldQuantity?: number;
   allocations:
     | {
         batchId: string;
@@ -115,6 +151,15 @@ export interface Mission {
    * "mới khai số liệu" với "đã lập tham mưu".
    */
   hasCoordinationAnalysis?: boolean;
+  /**
+   * Đã chạy bước chọn kho chưa — rỗng nghĩa là mới có bản tham mưu.
+   *
+   * Bảng phân bổ và mức đáp ứng chỉ có nghĩa khi trường này có giá trị; đọc
+   * `fulfillment` trước đó là đọc số 0 mặc định như một kết luận.
+   */
+  allocationPlannedAt?: string | null;
+  /** Hiện trường báo không cần lấy gì từ kho — bỏ hẳn chặng kho chuẩn bị. */
+  warehouseStageSkipped?: boolean;
   fulfillment: number;
   // Mô tả thô của trưởng thôn (mobile) khi mission là "hộp thư" báo cáo — web tự điền + phân tích.
   reportText?: string | null;
@@ -145,6 +190,19 @@ export interface Mission {
   deliveryNote?: string | null;
   completedAt?: string | null;
   /** Ảnh bằng chứng hiện trường gửi kèm lúc báo hoàn thành; bytes lấy riêng theo id. */
+  /** Vật tư đội còn cầm của chính nhiệm vụ này (kể cả phần đã hoàn trả). */
+  supplyHoldings?: {
+    id: string;
+    sku: string;
+    itemName: string;
+    unit: string;
+    quantity: number;
+    status: "HELD" | "RETURNED";
+    heldSince: string;
+    returnedAt: string | null;
+    transferredFromHoldingId: string | null;
+    warehouse: { id: string; name: string };
+  }[];
   deliveryPhotos?: MissionDeliveryPhoto[];
   /** Có bản ghi âm kèm báo cáo hay không — chỉ mô tả, bytes tải riêng khi bấm nghe. */
   reportAudio?: MissionReportAudio | null;
@@ -493,6 +551,52 @@ export const generateActionPlan = (id: string, signal?: AbortSignal) =>
   apiFetch<ActionPlan>(`/api/missions/${id}/action-plan`, { method: "POST", signal });
 
 // ADMIN phát hành trực tiếp tới kho; lực lượng hiện trường chỉ đọc phương án.
+/**
+ * Khả năng đáp ứng theo bản tham mưu HIỆN TẠI, tính lại mỗi lần danh sách đổi.
+ *
+ * Chỉ đọc — máy chủ không ghim lô nào và không ghi gì xuống nhiệm vụ. Khác
+ * `mission.readinessAssessment` ở chỗ đó: bản trong nhiệm vụ là ẢNH CHỤP lúc lập
+ * kế hoạch, còn cái này luôn nói theo con số đang hiện trên màn hình.
+ */
+export const getReadinessPreview = (id: string) =>
+  apiFetch<MissionReadinessAssessment>(`/api/missions/${id}/readiness-preview`);
+
+/** Danh mục vật tư còn tồn khả dụng trong xã, để thêm vào bản tham mưu. */
+export const getAddableItems = (id: string) =>
+  apiFetch<AddableItem[]>(`/api/missions/${id}/addable-items`);
+
+/** ADMIN sửa số / bỏ món / thêm món trên bản tham mưu. `required: 0` là bỏ món. */
+export const updateMissionRequirements = (
+  id: string,
+  changes: { sku: string; required: number }[],
+) =>
+  apiFetch<Mission>(`/api/missions/${id}/requirements`, {
+    method: "POST",
+    body: JSON.stringify({ changes }),
+  });
+
+/** Gửi bản tham mưu cho lực lượng hiện trường chốt số cần lấy. */
+export const requestFieldDecision = (id: string) =>
+  apiFetch<Mission>(`/api/missions/${id}/request-field-decision`, { method: "POST" });
+
+/** Thu hồi bản tham mưu về nháp để sửa tiếp. */
+export const withdrawFieldDecision = (id: string) =>
+  apiFetch<Mission>(`/api/missions/${id}/withdraw-field-decision`, { method: "POST" });
+
+/** "Lập kế hoạch cứu hộ": tới đây web mới chọn kho và tính khoảng cách. */
+export const planMissionAllocation = (id: string) =>
+  apiFetch<Mission>(`/api/missions/${id}/plan-allocation`, { method: "POST" });
+
+/** Vật tư đội cứu hộ đang giữ, cả xã. */
+export const listRescueHoldings = (includeReturned = false) =>
+  apiFetch<RescueHolding[]>(
+    `/api/rescue-holdings${includeReturned ? "?includeReturned=true" : ""}`,
+  );
+
+/** KHO xác nhận đã nhận lại — tới đây tồn kho mới được cộng lại. */
+export const confirmHoldingReturn = (holdingId: string) =>
+  apiFetch<RescueHolding>(`/api/rescue-holdings/${holdingId}/confirm-return`, { method: "POST" });
+
 export const approveMission = (id: string) =>
   apiFetch<Mission>(`/api/missions/${id}/approve`, { method: "POST" });
 export const prepareMission = (id: string) =>

@@ -10,6 +10,8 @@
 /** Trạng thái nhiệm vụ, khớp `MissionStatus` của backend. */
 export type WorkflowStatus =
   | "DRAFT"
+  | "PENDING_FIELD_DECISION"
+  | "FIELD_DECIDED"
   | "PENDING_WAREHOUSE"
   | "READY"
   | "COMPLETED"
@@ -19,8 +21,16 @@ export type WorkflowStatus =
   | "DEFERRED"
   | "CANCELLED";
 
-/** Số bước trên thanh tiến trình: điều phối → kho → hiện trường. */
-export const WORKFLOW_STEP_COUNT = 3;
+/**
+ * Năm bước: tham mưu → hiện trường chốt số → kho xuất → hiện trường giao xong →
+ * hoàn trả vật tư.
+ *
+ * Hai bước mới không phải là trang trí. Bước "chốt số" là chỗ DUY NHẤT đội cứu hộ
+ * nói được rằng họ đang cầm sẵn hàng; bước "hoàn trả" là chỗ duy nhất sổ kho biết
+ * hàng tái sử dụng đã về hay chưa. Thiếu chúng thì cả hai việc xảy ra ngoài hệ
+ * thống, và tồn kho chỉ đúng cho tới đợt kiểm kê sau.
+ */
+export const WORKFLOW_STEP_COUNT = 5;
 
 /** Một phiếu vật tư, chỉ cần trạng thái để biết đội đã ký nhận chưa. */
 export interface RequestStatusLike {
@@ -62,18 +72,29 @@ export function allRequestsPickedUp(requests?: RequestStatusLike[] | null): bool
 export function completedStepIndex(
   status: WorkflowStatus,
   requests?: RequestStatusLike[] | null,
+  /** Nhiệm vụ đã đóng và đội còn giữ vật tư chưa trả về kho. */
+  supplyPending?: boolean,
 ): number {
   switch (status) {
     case "DRAFT":
       return -1;
+    // Đã gửi cho hiện trường: bước tham mưu xong, đang chờ họ trả lời.
+    case "PENDING_FIELD_DECISION":
+      return 0;
+    // Hiện trường đã chốt; việc quay lại tay điều phối để lập kế hoạch và phát hành.
+    case "FIELD_DECIDED":
+      return 1;
     case "PENDING_WAREHOUSE":
+    // Hai trạng thái của luồng cũ: dữ liệu lịch sử, đều đã qua bước phát hành.
     case "PENDING_RESCUE":
     case "RESCUE_CONFIRMED":
-      return 0;
+      return 1;
     case "READY":
-      return allRequestsPickedUp(requests) ? 1 : 0;
+      return allRequestsPickedUp(requests) ? 2 : 1;
+    // Đóng nhiệm vụ mà còn nợ vật tư thì bước hoàn trả CHƯA xong. Tick xanh lúc
+    // này là xoá khỏi màn hình đúng khoản duy nhất còn treo.
     case "COMPLETED":
-      return 2;
+      return supplyPending ? 3 : 4;
     default:
       return -1;
   }
@@ -83,7 +104,25 @@ export function completedStepIndex(
 export function activeStepIndex(
   status: WorkflowStatus,
   requests?: RequestStatusLike[] | null,
+  supplyPending?: boolean,
 ): number | null {
-  const next = completedStepIndex(status, requests) + 1;
+  const next = completedStepIndex(status, requests, supplyPending) + 1;
   return next < WORKFLOW_STEP_COUNT ? next : null;
+}
+
+/**
+ * Chữ trên thẻ trạng thái sau khi nhiệm vụ đã đóng.
+ *
+ * Ba câu khác nhau chứ không phải hai: phần đang giữ có thể đã được CHUYỂN sang
+ * nhiệm vụ khác, và lúc đó nói "đã hoàn trả" là sai — hàng vẫn ở ngoài kho, chỉ
+ * là đang phục vụ việc khác.
+ */
+export function completionLabel(input: {
+  warehouseStageSkipped?: boolean;
+  heldCount: number;
+  transferredCount: number;
+}): string {
+  if (input.heldCount > 0) return "Hoàn thành — chưa hoàn trả vật tư";
+  if (input.transferredCount > 0) return "Hoàn thành — đã chuyển vật tư sang nhiệm vụ khác";
+  return "Hoàn thành — đã hoàn trả vật tư";
 }

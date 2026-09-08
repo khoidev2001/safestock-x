@@ -395,7 +395,7 @@ describe("MissionController.prepare", () => {
       {} as never,
       {} as never,
       {} as never,
-      {} as never,
+      {} as never, {} as never,
     );
 
     await controller.prepare(

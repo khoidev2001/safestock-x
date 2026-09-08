@@ -237,8 +237,49 @@ export class MissionWarehouseRequestService {
         },
         `tiếp nhận ${requestId}`,
       );
+      await this.notifyFieldForceOnFullAcceptance(
+        current.missionId,
+        current.warehouse.organizationId,
+      );
     }
     return current;
+  }
+
+  /**
+   * MỌI phiếu của nhiệm vụ đã được kho tiếp nhận → gọi lực lượng hiện trường.
+   *
+   * Đây là mốc đầu tiên đội biết chắc lệnh đã tới tay người soạn hàng. Trước đó
+   * "đã phát hành" chỉ nói hệ thống gửi đi, chưa nói có ai đọc; sau đó là tin
+   * "đã xuất xong" mà giữa hai mốc có thể cách nhau cả buổi. Đội cần mốc giữa để
+   * bắt đầu chuẩn bị xe và người thay vì ngồi chờ một tin duy nhất.
+   *
+   * Chỉ bắn ở phiếu CUỐI CÙNG được tiếp nhận: báo từng phiếu là mỗi món một lần
+   * rung điện thoại cho đúng một chuyến đi. Và chỉ đếm phiếu còn PENDING — phiếu
+   * đã ACCEPTED/PREPARED/PICKED_UP đều đã qua mốc này rồi.
+   */
+  private async notifyFieldForceOnFullAcceptance(missionId: string, organizationId: string) {
+    const stillPending = await this.prisma.missionWarehouseRequest.count({
+      where: { missionId, status: MissionWarehouseRequestStatus.PENDING },
+    });
+    if (stillPending > 0) return;
+    const mission = await this.prisma.mission.findUnique({
+      where: { id: missionId },
+      select: { missionNo: true },
+    });
+    const warehouseCount = await this.prisma.missionWarehouseRequest
+      .findMany({ where: { missionId }, select: { warehouseId: true }, distinct: ["warehouseId"] })
+      .then((rows) => rows.length);
+    await this.notify(
+      {
+        recipientRole: UserRole.RESCUE,
+        kind: NotificationKind.WAREHOUSE_REQUEST_ACCEPTED,
+        title: "Các kho đã tiếp nhận — đang soạn hàng",
+        body: `${missionLabel(mission?.missionNo)}: ${warehouseCount} kho đã nhận lệnh và bắt đầu soạn phần của mình. Kho nào xuất xong sẽ báo riêng để tới lấy, không phải chờ đủ tất cả.`,
+        missionId,
+        organizationId,
+      },
+      `mọi kho đã tiếp nhận nhiệm vụ ${missionId}`,
+    );
   }
 
   /** CAS ngăn ghi chú chênh lệch đè lên SKU đã PREPARED. */
@@ -507,6 +548,9 @@ export class MissionWarehouseRequestService {
       .catch((error) =>
         this.log.warn(`Recalc sau prepare SKU ${requestId} lỗi: ${message(error)}`),
       );
+    // Kho nào của nhiệm vụ này còn nợ hàng — để câu gọi đội nói được cả hai vế:
+    // tới đâu lấy được ngay, và còn phải chờ những đâu.
+    const stillPreparing = await this.warehousesStillPreparing(result.request.missionId);
     await Promise.all([
       this.notify(
         {
@@ -556,7 +600,7 @@ export class MissionWarehouseRequestService {
                   recipientRole: UserRole.RESCUE,
                   kind: NotificationKind.WAREHOUSE_READY,
                   title: "Kho đã chuẩn bị xong — tới lấy hàng",
-                  body: `${missionLabel(result.missionNo)}: ${result.request.warehouse.name} đã xuất xong phần vật tư của kho. Tới kho nhận hàng; người giữ kho bấm ký nhận sau khi bàn giao. Các kho còn lại vẫn đang chuẩn bị.`,
+                  body: `${missionLabel(result.missionNo)}: ${result.request.warehouse.name} đã xuất xong phần vật tư của kho. Tới kho nhận hàng; người giữ kho bấm ký nhận sau khi bàn giao. ${describeStillPreparing(stillPreparing)}`,
                   missionId: result.request.missionId,
                   warehouseId: result.request.warehouseId,
                   organizationId: result.request.warehouse.organizationId,
@@ -567,6 +611,24 @@ export class MissionWarehouseRequestService {
           : []),
     ]);
     return result.request;
+  }
+
+  /**
+   * Kho nào của nhiệm vụ này CÒN NỢ hàng, theo tên.
+   *
+   * Đội cứu hộ phải theo dõi được tiến trình của cả phương án chứ không chỉ của
+   * kho vừa xong: một chuyến đi ghé bốn kho, và biết còn phải chờ hai kho nào là
+   * thứ quyết định họ xuất phát ngay hay đợi thêm nửa tiếng. Đếm số ("còn 2 kho")
+   * thì họ vẫn phải mở nhiệm vụ ra dò xem là hai kho nào.
+   */
+  private async warehousesStillPreparing(missionId: string): Promise<string[]> {
+    const pending = await this.prisma.missionWarehouseRequest.findMany({
+      where: { missionId, status: { in: [...UNEXPORTED_REQUEST_STATUSES] } },
+      select: { warehouse: { select: { name: true } } },
+      distinct: ["warehouseId"],
+      orderBy: { warehouseId: "asc" },
+    });
+    return pending.map((row) => row.warehouse.name);
   }
 
   private async resolveWarehouseId(
@@ -589,6 +651,12 @@ export class MissionWarehouseRequestService {
       this.log.warn(`Tạo thông báo ${context} lỗi: ${message(error)}`);
     });
   }
+}
+
+/** Vế "còn phải chờ đâu" của câu gọi đội tới lấy hàng. */
+function describeStillPreparing(names: string[]): string {
+  if (names.length === 0) return "Các kho khác đã xuất xong.";
+  return `Còn ${names.length} kho đang chuẩn bị: ${names.join(", ")}.`;
 }
 
 function normalizeNote(value?: string | null): string | null {

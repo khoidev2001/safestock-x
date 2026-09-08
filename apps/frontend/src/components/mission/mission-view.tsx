@@ -10,7 +10,7 @@ import { useAuth } from "@/lib/auth-store";
 import { useMissionFocus } from "@/lib/mission-focus-store";
 import { missionDeepLink, missionNumberLink } from "@/lib/mission-inbox-state";
 import type { LatLng } from "@/lib/geo";
-import { ApiError } from "@/lib/api";
+import { ApiError, errorMessage } from "@/lib/api";
 import {
   analyzeMission,
   approveMission,
@@ -23,17 +23,24 @@ import {
   getWarehouseRoutes,
   parseIncident,
   planFromReport,
+  planMissionAllocation,
   prepareMission,
+  requestFieldDecision,
+  withdrawFieldDecision,
   transcribeAudio,
   type DeliveryOutcome,
   type GenerateInput,
   type Mission,
   type MissionDeliveryPhoto,
+  type MissionStatus,
   type ParsedIncident,
   fetchMissionReportAudio,
   type MissionReportAudio,
 } from "@/lib/mission-api";
 import { listAllWarehouses } from "@/lib/warehouse-api";
+import { AdvisoryPlanPanel } from "./advisory-plan-panel";
+import { SupplyReadinessPanel } from "./supply-readiness-panel";
+import { RescueHoldingsPanel } from "./rescue-holdings-panel";
 import { listHamlets } from "@/lib/hamlet-api";
 import {
   findHamlet,
@@ -54,16 +61,27 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { blobToWavBase64, SILENCE_RMS } from "@/lib/audio-wav";
 import { ActionPlanView } from "./action-plan-view";
 import { MissionInbox } from "./mission-inbox";
-import { MissionReadinessPanel } from "./mission-readiness-panel";
-import { CoordinationAnalysisPanel, requestId } from "./coordination-analysis-panel";
+import { requestId } from "@/lib/request-id";
 import { WarehouseRequestPanel } from "./warehouse-request-panel";
 import { WorkflowStepper } from "./workflow-stepper";
 import { completedStepIndex } from "./workflow-progress";
 import { FIELD_FORCE_ROLE_LABEL } from "@safestock/shared-types";
 
+/**
+ * Bản đồ nạp riêng, chỉ ở trình duyệt (Leaflet đụng `window` ngay lúc nạp).
+ *
+ * Khung chờ PHẢI CÓ CHỮ. Trước đây nó là một ô trống bo góc, nhìn y hệt một bản
+ * đồ hỏng — và khi gói mã của bản đồ không tải xong (chuyện thường gặp sau nhiều
+ * lượt nạp nóng lúc đang sửa mã) thì người dùng chỉ thấy một ô trắng, không có gì
+ * nói cho họ biết là nên tải lại trang hay là bản đồ đã chết hẳn.
+ */
 const IncidentMap = dynamic(() => import("./incident-map").then((m) => m.IncidentMap), {
   ssr: false,
-  loading: () => <div className="h-[320px] animate-pulse rounded-md border bg-[var(--surface)]" />,
+  loading: () => (
+    <div className="flex h-[320px] items-center justify-center rounded-md border bg-[var(--surface)]">
+      <p className="animate-pulse text-sm text-[var(--text-muted)]">Đang tải bản đồ…</p>
+    </div>
+  ),
 });
 
 const INCIDENT_TYPES = [
@@ -734,6 +752,40 @@ export function MissionView({
     },
   });
 
+  /**
+   * "Lập kế hoạch cứu hộ" — MỘT cú bấm, hai việc.
+   *
+   * Chọn kho và tính quãng đường (`planMissionAllocation`) rồi sinh luôn phương án
+   * đọc được (`generateActionPlan`). Trước đây đây là hai nút nối tiếp nhau: bấm
+   * xong nút thứ nhất thì trang hiện đúng một dòng "chưa có kế hoạch" cùng một nút
+   * thứ hai tên khác hẳn, trong khi người dùng vừa yêu cầu đúng cái kế hoạch đó.
+   * Ai dừng lại ở đó thì nhiệm vụ nằm mãi ở FIELD_DECIDED mà không có bảng kho,
+   * không có quãng đường và không có tuyến trên bản đồ.
+   *
+   * Phần chọn kho chạy TRƯỚC và không có AI: hỏng thì chưa có gì bị ghi và người
+   * dùng bấm lại. Phần sinh diễn giải có gọi LLM nhưng đã tự rơi về bản mẫu khi
+   * LLM lỗi, nên nó không kéo cả cú bấm hỏng theo.
+   */
+  const planRescue = useMutation({
+    mutationFn: async () => {
+      await planMissionAllocation(missionId as string);
+      return generateActionPlan(missionId as string, newAiSignal("action-plan"));
+    },
+    onSuccess: () => {
+      setWorkflowError(null);
+      setPendingPlanScroll(true);
+      queryClient.invalidateQueries({ queryKey: ["missions", "inbox"] });
+      return queryClient.invalidateQueries({ queryKey: ["mission", missionId] });
+    },
+    onError: (err) => {
+      if (isUserAbort(err)) return;
+      setWorkflowError(
+        errorMessage(err, "Chưa thể lập kế hoạch cứu hộ. Vui lòng kiểm tra địa điểm ứng phó."),
+      );
+      refreshMissionAfterConflict();
+    },
+  });
+
   const step = useMutation({
     mutationFn: (fn: (id: string) => Promise<Mission>) => fn(missionId as string),
     onSuccess: () => {
@@ -742,15 +794,23 @@ export function MissionView({
       return queryClient.invalidateQueries({ queryKey: ["mission", missionId] });
     },
     onError: (err) => {
-      setWorkflowError(
-        err instanceof ApiError ? err.message : "Chưa thể cập nhật nhiệm vụ. Vui lòng thử lại.",
-      );
+      setWorkflowError(errorMessage(err, "Chưa thể cập nhật nhiệm vụ. Vui lòng thử lại."));
       refreshMissionAfterConflict();
     },
   });
 
   const isAdmin = role === "ADMIN";
   const missionHasIncidentPoint = mission?.incidentLat != null && mission?.incidentLng != null;
+  /**
+   * Nhiệm vụ đã đóng nhưng đội còn cầm vật tư chưa trả về kho.
+   *
+   * Đọc từ chính các dòng tạm giữ chứ không từ một cột trạng thái riêng: cột
+   * denormalized thì hai code path (trả từng phần, chuyển sang nhiệm vụ khác)
+   * đều phải nhớ lật nó, và chỉ cần một bên quên là màn hình nói sai.
+   */
+  const missionSupplyPending = (mission?.supplyHoldings ?? []).some(
+    (holding) => holding.status === "HELD",
+  );
   const missionPoint = missionHasIncidentPoint
     ? { lat: mission!.incidentLat as number, lng: mission!.incidentLng as number }
     : null;
@@ -785,6 +845,18 @@ export function MissionView({
   );
 
   /**
+   * Hiện trường đã trả lời phần "lấy bao nhiêu từ kho" chưa.
+   *
+   * Đọc theo DẤU VẾT trên từng dòng vật tư, không theo trạng thái nhiệm vụ: nhiệm
+   * vụ đã phát hành cũng đã đi qua chặng này, và bảng câu trả lời vẫn phải đọc lại
+   * được sau đó. Xét bằng `status === "FIELD_DECIDED"` thì khối biến mất đúng lúc
+   * người ta cần đối chiếu xem kho đang soạn theo con số nào.
+   */
+  const fieldDecided = Boolean(
+    mission?.requirements.some((requirement) => requirement.pickupDecision),
+  );
+
+  /**
    * Khối "Tình huống khẩn cấp" có đang hiện không.
    *
    * Quan trọng vì hai nút AI nằm trong đó. Nhiệm vụ đã phát hành thì khối này ẩn
@@ -814,7 +886,7 @@ export function MissionView({
    * phải đọc. Chưa có nhiệm vụ nào thì nó vẫn phải ở lại trong form, nếu không sẽ
    * không còn đường nào tạo nhiệm vụ đầu tiên.
    */
-  const readinessVisible = Boolean(mission?.readinessAssessment);
+  const readinessVisible = Boolean(mission && mission.requirements.length > 0 && isDetailPage);
   /**
    * Đang có một lượt lập tham mưu chạy dở — kể cả lượt do MÀN HÌNH TRƯỚC bấm.
    *
@@ -933,7 +1005,12 @@ export function MissionView({
     /* `scroll-mt`: thanh tiêu đề trang là `sticky top-0`. Cuộn sát mép trên thì
        mép khối chui xuống dưới nó và mất luôn bước đầu của thanh tiến trình. */
     <section className="app-panel scroll-mt-24 p-5" ref={workflowRef}>
-      <WorkflowStepper status={mission.status} warehouseRequests={mission.warehouseRequests} />
+      <WorkflowStepper
+        status={mission.status}
+        warehouseRequests={mission.warehouseRequests}
+        warehouseStageSkipped={mission.warehouseStageSkipped}
+        supplyPending={missionSupplyPending}
+      />
       {/* Ai chốt phương án này. Một xã có nhiều quản trị viên cùng duyệt để chia
           tải, nên khi phải hỏi lại thì phải biết gọi ai — trước đây hệ thống có lưu
           id người duyệt nhưng không hiện ra đâu cả. */}
@@ -961,7 +1038,10 @@ export function MissionView({
           }}
           onPrepare={() => step.mutate(prepareMission)}
           onCancel={(note) => step.mutate((id) => cancelMission(id, note))}
-          busy={genActionPlan.isPending || step.isPending}
+          onRequestFieldDecision={() => step.mutate(requestFieldDecision)}
+          onWithdrawFieldDecision={() => step.mutate(withdrawFieldDecision)}
+          onPlanAllocation={() => planRescue.mutate()}
+          busy={genActionPlan.isPending || planRescue.isPending || step.isPending}
         />
       </div>
       {workflowError && (
@@ -1269,7 +1349,7 @@ export function MissionView({
         ]}
       />
       <AiProgressDialog
-        open={genActionPlan.isPending}
+        open={genActionPlan.isPending || planRescue.isPending}
         onCancel={() => cancelAi("action-plan")}
         title="Lập kế hoạch cứu hộ"
         estimate="40 giây"
@@ -1524,73 +1604,71 @@ export function MissionView({
                   Thanh đó nói "đang chờ kho xuất hàng"; khối này là chính những
                   dòng phải xuất. Để nó nằm sâu trong kế hoạch cứu hộ như lúc chưa
                   phát hành thì người của kho mở nhiệm vụ ra phải cuộn qua khả năng
-                  đáp ứng, tham mưu, đánh giá, phương án cấp phát — bốn khối họ
-                  không cần đọc — mới tới việc của mình. */}
+                  đáp ứng, bản tham mưu và đánh giá tình huống — ba khối họ không
+                  cần đọc — mới tới việc của mình. */}
               {isPublished ? warehouseRequestPanel : null}
 
-              {mission.readinessAssessment && (
-                <>
-                  {/* Cùng mốc với khối tham mưu: có kế hoạch cứu hộ rồi thì thu
-                      gọn lại. Mức đáp ứng và danh sách vật tư thiếu ở đây đã được
-                      kế hoạch kể lại trong phần "Phương án cấp phát".
+              {/* KHẢ NĂNG ĐÁP ỨNG là khối đầu tiên ở mọi chặng chưa phát hành.
+                  Nó vừa là danh sách vật tư vừa là kết luận kho có đủ hàng không —
+                  hai thứ trước đây nằm ở hai khối rời và chỉ khớp nhau sau khi lập
+                  kế hoạch. Ở chặng nháp nó cũng là thứ DUY NHẤT sửa được.
 
-                      `defaultOpen` chỉ đọc một lần lúc dựng, nên `key` phải đổi
-                      theo thì khối mới tự đóng ngay sau khi lập kế hoạch. */}
-                  <MissionReadinessPanel
-                    key={mission.actionPlan ? "da-co-ke-hoach" : "chua-co-ke-hoach"}
-                    assessment={mission.readinessAssessment}
-                    defaultOpen={!mission.actionPlan}
-                  />
-                  {/* Đọc xong kho còn đủ những gì thì mới tới lượt bấm lập tham mưu.
-                      Chỉ hiện cho người đang có form (ADMIN, nhiệm vụ còn nháp) —
-                      nhiệm vụ đã phát hành có nút riêng trong khối tham mưu. */}
-                  {showAnalyzeCta && <section className="app-panel p-5">{analyzeCta}</section>}
-                </>
-              )}
-              {/* Bằng chứng hiện trường nằm bên trong khối tham mưu: nó chính là
-                  nguồn làm bản tham mưu đổi, tách ra thì phải cuộn qua lại giữa
-                  hai khối mới đối chiếu được. */}
-              {isAdmin && (
-                <CoordinationAnalysisPanel
-                  /* Có KẾ HOẠCH CỨU HỘ rồi thì khối này THU GỌN LẠI.
-                     Bảng nhu cầu, danh sách kho và quãng đường trong bản tham mưu
-                     chính là bộ số mà kế hoạch cứu hộ bên dưới kể lại; để cả hai mở
-                     cùng lúc thì người trực đọc hai lần một thứ, và khi hai bên hiện
-                     khác nhau một chút họ không biết tin bên nào.
-
-                     Mốc đóng là lúc có kế hoạch, KHÔNG phải lúc có bản tham mưu.
-                     Vừa lập tham mưu xong là lúc người trực cần đọc chính nó — đó là
-                     kết quả của cú bấm vừa rồi, và chưa có kế hoạch nào để mà trùng.
-                     Đóng ngay lúc đó là giấu đi đúng thứ họ vừa yêu cầu tính.
-
-                     `defaultOpen` chỉ được đọc lúc khối được dựng, nên phải đổi cả
-                     `key` theo: không có nó, lập kế hoạch xong khối vẫn nằm mở cho
-                     tới khi tải lại trang.
-
-                     Đọc cờ từ `mission` chứ không từ một truy vấn riêng: `mission` đã
-                     có sẵn trước khi khối này được dựng, nên không có cảnh khối bật
-                     mở rồi tự đóng lại ngay trước mắt người dùng lúc mở trang. */
-                  key={mission.actionPlan ? "da-co-ke-hoach" : "chua-co-ke-hoach"}
-                  defaultOpen={!mission.actionPlan}
-                  missionId={mission.id}
-                  fieldUpdateId={fieldUpdateId}
-                  // Lập XONG rồi thì không truyền nữa — nút biến mất vĩnh viễn.
-                  // Sửa số liệu thì bản tham mưu tự lập lại theo (xem
-                  // `updateIncident`), nên một nút mời bấm lại đúng việc hệ thống
-                  // vừa tự làm chỉ tổ tốn thêm một lượt gọi LLM.
-                  //
-                  // Chỉ còn giữ đúng một ca: nhiệm vụ ĐÃ PHÁT HÀNH mà chưa hề có
-                  // bản tham mưu. Lúc đó khối khai tình huống đã ẩn nên đây là
-                  // đường duy nhất, bỏ nốt thì nhiệm vụ đó vĩnh viễn không lập
-                  // được bản nào.
-                  onRun={
-                    hasCoordinationAnalysis || showAnalyzeCta
-                      ? undefined
-                      : () => analyzeCoordination.mutate()
-                  }
-                  running={coordinationRunning}
+                  MỞ SẴN cho tới khi hiện trường chốt số: từ đó trở đi câu hỏi đổi
+                  sang "lấy bao nhiêu từ kho", và khối trả lời câu đó nằm ngay dưới.
+                  `key` đổi theo chặng vì `CollapsiblePanel` chỉ đọc `defaultOpen`
+                  lúc dựng. */}
+              {/* Bản tham mưu chưa có món nào (báo cáo thô chưa phân tích) thì
+                  khối này không có gì để nói — và cũng chưa sửa được, vì chỗ tạo
+                  ra danh sách là nút "Lập bản tham mưu" ở khối khai tình huống. */}
+              {mission.requirements.length > 0 && (
+                <SupplyReadinessPanel
+                  key={`dap-ung-${fieldDecided ? "da-chot" : "chua-chot"}`}
+                  defaultOpen={!fieldDecided}
+                  mission={mission}
+                  editable={isAdmin && mission.status === "DRAFT" && !isReportDraft}
                 />
               )}
+
+              {/* Chỉ hiện SAU KHI hiện trường trả lời. Trước đó nó là một bảng lặp
+                  lại y bảng trên với một cột rỗng — mà cột rỗng đó lại chính là lý
+                  do khối này tồn tại. */}
+              {fieldDecided && (
+                <AdvisoryPlanPanel
+                  /* Có kế hoạch cứu hộ rồi thì thu gọn: từ đó trở đi việc nằm ở
+                     phần điều phối kho bên dưới. */
+                  key={mission.actionPlan ? "tham-muu-da-co-ke-hoach" : "tham-muu-chua-ke-hoach"}
+                  defaultOpen={!mission.actionPlan}
+                  mission={mission}
+                  fieldUpdateId={fieldUpdateId}
+                />
+              )}
+
+              {/* Sổ tạm giữ chỉ hiện cho người có việc với nó: thủ kho phải nhận
+                  lại hàng, điều phối phải biết mình còn cho mượn những gì.
+
+                  MỞ SẴN đúng ở chặng LẬP BẢN THAM MƯU. Đó là lúc nó trả lời một
+                  câu đang được hỏi: món này đội đã cầm sẵn chưa, có nên bắt kho
+                  soạn lại không. Từ chặng hiện trường chốt số trở đi thì chính họ
+                  vừa trả lời câu đó rồi — sổ chỉ còn là chỗ tra khi cần, mà mở sẵn
+                  thì nó chen giữa bản tham mưu và kế hoạch cứu hộ, hai khối phải
+                  đọc liền nhau.
+
+                  `key` đổi theo chặng vì `CollapsiblePanel` chỉ đọc `defaultOpen`
+                  lúc dựng: không có nó, khối vẫn nằm mở tới khi tải lại trang. */}
+              {(isAdmin || role === "WAREHOUSE") && (
+                <RescueHoldingsPanel
+                  key={`tam-giu-${fieldDecided ? "da-chot" : "chua-chot"}`}
+                  defaultOpen={!fieldDecided}
+                  canConfirmReturn={role === "WAREHOUSE"}
+                />
+              )}
+
+              {/* Đọc xong kho còn đủ những gì thì mới tới lượt bấm lập tham mưu.
+                  Chỉ hiện cho người đang có form (ADMIN, nhiệm vụ còn nháp). */}
+              {showAnalyzeCta && readinessVisible && (
+                <section className="app-panel p-5">{analyzeCta}</section>
+              )}
+
               {/* Không có kế hoạch cứu hộ thì khối SKU không có chỗ để gá vào. */}
               {!isPublished && !mission.actionPlan && warehouseRequestPanel}
               {showWorkflowPanel && !isPublished && !mission.actionPlan ? workflowPanel : null}
@@ -1603,23 +1681,23 @@ export function MissionView({
                   <ActionPlanView
                     plan={mission.actionPlan}
                     incidentPoint={missionPoint}
-                    status={mission.status}
                     // Đã phát hành thì khối này đã lên đầu trang; gá thêm ở đây
                     // là cùng một danh sách hiện hai chỗ trên một trang.
                     warehouseSlot={isPublished ? null : warehouseRequestPanel}
                   />
                 </div>
-              ) : showWorkflowPanel ? (
-                <div className="rounded-md border border-dashed bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-muted)]">
-                  Chọn <b>Lập kế hoạch cứu hộ</b> để tạo các bước thực hiện chi tiết.
-                </div>
               ) : (
-                /* Chưa có tham mưu thì câu nhắc phải chỉ đúng việc kế tiếp. Giữ
-                   nguyên câu "Chọn Lập kế hoạch cứu hộ" ở đây là chỉ vào một nút
-                   vừa bị ẩn, và người dùng đi tìm một thứ không tồn tại. */
-                <div className="rounded-md border border-dashed bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-muted)]">
-                  Lập <b>bản tham mưu</b> trước; tiến trình và các bước tiếp theo sẽ mở ra sau đó.
-                </div>
+                /* Câu nhắc phải chỉ đúng việc KẾ TIẾP của chặng đang đứng.
+                   Trước đây mọi chặng chưa có kế hoạch đều đọc chung một câu "Chọn
+                   Lập kế hoạch cứu hộ" — trong khi ở chặng nháp nút đó chưa tồn tại
+                   (việc đang làm là soát danh sách vật tư) và ở chặng chờ hiện
+                   trường thì nó cũng chưa hiện. Người dùng đi tìm một nút không có
+                   trên màn hình, ngay dưới đúng cái nút họ thật sự phải bấm. */
+                <NextStepHint
+                  status={mission.status}
+                  isAdmin={isAdmin}
+                  hasAdvisoryPlan={mission.requirements.length > 0}
+                />
               )}
 
               {/* Có kế hoạch cứu hộ rồi thì nút duyệt xuống DƯỚI CÙNG, sau toàn bộ
@@ -1695,6 +1773,9 @@ function RoleActions({
   onPublish,
   onPrepare,
   onCancel,
+  onRequestFieldDecision,
+  onWithdrawFieldDecision,
+  onPlanAllocation,
   busy,
 }: {
   mission: Mission;
@@ -1706,6 +1787,9 @@ function RoleActions({
   onPublish: () => void;
   onPrepare: () => void;
   onCancel: (note: string) => void;
+  onRequestFieldDecision: () => void;
+  onWithdrawFieldDecision: () => void;
+  onPlanAllocation: () => void;
   busy: boolean;
 }) {
   const isAdmin = role === "ADMIN";
@@ -1765,13 +1849,45 @@ function RoleActions({
 
       <div className="flex flex-wrap gap-2">
         {/* Báo cáo chưa phân tích: hành động nằm ở thẻ báo cáo phía trên, không hiện nút phương án. */}
+        {/* Bản tham mưu xong → hỏi hiện trường. KHÔNG còn đường phát hành thẳng
+            tới kho: chính chặng này là chỗ đội cứu hộ nói ra rằng họ đang cầm
+            sẵn hàng, mà bỏ qua nó là kho soạn lại đúng đống hàng trên xe họ. */}
         {isAdmin && mission.status === "DRAFT" && !isReportDraft && (
+          <button
+            className={actionBtn}
+            style={primaryStyle}
+            onClick={onRequestFieldDecision}
+            disabled={busy || !hasIncidentPoint || mission.requirements.length === 0}
+            title={
+              !hasIncidentPoint
+                ? "Cần xác nhận địa điểm ứng phó trước khi gửi"
+                : mission.requirements.length === 0
+                  ? "Bản tham mưu chưa có vật tư nào"
+                  : undefined
+            }
+          >
+            <ColorIcon name="send" size={18} tone="blue" /> Gửi {FIELD_FORCE_ROLE_LABEL} xác nhận
+          </button>
+        )}
+
+        {isAdmin && mission.status === "PENDING_FIELD_DECISION" && (
+          <button
+            className={actionBtn}
+            onClick={onWithdrawFieldDecision}
+            disabled={busy}
+            title="Thu hồi để sửa lại danh sách vật tư; câu trả lời đã nhập sẽ bị xoá"
+          >
+            Thu hồi để sửa bản tham mưu
+          </button>
+        )}
+
+        {isAdmin && mission.status === "FIELD_DECIDED" && (
           <>
-            {!mission.actionPlan && (
+            {!mission.allocationPlannedAt && (
               <button
                 className={actionBtn}
                 style={primaryStyle}
-                onClick={onGenerateActionPlan}
+                onClick={onPlanAllocation}
                 disabled={busy || !hasIncidentPoint}
                 title={
                   hasIncidentPoint
@@ -1782,7 +1898,21 @@ function RoleActions({
                 <ColorIcon name="mission" size={18} tone="orange" /> Lập kế hoạch cứu hộ
               </button>
             )}
-            {mission.actionPlan && (
+            {/* Kho đã chọn xong nhưng phần diễn giải chưa sinh được — thường là
+                lượt gọi trước bị huỷ giữa chừng hoặc mất mạng. Chỉ còn thiếu nửa
+                sau, nên nút này KHÔNG chọn lại kho: bấm nó không làm đổi phân bổ
+                mà hiện trường vừa chốt theo. */}
+            {mission.allocationPlannedAt && !mission.actionPlan && (
+              <button
+                className={actionBtn}
+                onClick={onGenerateActionPlan}
+                disabled={busy || !hasIncidentPoint}
+                title="Kho đã được chọn; chỉ còn thiếu phần diễn giải kế hoạch"
+              >
+                <ColorIcon name="mission" size={18} tone="orange" /> Hoàn tất kế hoạch cứu hộ
+              </button>
+            )}
+            {mission.allocationPlannedAt && (
               <button
                 className={actionBtn}
                 style={primaryStyle}
@@ -1806,11 +1936,14 @@ function RoleActions({
           </>
         )}
 
-        {isAdmin && mission.status === "DRAFT" && !isReportDraft && !hasIncidentPoint && (
-          <p className="w-full text-sm text-[var(--color-critical)]">
-            Cần xác nhận địa điểm ứng phó trước khi lập kế hoạch hoặc gửi nhiệm vụ.
-          </p>
-        )}
+        {isAdmin &&
+          ["DRAFT", "FIELD_DECIDED"].includes(mission.status) &&
+          !isReportDraft &&
+          !hasIncidentPoint && (
+            <p className="w-full text-sm text-[var(--color-critical)]">
+              Cần xác nhận địa điểm ứng phó trước khi lập kế hoạch hoặc gửi nhiệm vụ.
+            </p>
+          )}
 
         {warehouseCanPrepare && (
           <button className={actionBtn} style={primaryStyle} onClick={onPrepare} disabled={busy}>
@@ -1844,9 +1977,81 @@ function RoleActions({
   );
 }
 
+/**
+ * Một câu duy nhất: việc kế tiếp của nhiệm vụ này đang nằm ở đâu.
+ *
+ * Chỉ hiện khi CHƯA có kế hoạch cứu hộ — có kế hoạch rồi thì chính nó là thứ phải
+ * đọc, không cần ai nhắc. Câu chữ đổi theo chặng và theo vai: người của kho mở
+ * một nhiệm vụ còn nháp thì việc không nằm ở tay họ, nói "bấm Lập kế hoạch" là
+ * chỉ vào một nút họ không có quyền thấy.
+ */
+function NextStepHint({
+  status,
+  isAdmin,
+  /** Bản tham mưu đã có vật tư chưa — báo cáo thô chưa phân tích thì chưa có gì để soát. */
+  hasAdvisoryPlan,
+}: {
+  status: MissionStatus;
+  isAdmin: boolean;
+  hasAdvisoryPlan: boolean;
+}) {
+  const text = nextStepText(status, isAdmin, hasAdvisoryPlan);
+  if (!text) return null;
+  return (
+    <div className="rounded-md border border-dashed bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-muted)]">
+      {text}
+    </div>
+  );
+}
+
+function nextStepText(
+  status: MissionStatus,
+  isAdmin: boolean,
+  hasAdvisoryPlan: boolean,
+): React.ReactNode {
+  if (!isAdmin) return "Nhiệm vụ đang ở bàn điều phối; chưa có kế hoạch cứu hộ để xem.";
+  switch (status) {
+    case "DRAFT":
+      if (!hasAdvisoryPlan) {
+        return (
+          <>
+            Đọc lại lời kể phía trên rồi bấm <b>Lập bản tham mưu</b> để hệ thống tính nhu cầu vật
+            tư.
+          </>
+        );
+      }
+      return (
+        <>
+          Rà lại <b>bản tham mưu</b> phía trên — sửa số, bỏ món thừa, thêm món còn thiếu — rồi bấm{" "}
+          <b>Gửi {FIELD_FORCE_ROLE_LABEL} xác nhận</b>.
+        </>
+      );
+    case "PENDING_FIELD_DECISION":
+      return (
+        <>
+          Đang chờ {FIELD_FORCE_ROLE_LABEL} chốt từng món phải lấy bao nhiêu từ kho. Kế hoạch cứu hộ
+          chỉ lập được sau khi có câu trả lời của họ.
+        </>
+      );
+    case "FIELD_DECIDED":
+      return (
+        <>
+          {FIELD_FORCE_ROLE_LABEL} đã chốt số cần lấy. Soát lại cột <b>Hiện trường chốt</b> rồi bấm{" "}
+          <b>Lập kế hoạch cứu hộ</b> để hệ thống chọn kho gần điểm nạn và tính quãng đường.
+        </>
+      );
+    default:
+      return "Nhiệm vụ này chưa có kế hoạch cứu hộ.";
+  }
+}
+
 /** Có nút hành động cho role ở trạng thái này không (để quyết định hiện hint). */
 function actionableFor(status: string, role: string | undefined): boolean {
-  if (role === "ADMIN") return ["DRAFT", "PENDING_WAREHOUSE"].includes(status);
+  if (role === "ADMIN") {
+    return ["DRAFT", "PENDING_FIELD_DECISION", "FIELD_DECIDED", "PENDING_WAREHOUSE"].includes(
+      status,
+    );
+  }
   if (role === "RESCUE") return false;
   if (role === "WAREHOUSE") return status === "PENDING_WAREHOUSE";
   return false;
@@ -2058,6 +2263,14 @@ function statusHint(status: string, role: string | undefined): string {
     return `Đang chờ ${FIELD_FORCE_ROLE_LABEL.toLowerCase()} xác nhận.`;
   }
   if (status === "PENDING_WAREHOUSE") return "Đang chờ kho chuẩn bị vật tư.";
+  if (status === "PENDING_FIELD_DECISION") {
+    return role === "RESCUE"
+      ? "Xem từng món trong bản tham mưu và cho biết cần lấy bao nhiêu từ kho."
+      : `Đang chờ ${FIELD_FORCE_ROLE_LABEL.toLowerCase()} chốt số vật tư cần lấy từ kho.`;
+  }
+  if (status === "FIELD_DECIDED") {
+    return `${FIELD_FORCE_ROLE_LABEL} đã chốt số cần lấy. Bộ phận điều phối lập kế hoạch rồi phát hành.`;
+  }
   if (status === "DRAFT" && role !== "ADMIN") return "Bộ phận điều phối đang lập kế hoạch.";
   if (status === "REJECTED") {
     return `${FIELD_FORCE_ROLE_LABEL} đã từ chối. Chờ bộ phận điều phối xử lý.`;

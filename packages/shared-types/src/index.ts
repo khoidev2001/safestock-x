@@ -128,6 +128,13 @@ export enum Permission {
   // Lực lượng hiện trường xác nhận nhận lệnh, từ chối kèm lý do, và báo kết quả giao.
   MISSION_CONFIRM = "mission:confirm",
   MISSION_FIELD_UPDATE = "mission:field_update", // Lực lượng hiện trường gửi ghi nhận đã xác nhận
+  // Lực lượng hiện trường chốt từng món phải lấy bao nhiêu từ kho. Tách khỏi
+  // MISSION_CONFIRM vì đây là quyền ĐỔI SỐ LƯỢNG của một phương án, không phải
+  // quyền báo lại kết quả một việc đã làm xong.
+  MISSION_SUPPLY_DECIDE = "mission:supply_decide",
+  // WAREHOUSE xác nhận đã nhận lại vật tư đội cứu hộ mang trả. Chỉ kho mới được:
+  // để đội tự khai đã trả là tồn kho cộng lên bằng lời nói.
+  MISSION_SUPPLY_RETURN_CONFIRM = "mission:supply_return_confirm",
   MISSION_FULFILL = "mission:fulfill", // WAREHOUSE chuẩn bị + xuất
   NOTIFICATION_VIEW = "notification:view",
   INCIDENT_REPORT_VIEW_OWN = "incident:report_view_own", // trưởng thôn xem lại báo cáo text của chính mình
@@ -168,6 +175,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.INCIDENT_ALARM_ACK, // người trực kho phải tắt được chuông tại chỗ
     Permission.LOAN_MANAGE,
     Permission.WAREHOUSE_MANAGE,
+    Permission.MISSION_SUPPLY_RETURN_CONFIRM, // nhận lại vật tư đội cứu hộ mang trả
     Permission.NOTIFICATION_VIEW,
     Permission.REPORT_SUBMIT, // gửi báo cáo kiểm kê tháng
     Permission.REPORT_VIEW,
@@ -180,6 +188,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     // evidence đã tự xác nhận, và báo tình huống mới thấy ngoài thực địa.
     Permission.MISSION_VIEW,
     Permission.MISSION_CONFIRM, // xác nhận nhận lệnh, từ chối, báo kết quả giao
+    Permission.MISSION_SUPPLY_DECIDE, // chốt từng món lấy bao nhiêu từ kho
     Permission.MISSION_FIELD_UPDATE,
     Permission.NOTIFICATION_VIEW,
     // Người đứng tại chỗ xảy ra sự việc phải báo được ngay, không phải gọi điện
@@ -196,6 +205,30 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
 /** Kiểm 1 role có quyền cụ thể không. */
 export function roleHasPermission(role: UserRole, permission: Permission): boolean {
   return ROLE_PERMISSIONS[role]?.includes(permission) ?? false;
+}
+
+/**
+ * Lực lượng hiện trường quyết gì với MỘT món trong bản tham mưu.
+ *
+ * Ba lựa chọn chứ không phải một con số: "lấy hết" và "gõ đúng con số bằng số
+ * cần" nhìn giống nhau lúc nhập nhưng khác nhau lúc điều phối đọc lại — cái đầu
+ * là đồng ý với bản tham mưu, cái sau là một con số người ta tự nghĩ ra.
+ */
+export enum PickupDecision {
+  TAKE_ALL = "TAKE_ALL",
+  TAKE_PARTIAL = "TAKE_PARTIAL",
+  TAKE_NONE = "TAKE_NONE",
+}
+
+/** Chữ hiện trên web và trên điện thoại cho từng lựa chọn. */
+export const PICKUP_DECISION_LABELS: Readonly<Record<PickupDecision, string>> = {
+  [PickupDecision.TAKE_ALL]: "Lấy hết từ kho",
+  [PickupDecision.TAKE_PARTIAL]: "Lấy một phần từ kho",
+  [PickupDecision.TAKE_NONE]: "Không cần lấy từ kho",
+};
+
+export function pickupDecisionLabel(value: PickupDecision | string): string {
+  return PICKUP_DECISION_LABELS[value as PickupDecision] ?? value;
 }
 
 /** Loại tình huống khẩn cấp — Mission-to-Kit */

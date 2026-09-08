@@ -1,7 +1,7 @@
 "use client";
 
 import L from "leaflet";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   Circle,
   MapContainer,
@@ -310,6 +310,29 @@ export function IncidentMap({
     );
   }, [baseWarehouses, warehouses]);
 
+  /**
+   * Toạ độ tuyến đã đảo sẵn về [vĩ độ, kinh độ], nhớ lại giữa các lượt vẽ.
+   *
+   * Một tuyến OSRM dài vài trăm điểm. Dựng lại mảng mỗi lần component vẽ lại —
+   * bật toàn màn hình, đổi nền bản đồ — là ép luôn phần tính chỗ đặt mũi tên chạy
+   * lại và thay toàn bộ marker mũi tên trong DOM, cho một dữ liệu không hề đổi.
+   */
+  const routeLines = useMemo(
+    () =>
+      warehouses.flatMap((warehouse, index) =>
+        warehouse.routeStatus === "ROUTED" && warehouse.routeGeometry
+          ? [
+              {
+                id: warehouse.id,
+                color: ROUTE_COLORS[index % ROUTE_COLORS.length],
+                positions: warehouse.routeGeometry.coordinates.map(([lng, lat]) => ({ lat, lng })),
+              },
+            ]
+          : [],
+      ),
+    [warehouses],
+  );
+
   const boundsPoints = useMemo(() => {
     const pts: LatLng[] = warehouses.map((w) => ({ lat: w.lat, lng: w.lng }));
     for (const w of otherWarehouses) pts.push({ lat: w.lat as number, lng: w.lng as number });
@@ -479,19 +502,31 @@ export function IncidentMap({
                 />
               </Marker>
             ))}
-            {warehouses.map((w, index) =>
-              w.routeStatus === "ROUTED" && w.routeGeometry ? (
+            {routeLines.map((route) => (
+              // `Fragment` chứ không phải `<div>`: con của MapContainer phải là
+              // lớp Leaflet, một thẻ DOM lạ sẽ bị thả thẳng vào khung bản đồ.
+              <Fragment key={`route-${route.id}`}>
+                {/* Viền trắng bên dưới: một nét xanh đơn độc trên ảnh vệ tinh lẫn
+                    vào mái tôn và mặt đường bê tông, có khúc gần như biến mất. Lớp
+                    này chỉ để tách đường ra khỏi nền, không mang tin. */}
                 <Polyline
-                  key={`route-${w.id}`}
-                  positions={w.routeGeometry.coordinates.map(([lng, lat]) => [lat, lng])}
                   pathOptions={{
-                    color: ROUTE_COLORS[index % ROUTE_COLORS.length],
-                    weight: 5,
-                    opacity: 0.9,
+                    color: "#FFFFFF",
+                    weight: ROUTE_CASING_WEIGHT,
+                    opacity: 0.75,
+                    interactive: false,
                   }}
+                  positions={route.positions.map((point) => [point.lat, point.lng])}
                 />
-              ) : null,
-            )}
+                <Polyline
+                  pathOptions={{ color: route.color, weight: ROUTE_WEIGHT, opacity: 0.95 }}
+                  positions={route.positions.map((point) => [point.lat, point.lng])}
+                />
+                {/* Mũi tên nằm TRONG lòng đường, chỉ từ kho về phía điểm gặp nạn —
+                    tuyến máy chủ trả về luôn đi theo chiều đó. */}
+                <RouteDirectionArrows color={route.color} positions={route.positions} />
+              </Fragment>
+            ))}
             {warehouses.map((w) => (
               <Marker
                 key={w.id}
@@ -593,6 +628,12 @@ export function IncidentMap({
               svg={houseSvg(MAP_SUPPLYING_COLOR, 18)}
               label={`Kho tiếp tế (${warehouses.length})`}
             />
+          ) : null}
+          {/* Nói rõ MŨI TÊN CHỈ CHIỀU NÀO. Đường kẻ có mũi tên vẫn có thể bị đọc
+              ngược — "hàng chuyển về kho" — mà đọc ngược ở đây là cho xe đi sai
+              hướng. Chỉ hiện khi trên bản đồ thật sự có tuyến vẽ được. */}
+          {routeLines.length > 0 ? (
+            <LegendGlyph label="Tuyến kho → điểm gặp nạn" svg={routeLegendSvg(20)} />
           ) : null}
         </div>
         {incidentPoint ? (
@@ -744,6 +785,158 @@ function BoundsForZoom() {
 }
 
 const ROUTE_COLORS = ["#2563eb", "#0284c7", "#4f46e5", "#0891b2", "#1d4ed8"];
+
+/**
+ * Bề dày tuyến đường.
+ *
+ * Nét mảnh biến mất trên ảnh vệ tinh: mái tôn, đường bê tông và bờ ruộng đều có
+ * sắc gần với xanh dương ở độ phóng thấp, và người trực phải nheo mắt dò xem
+ * đường chạy lối nào. Vẽ đường CHÍNH đủ dày để mũi tên chỉ hướng nằm lọt hẳn bên
+ * trong nó, kèm một lớp viền trắng bên dưới để tách đường ra khỏi nền.
+ */
+const ROUTE_WEIGHT = 8;
+const ROUTE_CASING_WEIGHT = ROUTE_WEIGHT + 5;
+
+/** Khoảng cách trên MÀN HÌNH giữa hai mũi tên chỉ hướng, tính bằng pixel. */
+const ARROW_SPACING_PX = 120;
+
+/** Nhiều nhất ngần này mũi tên trên một tuyến — quá số này thì đường thành gạch nối. */
+const MAX_ARROWS_PER_ROUTE = 8;
+
+/**
+ * Mũi tên chỉ hướng vẽ NẰM TRONG lòng đường, từ kho chạy về phía điểm gặp nạn.
+ *
+ * Một đường kẻ không có hướng chỉ nói "hai chỗ này nối với nhau". Trên bản đồ có
+ * ba bốn kho cùng cấp hàng, các tuyến cắt nhau ở ngã ba và người đọc phải tự
+ * đoán khúc nào chạy về đâu — đoán sai là cho xe đi ngược. Mũi tên trả lời sẵn
+ * câu đó ngay trên hình.
+ *
+ * Góc quay tính trong hệ toạ độ MÀN HÌNH (`map.project`), không phải theo hiệu
+ * số vĩ độ/kinh độ. Chiếu Mercator kéo giãn theo vĩ độ, nên góc tính từ lat/lng
+ * trần sẽ lệch dần khỏi đường thật — mũi tên chỉ chệch ra ngoài lòng đường là
+ * chi tiết đập vào mắt ngay.
+ *
+ * Vẽ lại sau mỗi lần phóng to thu nhỏ: khoảng cách giữa các mũi tên đo bằng
+ * pixel, nên phóng to phải thêm mũi tên vào những khúc vừa giãn ra.
+ */
+function RouteDirectionArrows({ positions, color }: { positions: LatLng[]; color: string }) {
+  const map = useMap();
+  const [zoom, setZoom] = useState(() => map.getZoom());
+
+  useEffect(() => {
+    const sync = () => setZoom(map.getZoom());
+    map.on("zoomend", sync);
+    return () => {
+      map.off("zoomend", sync);
+    };
+  }, [map]);
+
+  const arrows = useMemo(() => {
+    if (positions.length < 2) return [];
+
+    // Đo tuyến trong hệ pixel của đúng mức phóng hiện tại: khoảng cách giữa hai
+    // mũi tên là khoảng cách MẮT NHÌN THẤY, không phải quãng đường thật.
+    const points = positions.map((position) => map.project([position.lat, position.lng], zoom));
+    const lengths: number[] = [];
+    let total = 0;
+    for (let i = 1; i < points.length; i += 1) {
+      const segment = points[i].distanceTo(points[i - 1]);
+      lengths.push(segment);
+      total += segment;
+    }
+    if (total <= 0) return [];
+
+    // Ít nhất MỘT mũi tên trên mỗi tuyến, kể cả tuyến ngắn: tuyến ngắn nhất
+    // thường là kho thôn ngay cạnh điểm nạn, mà đó lại là kho nên tới trước.
+    const count = Math.max(1, Math.min(MAX_ARROWS_PER_ROUTE, Math.round(total / ARROW_SPACING_PX)));
+
+    const placed: { key: string; lat: number; lng: number; angleDeg: number }[] = [];
+    for (let index = 0; index < count; index += 1) {
+      // Chia đều và lùi vào trong: đặt mũi tên ở mốc 0 hay mốc 1 là dán nó ngay
+      // dưới dấu ghim kho hoặc dấu ghim điểm nạn, nơi nó bị che mất.
+      const target = (total * (index + 0.5)) / count;
+      let walked = 0;
+      let segment = 0;
+      while (segment < lengths.length - 1 && walked + lengths[segment] < target) {
+        walked += lengths[segment];
+        segment += 1;
+      }
+      const from = points[segment];
+      const to = points[segment + 1];
+      const ratio = lengths[segment] > 0 ? (target - walked) / lengths[segment] : 0;
+      const at = L.point(from.x + (to.x - from.x) * ratio, from.y + (to.y - from.y) * ratio);
+      const latlng = map.unproject(at, zoom);
+      placed.push({
+        key: `${index}`,
+        lat: latlng.lat,
+        lng: latlng.lng,
+        // `atan2` trong hệ pixel: trục y hướng XUỐNG, nên góc này đã đúng chiều
+        // quay của CSS `rotate` mà không phải đảo dấu.
+        angleDeg: (Math.atan2(to.y - from.y, to.x - from.x) * 180) / Math.PI,
+      });
+    }
+    return placed;
+  }, [map, positions, zoom]);
+
+  return (
+    <>
+      {arrows.map((arrow) => (
+        <Marker
+          icon={arrowIcon(arrow.angleDeg, color)}
+          // Trang trí thuần: nuốt cú bấm ở đây là chặn mất thao tác dời điểm nạn
+          // của người đang lập phương án.
+          interactive={false}
+          key={`${arrow.key}-${arrow.lat}-${arrow.lng}`}
+          position={[arrow.lat, arrow.lng]}
+        />
+      ))}
+    </>
+  );
+}
+
+/**
+ * Hình tuyến đường cho chú giải: đúng bề dày, đúng màu, đúng mũi tên như trên bản đồ.
+ *
+ * Vẽ lại bằng cùng những con số mà tuyến thật dùng, để chú giải không thể lệch
+ * với hình người ta đang nhìn.
+ */
+function routeLegendSvg(size: number): string {
+  const middle = size / 2;
+  return (
+    `<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" aria-hidden="true">` +
+    `<line x1="1" y1="${middle}" x2="${size - 1}" y2="${middle}" stroke="#FFFFFF" ` +
+    `stroke-width="${ROUTE_CASING_WEIGHT / 2}" stroke-linecap="round" />` +
+    `<line x1="1" y1="${middle}" x2="${size - 1}" y2="${middle}" stroke="${ROUTE_COLORS[0]}" ` +
+    `stroke-width="${ROUTE_WEIGHT / 2}" stroke-linecap="round" />` +
+    `<path d="M${middle - 2} ${middle - 2.4} L${middle + 2} ${middle} L${middle - 2} ${middle + 2.4}" ` +
+    `fill="none" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />` +
+    `</svg>`
+  );
+}
+
+/**
+ * Một mũi tên trắng đủ nhỏ để nằm lọt trong lòng đường.
+ *
+ * Trắng chứ không phải màu đậm hơn của chính tuyến: nền là ảnh vệ tinh, và giữa
+ * hai sắc xanh cạnh nhau thì mắt phải nhìn kỹ mới tách ra được hình mũi tên.
+ */
+function arrowIcon(angleDeg: number, color: string): L.DivIcon {
+  const size = ROUTE_WEIGHT + 4;
+  return L.divIcon({
+    className: "",
+    html:
+      `<div style="width:${size}px;height:${size}px;display:flex;align-items:center;` +
+      `justify-content:center;transform:rotate(${angleDeg.toFixed(1)}deg)">` +
+      `<svg viewBox="0 0 12 12" width="${size}" height="${size}" aria-hidden="true">` +
+      `<path d="M3.4 1.6 L8.4 6 L3.4 10.4" fill="none" stroke="#FFFFFF" stroke-width="2.6" ` +
+      `stroke-linecap="round" stroke-linejoin="round" />` +
+      `<path d="M3.4 1.6 L8.4 6 L3.4 10.4" fill="none" stroke="${color}" stroke-width="0.9" ` +
+      `stroke-linecap="round" stroke-linejoin="round" />` +
+      `</svg></div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
+}
 
 /**
  * Một dòng chú giải vẽ ĐÚNG hình đang có trên bản đồ.

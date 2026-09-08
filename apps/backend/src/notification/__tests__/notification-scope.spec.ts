@@ -98,7 +98,10 @@ describe("NotificationService organization scope", () => {
 
     expect(prisma.notification.findMany).toHaveBeenCalledWith({
       where: { organizationId: "org-a", recipientRole: "ADMIN", read: false },
-      orderBy: { createdAt: "desc" },
+      // Mốc phụ `id`: hai thông báo sinh ra trong cùng một transaction mang đúng
+      // một `createdAt`, và không có mốc phụ thì thứ tự giữa chúng đổi mỗi lượt
+      // tải — tin mới nhất không phải lúc nào cũng nằm ở đầu.
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: 50,
     });
   });

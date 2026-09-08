@@ -1,12 +1,17 @@
-import { MissionStatus } from "@prisma/client";
+import { MissionStatus, PickupDecision } from "@prisma/client";
 import { MissionService } from "../mission.service";
 
 const multiWarehouseMission = {
   id: "mission-1",
+  missionNo: 12,
   warehouseId: "warehouse-a",
   incidentType: "FLOOD",
   affectedPeople: 20,
-  status: MissionStatus.DRAFT,
+  hamletName: null,
+  location: null,
+  // Hiện trường đã chốt và ADMIN đã lập kế hoạch: đó là điều kiện để phát hành.
+  status: MissionStatus.FIELD_DECIDED,
+  allocationPlannedAt: new Date("2026-09-08T00:00:00Z"),
   incidentLat: 13.378,
   incidentLng: 109.104,
   readinessAssessment: { status: "DISPATCHABLE", blockers: [] },
@@ -17,6 +22,8 @@ const multiWarehouseMission = {
       sku: "WATER-01",
       itemName: "Nước uống",
       unit: "chai",
+      pickupDecision: PickupDecision.TAKE_ALL,
+      warehouseQuantity: 10,
       allocations: [
         { batchId: "batch-a", qty: 4, warehouseId: "warehouse-a" },
         { batchId: "batch-b", qty: 6, warehouseId: "warehouse-b" },
@@ -110,7 +117,7 @@ describe("MissionService warehouse participation", () => {
     const notifications = { pushPersisted: jest.fn() };
     const service = serviceWithPrisma(prisma, notifications);
 
-    await service.approve("mission-1", "admin-1");
+    await service.publishPlan("mission-1", "admin-1");
 
     expect(missionWarehousePreparation.createMany).toHaveBeenCalledWith({
       data: [
@@ -137,7 +144,7 @@ describe("MissionService warehouse participation", () => {
       skipDuplicates: true,
     });
     expect(mission.updateMany).toHaveBeenCalledWith({
-      where: { id: "mission-1", status: MissionStatus.DRAFT },
+      where: { id: "mission-1", status: MissionStatus.FIELD_DECIDED },
       data: expect.objectContaining({
         status: MissionStatus.PENDING_WAREHOUSE,
         approvedByUserId: "admin-1",

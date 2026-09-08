@@ -35,8 +35,7 @@ function makeService() {
   const internals = service as unknown as {
     assertWarehouseAccess: jest.Mock;
     resolveIncidentLocation: jest.Mock;
-    computePlan: jest.Mock;
-    buildRequirementCreates: jest.Mock;
+    computeRequirementQuantities: jest.Mock;
   };
   internals.assertWarehouseAccess = jest.fn().mockResolvedValue(undefined);
   internals.resolveIncidentLocation = jest.fn().mockResolvedValue({
@@ -44,10 +43,7 @@ function makeService() {
     hamletId: "hamlet-long-chau",
     point: { lat: 13.38, lng: 109.1 },
   });
-  internals.computePlan = jest
-    .fn()
-    .mockResolvedValue({ allocations: [], neighbors: [], fulfillment: 100, readinessSnapshot: {} });
-  internals.buildRequirementCreates = jest.fn().mockReturnValue([]);
+  internals.computeRequirementQuantities = jest.fn().mockResolvedValue([]);
   return { service, create };
 }
 

@@ -44,6 +44,8 @@ interface MissionRecord {
   affectedPeople: number;
   durationHours: number;
   fulfillment: number;
+  /// Rỗng nghĩa là mới có bản tham mưu, chưa chọn kho nào.
+  allocationPlannedAt: Date | null;
   incidentLat: number | null;
   incidentLng: number | null;
   reportText: string | null;
@@ -107,7 +109,18 @@ export class CoordinationSnapshotService {
     const allocations = allocationSnapshots.map(
       ({ routeGeometry: _routeGeometry, roadRefs: _roadRefs, ...allocation }) => allocation,
     );
-    const hasLocalShortage = mission.requirements.some((requirement) => requirement.shortage > 0);
+    /**
+     * Đã chọn kho chưa — hỏi đúng MỘT cột, không đoán qua ba dấu hiệu.
+     *
+     * Bản tham mưu cố ý dừng ở số lượng: chưa dòng nào có phân bổ, `fulfillment`
+     * còn 0, `shortage` bằng cả phần cần lấy. Đọc mấy con số đó như thể đã tính
+     * xong là kết luận "kho đáp ứng 0%" cho một nhiệm vụ chưa hề đem đi hỏi kho.
+     */
+    const allocationPlanned = mission.allocationPlannedAt != null;
+    // Chưa chọn kho thì chưa biết có thiếu hay không, mà mỗi lượt hỏi là một lượt
+    // tính đường tới từng xã lân cận — trả giá cho một kết luận chưa tồn tại.
+    const hasLocalShortage =
+      allocationPlanned && mission.requirements.some((requirement) => requirement.shortage > 0);
     const externalContacts = hasLocalShortage ? await this.computeExternalContacts(mission) : [];
     const forecasts = buildCoordinationForecasts(weather);
     const status = readiness.missingData.length > 0 ? "NEEDS_CONFIRMATION" : "PRELIMINARY";
@@ -127,14 +140,23 @@ export class CoordinationSnapshotService {
       conflicts: extraction.conflicts,
       requirements: readiness.requirements,
       coordination: {
-        status: readiness.requirements.status === "COMPUTED" ? "COMPUTED" : "PENDING_DATA",
+        status:
+          readiness.requirements.status !== "COMPUTED"
+            ? "PENDING_DATA"
+            : allocationPlanned
+              ? "COMPUTED"
+              : "PENDING_BACKEND",
         allocations,
         fulfillmentPercent:
-          readiness.requirements.status === "COMPUTED" ? mission.fulfillment : null,
+          readiness.requirements.status === "COMPUTED" && allocationPlanned
+            ? mission.fulfillment
+            : null,
         reason:
-          readiness.requirements.status === "COMPUTED"
-            ? null
-            : "Cần xác minh số người và loại tình huống trước khi dùng số liệu kho.",
+          readiness.requirements.status !== "COMPUTED"
+            ? "Cần xác minh số người và loại tình huống trước khi dùng số liệu kho."
+            : allocationPlanned
+              ? null
+              : "Chưa lập kế hoạch cứu hộ — chưa chọn kho xuất vật tư.",
         externalContacts,
       },
       forecasts,

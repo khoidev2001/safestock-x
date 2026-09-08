@@ -11,7 +11,7 @@
     "ios": "expo run:ios",
     "android:keystore": "node scripts/generate-android-keystore.mjs",
     "android:release": "node scripts/build-android-release.mjs",
-    "test:state": "tsc --target ES2021 --module commonjs --moduleResolution node --esModuleInterop --skipLibCheck --outDir .expo/state-test session-state.ts offline-cache-state.ts dashboard-state.ts inventory-state.ts mission-state.ts mission-pickup-plan.ts mission-delivery-report.ts audio-platform-state.ts notification-feed-state.ts role-labels.ts __tests__/mobile-state.test.ts && node --test .expo/state-test/__tests__/mobile-state.test.js",
+    "test:state": "tsc --target ES2021 --module commonjs --moduleResolution node --esModuleInterop --skipLibCheck --outDir .expo/state-test session-state.ts offline-cache-state.ts dashboard-state.ts inventory-state.ts mission-state.ts mission-pickup-plan.ts mission-delivery-report.ts rescue-decision-state.ts audio-platform-state.ts notification-feed-state.ts role-labels.ts __tests__/mobile-state.test.ts && node --test .expo/state-test/__tests__/mobile-state.test.js",
     "test:resolution": "node --test __tests__/dependency-resolution.test.cjs",
     "lint": "cross-env ESLINT_USE_FLAT_CONFIG=false expo lint",
     "lint:fix": "cross-env ESLINT_USE_FLAT_CONFIG=false expo lint -- --fix"

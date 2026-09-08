@@ -12,10 +12,12 @@ import { MissionCoordinationService } from "./mission-coordination.service";
 import { MissionService } from "./mission.service";
 import { FieldUpdateAssistantService } from "./field-update-assistant.service";
 import { MissionWarehouseRequestService } from "./mission-warehouse-request.service";
+import { MissionSupplyService } from "./mission-supply.service";
+import { RescueHoldingController } from "./rescue-holding.controller";
 
 @Module({
   imports: [GeoModule, InventoryModule, ReadinessModule, InsightsModule],
-  controllers: [MissionController],
+  controllers: [MissionController, RescueHoldingController],
   providers: [
     MissionService,
     EvidenceStorageService,
@@ -25,6 +27,7 @@ import { MissionWarehouseRequestService } from "./mission-warehouse-request.serv
     WhatIfService,
     FieldUpdateAssistantService,
     MissionWarehouseRequestService,
+    MissionSupplyService,
   ],
   exports: [MissionService],
 })

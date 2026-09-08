@@ -153,6 +153,9 @@ describe("MissionWarehouseRequestService concurrency", () => {
     };
     const prisma = {
       user: { findUnique: jest.fn().mockResolvedValue({ warehouseId: "warehouse-a" }) },
+      // Ngoài transaction: câu gọi đội cần biết còn kho nào chưa xuất, để nói ra
+      // TÊN thay vì chỉ đếm số.
+      missionWarehouseRequest: { findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     };
     const inventory = {
@@ -235,6 +238,7 @@ describe("MissionWarehouseRequestService concurrency", () => {
     };
     const prisma = {
       user: { findUnique: jest.fn().mockResolvedValue({ warehouseId: "warehouse-a" }) },
+      missionWarehouseRequest: { findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     };
     const service = new MissionWarehouseRequestService(
@@ -268,7 +272,11 @@ describe("MissionWarehouseRequestService concurrency", () => {
     // Một nhiệm vụ trải qua nhiều kho; kho xong sớm có thể xong trước kho cuối cả
     // buổi. Đợi đủ mới báo là để hàng nằm trên kệ trong khi đội hoàn toàn chạy
     // được một chuyến trước.
-    const harness = prepareHarness({ remainingForWarehouse: 0, remainingForMission: 2 });
+    const harness = prepareHarness({
+      remainingForWarehouse: 0,
+      remainingForMission: 2,
+      stillPreparing: ["Kho thôn Long Bình", "Kho cứu trợ trung tâm"],
+    });
     await harness.service.prepare("request-1", "warehouse-user", "warehouse-a");
 
     const rescueNotifications = harness.notifications.create.mock.calls
@@ -279,6 +287,10 @@ describe("MissionWarehouseRequestService concurrency", () => {
     expect(rescueNotifications[0].body).toContain("Nhiệm vụ số 145");
     expect(rescueNotifications[0].body).toContain("Kho thôn Long Châu");
     expect(rescueNotifications[0].body).toContain("ký nhận");
+    // Và phải kể TÊN các kho còn đang soạn: "còn 2 kho" bắt đội mở nhiệm vụ ra
+    // dò xem là hai kho nào, mà đó đúng là câu họ cần trả lời trước khi nổ máy.
+    expect(rescueNotifications[0].body).toContain("Kho thôn Long Bình");
+    expect(rescueNotifications[0].body).toContain("Kho cứu trợ trung tâm");
   });
 
   it("kho cuối xong thì gộp thành MỘT câu 'toàn bộ đã sẵn sàng'", async () => {
@@ -409,7 +421,12 @@ describe("MissionWarehouseRequestService.confirmPickup — thông báo ký nhậ
 });
 
 /** Dựng MissionWarehouseRequestService quanh một lượt prepare, chỉnh được phần "còn nợ". */
-function prepareHarness(counts: { remainingForWarehouse: number; remainingForMission: number }) {
+function prepareHarness(counts: {
+  remainingForWarehouse: number;
+  remainingForMission: number;
+  /** Tên các kho của nhiệm vụ còn chưa xuất xong, để câu gọi đội kể lại. */
+  stillPreparing?: string[];
+}) {
   const request = {
     id: "request-1",
     missionId: "mission-1",
@@ -447,6 +464,11 @@ function prepareHarness(counts: { remainingForWarehouse: number; remainingForMis
   };
   const prisma = {
     user: { findUnique: jest.fn().mockResolvedValue({ warehouseId: "warehouse-a" }) },
+    missionWarehouseRequest: {
+      findMany: jest
+        .fn()
+        .mockResolvedValue((counts.stillPreparing ?? []).map((name) => ({ warehouse: { name } }))),
+    },
     $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
   };
   const notifications = { create: jest.fn().mockResolvedValue({}) };

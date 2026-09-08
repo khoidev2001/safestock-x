@@ -63,7 +63,8 @@ export interface ActionPlanNarrative {
 export interface ActionPlan {
   severityLevel: number; // 1-5
   severityReason: string[];
-  fulfillment: number; // % đáp ứng (min qua loại)
+  /// % đáp ứng (min qua loại); `null` khi chưa chọn kho xuất.
+  fulfillment: number | null;
   allocations: AllocationSummary[];
   warehouses: WarehouseEta[];
   forecasts: Forecast[];
@@ -77,7 +78,15 @@ export interface ActionPlan {
  */
 export function scoreSeverity(
   incident: IncidentInput,
-  fulfillment: number,
+  /**
+   * Mức đáp ứng của kho, hoặc `null` khi CHƯA CHỌN KHO.
+   *
+   * Bản tham mưu dừng ở số lượng nên chưa có mức đáp ứng nào. Đọc số 0 mặc định
+   * như một kết luận là cộng thêm một bậc nguy cấp kèm câu "Kho chỉ đáp ứng 0%"
+   * cho một nhiệm vụ chưa hề đem đi hỏi kho — vừa sai, vừa đúng loại sai khiến
+   * người trực thôi tin những dòng còn lại.
+   */
+  fulfillment: number | null,
 ): { level: number; reasons: string[] } {
   const reasons: string[] = [];
   let score = 1;
@@ -106,7 +115,7 @@ export function scoreSeverity(
     reasons.push(`Thời gian cô lập dự kiến kéo dài (${incident.durationHours} giờ).`);
   }
 
-  if (fulfillment < 70) {
+  if (fulfillment != null && fulfillment < 70) {
     score += 1;
     reasons.push(`Kho chỉ đáp ứng ${fulfillment}% — thiếu vật tư thiết yếu.`);
   }
@@ -118,7 +127,11 @@ export function scoreSeverity(
  * Dự báo % bằng rule (KHÔNG để LLM bịa). Ước lượng định tính có căn cứ:
  * cô lập kéo dài, thiếu vật tư, cần sơ tán.
  */
-export function computeForecasts(incident: IncidentInput, fulfillment: number): Forecast[] {
+export function computeForecasts(
+  incident: IncidentInput,
+  /** `null` khi chưa chọn kho — xem chú thích ở `scoreSeverity`. */
+  fulfillment: number | null,
+): Forecast[] {
   const forecasts: Forecast[] = [];
 
   // Cô lập > 24h: tăng theo thời gian + loại lũ/sạt lở.
@@ -127,8 +140,11 @@ export function computeForecasts(incident: IncidentInput, fulfillment: number): 
   const isolationProb = clamp(isolationBase + Math.min(30, incident.durationHours), 0, 95);
   forecasts.push({ label: "Cô lập > 24 giờ", probability: isolationProb });
 
-  // Thiếu vật tư: nghịch với mức đáp ứng.
-  forecasts.push({ label: "Thiếu vật tư", probability: clamp(100 - fulfillment, 5, 95) });
+  // Thiếu vật tư: nghịch với mức đáp ứng. Chưa chọn kho thì bỏ hẳn dòng này —
+  // đoán 95% "sẽ thiếu vật tư" khi chưa ai mở sổ kho ra xem là bịa.
+  if (fulfillment != null) {
+    forecasts.push({ label: "Thiếu vật tư", probability: clamp(100 - fulfillment, 5, 95) });
+  }
 
   // Cần sơ tán: theo số người + nhóm dễ tổn thương.
   const vulnerable = countVulnerablePeople(incident);

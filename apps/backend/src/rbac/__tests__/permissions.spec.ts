@@ -24,11 +24,24 @@ describe("RBAC role permissions", () => {
     expect(ROLE_PERMISSIONS[UserRole.RESCUE]).toEqual([
       Permission.MISSION_VIEW,
       Permission.MISSION_CONFIRM,
+      Permission.MISSION_SUPPLY_DECIDE,
       Permission.MISSION_FIELD_UPDATE,
       Permission.NOTIFICATION_VIEW,
       Permission.INCIDENT_REPORT_SUBMIT,
       Permission.INCIDENT_REPORT_VIEW_OWN,
     ]);
+    // Chốt số cần lấy là việc của hiện trường; xác nhận hàng đã về kho thì không.
+    // Cú bấm ấy CỘNG LẠI TỒN KHO, nên nó phải nằm ở người đang đứng cạnh cái kệ
+    // và đếm được hàng thật — để đội tự khai đã trả là tồn kho cộng lên bằng lời
+    // nói, còn người duy nhất đối chiếu được thì đứng ngoài.
+    expect(roleHasPermission(UserRole.RESCUE, Permission.MISSION_SUPPLY_DECIDE)).toBe(true);
+    expect(roleHasPermission(UserRole.RESCUE, Permission.MISSION_SUPPLY_RETURN_CONFIRM)).toBe(
+      false,
+    );
+    expect(roleHasPermission(UserRole.WAREHOUSE, Permission.MISSION_SUPPLY_RETURN_CONFIRM)).toBe(
+      true,
+    );
+    expect(roleHasPermission(UserRole.WAREHOUSE, Permission.MISSION_SUPPLY_DECIDE)).toBe(false);
     expect(roleHasPermission(UserRole.RESCUE, Permission.INVENTORY_READ)).toBe(false);
     expect(roleHasPermission(UserRole.RESCUE, Permission.MISSION_REQUEST)).toBe(false);
     expect(roleHasPermission(UserRole.RESCUE, Permission.MISSION_FIELD_UPDATE)).toBe(true);

@@ -97,6 +97,8 @@ export interface InventoryBatch {
     id: string;
     name: string;
     sku: string;
+    /** true = tiêu hao (xuất là mất); false = tái sử dụng (xuất là cho mượn). */
+    consumable: boolean;
     category: { name: string; unit: string };
   };
   shelf: {
@@ -672,6 +674,11 @@ export interface CommuneLowStockItem {
   sku: string;
   itemName: string;
   unit: string;
+  /**
+   * true = hàng tiêu hao, đo bằng ngưỡng "còn ít"; false = thiết bị tái sử dụng,
+   * chỉ vào bảng khi đã về 0. Xem `communeLowStock` ở máy chủ.
+   */
+  consumable: boolean;
   quantity: number;
   /** Kho đang giữ lô này — cả xã chứ không riêng kho tổng. */
   warehouseId: string;

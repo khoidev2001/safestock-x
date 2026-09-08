@@ -21,8 +21,23 @@ import {
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { InterCommuneLoanSummary } from "./inter-commune-loan-summary";
 
-/** Lô còn từ ngần này món trở xuống thì coi là sắp cạn. */
+/**
+ * Lô HÀNG TIÊU HAO còn từ ngần này món trở xuống thì coi là sắp cạn.
+ *
+ * Chỉ hàng tiêu hao. Thiết bị tái sử dụng — xuồng cứu hộ, áo phao, bộ đàm — xuất
+ * đi là cho mượn rồi thu về, nên số tồn của chúng vốn nhỏ: sáu chiếc xuồng cho cả
+ * xã là đủ dùng chứ không phải sắp hết. Đo chúng bằng cùng con số này thì bảng
+ * lúc nào cũng có mấy dòng thiết bị nằm đó mà đọc mãi không thấy phải làm gì, rồi
+ * người trực bỏ qua cả bảng — kể cả hôm nước uống thật sự sắp cạn.
+ *
+ * Với thiết bị, chỉ 0 mới là tin: hết sạch thì không điều đi đâu được nữa.
+ */
 const LOW_QUANTITY = 10;
+
+/** Lô này có đáng vào bảng "còn ít" không — cùng quy tắc với máy chủ. */
+function isRunningLow(quantity: number, consumable: boolean): boolean {
+  return consumable ? quantity <= LOW_QUANTITY : quantity <= 0;
+}
 
 /** Bao nhiêu dòng hiện sẵn trước khi phải bấm "xem thêm". */
 const PREVIEW_ROWS = 6;
@@ -91,6 +106,8 @@ interface LowStockRow {
   itemName: string;
   unit: string;
   quantity: number;
+  /** Tiêu hao hay tái sử dụng — quyết định dòng này đọc ra "còn ít" hay "đã hết". */
+  consumable: boolean;
   /** Null khi chỉ đọc được kho của chính mình — lúc đó không có gì để phân biệt. */
   warehouseName: string | null;
   location: string;
@@ -148,6 +165,7 @@ function LowStockPanel({
         itemName: item.itemName,
         unit: item.unit,
         quantity: item.quantity,
+        consumable: item.consumable,
         warehouseName: item.warehouseName,
         location:
           item.zoneName && item.shelfCode
@@ -157,13 +175,14 @@ function LowStockPanel({
     }
     if (!communeQuery.isError) return undefined;
     return (batches ?? [])
-      .filter((batch) => batch.quantity <= LOW_QUANTITY)
+      .filter((batch) => isRunningLow(batch.quantity, batch.item.consumable))
       .map((batch) => ({
         batchId: batch.id,
         batchCode: batch.batchCode,
         itemName: batch.item.name,
         unit: batch.item.category.unit,
         quantity: batch.quantity,
+        consumable: batch.item.consumable,
         warehouseName: null,
         location: batch.shelf
           ? `${batch.shelf.zone.name} / kệ ${batch.shelf.code}`
@@ -200,7 +219,7 @@ function LowStockPanel({
         href="/inventory"
         hrefLabel="Mở kho vật tư →"
         icon={<ColorIcon name="packageSearch" size={19} tone="orange" />}
-        subtitle={`Còn từ ${LOW_QUANTITY} món trở xuống`}
+        subtitle={`Hàng tiêu hao còn từ ${LOW_QUANTITY} trở xuống · thiết bị tái sử dụng chỉ báo khi hết sạch`}
         title="Lô còn ít"
       />
 
@@ -254,6 +273,17 @@ function LowStockPanel({
                     <p className="truncate text-xs text-[var(--text-muted)]">
                       {row.batchCode} · {row.location}
                     </p>
+                    {/* Thiết bị tái sử dụng chỉ lọt vào bảng khi đã về 0, nên nói
+                        thẳng ra là "hết sạch". Không nói thì nó nằm lẫn giữa những
+                        dòng "còn ít" và đọc như thể vẫn còn vài chiếc để điều đi. */}
+                    {!row.consumable ? (
+                      <p
+                        className="truncate text-xs font-medium"
+                        style={{ color: "var(--color-critical)" }}
+                      >
+                        Thiết bị tái sử dụng — đã hết sạch, không còn chiếc nào để điều đi
+                      </p>
+                    ) : null}
                   </div>
                   {/* Số lượng tô đỏ khi đã cạn hẳn: lô 0 món không phải "còn ít",
                       nó là một dòng sổ cần dọn chứ không phải hàng để điều đi. */}

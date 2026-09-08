@@ -72,14 +72,15 @@ enum LoanStatus {
 }
 
 model Organization {
-  id                String             @id @default(cuid())
+  id                String                @id @default(cuid())
   name              String
-  createdAt         DateTime           @default(now())
+  createdAt         DateTime              @default(now())
   users             User[]
   warehouses        Warehouse[]
   hamlets           Hamlet[]
   notifications     Notification[]
   interCommuneLoans InterCommuneLoan[]
+  rescueHoldings    RescueSupplyHolding[]
 }
 
 model User {
@@ -131,6 +132,8 @@ model User {
   emailVerifications          EmailVerification[]
   phoneVerifications          PhoneVerification[]
   sessions                    UserSession[]
+  requirementDecisions        MissionRequirement[]          @relation("MissionRequirementDecidedBy")
+  rescueHoldingsConfirmed     RescueSupplyHolding[]         @relation("RescueSupplyHoldingConfirmedBy")
 }
 
 /// Một lần đăng nhập trên MỘT thiết bị. Web và điện thoại của cùng một người là
@@ -241,6 +244,7 @@ model Warehouse {
   deviceCredentials   DeviceCredential[]
   alertEmailOutboxes  AlertEmailOutbox[]
   interCommuneLoans   InterCommuneLoan[]
+  rescueHoldings      RescueSupplyHolding[]
 }
 
 // Thôn/điểm ứng phó do ADMIN cấu hình trước. Marker này độc lập với marker kho.
@@ -575,9 +579,19 @@ model ReadinessThreshold {
 // ===== Phase D: Mission-to-Kit =====
 
 enum MissionStatus {
-  DRAFT // vừa lập phương án (ADMIN), chờ đẩy workflow
-  PENDING_RESCUE // đã gửi, chờ cứu hộ xác nhận lấy
-  RESCUE_CONFIRMED // cứu hộ đã xác nhận
+  DRAFT // bản tham mưu: mới có số lượng cần dùng, ADMIN đang rà soát
+  // Đã gửi lực lượng hiện trường, chờ họ chốt từng món lấy bao nhiêu từ kho.
+  //
+  // CỐ TÌNH không tái dùng `PENDING_RESCUE` của luồng cũ: mọi nơi đọc trạng thái
+  // đó đều coi nhiệm vụ là "đã duyệt và phát hành" — bộ lọc `published` ở
+  // `listMissionsPage`, `missionIsPublished` và `completedStepIndex` trên web,
+  // nhãn "Đã nhận · chờ kho" trên điện thoại. Mượn lại giá trị cũ là nói dối ở
+  // sáu chỗ cùng lúc mà không chỗ nào báo lỗi biên dịch.
+  PENDING_FIELD_DECISION
+  // Hiện trường đã chốt xong số cần lấy; chờ ADMIN lập kế hoạch rồi phát hành.
+  FIELD_DECIDED
+  PENDING_RESCUE // (cũ) đã gửi, chờ cứu hộ xác nhận lấy
+  RESCUE_CONFIRMED // (cũ) cứu hộ đã xác nhận
   PENDING_WAREHOUSE // chờ kho chuẩn bị + xuất
   READY // kho đã chuẩn bị xong, sẵn sàng giao
   APPROVED // (cũ, giữ tương thích)
@@ -593,6 +607,32 @@ enum DeliveryOutcome {
   DELIVERED // giao đủ theo phương án
   PARTIAL // giao được một phần (thiếu/hỏng/không tiếp cận hết)
   FAILED // không giao được (đường tắc, điểm nạn di dời…)
+}
+
+/// Lực lượng hiện trường quyết gì với MỘT món trong bản tham mưu.
+///
+/// Ba lựa chọn chứ không phải một con số, vì "lấy hết" và "lấy đúng bằng số cần"
+/// nhìn giống nhau lúc nhập nhưng khác nhau lúc ADMIN đọc lại: cái đầu là đồng ý
+/// với bản tham mưu, cái sau là một con số người ta tự gõ ra.
+enum PickupDecision {
+  TAKE_ALL // lấy toàn bộ số bản tham mưu ghi
+  TAKE_PARTIAL // chỉ lấy một phần (kèm số lượng)
+  TAKE_NONE // không cần lấy từ kho
+}
+
+/// Dòng vật tư này do định mức sinh ra hay do ADMIN tự thêm khi rà soát.
+///
+/// Cần phân biệt vì lượt tính lại định mức phải GIỮ NGUYÊN phần ADMIN thêm tay —
+/// người ta thêm nó chính vì định mức không biết tới nó.
+enum RequirementSource {
+  NORM
+  ADMIN_ADDED
+}
+
+/// Vật tư đội cứu hộ đang cầm nhưng chưa trả về kho.
+enum RescueHoldingStatus {
+  HELD
+  RETURNED
 }
 
 enum MissionWarehouseRequestStatus {
@@ -632,6 +672,21 @@ model Mission {
   deliveryOutcome       DeliveryOutcome? // kết quả giao hiện trường (đội cứu hộ xác nhận khi hoàn tất)
   deliveryNote          String? // ghi chú kết quả giao (vd: thiếu 20 áo phao, đường tắc phải giao điểm khác)
   completedAt           DateTime? // thời điểm đội cứu hộ xác nhận đã giao
+  /// Đã chạy bước chọn kho và tính khoảng cách chưa — CỔNG DUY NHẤT trả lời câu đó.
+  ///
+  /// Bản tham mưu bây giờ chỉ có số lượng: `requirements[].allocations` rỗng,
+  /// `fulfillment` bằng 0 và `readinessAssessment` để trống cho tới khi ADMIN bấm
+  /// lập kế hoạch. Ba dấu hiệu ấy đều CÓ THỂ dùng để đoán "đã tính kho chưa", và
+  /// đó chính là vấn đề: ba nơi đoán theo ba kiểu rồi trôi lệch nhau. Ví dụ đã
+  /// gặp trong thiết kế: khối tham mưu đọc `requirements.length > 0` nên kết luận
+  /// "đã tính xong, kho đáp ứng 0%" cho một nhiệm vụ chưa hề chọn kho.
+  allocationPlannedAt   DateTime?
+  /// Hiện trường báo không cần lấy gì từ kho — bỏ hẳn chặng kho chuẩn bị.
+  ///
+  /// KHÔNG suy ra từ "không có phiếu vật tư nào": không có phiếu còn là kết quả
+  /// của một cụm kho trống rỗng, mà ca đó phải bị chặn phát hành chứ không phải
+  /// được đi tắt.
+  warehouseStageSkipped Boolean                       @default(false)
   actionPlan            Json? // Incident Action Plan (8 mục, ActionPlanResponse từ AI)
   hamletId              String?
   hamlet                Hamlet?                       @relation(fields: [hamletId], references: [id], onDelete: SetNull)
@@ -654,6 +709,7 @@ model Mission {
   deliveryPhotos        MissionDeliveryPhoto[]
   reportAudio           MissionReportAudio?
   fieldUpdates          MissionFieldUpdate[]
+  supplyHoldings        RescueSupplyHolding[]
 
   @@unique([createdByUserId, reportRequestId])
   @@index([hamletId])
@@ -774,20 +830,104 @@ model MissionFieldUpdate {
   @@index([actorId, createdAt])
 }
 
-// Nhu cầu vật tư của nhiệm vụ (sinh từ định mức).
+// Nhu cầu vật tư của nhiệm vụ (sinh từ định mức, ADMIN rà soát sửa được).
 model MissionRequirement {
-  id                 String  @id @default(cuid())
+  id                 String            @id @default(cuid())
   missionId          String
-  mission            Mission @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  mission            Mission           @relation(fields: [missionId], references: [id], onDelete: Cascade)
   sku                String
   itemName           String
-  required           Int // số cần theo định mức
-  allocated          Int // số cấp được từ kho (greedy)
-  shortage           Int // thiếu = required - allocated
+  required           Int // số cần theo định mức (hoặc số ADMIN sửa lại)
+  allocated          Int // số cấp được từ kho (greedy) — 0 cho tới khi lập kế hoạch
+  shortage           Int // thiếu = warehouseQuantity - allocated
   unit               String
-  allocations        Json // chi tiết phân bổ theo lô [{batchId, qty, expiryDate}]
+  allocations        Json // chi tiết phân bổ theo lô [{batchId, qty, expiryDate}] — rỗng ở bản tham mưu
   neighborSuggestion Json? // gợi ý mượn kho lân cận nếu thiếu [{name, distanceKm, available}]
+  source             RequirementSource @default(NORM)
+  /// Hiện trường quyết gì với món này; NULL nghĩa là chưa trả lời.
+  pickupDecision     PickupDecision?
+  /// Số PHẢI LẤY TỪ KHO sau khi hiện trường chốt. Đây mới là con số đem đi phân bổ.
+  ///
+  /// Tách khỏi `required` vì hai số trả lời hai câu khác nhau: `required` là "chỗ
+  /// này cần bao nhiêu", còn số này là "kho phải xuất bao nhiêu". Đội đang giữ sẵn
+  /// 20 áo phao thì hai số lệch nhau đúng 20, và mọi phép đánh giá đáp ứng phải
+  /// đọc số thứ hai — đọc `required` là mọi nhiệm vụ lấy một phần đều hiện "thiếu"
+  /// vĩnh viễn dù kho đã xuất đủ phần được yêu cầu.
+  warehouseQuantity  Int               @default(0)
+  /// Số bù bằng vật tư đội đang tạm giữ từ nhiệm vụ trước.
+  heldQuantity       Int               @default(0)
+  /// Dòng tạm giữ sẽ được chuyển sang nhiệm vụ này — mới là Ý ĐỊNH, chưa chuyển.
+  ///
+  /// Việc chuyển thật nằm trong transaction phát hành. Chuyển ngay lúc hiện trường
+  /// trả lời thì ADMIN huỷ nhiệm vụ là phần đang giữ mắc kẹt ở một nhiệm vụ đã
+  /// huỷ, trong khi nhiệm vụ cũ đã kịp ghi "đã hoàn vật tư".
+  heldFromHoldingId  String?
+  decidedAt          DateTime?
+  decidedByUserId    String?
+  decidedBy          User?             @relation("MissionRequirementDecidedBy", fields: [decidedByUserId], references: [id], onDelete: SetNull)
 
+  // ADMIN thêm được món tay thì phải chặn hai dòng cùng SKU: phiếu kho gộp theo
+  // (kho, SKU) nên vẫn chạy, nhưng bảng đánh giá đếm món đó hai lần và sinh hai
+  // dòng blocker giống hệt nhau.
+  @@unique([missionId, sku])
+  @@index([missionId])
+}
+
+/// Vật tư đội cứu hộ ĐANG CẦM: đã hoàn thành nhiệm vụ nhưng chưa trả về kho.
+///
+/// Vì sao cần bảng này: hàng đã được `bulkExportInTx` trừ khỏi `ItemBatch.quantity`
+/// ngay lúc kho xuất, nên từ đó trở đi không sổ nào nói nó đang ở đâu. Nhiệm vụ
+/// đóng lại là dấu vết cuối cùng biến mất — tồn kho ghi "đã xuất", còn hai chục
+/// áo phao thì nằm trên xe đội cứu hộ cho tới đợt kiểm kê sau mới lòi ra.
+///
+/// CHỈ vật tư tái sử dụng (`Item.consumable = false`) vào đây. Nước uống và lương
+/// khô phát cho dân rồi thì không có gì để đòi trả, ghi vào sổ là treo vĩnh viễn
+/// một khoản không bao giờ tất toán được.
+///
+/// KHÔNG dùng lại `LoanRecord` cho việc này. Phiếu mượn là GIỮ CHỖ TẠI CHỖ —
+/// `loan.service.ts` ghi rõ "KHÔNG trừ tổng kho", và `loadClusterBatches` cùng
+/// `detectCommitmentShortfalls` đều TRỪ phần đang mượn ra khỏi `quantity`. Tạo
+/// phiếu mượn cho số hàng đã rời kho là trừ hai lần cùng một đống hàng.
+///
+/// Sổ theo TỔ CHỨC (xã), không theo người: mỗi xã một đội cứu hộ, và người ký
+/// nhận hôm nay với người mang trả hôm sau thường không phải một.
+model RescueSupplyHolding {
+  id                       String              @id @default(cuid())
+  organizationId           String
+  organization             Organization        @relation(fields: [organizationId], references: [id])
+  /// Nhiệm vụ đang chịu trách nhiệm cho phần đang giữ này.
+  ///
+  /// Đổi khi phần đang giữ được dùng cho nhiệm vụ sau: dòng cũ giảm đi, dòng mới
+  /// mọc ra ở nhiệm vụ mới. Nhờ vậy chỉ phải trả MỘT lần ở cuối chuỗi.
+  missionId                String
+  mission                  Mission             @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  /// Kho phải nhận lại. Thiếu nó thì bất kỳ thủ kho nào trong xã cũng xác nhận
+  /// được phần hàng của kho khác, và `bulkImportInTx` gọi `incrementInTx` KHÔNG
+  /// kèm phạm vi kho nên chốt chặn sẵn có ở đó không bao giờ chạy.
+  warehouseId              String
+  warehouse                Warehouse           @relation(fields: [warehouseId], references: [id])
+  sku                      String
+  itemName                 String
+  unit                     String
+  quantity                 Int
+  /// Lô gốc để hoàn đúng chỗ: [{batchId, qty, warehouseId, ...}].
+  ///
+  /// Chụp lại lúc đóng nhiệm vụ chứ không tính lại lúc trả: phiếu vật tư có thể
+  /// đã bị điều phối cắt bớt, và phần đang giữ có thể đã đi qua vài nhiệm vụ.
+  batches                  Json
+  status                   RescueHoldingStatus @default(HELD)
+  heldSince                DateTime            @default(now())
+  returnedAt               DateTime?
+  confirmedByUserId        String?
+  confirmedBy              User?               @relation("RescueSupplyHoldingConfirmedBy", fields: [confirmedByUserId], references: [id], onDelete: SetNull)
+  /// Dòng tạm giữ đã sinh ra dòng này — theo dấu được cả chuỗi A→B→C và cả lần
+  /// tách đôi, thứ mà chỉ ghi `missionId` nguồn thì không dựng lại được.
+  transferredFromHoldingId String?
+  createdAt                DateTime            @default(now())
+  updatedAt                DateTime            @updatedAt
+
+  @@index([organizationId, sku, status])
+  @@index([organizationId, status])
   @@index([missionId])
 }
 

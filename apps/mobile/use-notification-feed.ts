@@ -7,6 +7,7 @@ import {
   dismissToast,
   mergeNotification,
   pushToast,
+  sortNotificationsNewestFirst,
   type ToastEntry,
 } from "./notification-feed-state";
 import { releaseNotificationSound, playNotificationSound } from "./notification-sound";
@@ -56,7 +57,16 @@ export function useNotificationFeed(token: string, userId: string): Notification
       const cached = await readOfflineCache<Notification[]>(userId, "notifications");
       if (cached) {
         hasCachedData = true;
-        setItems(cached.data);
+        /*
+          Bản lưu chỉ để LẤP CHỖ TRỐNG, không được ghi đè.
+
+          Đọc từ ổ đĩa là việc bất đồng bộ, mà socket đã mở ngay từ lúc màn hình
+          dựng lên. Thông báo về trong quãng chờ đó thì bản chụp cũ — không có nó
+          — ập xuống và xoá mất, người dùng nghe chuông rồi mở danh sách ra không
+          thấy gì. Danh sách đã có thứ thì cứ giữ; bản mới từ máy chủ ngay bên
+          dưới sẽ nói lời cuối.
+        */
+        setItems((prev) => (prev.length > 0 ? prev : sortNotificationsNewestFirst(cached.data)));
         setCacheStoredAt(cached.storedAt);
         setLoading(false);
       } else {
@@ -67,7 +77,16 @@ export function useNotificationFeed(token: string, userId: string): Notification
     }
     try {
       const notifications = await fetchNotifications(token);
-      setItems(notifications);
+      /*
+        Gộp chứ không thay thẳng: bản chụp của máy chủ được lấy TRƯỚC lúc nó về
+        tới đây, nên thông báo do socket đẩy về trong quãng đó không nằm trong
+        danh sách này. Thay thẳng là nuốt mất chúng cho tới lượt tải sau.
+      */
+      setItems((prev) => {
+        const known = new Set(notifications.map((item) => item.id));
+        const missed = prev.filter((item) => !known.has(item.id));
+        return sortNotificationsNewestFirst([...notifications, ...missed]);
+      });
       setCacheStoredAt(null);
       await writeOfflineCache(userId, "notifications", notifications);
     } catch (e) {

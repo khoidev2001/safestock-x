@@ -9,6 +9,9 @@ const mission = {
   affectedPeople: 18,
   durationHours: 24,
   fulfillment: 60,
+  // Đã qua bước lập kế hoạch: chỉ khi đó mới biết cụm kho còn thiếu bao nhiêu,
+  // và mới có căn cứ để đi hỏi xã lân cận.
+  allocationPlannedAt: new Date("2026-09-08T00:00:00Z"),
   incidentLat: 13.36,
   incidentLng: 109.1,
   reportText: "Lũ tại thôn Phước Lộc, 18 người bị ảnh hưởng.",
@@ -160,6 +163,35 @@ describe("CoordinationSnapshotService", () => {
         }),
       ]),
     );
+  });
+
+  it("bản tham mưu chưa chọn kho thì KHÔNG được nói kho đáp ứng 0%", async () => {
+    // Lỗi đã suýt xảy ra: `coordination.status` chỉ nhìn "có dòng nhu cầu nào
+    // không", nên một nhiệm vụ mới lập — chưa hề đem đi hỏi kho — báo về
+    // "COMPUTED, đáp ứng 0%". Người trực đọc câu đó sẽ đi mượn xã khác trước khi
+    // có ai mở sổ kho của chính mình ra xem.
+    const { service, prisma, routing } = makeService();
+    prisma.mission.findUnique.mockResolvedValue({
+      ...mission,
+      allocationPlannedAt: null,
+      fulfillment: 0,
+      requirements: [
+        { ...mission.requirements[0], allocated: 0, shortage: 36, allocations: [] },
+      ],
+    });
+
+    const result = await service.compute("mission-1", extraction(), {
+      now: new Date("2026-07-28T01:05:00.000Z"),
+    });
+
+    expect(result.analysis.coordination.status).toBe("PENDING_BACKEND");
+    expect(result.analysis.coordination.fulfillmentPercent).toBeNull();
+    expect(result.analysis.coordination.allocations).toEqual([]);
+    expect(result.analysis.coordination.reason).toMatch(/Chưa lập kế hoạch cứu hộ/);
+    // Và không đi hỏi xã lân cận: chưa biết có thiếu hay không, mà mỗi lượt hỏi
+    // là một lượt tính đường tới từng xã.
+    expect(result.analysis.coordination.externalContacts).toEqual([]);
+    expect(routing.route).not.toHaveBeenCalled();
   });
 
   it("keeps an unavailable weather source unknown instead of turning it into zero", async () => {

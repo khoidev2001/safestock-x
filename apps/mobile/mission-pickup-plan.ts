@@ -204,3 +204,77 @@ export function formatTravel(distanceKm: number | null, etaMinutes: number | nul
   if (distanceKm == null || etaMinutes == null) return "Chưa tính được quãng đường";
   return `${distanceKm.toFixed(1)} km · ~${etaMinutes} phút`;
 }
+
+/**
+ * Tách các điểm lấy hàng thành ba nhóm theo VIỆC CÒN LẠI của người đi lấy.
+ *
+ * Một phương án lớn huy động ba bốn kho, và các kho không bao giờ xong cùng lúc.
+ * Danh sách xếp theo quãng đường trả lời "đi đâu trước", nhưng không trả lời
+ * "giờ này đi được chưa" — người đi lấy phải mở từng thẻ, đọc nhãn trạng thái rồi
+ * tự nhớ trong đầu kho nào đã xong. Ba bốn kho là quá đủ để nhớ nhầm, mà nhớ nhầm
+ * ở đây là chạy tới nơi rồi ngồi chờ kho soạn.
+ *
+ * Nhóm theo KHO chứ không theo từng dòng vật tư: một chuyến đi là một cái kho, và
+ * kho mới soạn xong hai trong ba món vẫn là một chuyến đi hụt.
+ */
+export interface PickupReadiness {
+  /** Đã soạn xong toàn bộ phần của kho, chưa bàn giao — tới lấy được ngay. */
+  readyNow: PickupStop[];
+  /** Đã ký nhận bàn giao xong — không còn gì để lấy ở kho này nữa. */
+  collected: PickupStop[];
+  /** Còn đang soạn, kể cả kho mới xong một phần. */
+  preparing: PickupStop[];
+}
+
+export function summarizePickupReadiness(stops: PickupStop[]): PickupReadiness {
+  const readiness: PickupReadiness = { readyNow: [], collected: [], preparing: [] };
+  for (const stop of stops) {
+    if (stop.totalCount === 0) continue;
+    if (stop.pickedUpCount === stop.totalCount) readiness.collected.push(stop);
+    else if (stop.readyCount === stop.totalCount) readiness.readyNow.push(stop);
+    else readiness.preparing.push(stop);
+  }
+  return readiness;
+}
+
+/**
+ * Một câu nói thẳng việc kế tiếp, đặt trên đầu danh sách điểm lấy hàng.
+ *
+ * Viết ra TÊN KHO chứ không chỉ đếm số. "2/3 kho đã xong" bắt người đọc quay lại
+ * dò từng thẻ xem hai kho nào, mà đó đúng là câu họ cần trả lời trước khi nổ máy.
+ */
+export function pickupReadinessHeadline(readiness: PickupReadiness): {
+  title: string;
+  detail: string;
+  tone: "done" | "ready" | "waiting";
+} {
+  const names = (stops: PickupStop[]) => stops.map((stop) => stop.name).join(", ");
+  const total = readiness.readyNow.length + readiness.collected.length + readiness.preparing.length;
+
+  if (readiness.readyNow.length === 0 && readiness.preparing.length === 0) {
+    return {
+      title: "Đã nhận hàng ở tất cả các kho",
+      detail: `${total} kho đã ký nhận bàn giao. Không còn kho nào phải ghé.`,
+      tone: "done",
+    };
+  }
+
+  if (readiness.readyNow.length === 0) {
+    return {
+      title: "Chưa kho nào soạn xong",
+      detail: `Còn ${readiness.preparing.length} kho đang chuẩn bị: ${names(readiness.preparing)}. Chờ báo soạn xong rồi hãy xuất phát.`,
+      tone: "waiting",
+    };
+  }
+
+  const waiting =
+    readiness.preparing.length > 0
+      ? ` Còn đang chuẩn bị: ${names(readiness.preparing)}.`
+      : " Tất cả các kho còn lại đã bàn giao xong.";
+
+  return {
+    title: `${readiness.readyNow.length}/${total} kho đã xuất xong — tới lấy được`,
+    detail: `Tới lấy được ngay: ${names(readiness.readyNow)}.${waiting}`,
+    tone: "ready",
+  };
+}

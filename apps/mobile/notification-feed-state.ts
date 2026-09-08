@@ -49,12 +49,63 @@ export function dismissToast(stack: ToastEntry[], key: string): ToastEntry[] {
   return stack.filter((item) => item.key !== key);
 }
 
+/** Thứ cần có để xếp một thông báo theo dòng thời gian. */
+export interface TimestampedNotification {
+  id: string;
+  createdAt?: string | null;
+}
+
+/**
+ * Xếp danh sách thông báo theo DÒNG THỜI GIAN — mới nhất luôn ở đầu.
+ *
+ * Trước đây màn hình không xếp gì cả: nó tin vào thứ tự máy chủ trả về, cộng với
+ * mẹo "chèn cái vừa nhận lên đầu". Hai nguồn đó không phải lúc nào cũng nói cùng
+ * một điều, và mỗi lần chúng lệch nhau là một thông báo mới nằm lẫn ở giữa danh
+ * sách:
+ *
+ * - Bản lưu ngoại tuyến đọc từ ổ đĩa xong SAU khi socket đã đẩy về vài thông báo,
+ *   và nó ghi đè cả danh sách bằng bản chụp cũ.
+ * - Máy chủ gửi lại một thông báo CŨ vừa được cập nhật nội dung; mẹo chèn lên đầu
+ *   đẩy nó lên trên những thông báo thật sự mới hơn.
+ * - Hai thông báo sinh ra trong cùng một transaction mang đúng một mốc giờ, và
+ *   không có mốc phụ thì thứ tự giữa chúng đổi mỗi lượt tải.
+ *
+ * Xếp lại ở đây thì mọi đường đi vào danh sách — tải lần đầu, bản lưu, socket —
+ * đều cho ra cùng một thứ tự, và thứ tự đó khớp với thứ tự người dùng thấy sau
+ * khi tắt app mở lại.
+ *
+ * `id` làm mốc phụ: cuid tăng dần theo thời gian tạo, nên hai thông báo cùng mốc
+ * giờ vẫn có một thứ tự ổn định thay vì nhảy chỗ mỗi lần vẽ lại.
+ */
+export function sortNotificationsNewestFirst<T extends TimestampedNotification>(list: T[]): T[] {
+  return [...list].sort((left, right) => {
+    const leftAt = Date.parse(left.createdAt ?? "");
+    const rightAt = Date.parse(right.createdAt ?? "");
+    const leftValid = Number.isFinite(leftAt);
+    const rightValid = Number.isFinite(rightAt);
+    // Bản ghi thiếu giờ (dữ liệu cũ, bản lưu hỏng) xuống cuối chứ không được coi
+    // là mốc 0 — coi là 0 thì nó chen vào giữa và đẩy thứ tự lệch hẳn.
+    if (!leftValid && !rightValid) return right.id.localeCompare(left.id);
+    if (!leftValid) return 1;
+    if (!rightValid) return -1;
+    if (leftAt !== rightAt) return rightAt - leftAt;
+    return right.id.localeCompare(left.id);
+  });
+}
+
 /**
  * Chèn thông báo vừa tới vào danh sách: mới nhất lên đầu, cùng id thì thay chỗ
  * cái cũ chứ không nhân đôi.
+ *
+ * Xếp lại cả danh sách thay vì chèn thẳng lên đầu. Máy chủ có gửi lại một thông
+ * báo cũ vừa sửa nội dung thì nó về đúng chỗ theo giờ của nó, không trèo lên trên
+ * những việc mới hơn — nhãn MỚI vẫn đủ để mắt bắt được nó.
  */
-export function mergeNotification<T extends { id: string }>(list: T[], incoming: T): T[] {
-  return [incoming, ...list.filter((item) => item.id !== incoming.id)];
+export function mergeNotification<T extends TimestampedNotification>(list: T[], incoming: T): T[] {
+  return sortNotificationsNewestFirst([
+    incoming,
+    ...list.filter((item) => item.id !== incoming.id),
+  ]);
 }
 
 /** Thứ cần có để lọc được một thông báo theo số hiệu nhiệm vụ. */

@@ -30,13 +30,16 @@ import {
   ParseDto,
   PlanFromReportDto,
   ReviewWarehouseRequestDto,
+  SubmitFieldDecisionsDto,
   SubmitReportDto,
   TranscribeDto,
   WarehouseRequestDiscrepancyDto,
   WarehouseRequestNoteDto,
   WhatIfDto,
   ConfirmPickupDto,
+  UpdateRequirementsDto,
 } from "./dto";
+import { MissionSupplyService } from "./mission-supply.service";
 import { IncidentInput } from "./mission.compute";
 import {
   MissionService,
@@ -66,6 +69,7 @@ export class MissionController {
     private whatIf: WhatIfService,
     private fieldAssistant: FieldUpdateAssistantService,
     private warehouseRequestService: MissionWarehouseRequestService,
+    private supply: MissionSupplyService,
   ) {}
 
   /** Parse mô tả → tình huống JSON (proxy AI, có cache). */
@@ -507,7 +511,84 @@ export class MissionController {
   @RequirePermission(Permission.MISSION_APPROVE)
   @Post(":id/approve")
   approve(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
-    return this.missions.approve(id, req.user.userId, req.user.warehouseId);
+    return this.missions.publishPlan(id, req.user.userId, req.user.warehouseId);
+  }
+
+  // ===== Bản tham mưu: ADMIN rà soát trước khi hỏi hiện trường =====
+
+  /** Danh mục vật tư còn tồn khả dụng trong xã, để ADMIN thêm vào bản tham mưu. */
+  @RequirePermission(Permission.MISSION_CREATE)
+  @Get(":id/addable-items")
+  addableItems(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.supply.listAddableItems(id, req.user.userId, req.user.warehouseId);
+  }
+
+  /** ADMIN sửa số / bỏ món / thêm món trên bản tham mưu (chỉ khi còn nháp). */
+  @RequirePermission(Permission.MISSION_CREATE)
+  @Post(":id/requirements")
+  updateRequirements(
+    @Request() req: AuthenticatedRequest,
+    @Param("id") id: string,
+    @Body() dto: UpdateRequirementsDto,
+  ) {
+    return this.supply.updateRequirements(id, dto.changes, req.user.userId, req.user.warehouseId);
+  }
+
+  /** ADMIN gửi bản tham mưu cho lực lượng hiện trường chốt số cần lấy. */
+  @RequirePermission(Permission.MISSION_CREATE)
+  @Post(":id/request-field-decision")
+  requestFieldDecision(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.supply.requestFieldDecision(id, req.user.userId, req.user.warehouseId);
+  }
+
+  /** ADMIN thu hồi bản tham mưu về nháp để sửa tiếp. */
+  @RequirePermission(Permission.MISSION_CREATE)
+  @Post(":id/withdraw-field-decision")
+  withdrawFieldDecision(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.supply.withdrawFieldDecision(id, req.user.userId, req.user.warehouseId);
+  }
+
+  /**
+   * Khả năng đáp ứng theo bản tham mưu HIỆN TẠI — tính lại mỗi lần danh sách đổi.
+   *
+   * Chỉ đọc: không ghim lô, không ghi gì xuống nhiệm vụ. Màn hình gọi lại sau mỗi
+   * lần ADMIN sửa số hoặc thêm món, nên nó phải rẻ và không để lại dấu vết.
+   */
+  @RequirePermission(Permission.MISSION_VIEW)
+  @Get(":id/readiness-preview")
+  readinessPreview(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.missions.previewReadiness(id, req.user.userId, req.user.warehouseId);
+  }
+
+  /** ADMIN bấm "Lập kế hoạch cứu hộ": tới đây mới chọn kho và tính khoảng cách. */
+  @RequirePermission(Permission.MISSION_CREATE)
+  @Post(":id/plan-allocation")
+  planAllocation(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.missions.planAllocation(id, req.user.userId, req.user.warehouseId);
+  }
+
+  // ===== Lực lượng hiện trường chốt số cần lấy =====
+
+  /** Vật tư đội đang giữ mà nhiệm vụ này cũng cần — đọc trước khi chốt. */
+  @RequirePermission(Permission.MISSION_VIEW)
+  @Get(":id/overlapping-holdings")
+  overlappingHoldings(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.supply.overlappingHoldings(id, req.user.userId, req.user.warehouseId);
+  }
+
+  @RequirePermission(Permission.MISSION_SUPPLY_DECIDE)
+  @Post(":id/field-decisions")
+  submitFieldDecisions(
+    @Request() req: AuthenticatedRequest,
+    @Param("id") id: string,
+    @Body() dto: SubmitFieldDecisionsDto,
+  ) {
+    return this.supply.submitFieldDecisions(
+      id,
+      dto.decisions,
+      req.user.userId,
+      req.user.warehouseId,
+    );
   }
 
   /** ADMIN huỷ phương án trước khi bất kỳ kho nào xuất vật tư. */
@@ -546,6 +627,9 @@ export class MissionController {
       dto.note,
       req.user.warehouseId,
       dto.photos,
+      // Máy khách cũ không gửi trường này. Coi như đã trả để không dựng ra một
+      // khoản nợ mà người dùng chưa từng được hỏi.
+      { returned: dto.suppliesReturned !== false, heldItems: dto.heldItems },
     );
   }
 
@@ -608,6 +692,7 @@ export class MissionController {
     incidentType: string;
     affectedPeople: number;
     fulfillment: number;
+    allocationPlannedAt: Date | null;
     requirements: {
       itemName: string;
       required: number;
@@ -616,13 +701,22 @@ export class MissionController {
       unit: string;
     }[];
   }): string {
-    const lines = mission.requirements.map(
-      (r) =>
-        `${r.itemName}: cần ${r.required} ${r.unit}, cấp được ${r.allocated}, thiếu ${r.shortage}`,
+    /**
+     * Chưa chọn kho thì chỉ kể phần CẦN, không kể phần cấp được.
+     *
+     * Bản tham mưu dừng ở số lượng nên `allocated` còn 0 ở mọi dòng. Đưa nguyên
+     * bộ số đó cho AI là bảo nó rằng kho trống rỗng, và lời giải thích trả về sẽ
+     * xoay quanh một tình trạng thiếu hụt chưa ai kiểm chứng.
+     */
+    const planned = mission.allocationPlannedAt != null;
+    const lines = mission.requirements.map((r) =>
+      planned
+        ? `${r.itemName}: cần ${r.required} ${r.unit}, cấp được ${r.allocated}, thiếu ${r.shortage}`
+        : `${r.itemName}: cần ${r.required} ${r.unit}`,
     );
     return [
       `Tình huống ${mission.incidentType}, ${mission.affectedPeople} người.`,
-      `Mức đáp ứng ${mission.fulfillment}%.`,
+      planned ? `Mức đáp ứng ${mission.fulfillment}%.` : "Chưa chọn kho xuất vật tư.",
       ...lines,
     ].join("\n");
   }

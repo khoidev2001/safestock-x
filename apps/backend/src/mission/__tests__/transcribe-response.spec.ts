@@ -18,7 +18,7 @@ describe("MissionController.transcribe", () => {
       {} as never,
       {} as never,
       {} as never,
-      {} as never,
+      {} as never, {} as never,
     );
     return { controller, ai };
   }

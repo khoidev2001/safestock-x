@@ -71,17 +71,6 @@ describe("MissionService khi một phần kho đã xuất", () => {
     expect(state.notifications.create).not.toHaveBeenCalled();
   });
 
-  it("legacy RESCUE reject bị state machine chặn vì lực lượng hiện trường chỉ đọc", async () => {
-    const state = makeService();
-
-    await expect(state.service.rejectByRescue("mission-1", "Không tiếp cận được")).rejects.toThrow(
-      "Không thể chuyển PENDING_WAREHOUSE → REJECTED",
-    );
-
-    expect(state.mission.updateMany).not.toHaveBeenCalled();
-    expect(state.notifications.create).not.toHaveBeenCalled();
-  });
-
   it("chặn huỷ khi mới một SKU PREPARED nhưng summary kho vẫn chưa hoàn tất", async () => {
     const state = makeService({ preparedWarehouseCount: 0, preparedRequestCount: 1 });
 

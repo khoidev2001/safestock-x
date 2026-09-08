@@ -159,7 +159,28 @@ test("chưa kho nào xuất thì không ghi 0/3 cho rối", () => {
 });
 
 test("hiện trường báo kết quả xong thì nhiệm vụ đã đóng, không còn là chặng phát hành", () => {
-  assert.equal(missionStageLabel({ ...stageBase, status: "COMPLETED" }), "Đã hoàn thành");
+  // Đóng rồi mà còn nợ vật tư là hai câu khác nhau: một câu còn việc phải làm,
+  // một câu thì không.
+  assert.equal(
+    missionStageLabel({ ...stageBase, status: "COMPLETED" }),
+    "Đã hoàn thành (đã trả vật tư)",
+  );
+  assert.equal(
+    missionStageLabel({
+      ...stageBase,
+      status: "COMPLETED",
+      supplyHoldings: [{ status: "RETURNED" }],
+    }),
+    "Đã hoàn thành (đã trả vật tư)",
+  );
+  assert.equal(
+    missionStageLabel({
+      ...stageBase,
+      status: "COMPLETED",
+      supplyHoldings: [{ status: "HELD" }],
+    }),
+    "Đã hoàn thành (chưa trả vật tư)",
+  );
   // Dấu vết của các bước trước không được kéo nhãn ngược về giai đoạn cũ.
   assert.equal(
     missionStageLabel({
@@ -169,7 +190,7 @@ test("hiện trường báo kết quả xong thì nhiệm vụ đã đóng, khô
       actionPlan: {},
       warehousePreparations: [{ warehouseId: "w1", preparedAt: null }],
     }),
-    "Đã hoàn thành",
+    "Đã hoàn thành (đã trả vật tư)",
   );
 });
 

@@ -385,6 +385,8 @@ export async function fetchOwnReport(token: string, id: string): Promise<OwnRepo
   return res.json();
 }
 
+export type PickupDecision = "TAKE_ALL" | "TAKE_PARTIAL" | "TAKE_NONE";
+
 export interface MissionRequirement {
   id: string;
   sku: string;
@@ -393,6 +395,37 @@ export interface MissionRequirement {
   allocated: number;
   shortage: number;
   unit: string;
+  /** Đội đã chốt gì với món này; rỗng = chưa trả lời. */
+  pickupDecision?: PickupDecision | null;
+  /** Số phải lấy từ kho sau khi đội chốt. */
+  warehouseQuantity?: number;
+  /** Số bù bằng vật tư đội đang giữ sẵn. */
+  heldQuantity?: number;
+}
+
+/** Vật tư đội đang cầm mà nhiệm vụ đang xem cũng cần. */
+export interface OverlappingHolding {
+  id: string;
+  sku: string;
+  itemName: string;
+  unit: string;
+  quantity: number;
+  heldSince: string;
+  mission: { id: string; missionNo: number };
+}
+
+/** Một khoản vật tư đội đang cầm, chưa trả về kho. */
+export interface RescueHolding {
+  id: string;
+  sku: string;
+  itemName: string;
+  unit: string;
+  quantity: number;
+  status: "HELD" | "RETURNED";
+  heldSince: string;
+  returnedAt: string | null;
+  warehouse: { id: string; name: string };
+  mission: { id: string; missionNo: number };
 }
 
 export interface MissionDetail {
@@ -419,6 +452,20 @@ export interface MissionDetail {
   incidentLat?: number | null;
   incidentLng?: number | null;
   requirements: MissionRequirement[];
+  /** Rỗng nghĩa là mới có bản tham mưu, chưa chọn kho nào. */
+  allocationPlannedAt?: string | null;
+  /** Đội báo không cần lấy gì từ kho — bỏ hẳn chặng kho chuẩn bị. */
+  warehouseStageSkipped?: boolean;
+  /** Vật tư đội còn cầm của chính nhiệm vụ này. */
+  supplyHoldings?: {
+    id: string;
+    sku: string;
+    itemName: string;
+    unit: string;
+    quantity: number;
+    status: "HELD" | "RETURNED";
+    warehouse: { id: string; name: string };
+  }[];
   warehouseRequests?: WarehouseMaterialRequest[];
   /** Ảnh bằng chứng đã gửi kèm lúc báo hoàn thành — chỉ phần mô tả, không có bytes. */
   deliveryPhotos?: MissionDeliveryPhoto[];
@@ -541,12 +588,59 @@ export async function completeMission(
   outcome: DeliveryOutcome,
   note?: string,
   photos?: { dataBase64: string }[],
+  /**
+   * Đã trả vật tư tái sử dụng về kho chưa, và còn giữ những gì.
+   *
+   * Bỏ trống = coi như đã trả. Máy khách cũ không gửi trường này, và dựng ra một
+   * khoản nợ mà người dùng chưa từng được hỏi thì tệ hơn là bỏ sót.
+   */
+  supplyReturn?: { returned: boolean; heldItems?: { sku: string; quantity: number }[] },
 ): Promise<unknown> {
   return postAuthorized(token, `/api/missions/${id}/complete`, {
     outcome,
     note,
     photos: photos && photos.length > 0 ? photos : undefined,
+    suppliesReturned: supplyReturn?.returned,
+    heldItems: supplyReturn?.heldItems,
   });
+}
+
+/** Vật tư đội đang giữ mà bản tham mưu của nhiệm vụ này cũng cần. */
+export async function fetchOverlappingHoldings(
+  token: string,
+  missionId: string,
+): Promise<OverlappingHolding[]> {
+  const res = await request(apiUrl(`/api/missions/${missionId}/overlapping-holdings`), {
+    headers: authHeader(token),
+  });
+  if (!res.ok) throw await apiFailure(res, "Không tải được phần vật tư đội đang giữ");
+  return res.json();
+}
+
+/** Đội chốt từng món phải lấy bao nhiêu từ kho. */
+export async function submitFieldDecisions(
+  token: string,
+  missionId: string,
+  decisions: { sku: string; decision: PickupDecision; quantity?: number }[],
+): Promise<unknown> {
+  return postAuthorized(token, `/api/missions/${missionId}/field-decisions`, { decisions });
+}
+
+/**
+ * Xác nhận một khoản tạm giữ đã về kho — tồn kho cộng lại ngay lúc này.
+ *
+ * Bấm lại lần hai là no-op ở máy chủ, không phải lỗi: sóng chập chờn thì người ta
+ * bấm lại, và lần thứ hai không được cộng thêm một lượt tồn nữa.
+ */
+export async function confirmHoldingReturn(token: string, holdingId: string): Promise<unknown> {
+  return postAuthorized(token, `/api/rescue-holdings/${holdingId}/confirm-return`, {});
+}
+
+/** Toàn bộ vật tư đội của xã đang cầm, chưa trả về kho. */
+export async function fetchRescueHoldings(token: string): Promise<RescueHolding[]> {
+  const res = await request(apiUrl("/api/rescue-holdings"), { headers: authHeader(token) });
+  if (!res.ok) throw await apiFailure(res, "Không tải được sổ vật tư đang giữ");
+  return res.json();
 }
 
 /**

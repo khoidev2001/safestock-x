@@ -7,16 +7,24 @@ import { FIELD_FORCE_ROLE_LABEL } from "@safestock/shared-types";
 import { activeStepIndex, completedStepIndex } from "./workflow-progress";
 
 /**
- * Ba bước phối hợp, xếp đúng thứ tự của state machine điều phối.
+ * Năm bước phối hợp, xếp đúng thứ tự của state machine điều phối.
  *
- * Xã phát hành phương án THẲNG tới kho nên hiện trường không xác nhận ở giữa;
- * họ đứng ở cuối, đi giao rồi báo kết quả để đóng nhiệm vụ. Trước đây thanh này
- * còn giữ thứ tự cũ (hiện trường xác nhận trước kho), nên nhiệm vụ vừa lập xong
- * hiện "Đang chờ" ở một bước không bao giờ xảy ra — người dùng ngồi đợi hiện
- * trường trong khi việc đang nằm ở tay chính họ.
+ * Điều phối lập bản tham mưu (mới chỉ có số lượng) → hiện trường chốt từng món
+ * phải lấy bao nhiêu từ kho → điều phối lập kế hoạch và phát hành → kho xuất →
+ * hiện trường giao xong → hoàn trả vật tư tái sử dụng.
+ *
+ * Hai bước của hiện trường không gộp làm một được, dù cùng một người bấm: bước
+ * chốt số xảy ra TRƯỚC khi kho động vào hàng, bước giao xong xảy ra sau khi hàng
+ * đã ra khỏi kho. Gộp lại là mất đúng chỗ mà con số của bản tham mưu được sửa.
  */
 const STEPS = [
-  { key: "admin", label: "Lập kế hoạch và phát hành", role: "ADMIN", icon: "workflow" },
+  { key: "admin", label: "Lập bản tham mưu", role: "ADMIN", icon: "workflow" },
+  {
+    key: "field-decision",
+    label: `${FIELD_FORCE_ROLE_LABEL} chốt số cần lấy`,
+    role: "RESCUE",
+    icon: "helmet",
+  },
   { key: "warehouse", label: "Kho chuẩn bị và xuất", role: "WAREHOUSE", icon: "house" },
   {
     key: "rescue",
@@ -24,6 +32,7 @@ const STEPS = [
     role: "RESCUE",
     icon: "helmet",
   },
+  { key: "return", label: "Hoàn trả vật tư", role: "WAREHOUSE", icon: "house" },
 ] satisfies {
   key: string;
   label: string;
@@ -44,13 +53,19 @@ const OFF_FLOW: Partial<Record<MissionStatus, { label: string; tone: string }>> 
 export function WorkflowStepper({
   status,
   warehouseRequests,
+  warehouseStageSkipped,
+  supplyPending,
 }: {
   status: MissionStatus;
   /** Phiếu vật tư của nhiệm vụ — mốc "kho xong" đọc theo chữ ký nhận của đội. */
   warehouseRequests?: { status: string }[] | null;
+  /** Hiện trường báo không cần lấy gì từ kho — chặng kho được bỏ qua. */
+  warehouseStageSkipped?: boolean;
+  /** Nhiệm vụ đã đóng nhưng đội còn giữ vật tư chưa trả về kho. */
+  supplyPending?: boolean;
 }) {
-  const done = completedStepIndex(status, warehouseRequests);
-  const active = activeStepIndex(status, warehouseRequests);
+  const done = completedStepIndex(status, warehouseRequests, supplyPending);
+  const active = activeStepIndex(status, warehouseRequests, supplyPending);
   const offFlow = OFF_FLOW[status];
 
   if (offFlow) {
@@ -99,7 +114,15 @@ export function WorkflowStepper({
                 <ColorIcon mono name={step.icon} size={24} />
               </div>
               <div>
-                <p className="text-xs font-medium leading-tight">{step.label}</p>
+                {/* Chặng kho bị bỏ qua vẫn vẽ là ĐÃ XONG, chỉ đổi chữ. Vẽ nó dở
+                    dang thì thanh tiến trình đứng mãi ở một bước không bao giờ
+                    có ai làm, còn giấu hẳn cột đi thì năm bước thành bốn và
+                    người quen nhìn vị trí sẽ đọc nhầm sang bước bên cạnh. */}
+                <p className="text-xs font-medium leading-tight">
+                  {step.key === "warehouse" && warehouseStageSkipped
+                    ? "Không cần xuất kho"
+                    : step.label}
+                </p>
                 {isActive && !isDone && (
                   <p className="text-[10px] text-[var(--color-attention)]">Đang chờ</p>
                 )}

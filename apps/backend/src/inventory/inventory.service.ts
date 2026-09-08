@@ -295,6 +295,15 @@ export class InventoryService {
    *
    * Ngưỡng nhận vào từ ngoài chứ không chôn cứng ở đây, để màn hình và máy chủ
    * không giữ hai con số khác nhau cho cùng một chữ "còn ít".
+   *
+   * NGƯỠNG CHỈ ÁP CHO HÀNG TIÊU HAO. Vật tư tái sử dụng — xuồng cứu hộ, áo phao,
+   * bộ đàm — xuất đi là CHO MƯỢN rồi thu về, nên số tồn của chúng vốn nhỏ: cả xã
+   * có sáu chiếc xuồng là đủ dùng, không phải sắp hết. Đo chúng bằng cùng con số
+   * mười của thùng mì làm bảng "lô còn ít" lúc nào cũng có mấy dòng thiết bị nằm
+   * đó, mà đọc mãi không thấy phải làm gì — rồi người trực bỏ qua cả bảng, kể cả
+   * hôm nước uống thật sự sắp cạn.
+   *
+   * Với chúng, còn 0 mới là tin: hết sạch thì không điều đi đâu được nữa.
    */
   async communeLowStock(
     warehouseId: string,
@@ -316,15 +325,25 @@ export class InventoryService {
     const batches = await this.prisma.itemBatch.findMany({
       where: {
         circulation: "IN_STOCK",
-        quantity: { lte: threshold },
         shelf: { zone: { warehouse: { organizationId: warehouse.organizationId } } },
+        OR: [
+          { item: { consumable: true }, quantity: { lte: threshold } },
+          { item: { consumable: false }, quantity: { lte: 0 } },
+        ],
       },
       orderBy: { quantity: "asc" },
       select: {
         id: true,
         batchCode: true,
         quantity: true,
-        item: { select: { name: true, sku: true, category: { select: { unit: true } } } },
+        item: {
+          select: {
+            name: true,
+            sku: true,
+            consumable: true,
+            category: { select: { unit: true } },
+          },
+        },
         shelf: {
           select: {
             code: true,
@@ -350,6 +369,10 @@ export class InventoryService {
             sku: batch.item.sku,
             itemName: batch.item.name,
             unit: batch.item.category.unit,
+            // Màn hình phải nói được VÌ SAO dòng này có mặt: "còn ít" với hàng
+            // tiêu hao, "đã hết sạch" với thiết bị tái sử dụng. Cùng một con số 0
+            // mà hai loại hàng đọc ra hai việc khác nhau.
+            consumable: batch.item.consumable,
             quantity: batch.quantity,
             warehouseId: batchWarehouse.id,
             warehouseName: batchWarehouse.name,

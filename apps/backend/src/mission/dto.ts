@@ -2,6 +2,7 @@ import { Type } from "class-transformer";
 import {
   ArrayMaxSize,
   Equals,
+  IsBoolean,
   IsEnum,
   IsISO8601,
   IsIn,
@@ -16,7 +17,7 @@ import {
   ValidateIf,
   ValidateNested,
 } from "class-validator";
-import { DeliveryOutcome } from "@prisma/client";
+import { DeliveryOutcome, PickupDecision } from "@prisma/client";
 import { MAX_DELIVERY_PHOTOS } from "./delivery-photos";
 import { IncidentType } from "@safestock/shared-types";
 
@@ -72,6 +73,25 @@ export class CompleteMissionDto {
   @IsIn(Object.values(DeliveryOutcome))
   outcome!: DeliveryOutcome;
 
+  /**
+   * Đã trả vật tư tái sử dụng về kho chưa.
+   *
+   * BẮT BUỘC, và cố ý không có mặc định. Mặc định "rồi" là mọi lần quên trả đều
+   * lặng lẽ thành "đã trả"; mặc định "chưa" là mọi chuyến giao hàng tiêu hao đều
+   * mọc ra một khoản nợ không có thật. Người vừa đi hiện trường về là người duy
+   * nhất trả lời được.
+   */
+  @IsOptional()
+  @IsBoolean()
+  suppliesReturned?: boolean;
+
+  /** Số còn giữ của từng món; bỏ trống nghĩa là giữ toàn bộ phần đã ký nhận. */
+  @IsOptional()
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => HeldItemDto)
+  heldItems?: HeldItemDto[];
+
   @IsOptional()
   @IsString()
   note?: string;
@@ -81,6 +101,68 @@ export class CompleteMissionDto {
   @ValidateNested({ each: true })
   @Type(() => DeliveryPhotoDto)
   photos?: DeliveryPhotoDto[];
+}
+
+/** Một dòng ADMIN sửa trên bản tham mưu; `required = 0` nghĩa là bỏ món đó. */
+export class RequirementChangeDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  sku!: string;
+
+  @IsInt()
+  @Min(0)
+  @Max(1_000_000)
+  required!: number;
+}
+
+export class UpdateRequirementsDto {
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => RequirementChangeDto)
+  changes!: RequirementChangeDto[];
+}
+
+/**
+ * Lực lượng hiện trường chốt MỘT món: lấy hết, lấy một phần (kèm số), hay không lấy.
+ *
+ * `quantity` chỉ có nghĩa với `TAKE_PARTIAL`. Ràng buộc "nhỏ hơn số cần" nằm ở
+ * tầng service vì chỉ ở đó mới biết bản tham mưu ghi bao nhiêu.
+ */
+export class FieldDecisionItemDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  sku!: string;
+
+  @IsIn(Object.values(PickupDecision))
+  decision!: PickupDecision;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(1_000_000)
+  quantity?: number;
+}
+
+export class SubmitFieldDecisionsDto {
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => FieldDecisionItemDto)
+  decisions!: FieldDecisionItemDto[];
+}
+
+/** Số lượng một món mà đội cứu hộ khai là còn đang cầm khi đóng nhiệm vụ. */
+export class HeldItemDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  sku!: string;
+
+  @IsInt()
+  @Min(0)
+  @Max(1_000_000)
+  quantity!: number;
 }
 
 export class WarehouseRequestNoteDto {

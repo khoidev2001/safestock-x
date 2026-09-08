@@ -181,4 +181,21 @@ export async function closeWebSession(): Promise<void> {
   }
 }
 
+/**
+ * Câu lỗi để hiện cho người dùng, đọc được từ BẤT KỲ thứ gì bị ném ra.
+ *
+ * Vì sao không dùng `err instanceof ApiError` ở mỗi nơi: trong chế độ dev, Fast
+ * Refresh có thể nạp `api.ts` thành hai bản khác nhau, và `instanceof` giữa hai
+ * bản đó trả về false. Lúc ấy một lỗi 400 có câu giải thích rõ ràng của máy chủ
+ * lại rơi vào nhánh mặc định và hiện thành "vui lòng thử lại" — người dùng mất
+ * đúng dòng chữ nói cho họ biết phải sửa gì, còn người sửa lỗi thì mất manh mối.
+ *
+ * Đọc theo HÌNH DẠNG chứ không theo danh tính lớp: cái cần là câu chữ.
+ */
+export function errorMessage(cause: unknown, fallback: string): string {
+  if (cause instanceof Error && cause.message.trim()) return cause.message;
+  if (typeof cause === "string" && cause.trim()) return cause;
+  return fallback;
+}
+
 export { ApiError, BASE };

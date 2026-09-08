@@ -1,7 +1,9 @@
-export type MissionAction = "complete";
+export type MissionAction = "complete" | "decide";
 
 export const MISSION_STATUS_LABEL: Record<string, string> = {
   DRAFT: "Nháp",
+  PENDING_FIELD_DECISION: "Chờ bạn chốt số cần lấy",
+  FIELD_DECIDED: "Đã chốt · chờ điều phối",
   PENDING_RESCUE: "Chờ bạn nhận lệnh",
   RESCUE_CONFIRMED: "Đã nhận · chờ kho",
   PENDING_WAREHOUSE: "Kho đang chuẩn bị",
@@ -22,14 +24,75 @@ export const MISSION_STATUS_LABEL: Record<string, string> = {
  * không có nút, nhất là với người đang đứng ngoài mưa.
  */
 export function fieldForceActionsFor(status: string): MissionAction[] {
+  // Từ nay hiện trường có HAI việc, ở hai đầu của luồng: chốt số cần lấy trước
+  // khi kho động vào hàng, và báo kết quả sau khi đã đi giao.
+  if (status === "PENDING_FIELD_DECISION") return ["decide"];
   return status === "READY" ? ["complete"] : [];
 }
 
 /** Lệnh còn đang chạy thì xếp lên trước; việc đã đóng đẩy xuống dưới. */
 const CLOSED_STATUSES = new Set(["COMPLETED", "REJECTED", "CANCELLED"]);
 
+/**
+ * Nhiệm vụ đã đóng nhưng đội còn cầm vật tư chưa trả về kho.
+ *
+ * Đọc từ chính các dòng tạm giữ chứ không từ một cột trạng thái: cột riêng thì
+ * hai đường (trả từng phần, chuyển sang nhiệm vụ khác) đều phải nhớ lật nó.
+ */
+export function missionSupplyPending(
+  holdings?: { status: string }[] | null,
+): boolean {
+  return (holdings ?? []).some((holding) => holding.status === "HELD");
+}
+
+/** Chữ trên thẻ nhiệm vụ sau khi đã đóng — ba tình huống, không phải hai. */
+export function missionCompletionLabel(holdings?: { status: string }[] | null): string {
+  if (missionSupplyPending(holdings)) return "Hoàn thành · chưa trả vật tư";
+  // Có dòng nào đó nhưng không còn HELD: hoặc đã trả, hoặc đã chuyển sang nhiệm
+  // vụ khác. Cả hai đều là "không còn nợ nhiệm vụ này".
+  return "Hoàn thành · đã hoàn vật tư";
+}
+
 export function isMissionOpen(status: string): boolean {
   return !CLOSED_STATUSES.has(status);
+}
+
+/** Một nhiệm vụ đủ để xếp vào tab nào — chỉ cần trạng thái và sổ tạm giữ. */
+export interface GroupableMission {
+  status: string;
+  supplyHoldings?: { status: string }[] | null;
+}
+
+/**
+ * Ba ngăn của tab Nhiệm vụ trên máy đội cứu hộ.
+ *
+ * Một danh sách phẳng trộn lẫn việc đang chạy với việc đã xong là danh sách chỉ
+ * dùng được trong tuần đầu: sau một mùa lũ thì mấy nhiệm vụ đang chạy nằm lẫn
+ * giữa hàng chục nhiệm vụ đã đóng, và người trực cuộn tìm bằng mắt.
+ *
+ * Ngăn "đã xong" còn phải tách làm hai, vì CHƯA TRẢ VẬT TƯ vẫn là việc phải làm —
+ * nó chỉ không còn là việc cứu hộ. Gộp chung với nhóm đã trả xong thì khoản nợ
+ * biến mất khỏi màn hình đúng lúc nó thành thứ duy nhất còn treo.
+ */
+export interface MissionGroups<T> {
+  /** Còn phải cứu hộ: chưa đóng. */
+  active: T[];
+  /** Đã đóng nhưng đội còn cầm vật tư — còn một nút phải bấm. */
+  awaitingReturn: T[];
+  /** Đã đóng và không còn nợ gì. */
+  settled: T[];
+}
+
+export function groupMissionsForFieldForce<T extends GroupableMission>(
+  missions: T[],
+): MissionGroups<T> {
+  const groups: MissionGroups<T> = { active: [], awaitingReturn: [], settled: [] };
+  for (const mission of missions) {
+    if (isMissionOpen(mission.status)) groups.active.push(mission);
+    else if (missionSupplyPending(mission.supplyHoldings)) groups.awaitingReturn.push(mission);
+    else groups.settled.push(mission);
+  }
+  return groups;
 }
 
 export interface SortableMission {
@@ -39,39 +102,55 @@ export interface SortableMission {
 }
 
 /**
- * Xếp danh sách lệnh: việc cần làm ngay lên đầu, rồi tới việc đang chạy, cuối
- * cùng là việc đã đóng. Trong cùng nhóm thì mới nhất trước.
+ * Xếp danh sách lệnh THEO DÒNG THỜI GIAN: việc mới nhất luôn nằm trên cùng.
  *
- * CHÚ Ý: đây KHÔNG phải xếp theo thời gian. Một nhiệm vụ vừa nhận nhưng kho chưa
- * xuất hàng thì chưa có việc gì cho đội cứu hộ làm, nên nó nằm dưới nhiệm vụ cũ
- * hơn đang chờ người đi lấy. Nhìn vào tưởng danh sách xếp sai, nhưng đổi sang xếp
- * thuần theo giờ thì việc đang cần người lại trôi xuống dưới đống việc chưa tới lượt.
+ * Trước đây danh sách xếp theo "việc nào tới lượt mình" — nhiệm vụ đang chờ người
+ * đi lấy hàng lên trước nhiệm vụ vừa nhận nhưng kho chưa soạn xong. Nghe hợp lý,
+ * nhưng nó hỏng đúng lúc quan trọng nhất: một lệnh vừa về, người trực nghe chuông,
+ * mở tab Nhiệm vụ ra và KHÔNG thấy nó ở đầu — nó nằm lẫn đâu đó giữa danh sách vì
+ * kho chưa kịp động tới. Với việc cứu hộ thì "mới về" mới là thứ phải đọc trước,
+ * còn chặng nào thì thẻ đã nói ra bằng chữ rồi.
  *
- * `pinnedMissionId` — nhiệm vụ VỪA XEM — đứng trên tất cả.
+ * VIỆC ĐÃ ĐÓNG vẫn xuống cuối. Chúng không còn là việc phải làm, và một nhiệm vụ
+ * vừa báo hoàn thành xong mà chiếm chỗ trên cùng thì đẩy lệnh đang chạy xuống dưới.
  *
- * Người trực mở một nhiệm vụ, thoát ra làm việc khác rồi quay lại tìm đúng nó.
- * Không ghim thì họ phải cuộn đi tìm giữa sáu chục thẻ trông na ná nhau, mà thẻ
- * họ cần lại là thẻ vừa rời khỏi vài giây trước. Chỉ ghim MỘT: ghim mọi thẻ đã
- * xem thì sau nửa buổi trực, thứ tự danh sách thành lịch sử duyệt web chứ không
- * còn nói được việc nào cần làm trước.
+ * `pinnedMissionId` — nhiệm vụ VỪA XEM — THUA dòng thời gian.
+ *
+ * Trước đây nó được nhấc thẳng lên đầu, trên cả những lệnh về sau nó. Đó chính là
+ * lỗi phải sửa: người trực xem một nhiệm vụ cũ, rồi lệnh mới về và bị chính cái
+ * ghim đó che mất. Một khi thứ tự đã tính theo giờ thì nhiệm vụ vừa xem tự khắc
+ * đứng trên mọi nhiệm vụ cũ hơn nó, nên cái ghim chỉ còn việc cắt hoà giữa hai
+ * nhiệm vụ phát hành trong cùng một giây — và ở đó nó vẫn đáng giữ, vì thẻ người
+ * ta vừa rời khỏi vài giây trước là thẻ họ đang tìm.
  */
 export function sortMissionsForFieldForce<T extends SortableMission>(
   missions: T[],
   options?: { pinnedMissionId?: string | null },
 ): T[] {
   const pinnedId = options?.pinnedMissionId ?? null;
-  const rank = (mission: T): number => {
-    if (pinnedId && mission.id === pinnedId) return -1;
-    if (fieldForceActionsFor(mission.status).length > 0) return 0;
-    return isMissionOpen(mission.status) ? 1 : 2;
+  const openRank = (mission: T): number => (isMissionOpen(mission.status) ? 0 : 1);
+  const createdAtOf = (mission: T): number => {
+    const at = Date.parse(mission.createdAt ?? "");
+    // Thiếu giờ (bản lưu cũ, dữ liệu hỏng) thì xuống cuối nhóm chứ không được coi
+    // là mốc 0 — coi là 0 thì nó chen vào giữa và kéo thứ tự lệch hẳn.
+    return Number.isFinite(at) ? at : Number.NEGATIVE_INFINITY;
   };
+
   return [...missions].sort((left, right) => {
-    const byRank = rank(left) - rank(right);
-    if (byRank !== 0) return byRank;
-    const leftAt = Date.parse(left.createdAt ?? "");
-    const rightAt = Date.parse(right.createdAt ?? "");
-    if (!Number.isFinite(leftAt) || !Number.isFinite(rightAt)) return 0;
-    return rightAt - leftAt;
+    const byOpen = openRank(left) - openRank(right);
+    if (byOpen !== 0) return byOpen;
+
+    const leftAt = createdAtOf(left);
+    const rightAt = createdAtOf(right);
+    if (leftAt !== rightAt) return rightAt - leftAt;
+
+    // Cùng mốc giờ thì thẻ vừa xem đứng trước — đây là chỗ duy nhất cái ghim còn
+    // quyết định được điều gì, và cũng là mốc phụ giữ thứ tự khỏi nhảy loạn giữa
+    // hai lượt vẽ khi hai nhiệm vụ được phát hành trong cùng một giây.
+    const leftPinned = pinnedId != null && left.id === pinnedId;
+    const rightPinned = pinnedId != null && right.id === pinnedId;
+    if (leftPinned !== rightPinned) return leftPinned ? -1 : 1;
+    return (right.id ?? "").localeCompare(left.id ?? "");
   });
 }
 

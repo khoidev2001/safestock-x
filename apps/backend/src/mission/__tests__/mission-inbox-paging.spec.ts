@@ -2,21 +2,27 @@ import { MissionStatus, UserRole } from "@prisma/client";
 import { missionOrderBy, needsActionStatuses } from "../mission.service";
 
 describe("needsActionStatuses", () => {
-  it("điều phối lo bản nháp và các đơn bị trả về", () => {
+  it("điều phối lo bản nháp, phần hiện trường vừa chốt, và các đơn bị trả về", () => {
     expect(needsActionStatuses(UserRole.ADMIN)).toEqual([
       MissionStatus.DRAFT,
+      MissionStatus.FIELD_DECIDED,
       MissionStatus.REJECTED,
       MissionStatus.DEFERRED,
     ]);
+  });
+
+  it("nhiệm vụ hiện trường vừa chốt số phải nổi lên cho điều phối", () => {
+    // Đây đúng là lúc ADMIN phải bấm lập kế hoạch rồi phát hành. Thiếu trạng thái
+    // này thì nhiệm vụ rơi khỏi danh sách việc cần làm đúng vào lúc cần người nhất.
+    expect(needsActionStatuses(UserRole.ADMIN)).toContain(MissionStatus.FIELD_DECIDED);
   });
 
   it("kho chỉ lo nhiệm vụ đã phát hành đang chờ xuất", () => {
     expect(needsActionStatuses(UserRole.WAREHOUSE)).toEqual([MissionStatus.PENDING_WAREHOUSE]);
   });
 
-  it("lực lượng hiện trường chỉ đọc nên không có việc nào", () => {
-    // Họ chỉ có MISSION_VIEW + MISSION_FIELD_UPDATE, không đổi trạng thái nhiệm vụ.
-    expect(needsActionStatuses(UserRole.RESCUE)).toEqual([]);
+  it("hiện trường có đúng một việc: chốt số cần lấy từ kho", () => {
+    expect(needsActionStatuses(UserRole.RESCUE)).toEqual([MissionStatus.PENDING_FIELD_DECISION]);
   });
 });
 

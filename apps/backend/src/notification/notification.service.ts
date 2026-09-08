@@ -139,12 +139,21 @@ export class NotificationService {
     return notification;
   }
 
-  /** Latest notifications of exactly one organization and role. */
+  /**
+   * Latest notifications of exactly one organization and role.
+   *
+   * `id` là mốc phụ, không phải trang trí. Hai thông báo sinh ra trong cùng một
+   * transaction — điều phối phát hành phương án gửi một tin cho kho và một tin
+   * cho đội cứu hộ — mang đúng một mốc `createdAt`. Chỉ xếp theo giờ thì thứ tự
+   * giữa chúng do máy chủ tuỳ ý chọn và đổi giữa hai lượt tải, nên tin mới nhất
+   * không phải lúc nào cũng nằm ở đầu danh sách. `cuid` tăng dần theo thời gian
+   * tạo, đủ để cắt hoà một cách ổn định.
+   */
   async list(actorId: string, role: UserRole, onlyUnread = false) {
     const organizationId = await this.actorOrganizationId(actorId);
     return this.db.notification.findMany({
       where: { organizationId, recipientRole: role, ...(onlyUnread ? { read: false } : {}) },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: 50,
     });
   }

@@ -22,6 +22,8 @@ export interface MissionInboxItem {
   reportText?: string | null;
   affectedPeople: number;
   status: MissionStatus;
+  /** Hiện trường báo không cần lấy gì từ kho — chặng kho được bỏ qua. */
+  warehouseStageSkipped?: boolean;
   createdAt: string;
   warehousePreparations?: MissionInboxPreparation[];
   /**
@@ -33,6 +35,13 @@ export interface MissionInboxItem {
   hasCoordinationAnalysis?: boolean;
   /** Chỉ cần biết CÓ hay KHÔNG; hình dạng kế hoạch là việc của màn hình chi tiết. */
   actionPlan?: unknown;
+  /**
+   * Sổ tạm giữ của chính nhiệm vụ này — CHỈ trạng thái từng khoản.
+   *
+   * Đủ để trả lời câu duy nhất danh sách cần hỏi: đóng rồi mà còn nợ vật tư
+   * không. Bản ghi cũ (trước khi có sổ tạm giữ) không có trường này.
+   */
+  supplyHoldings?: { status: string }[];
 }
 
 /**
@@ -85,7 +94,27 @@ export function missionLocationLabel(mission: MissionInboxItem): string {
  * nhiệm vụ đã từng ra tới kho hay chưa.
  */
 export function missionIsPublished(mission: MissionInboxItem): boolean {
-  return mission.status !== "DRAFT" && mission.status !== "CANCELLED";
+  // Hai chặng mới nằm TRƯỚC lúc phát hành: bản tham mưu đang được hiện trường
+  // xem, chưa kho nào nhận lệnh. Gọi chúng là "đã phát hành" thì thẻ nhiệm vụ nói
+  // một việc chưa xảy ra, và người trực thôi không rà lại danh sách nữa.
+  return !UNPUBLISHED_STATUSES.includes(mission.status) && mission.status !== "CANCELLED";
+}
+
+/** Các chặng còn nằm trong tay điều phối và hiện trường, trước khi tới kho. */
+const UNPUBLISHED_STATUSES = ["DRAFT", "PENDING_FIELD_DECISION", "FIELD_DECIDED"];
+
+/**
+ * Đội còn cầm vật tư của nhiệm vụ này chưa trả về kho.
+ *
+ * Đọc từ chính các dòng tạm giữ chứ không từ một cột trạng thái riêng: cột
+ * denormalized thì hai đường (trả từng phần, chuyển sang nhiệm vụ khác) đều phải
+ * nhớ lật nó, và chỉ cần một bên quên là màn hình nói sai.
+ *
+ * Không có trường (bản ghi cũ, hoặc endpoint chưa trả) thì coi như KHÔNG nợ —
+ * đoán ngược lại là gắn cảnh báo cho mọi nhiệm vụ lịch sử.
+ */
+export function missionSupplyPending(mission: MissionInboxItem): boolean {
+  return (mission.supplyHoldings ?? []).some((holding) => holding.status === "HELD");
 }
 
 export function missionStageLabel(mission: MissionInboxItem): string {
@@ -94,13 +123,29 @@ export function missionStageLabel(mission: MissionInboxItem): string {
   // Hiện trường báo kết quả xong là NHIỆM VỤ ĐÓNG, không còn là một chặng của
   // "đã duyệt và phát hành". Ghi tiếp câu phát hành ở đây thì người trực đọc lướt
   // danh sách vẫn tưởng việc đang chạy và còn phải theo dõi, trong khi không còn
-  // ai phải làm gì nữa. `COMPLETED` chỉ được đặt ở đúng một chỗ — bước hiện trường
-  // xác nhận đã giao (mission.service.ts `confirmDelivery`) — nên đọc thẳng ra
-  // "đã hoàn thành" là đúng, không cần dò thêm dấu vết nào.
-  if (mission.status === "COMPLETED") return "Đã hoàn thành";
+  // ai phải làm gì nữa.
+  //
+  // Nhưng "đã hoàn thành" TRƠ MỘT MÌNH thì lại giấu mất khoản duy nhất còn treo:
+  // vật tư tái sử dụng đội chưa chở về kho. Sổ ghi nhiệm vụ xong, tồn kho hiện
+  // thiếu đúng số hàng đang nằm trên xe, và chỉ tới đợt kiểm kê sau mới lòi ra.
+  // Nên nói luôn trong ngoặc — cả hai vế, để "đã trả" cũng là một câu khẳng định
+  // đọc được chứ không phải sự vắng mặt của cảnh báo.
+  if (mission.status === "COMPLETED") {
+    return missionSupplyPending(mission)
+      ? "Đã hoàn thành (chưa trả vật tư)"
+      : "Đã hoàn thành (đã trả vật tư)";
+  }
 
-  // Còn nháp: đọc dấu vết, muộn nhất thắng.
+  // Chưa phát hành: đọc dấu vết, muộn nhất thắng.
   if (!missionIsPublished(mission)) {
+    if (mission.status === "PENDING_FIELD_DECISION") {
+      return "Chờ lực lượng hiện trường chốt số cần lấy";
+    }
+    if (mission.status === "FIELD_DECIDED") {
+      return mission.actionPlan
+        ? "Hiện trường đã chốt — chờ phát hành"
+        : "Hiện trường đã chốt — chờ lập kế hoạch cứu hộ";
+    }
     if (mission.actionPlan) return "Đã lập kế hoạch cứu hộ";
     if (mission.hasCoordinationAnalysis) return "Đã lập bản tham mưu";
     return "Bản nháp";
@@ -129,6 +174,10 @@ function publishedStageDetail(mission: MissionInboxItem): string {
       return "đang đợi kho chuẩn bị và xuất";
     }
     case "READY":
+      // Nhiệm vụ bỏ qua chặng kho thì KHÔNG có gì để soạn và không ai phải tới
+      // lấy — nói "chờ đội tới lấy" là chỉ người trực đi thúc một việc không tồn
+      // tại, còn thủ kho thì đi tìm một phiếu không có.
+      if (mission.warehouseStageSkipped) return "không cần xuất kho, chờ hiện trường báo kết quả";
       // "Đã soạn" chứ không phải "đã xuất": READY chỉ nói mọi kho soạn xong phần
       // của mình, hàng vẫn nằm trên sân kho cho tới khi đội tới ký nhận. Gọi là
       // "đã xuất" thì người trực tưởng hàng đang trên đường tới hiện trường.
@@ -154,14 +203,18 @@ export function missionNeedsAction(
   warehouseId?: string | null,
 ) {
   if (role === "ADMIN") {
-    return ["DRAFT", "REJECTED", "DEFERRED"].includes(mission.status);
+    // FIELD_DECIDED là ĐÚNG lúc điều phối phải bấm lập kế hoạch rồi phát hành.
+    // Thiếu nó thì nhiệm vụ rơi khỏi danh sách việc cần làm đúng lúc cần người nhất.
+    return ["DRAFT", "FIELD_DECIDED", "REJECTED", "DEFERRED"].includes(mission.status);
   }
 
   // Lực lượng hiện trường CHỈ ĐỌC: chỉ có MISSION_VIEW + MISSION_FIELD_UPDATE, không đổi
   // trạng thái nhiệm vụ nào. Vì vậy không gắn cờ "Cần xử lý" — họ không có hành động điều
   // phối để thực hiện, chỉ nhận thông tin và gửi cập nhật hiện trường.
   if (role === "RESCUE") {
-    return false;
+    // Từ nay họ CÓ một việc trong khâu điều phối: chốt xem từng món phải lấy bao
+    // nhiêu từ kho. Ngoài lúc đó thì vẫn chỉ đọc.
+    return mission.status === "PENDING_FIELD_DECISION";
   }
 
   if (role !== "WAREHOUSE" || mission.status !== "PENDING_WAREHOUSE" || !warehouseId) {

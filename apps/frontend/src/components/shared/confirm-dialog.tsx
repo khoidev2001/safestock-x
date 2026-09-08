@@ -11,6 +11,15 @@ export interface ConfirmDialogProps {
   message: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  /**
+   * Việc sắp làm có PHÁ HUỶ dữ liệu không.
+   *
+   * "destructive" (mặc định) là xoá hẳn — nút đỏ, hình cảnh báo. "neutral" dành
+   * cho việc chỉ ghi đè một con số: vẫn phải hỏi lại vì nó thay đổi thứ bên kia
+   * đang đọc, nhưng tô đỏ một cú sửa số thì lần sau người dùng đọc màu đỏ như
+   * một cái nền, và cú xoá thật cũng chìm theo.
+   */
+  tone?: "destructive" | "neutral";
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -32,9 +41,11 @@ export function ConfirmDialog({
   message,
   confirmLabel = "Xoá",
   cancelLabel = "Huỷ",
+  tone = "destructive",
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const destructive = tone === "destructive";
   useBodyScrollLock(open);
   const cancelRef = useRef<HTMLButtonElement>(null);
 
@@ -64,7 +75,12 @@ export function ConfirmDialog({
     >
       <div className="w-full max-w-md rounded-lg border bg-[var(--surface)] p-6 shadow-xl">
         <div className="flex items-start gap-3">
-          <ColorIcon className="mt-0.5 shrink-0" name="warning" size={24} tone="red" />
+          <ColorIcon
+            className="mt-0.5 shrink-0"
+            name={destructive ? "warning" : "help"}
+            size={24}
+            tone={destructive ? "red" : "blue"}
+          />
           <div className="min-w-0">
             <p className="font-semibold" id="confirm-dialog-title">
               {title}
@@ -87,7 +103,12 @@ export function ConfirmDialog({
           <button
             type="button"
             onClick={onConfirm}
-            className="rounded-md bg-[var(--color-critical)] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95 active:translate-y-px"
+            className="rounded-md px-4 py-2 text-sm font-semibold transition hover:brightness-95 active:translate-y-px"
+            style={
+              destructive
+                ? { background: "var(--color-critical)", color: "white" }
+                : { background: "var(--color-accent)", color: "var(--color-accent-fg)" }
+            }
           >
             {confirmLabel}
           </button>
