@@ -122,13 +122,14 @@ export const navItems: NavItem[] = [
   },
   {
     path: "/report",
-    label: "Báo cáo tháng",
+    label: "Báo cáo",
     icon: "report",
     tone: "green",
     group: "Nghiệp vụ kho",
     requiredPermission: Permission.REPORT_VIEW,
-    title: "Báo cáo kiểm kê tháng",
-    subtitle: "Tiếp nhận báo cáo từ các thôn, kiểm tra và cập nhật số liệu tồn kho.",
+    title: "Báo cáo",
+    subtitle:
+      "Báo cáo kiểm kê tháng của các thôn và thống kê vật tư đã dùng sau mỗi đợt thiên tai.",
   },
   {
     path: "/map",
