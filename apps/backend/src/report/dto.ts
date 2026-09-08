@@ -13,6 +13,17 @@ import {
   ValidateNested,
 } from "class-validator";
 
+/** Khoảng thời gian cho bảng thống kê sau thiên tai; bỏ trống = lấy toàn bộ. */
+export class DisasterStatisticsQueryDto {
+  @IsOptional()
+  @IsDateString()
+  from?: string;
+
+  @IsOptional()
+  @IsDateString()
+  to?: string;
+}
+
 export class RejectReportDto {
   @IsString()
   @MinLength(3)
