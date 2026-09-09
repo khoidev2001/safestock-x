@@ -70,6 +70,18 @@ export function DashboardShell({
   const unreadCounts = unreadByNavPath(notifQuery.data ?? []);
 
   /**
+   * Tab ĐANG MỞ không bao giờ đeo số.
+   *
+   * Người dùng đang nhìn thẳng vào nội dung của tab đó; một con số đỏ ngay trên
+   * cái tab họ đang đứng không nói được điều gì họ chưa thấy, nó chỉ nói "có gì
+   * đó ở đây" — mà "ở đây" là chỗ họ đang ở. Tệ hơn: nó không tắt được bằng thao
+   * tác nào cả, nên nó dạy người dùng rằng số đỏ là thứ để bỏ qua.
+   *
+   * Số vẫn chạy bình thường cho các tab KHÁC, và hiện lại ngay khi rời tab này.
+   */
+  const badgeFor = (path: string): number => (isActive(path) ? 0 : (unreadCounts[path] ?? 0));
+
+  /**
    * Xem việc của một tab rồi thì con số của tab đó phải mất.
    *
    * Trước đây chỉ mở chuông mới xoá được số, nên người trực bấm vào tab Nhiệm
@@ -163,17 +175,16 @@ export function DashboardShell({
    * Nhiệm vụ, nên nếu chỉ xoá số lúc bấm tab thì con số ở đó nằm lì trong khi
    * người dùng đang đọc đúng cái việc mà nó đếm.
    *
-   * `clearedForTab` khoá lại theo từng lượt vào: thông báo MỚI tới trong lúc đang
-   * ngồi ở tab đó vẫn hiện số bình thường, chỉ lượt vào mới xoá tiếp. Thiếu khoá
-   * này thì số không bao giờ kịp hiện và người trực không biết vừa có việc.
+   * Đánh dấu LIÊN TỤC chừng nào còn đứng ở tab đó, kể cả với thông báo vừa mới
+   * tới. Bản trước khoá lại theo từng lượt vào, để tin mới vẫn kịp hiện số — nhưng
+   * con số ấy nằm trên chính cái tab người dùng đang mở, nên nó không nói thêm
+   * được gì và cũng không có cách nào tắt đi ngoài việc rời tab rồi quay lại.
+   *
+   * Vẫn giữ đúng ý định cũ ở chỗ nó có tác dụng: tin về trong lúc người dùng đứng
+   * ở tab KHÁC vẫn hiện số bình thường trên tab của nó.
    */
-  const clearedForTab = useRef<string | null>(null);
   useEffect(() => {
-    // Chờ có dữ liệu thật rồi mới đánh dấu đã xử lý lượt vào này: chốt sổ lúc
-    // danh sách còn rỗng thì lượt vào đó coi như bị bỏ qua vĩnh viễn.
     if (!activeTab || !notifQuery.data) return;
-    if (clearedForTab.current === activeTab) return;
-    clearedForTab.current = activeTab;
     markTabRead(activeTab);
   }, [activeTab, notifQuery.data, markTabRead]);
 
@@ -267,7 +278,7 @@ export function DashboardShell({
                           isActive={isActive(item.path)}
                           item={item}
                           rail={navCollapsed}
-                          badge={unreadCounts[item.path] ?? 0}
+                          badge={badgeFor(item.path)}
                           onSelect={markTabRead}
                           onNavigate={goToTab}
                         />
@@ -370,7 +381,7 @@ export function DashboardShell({
                     compact
                     isActive={isActive(item.path)}
                     item={item}
-                    badge={unreadCounts[item.path] ?? 0}
+                    badge={badgeFor(item.path)}
                     onSelect={markTabRead}
                     onNavigate={goToTab}
                   />

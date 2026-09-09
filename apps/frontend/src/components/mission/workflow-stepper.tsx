@@ -24,6 +24,14 @@ const STEPS = [
     role: "RESCUE",
     icon: "helmet",
   },
+  // Bước CUỐI, và nó thuộc về KHO chứ không phải hiện trường: hàng tái sử dụng
+  // phải quay về kho, và người đếm lại nó khi về tới nơi mới ký được bước này.
+  {
+    key: "returned",
+    label: "Đã hoàn trả vật tư",
+    role: "WAREHOUSE",
+    icon: "house",
+  },
 ] satisfies {
   key: string;
   label: string;
