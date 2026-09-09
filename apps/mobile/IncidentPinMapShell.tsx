@@ -1,5 +1,5 @@
-import { useMemo, useState, type ReactNode } from "react";
-import { Pressable, Text, View } from "react-native";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Modal, Pressable, Text, View } from "react-native";
 import { buildPinMapHtml, type PinnedPoint } from "./incident-pin-map-html";
 import { c } from "./styles";
 
@@ -45,18 +45,54 @@ export function IncidentPinMapShell({
   disabled?: boolean;
   renderSurface: (props: PinMapSurfaceProps) => ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  /**
+   * MỞ SẴN mỗi lần vào màn báo cáo.
+   *
+   * Ghim vị trí là thứ quyết định cơ quan điều phối đi tới đâu, nhưng nó lại là
+   * bước duy nhất không bắt buộc trong màn này — đóng sẵn thì nó chỉ còn là một
+   * cái nút giữa hai việc bắt buộc, và người báo lướt qua. Mở sẵn thì bản đồ tự
+   * mời ghim. Ai không cần vẫn đóng lại được, nhưng lần vào sau lại mở: đó là
+   * lựa chọn cho MỘT lượt báo cáo, không phải một thiết lập cần nhớ.
+   */
+  const [open, setOpen] = useState(true);
+  /** Bản đồ đang chiếm trọn màn hình — ghim chính xác trên khung to. */
+  const [fullscreen, setFullscreen] = useState(false);
   const [failed, setFailed] = useState(false);
   const [command, setCommand] = useState<PinMapCommand | null>(null);
 
   /**
-   * HTML dựng MỘT LẦN cho mỗi lượt mở, cố tình không phụ thuộc `point`.
+   * HTML dựng lại MỖI LẦN khung bản đồ được gắn mới, cố tình không phụ thuộc `point`.
    *
-   * Cho `point` vào đây thì mỗi lần ghim là `html` đổi → khung bản đồ tải lại →
-   * nhảy về zoom ban đầu ngay khi vừa bấm. Điểm ban đầu chỉ cần lúc mở để dựng lại
-   * dấu ghim cũ; từ đó trở đi bên trong trang tự quản.
+   * Cho `point` vào danh sách phụ thuộc thì mỗi lần ghim là `html` đổi → khung bản
+   * đồ tải lại → nhảy về zoom ban đầu ngay khi vừa bấm. Điểm ban đầu chỉ cần lúc
+   * dựng để vẽ lại dấu ghim cũ; từ đó trở đi bên trong trang tự quản.
+   *
+   * Vào/ra toàn màn hình cũng dựng khung mới (khung nằm ở hai chỗ khác nhau trong
+   * cây), nên `fullscreen` phải nằm trong danh sách — thiếu nó thì bản đồ toàn màn
+   * hình dựng lại bằng HTML cũ và mất dấu ghim vừa đặt.
    */
-  const html = useMemo(() => buildPinMapHtml(point), [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  const html = useMemo(() => buildPinMapHtml(point), [open, fullscreen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /**
+   * Bỏ dấu ghim khỏi trang Leaflet mỗi khi toạ độ ở vỏ mất đi.
+   *
+   * Dấu ghim sống BÊN TRONG trang Leaflet, ngoài tầm với của React: xoá `point` ở
+   * vỏ mà không nói xuống thì bản đồ vẫn hiện chấm đỏ và dòng "Đã ghim 13.374172,
+   * …". Chỗ đau nhất là sau khi GỬI BÁO CÁO — màn báo cáo tự dọn `point` để người
+   * ta khai vụ tiếp theo, nhưng bản đồ vẫn cắm cờ ở chỗ vừa gửi, nên người báo
+   * tưởng vụ mới đã có sẵn toạ độ và không ghim lại.
+   *
+   * Đặt ở đây chứ không ở nút "Bỏ ghim": một hiệu ứng bám theo `point` bắt được
+   * MỌI đường xoá — nút bỏ ghim, gửi xong, hay bất kỳ chỗ nào khác sau này — thay
+   * vì phải nhớ gọi lệnh ở từng chỗ.
+   */
+  const hadPointRef = useRef(point != null);
+  useEffect(() => {
+    const had = hadPointRef.current;
+    hadPointRef.current = point != null;
+    if (!had || point != null) return;
+    setCommand((prev) => ({ id: (prev?.id ?? 0) + 1, name: "clear" }));
+  }, [point]);
 
   function handleMessage(raw: string) {
     try {
@@ -78,14 +114,13 @@ export function IncidentPinMapShell({
   }
 
   /**
-   * Bỏ ghim: vừa xoá toạ độ ở vỏ, vừa bảo trang Leaflet gỡ dấu ghim.
+   * Bỏ ghim: chỉ xoá toạ độ ở vỏ.
    *
-   * Thiếu vế thứ hai thì bản đồ vẫn hiện chấm đỏ và dòng "Đã ghim 13.374172,
-   * 109.103508 …" sau khi bấm — hai nửa cùng một màn hình nói hai điều trái ngược.
+   * Việc gỡ dấu ghim trên trang Leaflet do hiệu ứng bám `point` ở trên lo — nó
+   * bắt mọi đường xoá chứ không riêng nút này.
    */
   function clearPin() {
     onChange(null);
-    setCommand((prev) => ({ id: (prev?.id ?? 0) + 1, name: "clear" }));
   }
 
   /**
@@ -139,7 +174,13 @@ export function IncidentPinMapShell({
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={{ color: accent, fontWeight: "700", fontSize: 15 }}>
-              {open ? "Đóng bản đồ" : pinned ? "Đã ghim — bấm để sửa" : "Bấm để ghim vị trí"}
+              {open
+                ? pinned
+                  ? "Đã ghim — bấm để đóng bản đồ"
+                  : "Đóng bản đồ"
+                : pinned
+                  ? "Đã ghim — bấm để sửa"
+                  : "Bấm để ghim vị trí"}
             </Text>
             <Text style={{ color: pinned ? c.text : c.muted, fontSize: 12, marginTop: 3 }}>
               {point
@@ -173,7 +214,10 @@ export function IncidentPinMapShell({
         ) : null}
       </View>
 
-      {open ? (
+      {/* Khung bản đồ chỉ được dựng ở ĐÚNG MỘT chỗ: hoặc trong dòng, hoặc trong
+          khung toàn màn hình. Dựng cả hai là hai WebView cùng chạy một trang
+          Leaflet, và cú bấm ghim ở khung này không đến được khung kia. */}
+      {open && !fullscreen ? (
         <View
           style={{
             height: 320,
@@ -186,8 +230,93 @@ export function IncidentPinMapShell({
           }}
         >
           {renderSurface({ html, onMessage: handleMessage, command })}
+          {/* Nút phóng to nằm ĐÈ LÊN góc phải bản đồ, không phải một nút nữa
+              trong hàng bên trên: hàng đó đã có hai nút và đây là thao tác VỀ
+              bản đồ, đặt ngay trên nó thì không phải giải thích nó tác động lên
+              cái gì. Góc trái trên đã có nút phóng to/thu nhỏ của Leaflet. */}
+          <Pressable
+            disabled={disabled}
+            onPress={() => setFullscreen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Mở bản đồ toàn màn hình"
+            style={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: accent,
+              paddingVertical: 7,
+              paddingHorizontal: 10,
+              backgroundColor: "rgba(255,255,255,0.94)",
+              opacity: disabled ? 0.6 : 1,
+            }}
+          >
+            <Text style={{ fontSize: 14 }}>⛶</Text>
+            <Text style={{ color: accent, fontWeight: "700", fontSize: 12 }}>Toàn màn hình</Text>
+          </Pressable>
         </View>
       ) : null}
+
+      {/* Toàn màn hình: ghim một mái nhà giữa vùng ngập cần phóng tới mức mà khung
+          cao 320px không cho. `onRequestClose` bắt nút Back của Android — thoát
+          bằng cử chỉ quen thuộc thay vì phải tìm nút trên màn hình. */}
+      <Modal
+        visible={open && fullscreen}
+        animationType="slide"
+        onRequestClose={() => setFullscreen(false)}
+        statusBarTranslucent={false}
+      >
+        <View style={{ flex: 1, backgroundColor: "#e9edf2" }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10,
+              paddingVertical: 12,
+              paddingHorizontal: 14,
+              backgroundColor: c.surface,
+              borderBottomWidth: 1,
+              borderBottomColor: accent,
+            }}
+          >
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={{ color: c.text, fontSize: 15, fontWeight: "700" }}>
+                Ghim vị trí trên bản đồ
+              </Text>
+              {/* Toạ độ phải đọc được Ở ĐÂY luôn: khối tóm tắt bên ngoài đang bị
+                  che kín, nên không có dòng này thì người ghim xong không có gì
+                  xác nhận là hệ thống đã nhận đúng điểm. */}
+              <Text style={{ color: pinned ? c.text : c.muted, fontSize: 12, marginTop: 2 }}>
+                {point
+                  ? `${point.lat.toFixed(6)}, ${point.lng.toFixed(6)} — kéo để dời, bấm dấu ghim để bỏ`
+                  : "Bấm lên bản đồ để ghim chỗ đang xảy ra sự việc"}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => setFullscreen(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Thu nhỏ bản đồ"
+              style={{
+                borderWidth: 1.5,
+                borderColor: accent,
+                borderRadius: 10,
+                paddingVertical: 9,
+                paddingHorizontal: 14,
+                backgroundColor: accentSoft,
+              }}
+            >
+              <Text style={{ color: accent, fontWeight: "700", fontSize: 13 }}>Xong</Text>
+            </Pressable>
+          </View>
+          <View style={{ flex: 1 }}>
+            {renderSurface({ html, onMessage: handleMessage, command })}
+          </View>
+        </View>
+      </Modal>
 
       {failed ? (
         <Text style={{ color: c.muted, fontSize: 12, marginTop: 6 }}>

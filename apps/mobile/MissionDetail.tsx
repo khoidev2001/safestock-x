@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type ComponentType,
+  type ReactNode,
   type Ref,
 } from "react";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
@@ -60,6 +61,8 @@ import {
   missionStageForViewer,
   missionStageLabel,
   missionStageNeedsAction,
+  ownWarehouseStage,
+  warehousePickupStates,
 } from "./mission-state";
 import {
   MAX_EVIDENCE_PHOTOS,
@@ -104,6 +107,7 @@ const STATUS_LABEL: Record<string, string> = {
   PENDING_WAREHOUSE: "Chờ kho chuẩn bị",
   READY: "Kho đã sẵn sàng",
   COMPLETED: "Hoàn thành",
+  RETURNED: "Đã hoàn trả vật tư",
   REJECTED: "Đã từ chối",
   DEFERRED: "Tạm hoãn",
   CANCELLED: "Đã huỷ",
@@ -477,7 +481,7 @@ export function MissionDetailScreen({
 
   const fieldForce = role === "RESCUE";
   const pickupStage = missionPickupStage(mission?.status ?? "", mission?.warehouseRequests);
-  const completed = mission?.status === "COMPLETED";
+  const completed = mission?.status === "COMPLETED" || mission?.status === "RETURNED";
   const detailsOpen = detailsOpenChoice ?? !completed;
 
   const mapData = useMemo<MissionMapData>(
@@ -506,6 +510,72 @@ export function MissionDetailScreen({
     () => buildPickupPlan(routes, mission?.warehouseRequests ?? []),
     [routes, mission?.warehouseRequests],
   );
+
+  /**
+   * Kho đang đăng nhập đang ở chặng nào của CHÍNH MÌNH.
+   *
+   * Quyết định màn hình bày ra bảng nào: còn nợ hàng thì bày việc phải làm, giao
+   * xong rồi thì bày biên bản đã giao. Xem `ownWarehouseStage`.
+   */
+  const ownStage = ownWarehouseStage(warehouseId, mission?.warehouseRequests);
+  /** Phiếu của chính kho mình — nguồn cho bảng "Vật tư đã xuất". */
+  const ownRequests = useMemo(
+    () =>
+      (mission?.warehouseRequests ?? []).filter(
+        (request) => !warehouseId || request.warehouseId === warehouseId,
+      ),
+    [mission?.warehouseRequests, warehouseId],
+  );
+  /**
+   * Người dùng có tự gập/mở hai mục của màn cứu hộ không.
+   *
+   * `null` là "chưa đụng tới" — lúc đó mặc định chạy theo chặng công việc: chưa
+   * lấy hàng thì mở điểm lấy hàng, lấy xong thì mở bảng vật tư. Đặt cứng
+   * `useState(true/false)` thì mặc định chỉ đúng ở lượt dựng đầu tiên và không
+   * bao giờ đổi theo việc nữa.
+   */
+  const [pickupPlanOpenChoice, setPickupPlanOpenChoice] = useState<boolean | null>(null);
+  const [suppliesOpenChoice, setSuppliesOpenChoice] = useState<boolean | null>(null);
+
+  /** Từng kho đã xuất xong chưa — để đội cứu hộ đi được kho nào hay kho ấy. */
+  const pickupStates = useMemo(
+    () => warehousePickupStates(mission?.warehouseRequests),
+    [mission?.warehouseRequests],
+  );
+  /**
+   * Kho đã soạn xong mà đội CHƯA ký nhận — tức là còn hàng đang chờ người tới lấy.
+   *
+   * Đây mới là danh sách "đi ngay được", không phải `mission.status === READY`.
+   * Trạng thái nhiệm vụ chỉ bật lên READY khi kho CUỐI CÙNG xong, nên bám vào nó
+   * là bắt đội ngồi chờ trong khi hàng ở kho thôn đã nằm sẵn trên kệ từ sáng.
+   */
+  const warehousesToVisit = pickupStates.filter((state) => state.ready && !state.pickedUp);
+  const allWarehousesReady = pickupStates.length > 0 && pickupStates.every((state) => state.ready);
+
+  /**
+   * Đội đã ký nhận hàng ở MỌI kho chưa — mốc lật hai mục của màn cứu hộ.
+   *
+   * Trước mốc này việc là ĐI LẤY, nên mở điểm lấy hàng. Sau mốc này hàng đã trên
+   * xe, việc là soát lại mang đủ chưa, nên mở bảng vật tư và gập điểm lấy hàng
+   * lại — nó đã xong, để mở chỉ tổ đẩy phần cần đọc xuống dưới màn hình.
+   */
+  const pickupSigned = pickupStage === "PICKED_UP";
+  /**
+   * Mốc đổi thì BỎ lựa chọn tay của người dùng.
+   *
+   * Họ gập mục điểm lấy hàng lúc đang chờ kho là ý định cho LÚC ĐÓ. Giữ nguyên
+   * lựa chọn đó sau khi ký nhận xong là màn hình đứng im ở bố cục của việc cũ,
+   * đúng lúc việc vừa đổi sang thứ khác.
+   */
+  const lastPickupSignedRef = useRef(pickupSigned);
+  useEffect(() => {
+    if (lastPickupSignedRef.current === pickupSigned) return;
+    lastPickupSignedRef.current = pickupSigned;
+    setPickupPlanOpenChoice(null);
+    setSuppliesOpenChoice(null);
+  }, [pickupSigned]);
+  const pickupPlanOpen = pickupPlanOpenChoice ?? !pickupSigned;
+  const suppliesOpen = suppliesOpenChoice ?? pickupSigned;
 
   return (
     <View style={styles.screen}>
@@ -614,16 +684,50 @@ export function MissionDetailScreen({
               {fieldForce ? (
                 <>
                   <MissionMap data={mapData} loading={routesLoading && routes.length === 0} />
-                  <PickupPlanSection
-                    stops={pickupStops}
-                    loading={routesLoading && pickupStops.length === 0}
-                  />
+                  <SectionToggle
+                    title={`Điểm lấy vật tư${pickupStops.length > 0 ? ` (${pickupStops.length} kho)` : ""}`}
+                    open={pickupPlanOpen}
+                    onToggle={() => setPickupPlanOpenChoice(!pickupPlanOpen)}
+                  >
+                    <PickupPlanSection
+                      hideTitle
+                      stops={pickupStops}
+                      loading={routesLoading && pickupStops.length === 0}
+                    />
+                  </SectionToggle>
                 </>
               ) : null}
 
-              <SuppliesSection requirements={mission.requirements} />
+              {/* Kho chỉ thấy MỘT trong hai bảng, không bao giờ cả hai.
+                  - Chưa phát hành tới kho này: bảng "Vật tư cần mang" của phương
+                    án, để họ biết trước sẽ phải soạn những gì.
+                  - Đang nợ hàng: giấu bảng phương án đi, chỉ còn bảng việc phải
+                    làm bên dưới. Hai bảng liệt kê gần như cùng một danh sách vật
+                    dụng với hai bộ số khác nhau (theo phương án và theo phiếu
+                    xuất) — người đứng bốc hàng nhìn hai bảng cạnh nhau không biết
+                    phải cân theo cột nào.
+                  - Đã ký nhận xong: bảng việc biến mất, bảng phương án quay lại
+                    nhưng đổi vai — nay nó là BIÊN BẢN, ghi số thực người đi lấy đã
+                    ký nhận chứ không phải số dự kiến. */}
+              {role === "WAREHOUSE" && ownStage !== "NONE" ? (
+                ownStage === "HANDED_OVER" ? (
+                  <ExportedSuppliesSection requests={ownRequests} />
+                ) : null
+              ) : fieldForce ? (
+                <SectionToggle
+                  title={`Vật tư cần mang (${mission.requirements.length})`}
+                  open={suppliesOpen}
+                  onToggle={() => setSuppliesOpenChoice(!suppliesOpen)}
+                >
+                  <SuppliesSection hideTitle requirements={mission.requirements} />
+                </SectionToggle>
+              ) : (
+                <SuppliesSection requirements={mission.requirements} />
+              )}
 
-              {role === "WAREHOUSE" && (mission.warehouseRequests?.length ?? 0) > 0 ? (
+              {role === "WAREHOUSE" &&
+              (mission.warehouseRequests?.length ?? 0) > 0 &&
+              ownStage !== "HANDED_OVER" ? (
                 <WarehouseMaterialRequestPanel
                   requests={mission.warehouseRequests ?? []}
                   notes={warehouseNotes}
@@ -675,7 +779,7 @@ export function MissionDetailScreen({
                     styles.statusBadge,
                     {
                       backgroundColor:
-                        fieldForce && pickupStage === "READY_FOR_PICKUP"
+                        fieldForce && warehousesToVisit.length > 0
                           ? "rgba(21,128,61,0.12)"
                           : c.surfaceAlt,
                     },
@@ -684,18 +788,23 @@ export function MissionDetailScreen({
                   <Text
                     style={[
                       styles.statusText,
-                      {
-                        color: fieldForce && pickupStage === "READY_FOR_PICKUP" ? c.green : c.text,
-                      },
+                      { color: fieldForce && warehousesToVisit.length > 0 ? c.green : c.text },
                     ]}
                   >
-                    {fieldForce && pickupStage === "READY_FOR_PICKUP"
-                      ? "Kho đã chuẩn bị xong vật tư — hãy đến lấy"
+                    {/* Gọi ĐÍCH DANH kho đã xong. "Kho đã chuẩn bị xong" nói chung
+                        chung thì người đọc vẫn phải mở danh sách điểm lấy hàng ra
+                        dò xem là kho nào — mà câu này tồn tại chính để họ khỏi phải
+                        dò. Xong hết thì gộp lại một câu, vì lúc đó liệt kê tên
+                        chẳng thêm gì. */}
+                    {fieldForce && warehousesToVisit.length > 0
+                      ? allWarehousesReady
+                        ? "Tất cả các kho đã chuẩn bị xong — hãy đến lấy"
+                        : `${warehousesToVisit.map((state) => state.name).join(", ")} đã chuẩn bị xong — hãy đến lấy`
                       : (STATUS_LABEL[mission.status] ?? mission.status)}
                   </Text>
                 </View>
                 <Text style={[styles.emptyText, { marginTop: 10, textAlign: "left" }]}>
-                  {mission.status === "READY"
+                  {allWarehousesReady
                     ? "Các kho đã chuẩn bị xong vật tư. Việc liên hệ và triển khai do con người quyết định ngoài thực tế."
                     : "Bạn nhận thông tin phương án và tự đến các điểm lấy vật tư; ứng dụng không phân công cá nhân hoặc đội."}
                 </Text>
@@ -703,18 +812,23 @@ export function MissionDetailScreen({
                 Không có dòng này thì người đi hiện trường mở nhiệm vụ ra chỉ thấy
                 trống, và "trống" đọc ra thành "app hỏng" chứ không phải "chưa tới
                 lượt mình". */}
-                {fieldForce && !cacheStoredAt && mission.status !== "COMPLETED" ? (
+                {fieldForce && !cacheStoredAt && !completed ? (
                   <Text
                     style={[
                       styles.emptyText,
                       { marginTop: 8, textAlign: "left" },
-                      pickupStage === "READY_FOR_PICKUP" && { color: c.green, fontWeight: "700" },
+                      warehousesToVisit.length > 0 && { color: c.green, fontWeight: "700" },
                     ]}
                   >
-                    {pickupStage === "READY_FOR_PICKUP"
-                      ? "Tới kho nhận hàng. Người giữ kho bấm ký nhận sau khi bàn giao — ô báo cáo kết quả hiện ra ngay sau đó."
-                      : pickupStage === "WAITING_WAREHOUSE"
-                        ? "Ô báo cáo kết quả sẽ hiện ở đây khi tất cả kho tham gia đã xuất xong vật tư."
+                    {/* Câu này phải nói đúng ĐIỀU KIỆN mở ô báo kết quả, vì nó là
+                        thứ duy nhất giải thích khoảng trống bên dưới. Điều kiện đó
+                        là chữ ký nhận ở MỌI kho, không phải việc các kho xuất xong. */}
+                    {warehousesToVisit.length > 0
+                      ? allWarehousesReady
+                        ? "Tới các kho nhận hàng. Người giữ kho bấm ký nhận sau khi bàn giao — ký đủ mọi kho thì ô báo cáo kết quả hiện ra."
+                        : "Tới kho đã chuẩn bị xong để nhận trước phần của kho đó; các kho còn lại vẫn đang soạn. Ô báo cáo kết quả hiện ra khi đã ký nhận đủ mọi kho."
+                      : pickupStates.length > 0
+                        ? "Các kho đang chuẩn bị. Kho nào xong trước sẽ hiện ở đây ngay, không phải chờ đủ cả nhóm."
                         : ""}
                   </Text>
                 ) : null}
@@ -1549,11 +1663,20 @@ function EvidenceCamera({
  * nên đi. Không có nút bấm nào ở đây: người đi lấy hàng chỉ xem rồi tự tới kho,
  * còn việc ký xuất là của người giữ kho bấm trên máy của họ.
  */
-function PickupPlanSection({ stops, loading }: { stops: PickupStop[]; loading: boolean }) {
+function PickupPlanSection({
+  stops,
+  loading,
+  hideTitle = false,
+}: {
+  stops: PickupStop[];
+  loading: boolean;
+  /** Tiêu đề do khối gập bên ngoài vẽ — không vẽ lần thứ hai ở đây. */
+  hideTitle?: boolean;
+}) {
   if (loading) {
     return (
-      <View style={{ marginTop: 18 }}>
-        <Text style={styles.sectionTitle}>Điểm lấy vật tư</Text>
+      <View style={hideTitle ? undefined : { marginTop: 18 }}>
+        {hideTitle ? null : <Text style={styles.sectionTitle}>Điểm lấy vật tư</Text>}
         <View style={styles.skeleton} />
         <View style={styles.skeleton} />
       </View>
@@ -1562,8 +1685,8 @@ function PickupPlanSection({ stops, loading }: { stops: PickupStop[]; loading: b
 
   if (stops.length === 0) {
     return (
-      <View style={{ marginTop: 18 }}>
-        <Text style={styles.sectionTitle}>Điểm lấy vật tư</Text>
+      <View style={hideTitle ? undefined : { marginTop: 18 }}>
+        {hideTitle ? null : <Text style={styles.sectionTitle}>Điểm lấy vật tư</Text>}
         <Text style={[styles.emptyText, { textAlign: "left" }]}>
           Phương án chưa phân bổ vật tư về kho nào. Chờ cơ quan điều phối phát hành, hoặc liên hệ
           trực tiếp nếu đã nhận lệnh đi.
@@ -1573,8 +1696,10 @@ function PickupPlanSection({ stops, loading }: { stops: PickupStop[]; loading: b
   }
 
   return (
-    <View style={{ marginTop: 18 }}>
-      <Text style={styles.sectionTitle}>Điểm lấy vật tư ({stops.length} kho)</Text>
+    <View style={hideTitle ? undefined : { marginTop: 18 }}>
+      {hideTitle ? null : (
+        <Text style={styles.sectionTitle}>Điểm lấy vật tư ({stops.length} kho)</Text>
+      )}
       <Text style={[styles.emptyText, { textAlign: "left", marginBottom: 10 }]}>
         Kho gần điểm gặp nạn xếp trước. Tự di chuyển tới kho để nhận hàng; người giữ kho bấm xác
         nhận xuất kho sau khi bàn giao.
@@ -1706,8 +1831,57 @@ function PickupStopCard({ stop, order }: { stop: PickupStop; order: number }) {
   );
 }
 
+/**
+ * Tiêu đề mục bấm được để gập/mở.
+ *
+ * Màn của đội cứu hộ có hai mục dài nối đuôi nhau — điểm lấy hàng và bảng vật
+ * dụng — nhưng ở mỗi thời điểm chỉ MỘT trong hai là việc đang làm: chưa lấy hàng
+ * thì cần biết đi kho nào, lấy xong rồi thì cần soát lại mang đủ chưa. Mở cả hai
+ * là bắt cuộn qua mục không dùng tới, giữa lúc đang đứng ngoài mưa một tay cầm máy.
+ *
+ * Gập chứ không ẩn: người dùng vẫn mở lại được bất cứ lúc nào, và nhìn tiêu đề là
+ * biết ở đó có gì.
+ */
+function SectionToggle({
+  title,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <View style={{ marginTop: 18 }}>
+      <Pressable
+        onPress={onToggle}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+      >
+        <Text style={[styles.sectionTitle, { marginTop: 0, flex: 1 }]}>{title}</Text>
+        <MaterialCommunityIcons
+          name={open ? "chevron-up" : "chevron-down"}
+          size={22}
+          color={c.muted}
+        />
+      </Pressable>
+      {open ? children : null}
+    </View>
+  );
+}
+
 /** Danh sách vật tư dạng thẻ trực quan + tóm tắt "đủ / thiếu" ở đầu mục. */
-function SuppliesSection({ requirements }: { requirements: MissionDetail["requirements"] }) {
+function SuppliesSection({
+  requirements,
+  hideTitle = false,
+}: {
+  requirements: MissionDetail["requirements"];
+  /** Tiêu đề do khối gập bên ngoài vẽ — không vẽ lần thứ hai ở đây. */
+  hideTitle?: boolean;
+}) {
   if (requirements.length === 0) {
     return (
       <>
@@ -1724,7 +1898,11 @@ function SuppliesSection({ requirements }: { requirements: MissionDetail["requir
   return (
     <>
       <View style={styles.suppliesHead}>
-        <Text style={styles.sectionTitle}>Vật tư cần mang ({requirements.length})</Text>
+        {hideTitle ? (
+          <View style={{ flex: 1 }} />
+        ) : (
+          <Text style={styles.sectionTitle}>Vật tư cần mang ({requirements.length})</Text>
+        )}
         {shortItems > 0 ? (
           <View style={styles.shortSummary}>
             <Text style={styles.shortSummaryText}>⚠ Thiếu {shortItems} loại</Text>
@@ -1739,6 +1917,106 @@ function SuppliesSection({ requirements }: { requirements: MissionDetail["requir
         <SupplyCard key={r.id} req={r} />
       ))}
     </>
+  );
+}
+
+/**
+ * Biên bản những gì kho ĐÃ GIAO, hiện sau khi người đi lấy ký nhận xong.
+ *
+ * Cùng hình thẻ với "Vật tư cần mang" nhưng đọc theo chiều ngược lại: bảng kia
+ * là dự kiến (phương án nói cần bấy nhiêu), bảng này là việc đã rồi (đã soạn bấy
+ * nhiêu, người ta ký nhận bấy nhiêu). Số ký nhận mới là con số kho phải trả lời
+ * khi có ai hỏi lại, nên nó là con số to nhất trên thẻ.
+ *
+ * Ký nhận HỤT so với số đã soạn không phải lỗi hiển thị: người đi lấy chở không
+ * hết, hoặc đếm lại thấy thiếu. Chỗ đó phải nổi lên kèm lý do đã ghi, vì phần
+ * chênh vẫn đang nằm trong kho và ai đó sẽ phải đối chiếu.
+ */
+function ExportedSuppliesSection({ requests }: { requests: WarehouseMaterialRequest[] }) {
+  if (requests.length === 0) return null;
+  const shortRows = requests.filter(
+    (request) => (request.pickedUpQuantity ?? 0) < request.preparedQuantity,
+  ).length;
+  const sorted = [...requests].sort((left, right) =>
+    left.itemName.localeCompare(right.itemName, "vi"),
+  );
+
+  return (
+    <>
+      <View style={styles.suppliesHead}>
+        <Text style={styles.sectionTitle}>Vật tư đã xuất ({requests.length})</Text>
+        {shortRows > 0 ? (
+          <View style={styles.shortSummary}>
+            <Text style={styles.shortSummaryText}>⚠ {shortRows} loại ký nhận hụt</Text>
+          </View>
+        ) : (
+          <View style={styles.fullSummary}>
+            <Text style={styles.fullSummaryText}>✓ Đã bàn giao đủ</Text>
+          </View>
+        )}
+      </View>
+      {sorted.map((request) => (
+        <ExportedSupplyCard key={request.id} request={request} />
+      ))}
+    </>
+  );
+}
+
+function ExportedSupplyCard({ request }: { request: WarehouseMaterialRequest }) {
+  const meta = supplyOf(request.sku, request.itemName);
+  const received = request.pickedUpQuantity ?? 0;
+  const prog = supplyProgress(request.preparedQuantity, received);
+  const missing = request.preparedQuantity - received;
+
+  return (
+    <View style={[styles.supplyCard, { borderLeftColor: prog.color }]}>
+      <View style={[styles.supplyIconBox, { backgroundColor: meta.tint }]}>
+        <Text style={styles.supplyIcon}>{meta.icon}</Text>
+      </View>
+
+      <View style={styles.supplyMain}>
+        <View style={styles.supplyTopRow}>
+          <Text style={styles.supplyName} numberOfLines={2}>
+            {request.itemName}
+          </Text>
+          <Text style={[styles.supplyStatusText, { color: missing > 0 ? c.red : c.green }]}>
+            {missing > 0 ? "Hụt" : "Đã giao"}
+          </Text>
+        </View>
+
+        <Text style={styles.supplyGroup}>{meta.group}</Text>
+
+        <View style={styles.supplyBarTrack}>
+          <View
+            style={[
+              styles.supplyBarFill,
+              { width: `${Math.round(prog.ratio * 100)}%`, backgroundColor: prog.color },
+            ]}
+          />
+        </View>
+
+        <View style={styles.supplyQtyRow}>
+          {/* Số ĐÃ KÝ NHẬN đứng trước, số đã soạn làm nền so sánh — đúng thứ tự
+              câu hỏi "cuối cùng giao được bao nhiêu / trên bao nhiêu đã soạn". */}
+          <Text style={styles.supplyQtyStrong}>
+            {received}
+            <Text style={styles.supplyQtyMuted}>
+              /{request.preparedQuantity} {request.unit} đã soạn
+            </Text>
+          </Text>
+          {missing > 0 ? (
+            <Text style={styles.supplyShort}>
+              Hụt {missing} {request.unit}
+            </Text>
+          ) : null}
+        </View>
+        {missing > 0 ? (
+          <Text style={[styles.supplyGroup, { marginTop: 2 }]}>
+            Lý do: {request.pickupNote ?? "không ghi"}
+          </Text>
+        ) : null}
+      </View>
+    </View>
   );
 }
 
@@ -1758,9 +2036,18 @@ function SupplyCard({ req }: { req: MissionDetail["requirements"][number] }) {
           <Text style={styles.supplyName} numberOfLines={2}>
             {req.itemName}
           </Text>
-          <View style={[styles.supplyStatusBadge, { backgroundColor: prog.color }]}>
-            <Text style={styles.supplyStatusText}>{prog.label}</Text>
-          </View>
+          {/* Chỉ hai màu: đủ thì xanh lá, còn thiếu thì đỏ. Thanh tiến độ ngay
+              bên dưới vẫn giữ màu riêng cho "thiếu một phần" và "chưa có cái nào",
+              nên phân biệt đó không mất đi — chỉ là nó không cần chen vào dòng
+              tên vật tư nữa. */}
+          <Text
+            style={[
+              styles.supplyStatusText,
+              { color: prog.status === "FULL" ? c.green : c.red },
+            ]}
+          >
+            {prog.label}
+          </Text>
         </View>
 
         <Text style={styles.supplyGroup}>{meta.group}</Text>

@@ -15,7 +15,9 @@ import {
   filterMissionsByNo,
   missionPlaceLabel,
   missionStageForViewer,
+  missionStageOptions,
   sortMissionsForFieldForce,
+  type MissionWorkStage,
 } from "./mission-state";
 import { readOfflineCache, writeOfflineCache } from "./offline-cache";
 import { c, styles } from "./styles";
@@ -47,6 +49,8 @@ export function MissionListScreen({
   const [error, setError] = useState<string | null>(null);
   const [cacheStoredAt, setCacheStoredAt] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  /** Mốc đang lọc; `null` là xem tất cả. */
+  const [stageFilter, setStageFilter] = useState<MissionWorkStage | null>(null);
   /**
    * Nhiệm vụ vừa mở, ghim lên đầu danh sách.
    *
@@ -122,11 +126,43 @@ export function MissionListScreen({
     phần ghim chưa có gì để ghim, và thẻ chỉ nhảy lên đầu ở lần tải sau.
   */
   const ordered = useMemo(
-    () => sortMissionsForFieldForce(missions, { pinnedMissionId: lastViewedId }),
-    [missions, lastViewedId],
+    () => sortMissionsForFieldForce(missions, { pinnedMissionId: lastViewedId, role: user.role }),
+    [missions, lastViewedId, user.role],
   );
-  const shown = filterMissionsByNo(ordered, query);
+  /**
+   * Mốc của từng nhiệm vụ, tính MỘT LẦN rồi dùng cho cả bộ lọc lẫn thẻ.
+   *
+   * Tính hai lần thì hàng nút lọc và thẻ bên dưới có thể đọc ra hai mốc khác nhau
+   * cho cùng một nhiệm vụ — và người dùng sẽ thấy nút "Cần tới lấy (3)" mở ra hai
+   * thẻ.
+   */
+  const stageByMission = useMemo(() => {
+    const map = new Map<string, MissionWorkStage>();
+    for (const mission of missions) {
+      map.set(mission.id, missionStageForViewer(mission, user.role, user.warehouseId));
+    }
+    return map;
+  }, [missions, user.role, user.warehouseId]);
+
+  /** Số nhiệm vụ ở mỗi mốc — nút không có việc nào thì không bày ra. */
+  const stageOptions = useMemo(() => {
+    const counts = new Map<MissionWorkStage, number>();
+    for (const stage of stageByMission.values()) {
+      counts.set(stage, (counts.get(stage) ?? 0) + 1);
+    }
+    return missionStageOptions(user.role)
+      .map((option) => ({ ...option, count: counts.get(option.stage) ?? 0 }))
+      .filter((option) => option.count > 0);
+  }, [stageByMission, user.role]);
+
+  const byStage = stageFilter
+    ? ordered.filter((mission) => stageByMission.get(mission.id) === stageFilter)
+    : ordered;
+  const shown = filterMissionsByNo(byStage, query);
   const offline = cacheStoredAt !== null;
+  const activeStageLabel = stageFilter
+    ? (stageOptions.find((option) => option.stage === stageFilter)?.label ?? null)
+    : null;
 
   return (
     <View style={styles.screen}>
@@ -139,8 +175,8 @@ export function MissionListScreen({
           <Text numberOfLines={1} style={styles.subtitle}>
             {loading
               ? "Đang tải…"
-              : query.trim().length > 0
-                ? `${shown.length}/${missions.length} nhiệm vụ khớp từ khoá`
+              : query.trim().length > 0 || stageFilter
+                ? `${shown.length}/${missions.length} nhiệm vụ đang hiện`
                 : `${missions.length} nhiệm vụ`}
           </Text>
         </View>
@@ -176,6 +212,41 @@ export function MissionListScreen({
         </View>
       ) : null}
 
+      {/* Lọc theo MỐC CÔNG VIỆC. Ô tìm ngay trên chỉ tìm được khi đã biết số hiệu;
+          câu hỏi thường gặp hơn là "còn việc nào tới lượt tôi" — mà trả lời câu đó
+          bằng cách đọc nhãn của sáu chục thẻ thì không ai làm.
+
+          Chỉ hiện những mốc CÓ nhiệm vụ: một nút bấm vào ra danh sách rỗng là một
+          nút nói dối, và hàng nút dài ra vô ích trên màn hình điện thoại. */}
+      {stageOptions.length > 1 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={local.filterRow}
+        >
+          <FilterChip
+            label="Tất cả"
+            count={missions.length}
+            active={stageFilter === null}
+            onPress={() => setStageFilter(null)}
+          />
+          {stageOptions.map((option) => (
+            <FilterChip
+              key={option.stage}
+              label={option.label}
+              count={option.count}
+              active={stageFilter === option.stage}
+              // Bấm lại đúng nút đang chọn = bỏ lọc. Không có đường này thì lối
+              // duy nhất quay về "tất cả" là nhớ ra có nút "Tất cả" ở đầu hàng,
+              // mà hàng này cuộn ngang nên nút đó thường đã trôi khỏi màn hình.
+              onPress={() =>
+                setStageFilter((current) => (current === option.stage ? null : option.stage))
+              }
+            />
+          ))}
+        </ScrollView>
+      ) : null}
+
       {offline ? (
         <View style={local.offline} accessibilityRole="alert">
           <Text style={local.offlineTitle}>Ngoại tuyến · chỉ đọc</Text>
@@ -202,7 +273,11 @@ export function MissionListScreen({
         {/* Lọc xong không còn gì thì nói rõ là do TỪ KHOÁ, đừng dùng chung câu
             "chưa có nhiệm vụ nào" — hai tình huống ấy đòi hai hành động khác hẳn. */}
         {!loading && missions.length > 0 && shown.length === 0 ? (
-          <Text style={local.empty}>Không có nhiệm vụ nào mang số “{query.trim()}”.</Text>
+          <Text style={local.empty}>
+            {query.trim().length > 0
+              ? `Không có nhiệm vụ nào mang số “${query.trim()}”${activeStageLabel ? ` ở mốc “${activeStageLabel}”` : ""}.`
+              : `Không có nhiệm vụ nào ở mốc “${activeStageLabel ?? ""}”.`}
+          </Text>
         ) : null}
 
         {shown.map((mission) => (
@@ -216,7 +291,7 @@ export function MissionListScreen({
             role={user.role}
             // Chặng tính theo VAI: đội cứu hộ đọc chặng chung, trưởng thôn chỉ đọc
             // phiếu của chính kho mình — xem `missionStageForViewer`.
-            stage={missionStageForViewer(mission, user.role, user.warehouseId)}
+            stage={stageByMission.get(mission.id) ?? missionStageForViewer(mission, user.role, user.warehouseId)}
             justViewed={mission.id === lastViewedId}
             onPress={() => openMission(mission.id)}
           />
@@ -226,7 +301,46 @@ export function MissionListScreen({
   );
 }
 
+/** Một nút lọc: chữ mốc + số nhiệm vụ đang ở mốc đó. */
+function FilterChip({
+  label,
+  count,
+  active,
+  onPress,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={`${label}, ${count} nhiệm vụ`}
+      style={[local.chip, active && local.chipActive]}
+    >
+      <Text style={[local.chipText, active && local.chipTextActive]}>
+        {label} ({count})
+      </Text>
+    </Pressable>
+  );
+}
+
 const local = StyleSheet.create({
+  filterRow: { paddingHorizontal: 16, paddingTop: 12, gap: 8, flexDirection: "row" },
+  chip: {
+    borderWidth: 1,
+    borderColor: c.border,
+    backgroundColor: c.surface,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  chipActive: { borderColor: c.primary, backgroundColor: c.primarySoft },
+  chipText: { color: c.muted, fontSize: 12, fontWeight: "700" },
+  chipTextActive: { color: c.primary },
   list: { padding: 16, gap: 12, paddingBottom: 32 },
   offline: {
     marginHorizontal: 16,

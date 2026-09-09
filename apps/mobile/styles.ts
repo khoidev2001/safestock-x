@@ -300,8 +300,15 @@ export const styles = StyleSheet.create({
   supplyName: { color: c.text, fontSize: 15, fontWeight: "700", flex: 1 },
   supplyGroup: { color: c.muted, fontSize: 12, fontWeight: "600", marginTop: 2, marginBottom: 8 },
 
-  supplyStatusBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
-  supplyStatusText: { color: "#0f172a", fontSize: 11, fontWeight: "900" },
+  /**
+   * Nhãn đủ/thiếu là CHỮ, không phải khối màu.
+   *
+   * Trước đây nó là một viên nền đặc màu nằm cạnh tên vật tư. Trong một danh
+   * sách chục dòng thì chục viên màu ấy tranh chú ý với chính con số bên dưới —
+   * mà con số mới là thứ người đứng bốc hàng cần đọc. Màu chữ nói đủ điều cần
+   * nói: xanh lá là đủ, đỏ là còn thiếu.
+   */
+  supplyStatusText: { fontSize: 12, fontWeight: "900" },
 
   supplyBarTrack: {
     height: 8,
