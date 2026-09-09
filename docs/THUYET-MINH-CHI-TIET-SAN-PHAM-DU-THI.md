@@ -77,7 +77,7 @@ Toàn bộ sản phẩm được xây quanh ba nguyên tắc, và mọi chức n
 
 > **Ứng phó nhanh quản lý năng lực phản ứng thực tế của kho, không chỉ số tồn trên sổ.**
 
-Từ một câu nói của trưởng thôn — *"Thôn Long Châu ngập nặng, khoảng một trăm năm mươi người mắc kẹt, cần nước uống và áo phao gấp"* — hệ thống đi trọn một vòng: bóc tách thành dữ liệu có cấu trúc, đối chiếu định mức cứu trợ quốc tế, soi vào tồn kho thật của 18 kho trong xã, chọn kho gần nhất còn hàng dùng được, tính tuyến đường và thời gian tới nơi, sinh một kế hoạch hành động 8 mục, chia việc xuống từng kho theo từng loại vật tư, rồi theo dõi tới lúc có người ký nhận đã lấy hàng.
+Từ một câu nói của trưởng thôn — *"Thôn Long Châu ngập nặng, khoảng một trăm năm mươi người mắc kẹt, cần nước uống và áo phao gấp"* — hệ thống đi trọn một vòng: bóc tách thành dữ liệu có cấu trúc, đối chiếu định mức cứu trợ quốc tế, soi vào tồn kho thật của 18 kho trong xã, chọn kho gần nhất còn hàng dùng được, tính tuyến đường và thời gian tới nơi, sinh một kế hoạch hành động 8 mục, chia việc xuống từng kho theo từng loại vật tư, theo dõi tới lúc có người ký nhận đã lấy hàng, tới lúc đội báo đã giao — và tới lúc **kho đếm lại số hàng tái sử dụng quay về và chốt sổ**. Giao xong chưa phải là hết việc: áo phao, đèn pin, bạt che phải trở lại kệ thì tồn kho trên sổ mới khớp với hàng trên kệ.
 
 ## 2. Hai chế độ vận hành
 
@@ -129,13 +129,13 @@ Trên thị trường đã có phần mềm quản lý kho (WMS) và đã có tr
 
 **Một — đo năng lực phản ứng, không đo số tồn.** Chỉ số sẵn sàng được tính trên 6 chiều có trọng số, nhưng điểm số **không có quyền ghi đè vướng mắc**: kho đang có nguy cơ cháy, không tiếp cận được kệ hoặc môi trường bảo quản mất an toàn thì trạng thái là *không điều phối được*, dù điểm tổng đang 95/100. Phần mềm kho thông thường không có khái niệm này.
 
-**Hai — chuyển tình huống thành bộ vật tư có căn cứ dẫn nguồn.** Định mức lấy từ Sphere Handbook (nước tối thiểu 15 lít/người/ngày) và quy định phòng chống thiên tai trong nước, được ghi rõ nguồn trong mã nguồn và trong kho tri thức. Mức đáp ứng tính theo **mắt xích yếu nhất** (loại vật tư thiếu nhất), không lấy trung bình — vì trung bình che giấu điểm nghẽn.
+**Hai — chuyển tình huống thành bộ vật tư có căn cứ dẫn nguồn, và trả lời bằng hai con số chứ không gộp làm một.** Định mức lấy từ Sphere Handbook (nước tối thiểu 15 lít/người/ngày) và quy định phòng chống thiên tai trong nước, được ghi rõ nguồn trong mã nguồn và trong kho tri thức. Kết quả trả về **một trạng thái** và **một tỷ lệ**, mỗi thứ trả lời một câu hỏi khác nhau: *trạng thái* nói **đi được hay chưa** — chỉ cần một loại thiết yếu không lấy được cái nào là nhiệm vụ bị khóa ở *chưa đáp ứng đủ*, đúng nguyên tắc mắt xích yếu nhất; *tỷ lệ phần trăm* nói **còn thiếu bao nhiêu** — trung bình mức đáp ứng của các loại vật tư, mỗi loại kẹp trần 100% để dư loại này không bù được cho loại kia. Nhập hai câu hỏi đó vào một con số thì mất cả hai câu trả lời: bản tham mưu 15 loại mà kho lo trọn 13 loại từng bị ghi "0% khả năng đáp ứng" ngay bên trên một cái bảng mười ba dòng "Đủ" — người trực nhìn thấy mâu thuẫn đó thì ngừng tin cả con số lẫn cái bảng.
 
 **Ba — lớp chống bịa số có thật, chạy được, và trình diễn được.** Câu trả lời của mô hình bị đối chiếu từng con số với ảnh chụp dữ liệu kho; số nào không có thật thì hệ thống **thay cả câu** bằng một câu an toàn. Câu hỏi ngoài phạm vi bị từ chối và không kéo theo số liệu kho vào câu trả lời.
 
 **Bốn — thiết kế cho lúc hỏng, không chỉ cho lúc chạy tốt.** Mô hình AI và nhận dạng giọng nói chạy tại chỗ; bản đồ và dữ liệu đường tải sẵn; ứng dụng IoT giữ hàng chờ bền vững và gửi lại không trùng khi có mạng; điện thoại cho xem dữ liệu đã lưu kèm dấu thời gian nhưng **từ chối ghi mới**; hai xã mất liên lạc thì có luồng **ghi tay khoản đã thỏa thuận qua điện thoại**, vẫn cộng trừ kho thật và có dấu riêng để sau này đối chiếu.
 
-**Năm — quy trình liên vai trò theo từng loại vật tư, không theo cả nhiệm vụ.** Mỗi kho nhận yêu cầu riêng cho từng mã hàng, tiếp nhận – báo thiếu/sai – xác nhận xuất từng dòng. Nhiệm vụ chỉ chuyển sang *sẵn sàng* khi kho cuối cùng đã xuất xong dòng cuối cùng. Người điều phối nhìn thấy kho nào xong, kho nào còn nợ — thay vì một con số gộp kiểu "1/5" không nói được phải gọi cho ai.
+**Năm — quy trình liên vai trò theo từng loại vật tư, không theo cả nhiệm vụ, và đi tới tận lúc hàng quay về kho.** Mỗi kho nhận yêu cầu riêng cho từng mã hàng, tiếp nhận – báo thiếu/sai – xác nhận xuất từng dòng. Nhiệm vụ chỉ chuyển sang *sẵn sàng* khi kho cuối cùng đã xuất xong dòng cuối cùng. Người điều phối nhìn thấy kho nào xong, kho nào còn nợ — thay vì một con số gộp kiểu "1/5" không nói được phải gọi cho ai. Và thanh tiến trình có **bốn bước chứ không phải ba**: điều phối → kho xuất → hiện trường giao → **kho nhận lại vật tư**. Bước cuối chỉ tài khoản kho bấm được, vì người đếm lại hàng khi nó về tới nơi mới là người ký được vào đó.
 
 **Sáu — liên xã bằng thông báo, không bằng cơ sở dữ liệu chung.** Đây là mô hình phù hợp thực tế hành chính: mỗi xã tự chịu trách nhiệm về kho của mình, và hệ thống không giả vờ có quyền nhìn vào kho của xã khác.
 
@@ -264,7 +264,7 @@ Mượn một phần **không khóa toàn bộ lô còn lại** — phần chưa
 
 1. **Vướng mắc vận hành xét trước tiên.** Có nguy cơ cháy đang mở, không tiếp cận được vật tư, hoặc môi trường bảo quản mất an toàn → trạng thái là **không điều phối được**, bất kể điểm tổng bao nhiêu.
 2. Sau đó mới xét trạng thái từng chiều → **cần xử lý** hoặc **sẵn sàng**.
-3. Khi có tình huống cụ thể, khả năng đáp ứng tính theo **mã hàng yếu nhất**.
+3. Khi có tình huống cụ thể, **trạng thái** của bản tham mưu do **mã hàng yếu nhất** quyết định: một loại không lấy được cái nào là cả nhiệm vụ *chưa đáp ứng đủ*, dù các loại còn lại đủ hết. Riêng **tỷ lệ phần trăm** là trung bình theo loại — nó trả lời câu hỏi khác: *còn thiếu bao nhiêu*.
 4. Điểm 0–100 chỉ để nhìn xu hướng, **không có quyền ghi đè vướng mắc**.
 
 Điểm được tính ở bốn cấp — lô → kệ → khu → toàn kho — và mỗi điểm bị trừ đều kèm nguyên nhân cụ thể cùng một câu khuyến nghị. Chỉ số được tính lại sau mỗi lần nhập, xuất, chuyển, điều chỉnh, kiểm kê, đổi tình trạng, mượn – trả và duyệt báo cáo. Bản chụp chỉ số mang theo thời điểm tính, tuổi dữ liệu và cờ *dữ liệu đã cũ*; điện thoại hiển thị cảnh báo khi số liệu quá hạn. Kho thôn không lắp cảm biến nên **không bị trừ điểm vì lý do không có thiết bị** — đó là chủ trương, không phải lỗ hổng.
@@ -298,6 +298,8 @@ Ngoài ra có khối **hàng đang mắc nợ với xã khác**: tồn kho là m
 **Cách hoạt động.** *Đầu vào:* danh mục kho và thôn. *Xử lý:* bản đồ nền dùng **ô bản đồ tải sẵn trong máy**, không gọi dịch vụ ngoài; quản trị xã ghim tọa độ bằng tay cho những điểm chưa xác minh. *Đầu ra:* bản đồ 18 điểm kho, phân biệt kho xã và kho thôn, kèm điểm cứu hộ mặc định của từng thôn.
 
 Hệ thống phân biệt rõ **điểm thôn** (đích cứu hộ, nơi tập kết) và **điểm kho** (nơi lấy vật tư) — hai loại điểm khác nhau, có thể gần nhau nhưng không được mặc định là cùng tọa độ. Trong bộ dữ liệu chuẩn, chỉ những kho thôn đã xác minh được vị trí nhà văn hóa mới có tọa độ; các kho còn lại để trống chờ quản trị ghim, **hệ thống không tự suy đoán tọa độ**.
+
+**Một bộ ký hiệu duy nhất cho cả web và điện thoại.** Ba hình vẽ được đặt trong gói dùng chung và cùng một bản SVG được cả hai nơi vẽ ra: **nhà thường** là kho thôn, **nhà lớn có cửa sổ** là kho tổng của xã, **ghim SOS** là điểm gặp nạn. Phân biệt bằng **dáng hình chứ không bằng màu**, để nhận ra được cả khi thu nhỏ và khi in đen trắng. Trước đây web giữ một bộ ký hiệu, ứng dụng điện thoại giữ một bộ khác — trưởng thôn ghim một điểm trên điện thoại rồi điều phối viên mở web nhìn lại đúng chỗ đó mà thấy một hình khác, nên câu "kho thôn nằm ngay đây" không còn chỉ vào cùng một thứ.
 
 **Vai trò AI:** không được phép sinh tọa độ. Mô hình chỉ tra cứu trong danh mục điểm đã được quản trị xác minh.
 
@@ -355,6 +357,12 @@ Mô hình kiểm soát là **hậu kiểm**, không phải duyệt hai bước c
 
 Trong bộ dữ liệu chuẩn của xã Đồng Xuân có **20 tài khoản**: 1 quản trị xã, 1 đội cứu hộ, 18 phụ trách kho (1 kho trung tâm + 17 kho thôn). Tên đăng nhập của kho thôn chính là tên thôn bỏ dấu viết liền, nên nhìn là biết ai giữ kho nào.
 
+**Quản trị tài khoản khi hệ thống phục vụ nhiều xã.** Từ khi có luồng mượn – trả liên xã, một máy chủ có thể giữ hồ sơ của nhiều xã, và việc phân cấp phải theo kịp. Ba luật được siết lại:
+
+- **Danh sách tài khoản lọc theo xã.** Quản trị viên xã chỉ nhìn thấy người của xã mình. Trước đây màn hình trả về mọi tài khoản trong cơ sở dữ liệu — đúng chừng nào còn đúng một xã, nhưng từ xã thứ hai trở đi thì quản trị xã Xuân Thọ mở màn Tài khoản là thấy trọn danh sách trưởng thôn của Đồng Xuân kèm số điện thoại và thư điện tử của họ; mà màn đó có sẵn nút Sửa/Xóa, nên **nhìn thấy đồng nghĩa với đụng được**.
+- **Kho được gán phải thuộc đúng xã của tài khoản.** Thiếu vế này thì gán được một trưởng thôn của xã này vào kho của xã kia, và mọi lớp kiểm quyền phía sau đều tin vào phân công đó nên không lớp nào chặn lại. Kho của xã khác được trả lời y như kho không tồn tại — câu "không có quyền" là một lời xác nhận rằng thứ đó có thật.
+- **Chỉ super admin mới chọn được xã, và chỉ cho tài khoản quản trị xã.** Đây là bậc dựng và thu hồi quyền quản trị cho từng xã. Ô chọn xã hiện kèm **số kho của từng xã**, vì tên đơn vị một mình không phân biệt được xã đã dựng xong với xã mới tạo còn trống — mà tạo quản trị viên cho một xã chưa có kho nào là tạo một tài khoản đăng nhập vào màn hình rỗng. Tài khoản kho và tài khoản hiện trường thì luôn thuộc cùng xã với người tạo, vì chúng gắn với một điểm kho và một địa bàn cụ thể.
+
 **Vai trò AI:** không có.
 
 `[ẢNH 18: quản lý tài khoản]`
@@ -363,15 +371,37 @@ Trong bộ dữ liệu chuẩn của xã Đồng Xuân có **20 tài khoản**: 
 
 **Mục đích.** Đưa việc cần làm đến đúng người, ngay lúc nó phát sinh.
 
-**Cách hoạt động.** *Đầu vào:* các sự kiện nghiệp vụ: báo cáo mới, phương án được phát hành, kho đã xuất hàng, đội báo lấy thiếu, sự cố mới, yêu cầu mượn từ xã bên. *Xử lý:* máy chủ đẩy qua kết nối thời gian thực; **phòng nhận thông báo do máy chủ suy ra từ phiên đăng nhập và phân công**, phía người dùng không được tự khai mình thuộc kho nào hay vai nào. *Đầu ra:* thẻ thông báo ở góc màn hình web, chuông trong ứng dụng điện thoại, và một hộp thư việc cần xử lý.
+**Cách hoạt động.** *Đầu vào:* các sự kiện nghiệp vụ: báo cáo mới, phương án được phát hành, kho đã xuất hàng, đội báo lấy thiếu, đội báo đã giao xong, **kho xác nhận đã nhận lại vật tư**, sự cố mới, yêu cầu mượn từ xã bên. *Xử lý:* máy chủ đẩy qua kết nối thời gian thực; **phòng nhận thông báo do máy chủ suy ra từ phiên đăng nhập và phân công**, phía người dùng không được tự khai mình thuộc kho nào hay vai nào. *Đầu ra:* thẻ thông báo ở góc màn hình web, chuông trong ứng dụng điện thoại, và một hộp thư việc cần xử lý.
 
 Thông báo có **đường dẫn sâu**: bấm vào là mở đúng nhiệm vụ đó, kể cả sau khi đăng xuất rồi đăng nhập lại hoặc khởi động lại ứng dụng — trạng thái không nằm trong bộ nhớ tạm.
+
+**Tab đang mở không bao giờ đeo số chưa đọc.** Người dùng đang nhìn thẳng vào nội dung của tab đó; một con số đỏ ngay trên cái tab họ đang đứng không nói được điều gì họ chưa thấy, và tệ hơn là **không có thao tác nào tắt được nó** — như vậy là dạy người dùng rằng số đỏ là thứ để bỏ qua, đúng lúc số đỏ trên các tab khác đang cần được đọc. Số vẫn chạy bình thường cho mọi tab khác và hiện lại ngay khi rời tab này.
 
 **Vai trò AI:** không có.
 
 **Tình huống thực tế.** Quản trị xã phát hành phương án lúc 23 giờ. Điện thoại của đội hiện trường rung; mở thông báo là thấy ngay danh sách vật tư và kho phải tới lấy.
 
 `[ẢNH 19: thông báo thời gian thực trên web]` · `[ẢNH 20: hộp thư việc trên điện thoại]`
+
+### 1.14. Thống kê vật tư sau mỗi đợt thiên tai
+
+**Mục đích.** Sau khi nước rút, xã phải trả lời được: **đợt vừa rồi đã dùng hết bao nhiêu, mất bao nhiêu, và thu hồi lại được bao nhiêu**. Đây là căn cứ để lập kế hoạch nhập bù, để báo cáo lên trên, và để biết định mức của lần sau nên điều chỉnh thế nào. Trước đây câu trả lời phải dựng lại bằng tay từ nhiều sổ khác nhau, thường là sau khi trí nhớ đã mờ.
+
+**Cách hoạt động.** *Đầu vào:* chính các sổ nghiệp vụ đã có — yêu cầu kho theo từng mã hàng và phiếu mượn — **không có một con số nào được ước lượng hay suy diễn**. *Xử lý:* gom theo từng đợt thiên tai (mỗi nhiệm vụ là một đợt), rồi trong mỗi đợt gom theo **nhóm vật tư → từng mã hàng**, lọc được theo khoảng thời gian. *Đầu ra:* một bảng gồm bảy con số cho mỗi dòng: **đã xuất kho**, **đội đã ký nhận**, **chênh lệch ký nhận**, **thất thoát**, **đã cho mượn**, **đã hoàn trả**, **chưa thu hồi**; kèm số người ảnh hưởng, các kho đã tham gia, kết quả giao và bốn mốc thời gian (ghi nhận, duyệt phát hành, hoàn tất giao, cập nhật gần nhất).
+
+**Ba nguyên tắc kế toán, mỗi nguyên tắc chặn một cách đọc sai:**
+
+- **"Đã xuất kho" và "đã ký nhận" là hai con số tách rời, không gộp.** Khoảng giữa hai con số đó chính là chỗ hàng bị thiếu — gộp lại là xóa mất đúng thứ người điều phối cần nhìn.
+- **Chênh lệch khi ký nhận KHÔNG được gọi là thất thoát.** Kho xuất 100 mà đội ký nhận 80 có thể chỉ vì xe không chở hết, chuyến sau lấy nốt. Chỉ phần đã ghi nhận **mất hoặc hỏng trên phiếu mượn** mới là thất thoát thật.
+- **Chưa ai ký nhận khác hẳn ký nhận bằng 0.** Ô còn trống được giữ nguyên là trống; cộng nó thành 0 là bịa ra một khoản thiếu chưa hề xảy ra.
+
+Bảng loại **bản nháp** ra ngoài (phương án chưa phát hành thì chưa kho nào được yêu cầu xuất, mọi con số bằng 0, đưa vào chỉ làm loãng danh sách) nhưng **giữ lại nhiệm vụ đã hủy** — nhiệm vụ hủy giữa chừng vẫn có thể đã xuất hàng thật trước lúc hủy, và số hàng đó vẫn phải được kê. Phạm vi kho được áp như mọi nơi khác: **kho thôn chỉ thấy phần việc của chính mình**, kể cả trong một nhiệm vụ mà nhiều kho cùng tham gia. Mỗi lần mở, bảng ghi rõ **thời điểm chốt số**, để người đọc biết mình đang nhìn số liệu cũ bao lâu thay vì mặc định là luôn tươi.
+
+**Vai trò AI:** không có. Đây là kế toán vật tư, cố ý giữ hoàn toàn tất định — mọi con số truy ngược được về đúng một dòng trong sổ.
+
+**Tình huống thực tế.** Sau đợt lũ, xã mở tab *Báo cáo → Thống kê sau thiên tai*, chọn khoảng từ đầu tháng. Bảng cho thấy đợt vừa rồi xuất 900 chai nước và đội ký nhận đủ; 150 áo phao cho mượn thì thu về 146 chiếc tốt, 2 hỏng, 2 mất; còn 12 đèn pin **chưa thu hồi**. Xã biết chính xác phải nhập bù 900 chai nước, đưa 2 áo phao đi kiểm định, và gọi ai để đòi 12 chiếc đèn pin.
+
+`[ẢNH 50: bảng thống kê sau thiên tai theo từng đợt]` · `[ẢNH 51: chi tiết một đợt, gom theo nhóm vật tư và mã hàng]`
 
 ## 2. NHÓM CHỨC NĂNG NỔI BẬT, ƯU VIỆT
 
@@ -436,17 +466,33 @@ Ngoài ra còn ba lớp phòng thủ: **chặn câu hỏi ngoài phạm vi** (h�
 
 **Bước 3 — Phân bổ (thuật toán tham lam + hai nguyên tắc ưu tiên).** Hệ thống lọc bỏ mọi lô **không điều phối được** — hỏng, cần kiểm tra, hết hạn, kệ đang khóa, phần đang cho mượn — rồi xếp các lô còn lại theo: **kho gần điểm bị nạn trước**, cùng kho thì **hạn dùng gần trước (FEFO)**. Lấy dần tới khi đủ, **không bao giờ vượt tồn**.
 
-**Bước 4 — Chấm mức đáp ứng (mắt xích yếu nhất).** Mức đáp ứng tổng = **giá trị nhỏ nhất** trong các tỷ lệ đáp ứng của từng loại vật tư, không phải trung bình. Thiếu một loại thiết yếu là chưa sẵn sàng — trung bình sẽ che giấu đúng điểm nghẽn cần biết.
+**Bước 4 — Chấm khả năng đáp ứng bằng hai con số tách bạch.**
 
-*Đầu ra:* bảng nhu cầu từng mã hàng (cần bao nhiêu – cấp được bao nhiêu – thiếu bao nhiêu), phân bổ chi tiết tới từng lô ở từng kho, và một con số phần trăm đáp ứng đã tính theo mắt xích yếu nhất.
+- **Trạng thái** trả lời *đi được hay chưa*, và nó theo đúng nguyên tắc **mắt xích yếu nhất**: chỉ cần một loại vật tư không lấy được cái nào là cả bản tham mưu bị khóa ở *chưa đáp ứng đủ — cần mượn xã khác trước khi đi*, dù mọi loại còn lại đủ hết. Loại thiếu một phần thì trạng thái là *chưa đáp ứng đủ — mượn xã khác cho đủ phần còn thiếu*.
+- **Tỷ lệ phần trăm** trả lời *còn thiếu bao nhiêu*: **trung bình mức đáp ứng của các loại vật tư**, mỗi loại **kẹp trần 100%** để dư loại này không bù được cho loại kia, và tính **theo loại chứ không theo số lượng** — 200 chai nước với 4 chiếc xuồng không cộng chung được, cộng chung thì mấy món đếm bằng trăm sẽ dìm mất mấy món đếm bằng đơn vị, mà xuồng cứu hộ mới là thứ thiếu là không đi nổi. Hai đầu mút được giữ lại đúng dấu hiệu "chưa xong": 99,6% hiện là 99% chứ không làm tròn thành 100% để người duyệt tưởng đủ rồi ký, và 0,4% hiện là 1% chứ không thành 0% để người đọc tưởng kho trống trơn.
 
-**Khi cả xã vẫn thiếu:** hệ thống **chỉ xếp hạng điểm liên hệ ngoài xã đã ghim sẵn** theo vị trí và tuyến, hiển thị số điện thoại công khai kèm nhãn **"đề xuất liên hệ, chưa xác nhận có hàng"**. Hệ thống **không** kiểm tra tồn kho xã khác, **không** cộng nguồn đó vào tỷ lệ đáp ứng và **không** tự tạo giao dịch liên xã. Đây là ranh giới trung thực: hệ thống không giả vờ biết thứ nó không biết.
+> **Vì sao tách hai con số.** Bản trước lấy **giá trị nhỏ nhất** làm tỷ lệ chung. Nghe thì chặt chẽ, nhưng đọc lên màn hình là nói sai sự thật: một bản tham mưu 15 loại, kho lo trọn 13 loại và thiếu 2 loại, vẫn bị ghi **"0% khả năng đáp ứng"** ngay bên trên một cái bảng mười ba dòng "Đủ". Người trực nhìn hai thứ mâu thuẫn nhau thì ngừng tin cả hai. Phần "thiếu một loại là chưa đi được" **không mất đi** — nó chuyển sang chỗ đúng của nó là **trạng thái**, thứ thật sự khóa nút phát hành.
+
+*Đầu ra:* bảng nhu cầu từng mã hàng (cần bao nhiêu – cấp được bao nhiêu – thiếu bao nhiêu, kèm đơn vị đếm ngay trong ô số), phân bổ chi tiết tới từng lô ở từng kho, một trạng thái và một tỷ lệ phần trăm; kèm dòng **"x/y loại vật tư đã đủ"** đặt ngay cạnh tỷ lệ, vì một con số như 87% treo lơ lửng thì câu hỏi kế tiếp luôn là *"87% của cái gì"*.
+
+**Nêu lý do cho MỌI loại còn thiếu, không riêng loại trắng kho.** Trước đây chỉ loại lấy được 0 mới kèm giải thích; loại lấy được một phần thì màn hình chỉ còn "thiếu 87" trơ trọi, người trực nhìn danh sách thấy mười mấy kho đang có áo phao mà chỉ một kho được lấy, không có gì nói vì sao, và họ kết luận hệ thống tính sai. Nay mỗi dòng thiếu đều kèm nguyên nhân cụ thể, ví dụ *"Kho cứu trợ trung tâm Đồng Xuân: còn 120 nhưng đã hứa 314 cho nhiệm vụ khác chưa xuất"*. Thiếu vì kho trống và thiếu vì hàng đã có người đặt gạch là hai tình huống dẫn tới hai hành động khác hẳn nhau — một bên đi mượn xã khác, một bên xem lại mấy nhiệm vụ đang giữ chỗ mà không chạy tiếp.
+
+**Giải thích vì sao cần từng loại.** Mỗi dòng vật tư có một dấu hỏi bấm được, mở ra câu trả lời cho *"vì sao tình huống này lại cần món này, và định mức tính theo cái gì"* — ví dụ áo phao trẻ em: *"áo người lớn quá rộng so với trẻ em, sóng đánh một cái là tuột khỏi người; mỗi trẻ cần một áo đúng cỡ, tính theo ô Trẻ em"*. Người trực không phải tin một con số suông, và khi cần bảo vệ phương án trước cấp trên thì có sẵn lập luận.
+
+**ADMIN sửa được danh sách vật tư của bản tham mưu.** Định mức của hệ thống là **điểm xuất phát, không phải kết luận**: nó tính theo đầu người và số ngày, nên nó không biết thôn này vừa được xã bên cạnh tiếp tế nước hôm qua, hay nhà văn hóa đang chứa thêm ba chục người từ thôn khác chạy sang. Người trực biết những điều đó, và trước nay chỉ còn cách chấp nhận con số máy đưa ra rồi tự bù trừ trong đầu. Nay quản trị **thêm, sửa số lượng hoặc xóa** một dòng ngay tại bảng, với bốn ràng buộc:
+
+- **Chỉ thêm được thứ cụm kho của xã còn ít nhất một đơn vị lấy ra được ngay** — danh sách chọn dùng lại đúng bộ lọc lô và đúng phép trừ phần đã hứa cho nhiệm vụ khác mà lượt lập phương án dùng. Thêm một món cả xã không có là ghi vào phương án một dòng chắc chắn thiếu 100%: nó không giúp ai chuẩn bị gì, chỉ kéo tụt số đáp ứng.
+- **Máy chủ chốt lại "có thật trong xã" ngay lúc ghi**, không tin màn hình đã lọc sẵn — danh sách chọn tải về từ vài phút trước, và trong vài phút đó một nhiệm vụ khác hoàn toàn có thể đã lấy hết món này.
+- **Sửa xong là tính lại toàn bộ**, không vá một dòng. Phân bổ là bài toán tranh giành cùng một kho hàng giữa các loại vật tư, nên sửa số của một loại có thể đổi kho nào cấp cho loại khác; vá một dòng thì tổng số đáp ứng không còn khớp với bất kỳ phép cộng nào. Kế hoạch hành động đã lập cũng bị xóa để lập lại trên bộ số mới — giữ nó lại là bày ra một bản kể chuyện về những con số không còn tồn tại.
+- **Chỉ khi nhiệm vụ còn là bản nháp.** Đã duyệt và phát hành thì các kho đang cầm phiếu xuất theo đúng con số cũ; đổi nhu cầu lúc đó là đổi lệnh dưới tay người đang bốc hàng. Nếu giữa lúc đang tính lại mà có người khác vừa bấm duyệt, thao tác bị chặn kèm câu *"nhiệm vụ vừa được duyệt ở nơi khác, tải lại trang"*. Số lượng gõ tay có **trần chống gõ nhầm** — thêm vài số 0 thì phép phân bổ vẫn chạy đúng nhưng mức đáp ứng tụt về gần 0 và nhiệm vụ bị khóa, trong khi kho thật ra vẫn đủ hàng.
+
+**Khi cả xã vẫn thiếu:** phần còn thiếu có **một đường đi rõ ràng ngay tại chỗ** — nút *"Mượn xã khác"* nằm ngay trên dòng vật tư thiếu, với số lượng điền sẵn bằng đúng số đang thiếu (xem mục 2.10). Câu báo lỗi khi chưa đủ hàng để phát hành cũng nói **việc phải làm** chứ không chỉ nói đã chặn: *"Kho trong xã chưa đủ để phát hành — … Hỏi mượn xã lân cận ở tab Mượn, trả rồi phát hành lại."* Kho trong xã hết hàng không phải là hết cách; đó là lúc phải hỏi xã bên cạnh, và đó đúng là điều các xã vẫn làm với nhau ngoài đời. Song song, hệ thống vẫn **chỉ xếp hạng điểm liên hệ ngoài xã đã ghim sẵn** theo vị trí và tuyến, hiển thị số điện thoại công khai kèm nhãn **"đề xuất liên hệ, chưa xác nhận có hàng"**. Hệ thống **không** kiểm tra tồn kho xã khác, **không** cộng nguồn đó vào tỷ lệ đáp ứng và **không** tự tạo giao dịch liên xã. Đây là ranh giới trung thực: hệ thống không giả vờ biết thứ nó không biết.
 
 **Vai trò AI:** chỉ ở bước 1 — hiểu câu tiếng Việt. Toàn bộ việc tính nhu cầu, chọn kho, trừ tồn, chấm mức đáp ứng do rule engine tất định làm, nên kết quả **lặp lại được và giải thích được từng bước**.
 
-**Tình huống thực tế.** Từ câu *"Thôn Long Châu ngập nặng, khoảng 150 người mắc kẹt"* cộng thêm quản trị điền 10 trẻ em, 5 người cao tuổi, 3 ca y tế, thời gian dự kiến 48 giờ: hệ thống ra 150 áo phao người lớn, 10 áo phao trẻ em, 900 chai nước 5 lít, 3 bộ sơ cứu, 15 đèn pin; chia ra 1 mã hàng lấy ở kho trung tâm và 4 mã hàng lấy ở kho thôn Long Châu. Người trực nhìn thấy vì sao ra từng con số.
+**Tình huống thực tế.** Từ câu *"Thôn Long Châu ngập nặng, khoảng 150 người mắc kẹt"* cộng thêm quản trị điền 10 trẻ em, 5 người cao tuổi, 3 ca y tế, thời gian dự kiến 48 giờ: hệ thống ra 150 áo phao người lớn, 10 áo phao trẻ em, 900 chai nước 5 lít, 3 bộ sơ cứu, 15 đèn pin; chia ra 1 mã hàng lấy ở kho trung tâm và 4 mã hàng lấy ở kho thôn Long Châu. Người trực nhìn thấy vì sao ra từng con số. Biết thôn vừa nhận tiếp tế nước hôm qua, quản trị hạ số nước xuống 600 chai và thêm 20 tấm bạt che vì có nhà tốc mái — bấm xong, khả năng đáp ứng được tính lại ngay theo tồn kho hiện tại.
 
-`[ẢNH 26: form nhập tình huống với dữ liệu đã bóc tách sẵn]` · `[ẢNH 27: bảng nhu cầu và phân bổ theo kho]`
+`[ẢNH 26: form nhập tình huống với dữ liệu đã bóc tách sẵn]` · `[ẢNH 27: bảng nhu cầu và phân bổ theo kho]` · `[ẢNH 52: quản trị sửa số lượng và thêm vật tư vào bản tham mưu]` · `[ẢNH 53: giải thích vì sao tình huống này cần loại vật tư đó]`
 
 ### 2.4. Kế hoạch hành động cứu hộ (Incident Action Plan) 8 mục
 
@@ -456,7 +502,7 @@ Ngoài ra còn ba lớp phòng thủ: **chặn câu hỏi ngoài phạm vi** (h�
 
 **Tầng số — máy chủ chấm bằng công thức, mô hình không được đụng vào:**
 
-- **Mức khẩn cấp 1–5**, chấm theo quy tắc cộng điểm: từ 100 người trở lên cộng 2 điểm, từ 30 người cộng 1; loại thiên tai nguy hiểm (lũ, sạt lở, bão) cộng 1; có nhóm dễ tổn thương cộng 1; mức đáp ứng dưới 70% cộng 1. Kèm **danh sách lý do cụ thể** cho từng điểm đã cộng.
+- **Mức khẩn cấp 1–5**, chấm theo quy tắc cộng điểm: từ 100 người trở lên cộng 2 điểm, từ 30 người cộng 1; loại thiên tai nguy hiểm (lũ, sạt lở, bão) cộng 1; có nhóm dễ tổn thương cộng 1; thời gian cô lập dự kiến kéo dài cộng 1. Về phần kho, có **hai nhánh loại trừ lẫn nhau**: nếu **kho trong xã không còn cái nào** của một loại vật tư nào đó thì cộng 1 và **gọi đích danh món đó** — *"Kho trong xã không còn xuồng cứu hộ — phải mượn xã khác trước khi đi"*; ngược lại, nếu chỉ thiếu một phần và tỷ lệ đáp ứng dưới 70% thì cộng 1. Hai nhánh không được cộng chồng vì chúng là **một** vấn đề "kho không lo nổi", cộng hai lần là thổi mức khẩn cấp lên vô cớ. Việc gọi tên món cũng là hệ quả của việc tỷ lệ nay là trung bình theo loại: mười ba loại đủ và hai loại trắng kho vẫn ra 87% — trên ngưỡng cảnh báo cũ, trong khi nhiệm vụ thì không đi nổi vì không có xuồng. **Không có xuồng phải được nói bằng tên món, không bằng một con số phần trăm.** Kèm **danh sách lý do cụ thể** cho từng điểm đã cộng.
 - **Dự báo theo phần trăm**, tính bằng công thức: khả năng cô lập quá 24 giờ (nền theo loại thiên tai, tăng theo thời gian dự kiến), khả năng thiếu vật tư (nghịch với mức đáp ứng), khả năng phải sơ tán (theo số người và nhóm dễ tổn thương).
 - **Tỷ lệ đáp ứng, phân bổ theo kho, khoảng cách và thời gian tới nơi.**
 
@@ -485,6 +531,10 @@ Ba nguyên tắc trung thực của bản đồ:
 - **Mỗi tuyến mang theo xuất xứ**: máy tính tuyến nào, phiên bản dữ liệu đường nào, tính lúc nào, từ tọa độ nào đến tọa độ nào.
 
 Phương án còn **lưu ảnh chụp tọa độ tại thời điểm lập**, để lịch sử không đổi khi quản trị cập nhật vị trí kho về sau.
+
+**Tuyến phải nói được chiều đi.** Một đường kẻ nối kho với điểm nạn có hai đầu giống nhau nên **không nói được đi về phía nào** — mà đó lại là câu đầu tiên người đi lấy hàng hỏi. Với một tuyến thì còn suy ra được từ hai đầu; bản đồ điều phối thường có bốn năm tuyến chồng lên nhau ở đoạn gần điểm nạn, và ở đó thì không suy được nữa. Nay mỗi tuyến được rải **mũi tên chỉ hướng dọc đường**, cách nhau khoảng 320 m và tối đa 12 mũi trên một tuyến; tuyến ngắn dưới 120 m thì không vẽ mũi nào, vì kho nằm ngay cạnh điểm nạn cho ra một tuyến chỉ dài hơn cái mũi tên một chút và vẽ vào là che mất cả tuyến lẫn hai dấu ghim. Đường được vẽ ba lớp: **viền trắng** để không tan vào ảnh vệ tinh (mái tôn, mặt nước và đường bê tông đều gần trắng ở mức phóng thường dùng), **thân màu dày** để tách được các tuyến chồng nhau, và **mũi tên** ở trên cùng.
+
+Phép đặt mũi tên nằm trong **gói dùng chung** giữa web và điện thoại, dù hai bên vẽ bản đồ bằng hai công nghệ khác nhau — nhờ vậy mũi tên rơi vào đúng cùng những chỗ ở cả hai màn hình, và luật đặt mũi tên khóa được bằng kiểm thử tự động mà không cần dựng bản đồ nào. Cùng lý do đó, **màu tuyến nay thống nhất một màu xanh dương** ở cả hai nơi: trước đây điện thoại vẽ cam còn web vẽ xanh, nên câu *"đi theo đường xanh"* nói qua điện thoại không có nghĩa gì với người đang cầm máy.
 
 **Vai trò AI:** không tham gia vào việc tính tuyến. Mô hình chỉ tra cứu điểm đã được xác minh; **không được geocode, không được sinh tọa độ**.
 
@@ -553,7 +603,7 @@ Bốn ràng buộc an toàn:
 
 ### 2.9. Quy trình điều phối liên vai trò theo từng loại vật tư
 
-**Mục đích.** Đây là chỗ nhiều hệ thống dừng lại ở "đã gửi phương án". Ứng phó nhanh theo tới lúc **có người ký nhận đã lấy hàng**.
+**Mục đích.** Đây là chỗ nhiều hệ thống dừng lại ở "đã gửi phương án". Ứng phó nhanh theo tới lúc **hàng tái sử dụng đã quay về kho và có người đếm lại**.
 
 **Cách hoạt động.** Phương án được duyệt sẽ **vật chất hóa thành từng yêu cầu riêng theo bộ ba nhiệm vụ – kho – mã hàng**. Mỗi kho chỉ thấy phần việc của mình, và thao tác trên từng dòng:
 
@@ -564,7 +614,12 @@ Bốn ràng buộc an toàn:
 | Xác nhận xuất vật tư | Kho | Tồn kho trừ thật ngay lúc này, kèm phiếu xuất và nhật ký |
 | Ký nhận đã lấy hàng | Đội cứu hộ | Ký nhận số lượng thực nhận |
 | Xác nhận đã giao | Đội cứu hộ | Ghi kết quả: đủ / một phần / không giao được, kèm lý do |
+| **Xác nhận đã hoàn trả vật tư** | **Kho** | **Đếm lại số hàng tái sử dụng quay về và chốt sổ — bước cuối, đóng hẳn nhiệm vụ** |
 | Xem xét lại | Quản trị | Duyệt phần chênh lệch mà kho báo lên |
+
+**Bước hoàn trả — vì sao phải có, và vì sao chỉ kho bấm được.** Giao xong không phải là hết việc: áo phao, đèn pin, bạt che là hàng tái sử dụng và phải quay về kho rồi mới tính là khép lại. Trước đây nhiệm vụ dừng ở *đã hoàn thành*, nên phần hàng đang nằm ngoài **không có mốc nào để đóng**, và tồn kho trên sổ lệch với hàng trên kệ cho tới kỳ kiểm kê; người trực cũng không có cách nào phân biệt *"đã giao xong"* với *"đã thu hồi xong"* — hai việc có khi cách nhau vài ngày. Bước này **chỉ tài khoản kho bấm được, không phải điều phối**: người đếm lại hàng khi nó về tới nơi mới là người biết nó về đủ hay không, điều phối ký hộ thì chữ ký đó rỗng. Điều kiện là kho của người bấm **có tham gia nhiệm vụ** — hoặc là kho đã tiếp nhận báo cáo, hoặc có phiếu vật tư trong phương án — chứ không bắt từng kho ký riêng, vì hàng thừa thường dồn về một chỗ chứ không chia lại đúng như lúc xuất, và bắt ký riêng thì nhiệm vụ treo mãi ở kho không có gì để nhận về. Khi kho bấm xong, cả quản trị và đội cứu hộ đều nhận thông báo *"nhiệm vụ khép lại, không còn bước nào phải làm"*.
+
+**Thanh tiến trình bốn bước:** điều phối → kho xuất → hiện trường giao → **kho nhận lại vật tư**.
 
 **Ba cơ chế bảo vệ, mỗi cơ chế sửa một lỗi có thật:**
 
@@ -574,13 +629,20 @@ Bốn ràng buộc an toàn:
 
 **Bắt buộc nêu lý do khi ký nhận thiếu.** Nếu người đi lấy ký nhận ít hơn số kho đã soạn mà **để trống ô lý do, hệ thống chặn lại**. Vì con số thiếu một mình không dùng được: người điều phối cần biết thiếu vì kho hết hàng — thì phải đi xin xã khác — hay vì xe không chở hết — thì chuyến sau lấy nốt. Hai việc khác hẳn nhau, và đúng lúc đó chỉ người đứng ở kho mới biết.
 
-Màn hình nhiệm vụ hiển thị **thẻ màu theo từng kho**: xanh là kho đã xong, cam là còn nợ. Trước đây chỉ có một con số gộp kiểu "1/5" — nó không nói được phải gọi cho ai.
+Màn hình nhiệm vụ hiển thị **thẻ màu theo từng kho**: xanh là kho đã xong, cam là còn nợ. Trước đây chỉ có một con số gộp kiểu "1/5" — nó không nói được phải gọi cho ai. Tiêu đề nhiệm vụ trên web còn ghi **ai đã gửi tin này lên** — *"Nhiệm vụ số 42 (Trưởng thôn Long Châu báo cáo)"*: một trận lũ làm mười mấy thôn cùng báo về trong một buổi, số hiệu nhiệm vụ không nói được tin nào từ ai, nên người trực đọc tới một chi tiết cần hỏi lại thì không biết gọi cho ai — mà lời kể gốc là thứ duy nhất có thông tin đó.
+
+**Trên điện thoại, mỗi vai nhìn đúng phần việc của mình.** Bốn điều chỉnh, mỗi điều sửa một chỗ màn hình từng nói thừa hoặc nói sai:
+
+- **Đội cứu hộ đi lấy được kho nào hay kho ấy.** Trước đây màn hình chỉ đổi câu khi **tất cả** các kho xuất xong, vì nó bám vào trạng thái chung của nhiệm vụ. Nhưng hàng ở kho thôn xong từ sáng thì đội hoàn toàn chạy được một chuyến ngay, không có lý do gì ngồi chờ kho tổng — mà đường vào vùng vừa có thiên tai thì mỗi giờ trôi qua lại xấu đi. Nay màn hình **gọi đích danh kho đã xong**: *"Kho thôn Long Châu đã chuẩn bị xong — hãy đến lấy"*, và nói rõ điều kiện mở ô báo kết quả là **ký nhận đủ ở mọi kho**.
+- **Kho chỉ thấy chặng của chính mình.** Một nhiệm vụ lớn trải qua chục kho; kho thôn xong phần của mình từ sáng vẫn phải chờ kho tổng tới chiều — bắt màn hình của họ kể chặng chung là bắt họ nhìn một danh sách việc đã xong mà không biết mình còn nợ gì. Kho đang nợ hàng thì chỉ thấy bảng việc phải làm; ký nhận xong thì bảng việc biến mất và bảng vật tư quay lại nhưng **đổi vai thành biên bản**, ghi số thực người đi lấy đã ký nhận chứ không phải số dự kiến.
+- **Lọc theo mốc công việc.** Ô tìm kiếm chỉ tìm được khi đã biết số hiệu; câu hỏi thường gặp hơn là *"còn việc nào tới lượt tôi"* — mà trả lời câu đó bằng cách đọc nhãn của sáu chục thẻ thì không ai làm. Hàng nút lọc xếp theo đúng dòng chảy công việc, kèm số lượng, và **chỉ hiện những mốc thật sự có nhiệm vụ** — một nút bấm vào ra danh sách rỗng là một nút nói dối.
+- **Thứ tự danh sách theo vai.** Đội cứu hộ đọc theo **dòng thời gian** (mới nhất lên đầu) vì họ nhận việc theo đợt và câu hỏi của họ là *"vừa có việc gì mới"*; kho và trưởng thôn vẫn đọc theo **việc phải làm** vì họ có thể ôm mấy chục phiếu cùng lúc. Nhiệm vụ vừa xem được ghim lên đầu để quay lại tìm thấy ngay, **nhưng không chắn được nhiệm vụ mới hơn nó** — ghim đè lên một việc vừa tới là giấu mất nó.
 
 **Vai trò AI:** không tham gia. Toàn bộ chuyển trạng thái do người bấm và do máy chủ kiểm soát.
 
-**Tình huống thực tế.** Phương án chia ra 1 mã hàng ở kho trung tâm và 4 mã hàng ở kho thôn Long Châu. Kho trung tâm xuất xong lúc 21h40, kho thôn xong lúc 22h05 — nhiệm vụ chuyển sang *sẵn sàng* đúng lúc đó. Đội hiện trường ký nhận thiếu 20 chai nước kèm lý do "xe chỉ chở được từng ấy, chuyến sau lấy nốt"; quản trị nhận thông báo và biết chính xác phải làm gì tiếp.
+**Tình huống thực tế.** Phương án chia ra 1 mã hàng ở kho trung tâm và 4 mã hàng ở kho thôn Long Châu. Kho trung tâm xuất xong lúc 21h40, kho thôn xong lúc 22h05 — nhiệm vụ chuyển sang *sẵn sàng* đúng lúc đó. Đội hiện trường ký nhận thiếu 20 chai nước kèm lý do "xe chỉ chở được từng ấy, chuyến sau lấy nốt"; quản trị nhận thông báo và biết chính xác phải làm gì tiếp. Hai ngày sau, đội mang 146 áo phao và 15 đèn pin về kho; người giữ kho đếm lại, bấm *Xác nhận đã hoàn trả vật tư*, và nhiệm vụ khép lại — tồn kho trên sổ khớp với hàng trên kệ ngay lúc đó, không phải đợi tới kỳ kiểm kê.
 
-`[ẢNH 35: bảng yêu cầu từng mã hàng theo kho]` · `[ẢNH 36: hệ thống chặn ký nhận thiếu không lý do]` · `[ẢNH 37: thẻ màu tiến độ từng kho]`
+`[ẢNH 35: bảng yêu cầu từng mã hàng theo kho]` · `[ẢNH 36: hệ thống chặn ký nhận thiếu không lý do]` · `[ẢNH 37: thẻ màu tiến độ từng kho]` · `[ẢNH 54: thanh tiến trình bốn bước và nút xác nhận đã hoàn trả vật tư]` · `[ẢNH 55: điện thoại — lọc theo mốc công việc và danh sách kho đã chuẩn bị xong]`
 
 ### 2.10. Mượn – trả liên xã qua thông báo, và luồng ghi tay khi mất mạng
 
@@ -599,15 +661,21 @@ Màn hình nhiệm vụ hiển thị **thẻ màu theo từng kho**: xanh là kh
 
 Có đủ các nhánh rẽ: **từ chối kèm lý do** (kho hai bên không đổi gì), **hủy yêu cầu trước khi bên kia trả lời** (sau đó bên kia bấm đồng ý sẽ bị chặn), và **trả từng phần** với trạng thái *đã trả một phần* / *đã trả xong*.
 
+**Hỏi mượn ngay tại dòng vật tư đang thiếu.** Trước đây chỗ thiếu hàng chỉ có một đường dẫn sang tab *Mượn, trả*. Sang tới nơi thì **ngữ cảnh rơi lại hết**: người trực phải nhớ mình đang thiếu món nào, thiếu bao nhiêu, cho nhiệm vụ số mấy, rồi gõ lại từng thứ vào một cái form trắng — trong lúc nước đang lên. Nay nút *"Mượn xã khác"* nằm ngay trên dòng vật tư thiếu, và hệ thống **chỉ hỏi đúng hai điều nó không biết**: mượn xã nào, và có sửa số lượng không. Số lượng thiếu thì hệ thống đã biết sẵn nên nó là **số điền sẵn, không phải câu hỏi**; lời nhắn gửi sang xã kia tự kèm số hiệu nhiệm vụ và số còn thiếu, để bên nhận không phải gọi điện hỏi lại *"hàng này đi đâu, ai chịu trách nhiệm"* đúng vào lúc cả hai xã đều đang bận. Mỗi dòng vật tư tự kể khoản mượn của mình đang tới đâu, và màn hình **hỏi lại máy chủ mỗi 15 giây chừng nào còn ít nhất một yêu cầu đang treo** — câu trả lời của xã kia tới qua máy chủ của họ, không qua thao tác nào trên màn hình này, nên không hỏi lại thì dòng "chờ đồng ý" nằm đó mãi dù họ đã bấm đồng ý từ lâu. Đã có một yêu cầu đang treo thì nút đổi chữ thành **"Hỏi thêm xã khác"**, vì hỏi thêm một xã nữa là việc có thật (xã đầu có thể từ chối) nhưng nó phải hiện ra đúng là việc hỏi thêm — nếu không người trực bấm hai lần rồi ôm hai lô hàng cho một chỗ thiếu.
+
+**Phân biệt "đã gửi đi rồi, đang chờ trả lời" với "chưa gửi đi được".** Đây là một lỗi có thật đã được sửa, và hệ quả của nó không nằm ở tầng kỹ thuật mà nằm trên màn hình: người trực bấm *"Mượn xã Xuân Thọ 2 xuồng"*, màn hình ghi *"chờ xã kia đồng ý"*, và họ **ngồi đợi một câu trả lời không bao giờ tới** — trong khi máy chủ Xuân Thọ chưa hề nhận được gì. Cả hai tình huống đều mang cùng một trạng thái trong cơ sở dữ liệu, nên phải có một bằng chứng riêng để phân biệt: **mã bản ghi đối ứng do xã kia trả về**. Chưa có mã đó thì màn hình nói thẳng *"Chưa gửi được sang xã X — xã kia CHƯA nhận được yêu cầu. Gọi điện báo họ, hoặc bấm gửi lại khi có mạng"*, kèm nút **Gửi lại**. Gửi lại **an toàn khi bấm nhiều lần**: khóa chống nhận trùng không đổi, nên xã kia nhận bao nhiêu lần cũng chỉ ra đúng một khoản mượn. Không gửi được là chuyện **bình thường** và có đường lùi sẵn (gọi điện rồi ghi tay); điều không chấp nhận được là **không nói ra**.
+
 **Luồng ghi tay khi mất mạng — đây là điểm nhóm tâm đắc nhất.** Lúc bão, đường truyền là thứ đứt đầu tiên. Khi đó không có thông báo nào đi qua được, và đó **không phải lỗi**. Hai xã gọi điện thỏa thuận với nhau — đúng như cách họ vẫn làm từ trước khi có phần mềm — rồi mỗi bên bấm **"Ghi tay khoản đã thỏa thuận qua điện thoại"**: chọn chiều (cho mượn hay đi mượn), tên xã bên kia, mã lô vật tư, số lượng, và ghi chú ai gọi lúc mấy giờ. Khoản ghi tay **vẫn cộng trừ kho thật**, chỉ khác là mang **nhãn "ghi tay"** để sau này đối chiếu còn phân biệt được.
 
 Ràng buộc chống sai sót: hai người cùng bấm ghi nhận trả trên một dòng thì **một người thành công, người kia nhận thông báo "khoản mượn vừa được cập nhật ở nơi khác, tải lại rồi thao tác tiếp"** — chứ không phải cả hai cùng thành công và kho bị trừ hai lần. Máy chủ sập giữa lúc đang chuyển kho thì "lời hứa chuyển kho" được ghi cùng lúc chốt sổ, và **lần khởi động sau tự làm nốt, không chuyển hai lần**.
 
 **Vai trò AI:** không có. Đây là nghiệp vụ tài sản, cố ý giữ hoàn toàn tất định.
 
-**Tình huống thực tế.** Đồng Xuân thiếu 50 áo phao. Gửi yêu cầu sang Xuân Thọ lúc 22h10; quản trị Xuân Thọ nhận thông báo, bấm đồng ý ngay trên thẻ và chọn lô. Kho Xuân Thọ giảm 50, kho Đồng Xuân tăng 50 kèm nhãn vàng nhắc rằng số này phải trả. Ba ngày sau trả làm hai đợt 20 và 30; trả hết thì nhãn biến mất ở cả hai bên và tồn kho hai xã về đúng như trước.
+**Tình huống thực tế.** Đồng Xuân thiếu 50 áo phao. Ngay trên dòng "áo phao người lớn — thiếu 50" của bản tham mưu, người trực bấm *Mượn xã khác*, chọn Xuân Thọ, số lượng đã điền sẵn 50, bấm gửi lúc 22h10. Quản trị Xuân Thọ nhận thông báo kèm số hiệu nhiệm vụ, bấm đồng ý ngay trên thẻ và chọn lô. Kho Xuân Thọ giảm 50, kho Đồng Xuân tăng 50 kèm nhãn vàng nhắc rằng số này phải trả. Ba ngày sau trả làm hai đợt 20 và 30; trả hết thì nhãn biến mất ở cả hai bên và tồn kho hai xã về đúng như trước.
 
-`[ẢNH 38: gửi yêu cầu mượn xã khác]` · `[ẢNH 39: xã bên kia quyết ngay trên thông báo]` · `[ẢNH 40: nhãn "đang mượn" trên tab vật tư]` · `[ẢNH 41: form ghi tay khoản đã thỏa thuận qua điện thoại]`
+**Về việc chạy thử.** Luồng này được thiết kế cho **hai máy chủ khác nhau**, mỗi bên một cơ sở dữ liệu riêng và không ai đọc được của ai — nên hai tài khoản trong cùng một cơ sở dữ liệu chỉ thử được phần giao diện. Kho mã có sẵn một kịch bản dựng **máy chủ thứ hai** từ cùng mã nguồn với cấu hình khác (cơ sở dữ liệu khác, cổng khác), và một kịch bản nạp **06 xã lân cận** có thật của Đồng Xuân — Xuân Thọ, Tuy An Bắc, Tuy An Tây, Xuân Lãnh, Phú Mỡ, Xuân Phước — mỗi xã một đơn vị riêng, kho riêng, tồn kho riêng, tài khoản quản trị riêng. Tọa độ lấy từ danh mục UBND xã đã đối chiếu bản đồ chứ **không bịa**, vì bản đồ và phép tính quãng đường đọc thẳng những con số đó. Số lượng tồn của mỗi xã **cố tình khác nhau** (từ dồi dào tới gần cạn): xã nào cũng đầy hàng thì mọi lượt thử đều thành công y hệt nhau, và ca đáng quan tâm nhất — **hỏi mượn một xã cũng không đủ hàng** — sẽ không bao giờ xảy ra.
+
+`[ẢNH 38: gửi yêu cầu mượn xã khác]` · `[ẢNH 39: xã bên kia quyết ngay trên thông báo]` · `[ẢNH 40: nhãn "đang mượn" trên tab vật tư]` · `[ẢNH 41: form ghi tay khoản đã thỏa thuận qua điện thoại]` · `[ẢNH 56: nút "Mượn xã khác" ngay trên dòng vật tư thiếu, số lượng điền sẵn]`
 
 ### 2.11. Tìm kiếm vật tư theo ngữ nghĩa và chuẩn hóa nhập liệu
 
@@ -749,9 +817,11 @@ Toàn bộ mã nguồn nằm trong một kho mã hợp nhất (monorepo) quản 
                                  ▼
  ┌──────────────────────────────────────────────────────────────────────────┐
  │ 3. TÍNH TOÁN  (rule engine — KHÔNG có AI)                                │
- │    Định mức Sphere ──► nhu cầu từng mã hàng                              │
+ │    Định mức Sphere ──► nhu cầu từng mã hàng ──► ADMIN sửa được khi NHÁP   │
  │    Lọc lô không dùng được ──► phân bổ: KHO GẦN trước, rồi HẠN GẦN trước  │
- │    Mức đáp ứng = MẮT XÍCH YẾU NHẤT       OSRM ──► tuyến bộ + thời gian    │
+ │    TRẠNG THÁI = mắt xích yếu nhất   │   % ĐÁP ỨNG = trung bình theo loại  │
+ │    (đi được hay chưa)               │   (còn thiếu bao nhiêu)             │
+ │    OSRM ──► tuyến bộ + thời gian + mũi tên chỉ chiều đi                   │
  └───────────────────────────────┬──────────────────────────────────────────┘
                                  ▼
  ┌──────────────────────────────────────────────────────────────────────────┐
@@ -770,24 +840,34 @@ Toàn bộ mã nguồn nằm trong một kho mã hợp nhất (monorepo) quản 
  ┌──────────────────────────────────────────────────────────────────────────┐
  │ 6. HIỆN TRƯỜNG                                                           │
  │    Ký nhận đã lấy hàng — thiếu thì BẮT BUỘC nêu lý do                    │
+ │    (đi được kho nào hay kho ấy, không chờ đủ cả nhóm)                    │
  │    Xác nhận đã giao: đủ / một phần / không giao được                     │
  │    Cập nhật bằng lời ──► bằng chứng có người, có giờ ──► quản trị xem xét │
  └───────────────────────────────┬──────────────────────────────────────────┘
                                  ▼
  ┌──────────────────────────────────────────────────────────────────────────┐
- │ 7. NẾU CẢ XÃ VẪN THIẾU                                                   │
- │    Xếp hạng điểm liên hệ ngoài xã — nhãn "chưa xác nhận có hàng"          │
- │    Mượn liên xã qua thông báo có khóa chung · mất mạng ─► GHI TAY         │
+ │ 7. HOÀN TRẢ  — chỉ KHO bấm được                                          │
+ │    Hàng tái sử dụng quay về ──► kho ĐẾM LẠI ──► chốt sổ, nhiệm vụ khép    │
+ │    Không có bước này thì tồn kho lệch với kệ tới tận kỳ kiểm kê           │
  └───────────────────────────────┬──────────────────────────────────────────┘
                                  ▼
  ┌──────────────────────────────────────────────────────────────────────────┐
- │ 8. HẬU KIỂM — nhật ký ai/lúc nào/đổi gì · đối chiếu tồn kho đầu – cuối    │
+ │ 8. NẾU CẢ XÃ VẪN THIẾU                                                   │
+ │    "Mượn xã khác" NGAY trên dòng vật tư thiếu — số lượng điền sẵn         │
+ │    Xếp hạng điểm liên hệ ngoài xã — nhãn "chưa xác nhận có hàng"          │
+ │    Mượn liên xã qua thông báo có khóa chung · mất mạng ─► GHI TAY         │
+ │    Chưa tới được xã kia ─► NÓI RÕ + nút gửi lại, không giả vờ "đang chờ"  │
+ └───────────────────────────────┬──────────────────────────────────────────┘
+                                 ▼
+ ┌──────────────────────────────────────────────────────────────────────────┐
+ │ 9. HẬU KIỂM — nhật ký ai/lúc nào/đổi gì · đối chiếu tồn kho đầu – cuối    │
+ │    Thống kê sau thiên tai: đã dùng / mất / thu hồi được bao nhiêu         │
  └──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## 4. Cách vận hành trong thực tế
 
-**Triển khai một xã** cần: 01 máy tính hoặc máy chủ (CPU phổ thông, 16 GB RAM; có card đồ họa 6 GB thì mô hình chạy nhanh, không có thì vẫn chạy được nhưng chậm hơn), Wi-Fi nội bộ, điện thoại Android cho trưởng thôn và đội cứu hộ.
+**Triển khai một xã** cần: 01 máy tính hoặc máy chủ chạy ứng dụng (CPU phổ thông, 16 GB RAM; có card đồ họa 6 GB thì mô hình chạy nhanh, không có thì vẫn chạy được nhưng chậm hơn), **01 máy tính riêng chạy máy chủ cơ sở dữ liệu — chỉ nối mạng nội bộ, không mở ra Internet** (xem mục VIII.3), Wi-Fi nội bộ, điện thoại Android cho trưởng thôn và đội cứu hộ. Xã chưa bố trí được máy thứ hai vẫn chạy đủ chức năng trên một máy, nhưng đó là cấu hình tối thiểu chứ không phải cấu hình khuyến nghị.
 
 **Các dịch vụ chạy nền** dưới dạng tác vụ hệ thống, tự khởi động cùng máy. Trước mỗi buổi diễn tập hoặc mỗi ca trực quan trọng, một kịch bản kiểm tra sẵn sàng chạy một lần và in ra bảng trạng thái của **10 hạng mục**: Docker, PostgreSQL, Redis, máy tính tuyến OSRM, mô hình ngôn ngữ đang thường trú, backend, web, dịch vụ AI, cổng vào, và **hai đường AI được hâm nóng bằng lời gọi thật** (gửi một giây tiếng vào nhận dạng giọng nói và một câu vào bóc tách tình huống). Trả lời được nghĩa là lát nữa bấm micro sẽ ra chữ — kiểm tra bằng lời gọi thật chứ không chỉ hỏi trạng thái.
 
@@ -810,6 +890,8 @@ Toàn bộ mã nguồn nằm trong một kho mã hợp nhất (monorepo) quản 
 
 - **Phân quyền theo quyền hạt mịn, không theo vai:** 29 quyền dạng `tài-nguyên:hành-động`, ánh xạ sang vai tại **một nguồn duy nhất dùng chung cho backend và giao diện** — không thể lệch nhau.
 - **Phạm vi tổ chức và kho được áp cho mọi thao tác đọc, ghi, ảnh chụp phân tích AI và kênh thời gian thực.** Một lỗ hổng thuộc loại này đã được phát hiện trong quá trình rà soát và đã vá: người báo cáo có thể chỉ định một kho thuộc tổ chức khác khi phiên không gắn kho — nay bộ giải quyết bắt buộc nhận định danh người thực hiện và so khớp tổ chức, kèm một bộ kiểm thử chống tái phát cho trường hợp xuyên tổ chức, **kể cả khi thử lại với cùng mã yêu cầu**.
+- **Phạm vi xã được áp cho cả việc quản trị tài khoản.** Quản trị viên xã chỉ liệt kê, sửa và xóa được người của xã mình; kho gán cho một tài khoản phải thuộc đúng xã của tài khoản đó; chỉ super admin mới tạo được tài khoản quản trị cho xã khác. Tài khoản hoặc kho ngoài phạm vi được trả lời là **không tìm thấy**, không phải *không có quyền* — vì "không có quyền" là một lời xác nhận rằng định danh đó có tồn tại, và ai cũng dò được để đếm xem xã bên cạnh có bao nhiêu tài khoản. Cùng lối trả lời với phạm vi nhiệm vụ.
+- **Bước hoàn trả vật tư chỉ mở cho vai kho**, và máy chủ chốt thêm rằng kho đó có tham gia nhiệm vụ — quyền của hiện trường không mở được bước này.
 - **Phòng nhận dữ liệu thời gian thực do máy chủ cấp từ phân công trong cơ sở dữ liệu**; phía người dùng không được tự khai vai hay kho.
 - **Giao diện chỉ hiện mục có quyền, nhưng máy chủ kiểm tra lại độc lập** ở từng lời gọi.
 - **Việc ghi số liệu mô phỏng mặc định tắt.** Bật lên vẫn cần quyền riêng và vẫn bị giới hạn theo kho. Riêng quyền **tắt chuông báo động** được tách khỏi quyền mô phỏng — vì chuông có thể do cảm biến thật kích hoạt, nên người trực kho phải tắt được dù họ không có quyền bơm số liệu mô phỏng.
@@ -863,26 +945,30 @@ Sản phẩm ở mức **bản thử nghiệm hoàn chỉnh, chạy được đ�
 
 | Hạng mục | Kết quả ghi nhận |
 |---|---|
-| Kiểm thử backend (Jest) | **94 bộ / 557 bài — đạt** (ghi nhận ngày 29/07/2026) |
-| Kiểm thử dịch vụ AI (pytest) | **74 bài — đạt** |
-| Kiểm thử hợp đồng dùng chung | **9 bài — đạt** |
-| Kiểm thử trạng thái ứng dụng di động | **13 bài + 2 bài kiểm tra phụ thuộc — đạt** |
-| Kiểm thử trạng thái web | **7 bài — đạt** |
+| Kiểm thử backend (Jest) | **132 bộ / 912 bài — đạt** (ghi nhận ngày 09/09/2026) |
+| Kiểm thử dịch vụ AI (pytest) | **261 bài — 260 đạt, 1 hỏng** (một bài kiểm tra chặn vector dị dạng, hỏng do khác biệt của bản Python trên máy chạy thử, không phải lỗi nghiệp vụ) |
+| Kiểm thử hợp đồng dùng chung | **25 bài — 24 đạt, 1 hỏng** (một bài còn giữ tên vai cũ sau khi nhãn được đổi thống nhất, cần cập nhật kỳ vọng của chính bài kiểm thử) |
+| Kiểm thử trạng thái ứng dụng di động | **61 bài + 2 bài kiểm tra phụ thuộc — đạt** |
+| Kiểm thử trạng thái web | **129 bài — đạt** |
 | Kiểm thử dữ liệu định tuyến offline | **đạt** |
 | Rà soát lỗ hổng thư viện dùng cho bản chạy thật | **0 cảnh báo** ở mọi mức, không dùng danh sách bỏ qua |
 | Dựng bản phát hành backend / web / di động / máy tính | **đạt** |
 | Kiểm tra tĩnh và định dạng mã | **đạt** |
 | Cổng chất lượng tự động (GitHub Actions) | Chạy đủ chuỗi: rà soát lỗ hổng → kiểm tra tĩnh → kiểm tra lược đồ dữ liệu → kiểm thử backend, web, di động, máy tính, định tuyến → kiểm thử an toàn AI |
 
-Các bài kiểm thử không chỉ kiểm chức năng chạy đúng. Chúng khóa cả những tình huống hỏng: **hai người bấm cùng lúc**, **gửi lại cùng một yêu cầu**, **tồn kho không được âm**, **thứ tự khóa giữa xuất kho và hoàn trả**, **hai kho chuẩn bị hàng đồng thời**, **truy cập xuyên tổ chức bị chặn**, **mô hình AI trả về số không có thật bị chặn**, và **kênh thời gian thực cách ly đúng phòng**.
+Các bài kiểm thử không chỉ kiểm chức năng chạy đúng. Chúng khóa cả những tình huống hỏng: **hai người bấm cùng lúc**, **gửi lại cùng một yêu cầu**, **tồn kho không được âm**, **thứ tự khóa giữa xuất kho và hoàn trả**, **hai kho chuẩn bị hàng đồng thời**, **truy cập xuyên tổ chức bị chặn**, **quản trị viên xã này không đụng được tài khoản của xã kia**, **mô hình AI trả về số không có thật bị chặn**, và **kênh thời gian thực cách ly đúng phòng**.
+
+> **Ghi chú trung thực về hai bài đang hỏng.** Cả hai đều thuộc loại *kỳ vọng của chính bài kiểm thử đã cũ*, không phải nghiệp vụ sai, và cả hai đã hỏng từ trước đợt cập nhật luồng cứu hộ này. Bài của gói dùng chung còn so với nhãn vai cũ sau khi hệ thống đổi sang một nhãn thống nhất; bài của dịch vụ AI hỏng ở một trường hợp biên khi chạy trên bản Python mới hơn bản dùng để phát triển. Nhóm ghi ra thay vì làm tròn thành "đạt hết" — đúng nguyên tắc chỉ đánh dấu hoàn thành khi có bằng chứng.
 
 ## 3. Kết quả thử nghiệm thực tế
 
 **Đã thực hiện được, có thể trình diễn lại:**
 
-- Vòng nghiệp vụ trọn vẹn: trưởng thôn nói vào điện thoại → nhận dạng giọng nói tại chỗ → xác nhận → quản trị xã phân tích → lập phương án đa kho có tuyến đường → hai kho xuất hàng theo từng mã hàng → đội hiện trường ký nhận và xác nhận đã giao → hậu kiểm.
+- Vòng nghiệp vụ trọn vẹn: trưởng thôn nói vào điện thoại → nhận dạng giọng nói tại chỗ → xác nhận → quản trị xã phân tích → lập phương án đa kho có tuyến đường → **quản trị sửa lại danh sách vật tư theo hiểu biết thực địa, hệ thống tính lại khả năng đáp ứng** → hai kho xuất hàng theo từng mã hàng → đội hiện trường ký nhận và xác nhận đã giao → **kho đếm lại hàng tái sử dụng quay về và xác nhận đã hoàn trả** → hậu kiểm.
 - **Đối chiếu số học đầu – cuối:** ghi tồn kho ra giấy trước khi bắt đầu; sau toàn bộ thao tác xuất, mượn, trả, số liệu **khớp từng đơn vị**.
-- Vòng mượn – trả liên xã đầy đủ giữa hai máy chủ độc lập, gồm cả nhánh từ chối, nhánh hủy, nhánh trả từng phần và **nhánh ghi tay khi mất mạng**.
+- Vòng mượn – trả liên xã đầy đủ giữa hai máy chủ độc lập, gồm cả nhánh từ chối, nhánh hủy, nhánh trả từng phần và **nhánh ghi tay khi mất mạng**; chạy với bộ dữ liệu **06 xã lân cận** có tồn kho khác nhau, nên thử được cả ca xã được hỏi cũng không đủ hàng.
+- **Nhánh không gửi được sang xã kia:** tắt máy chủ xã lân cận rồi gửi yêu cầu mượn — màn hình báo đúng là *chưa gửi được, xã kia chưa nhận được*, không giả vờ "đang chờ trả lời"; bật lại rồi bấm **Gửi lại** thì yêu cầu tới nơi và **không tạo khoản mượn thứ hai**.
+- **Thống kê sau thiên tai** dựng lại đúng số đã xuất, đã ký nhận, chênh lệch, thất thoát và phần chưa thu hồi của một đợt vừa chạy xong, đối chiếu khớp với nhật ký hậu kiểm.
 - Chuỗi cảm biến: xác nhận số liệu vượt ngưỡng → chuông tại kho → sự cố → thư cảnh báo có ba mốc thời gian → chỉ số sẵn sàng chuyển sang *không điều phối được*.
 - Lớp chống bịa số: kiểm chứng cả trường hợp chặn thành công (mô hình đưa số không có thật, hệ thống thay câu) và trường hợp từ chối câu hỏi ngoài phạm vi.
 - Bản phát hành Android `0.5.0` đã dựng và **ký bằng khóa RSA 4096-bit riêng**, không dùng chữ ký gỡ lỗi; đã cài và chạy trên điện thoại thật và trên máy ảo.
@@ -933,16 +1019,26 @@ Ba yếu tố làm cho việc triển khai thật khả thi:
 |---|---|
 | Phần mềm nền tảng | **0 đồng** — toàn bộ dùng mã nguồn mở hoặc miễn phí |
 | Mô hình AI | **0 đồng chi phí sử dụng** — mô hình ngôn ngữ, mô hình nhúng và nhận dạng giọng nói đều chạy tại chỗ, không tính tiền theo lượt gọi |
-| Máy chủ tại xã | Một máy tính văn phòng đã có sẵn ở đa số UBND xã; có card đồ họa phổ thông thì mô hình chạy nhanh hơn |
+| Máy chủ ứng dụng tại xã | Một máy tính văn phòng đã có sẵn ở đa số UBND xã; có card đồ họa phổ thông thì mô hình chạy nhanh hơn |
+| **Máy tính chạy máy chủ cơ sở dữ liệu** | **01 máy riêng, tách khỏi máy chủ ứng dụng** — xem giải thích bên dưới. Một máy tính văn phòng phổ thông là đủ; chi phí phát sinh chỉ là một thân máy, không cần card đồ họa |
 | Thiết bị người dùng | Điện thoại Android sẵn có của cán bộ |
 | Đường truyền | Wi-Fi nội bộ; **không bắt buộc Internet** cho chức năng lõi |
 | Cảm biến IoT | **Không bắt buộc ở giai đoạn đầu**; gắn có chọn lọc về sau |
+
+**Vì sao cần một máy riêng cho cơ sở dữ liệu.** Toàn bộ dữ liệu của xã — tồn kho, hồ sơ nhiệm vụ, tài khoản cán bộ, nhật ký hậu kiểm — nằm trong cơ sở dữ liệu. Đặt nó trên một máy riêng, **chỉ nối vào mạng nội bộ và không bao giờ mở ra Internet**, là biện pháp rẻ nhất để đạt mức bảo mật tuyệt đối cho phần dữ liệu, vì bốn lý do:
+
+- **Cắt hẳn đường tấn công từ ngoài vào dữ liệu.** Máy chủ ứng dụng là máy phải nói chuyện với trình duyệt, điện thoại và các xã lân cận, nên nó là bề mặt bị phơi ra. Cơ sở dữ liệu ngồi trên một máy khác thì kẻ chiếm được máy chủ ứng dụng vẫn còn phải vượt thêm một lớp nữa, thay vì đã đứng sẵn cạnh kho dữ liệu.
+- **Một máy hỏng không mất cả hai thứ.** Máy chủ ứng dụng chạy mô hình AI với tải nặng và hay phải khởi động lại khi cập nhật; cơ sở dữ liệu thì cần yên tĩnh và liên tục. Tách ra thì việc bảo trì, cập nhật hay thay thế bên này không đụng tới dữ liệu bên kia.
+- **Sao lưu và khôi phục làm được gọn.** Bản sao lưu theo lịch lấy từ đúng một máy có đúng một nhiệm vụ, và diễn tập khôi phục không phải dựng lại cả cụm dịch vụ AI.
+- **Phân quyền vật lý rõ ràng.** Chỉ người được giao mới chạm được vào máy chứa dữ liệu; quyền truy cập vật lý trở thành một lớp kiểm soát thật, không chỉ là cấu hình phần mềm.
+
+Đây là **khoản đầu tư phần cứng duy nhất được khuyến nghị bắt buộc**, và nó vẫn nằm trong tầm một máy tính văn phòng thông thường. Với xã chưa bố trí được máy thứ hai, hệ thống vẫn chạy đầy đủ trên một máy — nhưng nhóm ghi rõ đó là **cấu hình tối thiểu, không phải cấu hình khuyến nghị**.
 
 Điểm đáng chú ý về chi phí vận hành: vì mô hình chạy tại chỗ, **chi phí không tăng theo số lượt sử dụng**. Một xã dùng nhiều hay ít đều cùng một chi phí — khác hẳn mô hình gọi dịch vụ AI đám mây, nơi đúng lúc thiên tai (lúc dùng nhiều nhất) cũng là lúc hóa đơn tăng cao nhất.
 
 ## 4. Khả năng mở rộng, tích hợp và nhân rộng
 
-**Mở rộng theo địa bàn.** Mô hình một xã một hệ thống cho phép nhân rộng cho hàng nghìn xã mà không có điểm nghẽn chung. Cơ chế liên xã qua thông báo có khóa chung đã chạy được giữa hai máy chủ độc lập, và mở rộng thành mạng lưới nhiều xã chỉ là khai thêm tên vào danh mục.
+**Mở rộng theo địa bàn.** Mô hình một xã một hệ thống cho phép nhân rộng cho hàng nghìn xã mà không có điểm nghẽn chung. Cơ chế liên xã qua thông báo có khóa chung đã chạy được giữa hai máy chủ độc lập, và mở rộng thành mạng lưới nhiều xã chỉ là khai thêm tên vào danh mục — hiện đã dựng sẵn **06 xã lân cận** của Đồng Xuân để chạy thử. Bậc **super admin** đã có sẵn để dựng và thu hồi tài khoản quản trị cho từng xã, nên việc bàn giao cho một xã mới không cần ai chạm vào cơ sở dữ liệu.
 
 **Mở rộng theo loại kho.** Mô hình dữ liệu và luồng nghiệp vụ áp dụng được cho nhiều loại kho khác: vật tư phòng chống thiên tai, nhu yếu phẩm cứu trợ, thiết bị phòng cháy chữa cháy, vật tư y tế khẩn cấp, kho dự trữ tại trường học, trạm y tế, nhà văn hóa. Mỗi nơi chỉ cần cấu hình danh mục, định mức và quy trình phê duyệt.
 
@@ -1019,3 +1115,7 @@ Ba yếu tố làm cho việc triển khai thật khả thi:
 | 45–46 | Ứng dụng IoT với thanh trượt; sự cố và chỉ số sẵn sàng đổi theo | IV.2.13 |
 | 47 | Điện thoại hiển thị dữ liệu đã cũ khi mất mạng | IV.2.14 |
 | 48–49 | Bảng trạng thái kiểm tra sẵn sàng; kết quả bộ kiểm thử tự động | VII |
+| 50–51 | Thống kê sau thiên tai theo từng đợt; chi tiết một đợt theo nhóm vật tư và mã hàng | IV.1.14 |
+| 52–53 | Quản trị sửa số lượng và thêm vật tư vào bản tham mưu; giải thích vì sao cần loại vật tư đó | IV.2.3 |
+| 54–55 | Thanh tiến trình bốn bước và nút xác nhận đã hoàn trả vật tư; điện thoại — lọc theo mốc công việc và danh sách kho đã chuẩn bị xong | IV.2.9 |
+| 56 | Nút "Mượn xã khác" ngay trên dòng vật tư thiếu, số lượng điền sẵn | IV.2.10 |
