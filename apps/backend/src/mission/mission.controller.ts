@@ -24,6 +24,7 @@ import { AiClientService } from "../ai/ai-client.service";
 import {
   AdminNoteDto,
   AnalyzeMissionDto,
+  ChangeRequirementDto,
   CompleteMissionDto,
   FieldUpdateDto,
   GeneratePlanDto,
@@ -375,6 +376,47 @@ export class MissionController {
     return this.missions.getMission(id, req.user.userId, req.user.warehouseId);
   }
 
+  /**
+   * Vật tư ADMIN có thể thêm vào bản tham mưu — chỉ thứ cụm kho của xã còn hàng.
+   *
+   * Lọc ở MÁY CHỦ chứ không gửi cả danh mục xuống rồi để màn hình lọc: "còn hàng"
+   * là kết quả của bộ lọc lô và phép trừ phần đã hứa cho nhiệm vụ khác, cả hai đều
+   * nằm ở đây. Gửi thô xuống là màn hình phải tính lại một phép nó không có dữ liệu.
+   */
+  @RequirePermission(Permission.MISSION_CREATE)
+  @Get(":id/requirement-options")
+  requirementOptions(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.missions.listRequirementOptions(id, req.user.userId, req.user.warehouseId);
+  }
+
+  /** ADMIN thêm / sửa / xoá một dòng vật tư rồi nhận lại nhiệm vụ đã tính lại. */
+  @RequirePermission(Permission.MISSION_CREATE)
+  @Post(":id/requirements")
+  changeRequirement(
+    @Request() req: AuthenticatedRequest,
+    @Param("id") id: string,
+    @Body(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
+    dto: ChangeRequirementDto,
+  ) {
+    const change =
+      dto.op === "remove"
+        ? ({ op: "remove", sku: dto.sku } as const)
+        : ({ op: dto.op, sku: dto.sku, quantity: dto.quantity as number } as const);
+    return this.missions.changeRequirement(id, change, req.user.userId, req.user.warehouseId);
+  }
+
+  /**
+   * Phân bổ lại theo tồn kho hiện tại, giữ nguyên nhu cầu.
+   *
+   * Gọi sau khi hàng mượn của xã lân cận đã nhập kho: bản tham mưu chốt phân bổ
+   * lúc lập nên nó chưa biết kho vừa có thêm hàng.
+   */
+  @RequirePermission(Permission.MISSION_CREATE)
+  @Post(":id/recalculate-supply")
+  recalculateSupply(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.missions.recalculateSupply(id, req.user.userId, req.user.warehouseId);
+  }
+
   /** Snapshot phân tích AI để ADMIN đối chiếu nguồn và phiên bản đã dùng. */
   @RequirePermission(Permission.MISSION_ANALYZE)
   @Get(":id/analysis-snapshots")
@@ -522,6 +564,20 @@ export class MissionController {
   @Post(":id/prepare")
   prepare(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
     return this.missions.prepareByWarehouse(id, req.user.userId, req.user.warehouseId);
+  }
+
+  /**
+   * Bước CUỐI: kho xác nhận đã nhận lại vật tư (COMPLETED → RETURNED).
+   *
+   * Quyền `MISSION_FULFILL` là quyền của KHO — chính vì vậy nó nằm ở đây thay vì
+   * `MISSION_CONFIRM` (quyền của hiện trường): người đếm lại hàng khi nó về tới
+   * nơi mới là người ký được vào bước này. Service chốt thêm một lần theo vai và
+   * theo việc kho đó có tham gia nhiệm vụ hay không.
+   */
+  @RequirePermission(Permission.MISSION_FULFILL)
+  @Post(":id/supplies-returned")
+  markSuppliesReturned(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.missions.markReturnedByWarehouse(id, req.user.userId, req.user.warehouseId);
   }
 
   /**

@@ -63,7 +63,7 @@ export interface ActionPlanNarrative {
 export interface ActionPlan {
   severityLevel: number; // 1-5
   severityReason: string[];
-  fulfillment: number; // % đáp ứng (min qua loại)
+  fulfillment: number; // % đáp ứng (trung bình theo loại vật tư)
   allocations: AllocationSummary[];
   warehouses: WarehouseEta[];
   forecasts: Forecast[];
@@ -78,6 +78,16 @@ export interface ActionPlan {
 export function scoreSeverity(
   incident: IncidentInput,
   fulfillment: number,
+  /**
+   * Tên những loại vật tư kho trong xã KHÔNG CÒN CÁI NÀO.
+   *
+   * Từ khi `fulfillment` chuyển sang trung bình theo loại, nó không còn tự nó
+   * kêu lên khi một loại mất sạch: mười ba loại đủ và hai loại trắng kho vẫn ra
+   * 87%, tức là dưới ngưỡng cảnh báo cũ thì không, mà nhiệm vụ thì không đi nổi
+   * vì không có xuồng. Không có xuồng là chuyện của mức khẩn cấp, và nó phải
+   * được nói bằng tên món chứ không bằng một con số phần trăm.
+   */
+  unavailableItemNames: string[] = [],
 ): { level: number; reasons: string[] } {
   const reasons: string[] = [];
   let score = 1;
@@ -106,7 +116,14 @@ export function scoreSeverity(
     reasons.push(`Thời gian cô lập dự kiến kéo dài (${incident.durationHours} giờ).`);
   }
 
-  if (fulfillment < 70) {
+  // Hai nhánh loại trừ nhau: đều là MỘT vấn đề "kho không lo nổi", cộng điểm
+  // hai lần cho cùng một chuyện là thổi mức khẩn cấp lên vô cớ.
+  if (unavailableItemNames.length > 0) {
+    score += 1;
+    reasons.push(
+      `Kho trong xã không còn ${unavailableItemNames.join(", ")} — phải mượn xã khác trước khi đi.`,
+    );
+  } else if (fulfillment < 70) {
     score += 1;
     reasons.push(`Kho chỉ đáp ứng ${fulfillment}% — thiếu vật tư thiết yếu.`);
   }
