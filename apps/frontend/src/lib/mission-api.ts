@@ -12,6 +12,7 @@ export type MissionStatus =
   | "PENDING_WAREHOUSE"
   | "READY"
   | "COMPLETED"
+  | "RETURNED"
   | "REJECTED"
   | "DEFERRED"
   | "CANCELLED";
@@ -71,21 +72,30 @@ export type DeliveryOutcome = "DELIVERED" | "PARTIAL" | "FAILED";
 
 export type MissionReadinessStatus = "READY" | "NEEDS_ACTION" | "NOT_DISPATCHABLE";
 
+/**
+ * Một loại vật tư trong đánh giá khả năng đáp ứng.
+ *
+ * Tách ra khỏi `MissionReadinessAssessment` vì khối giao diện hỏi mượn xã khác
+ * nhận đúng MỘT dòng chứ không phải cả bản đánh giá — truyền cả bản đánh giá vào
+ * rồi trong đó tự dò lại đúng dòng mình cần là mở đường cho việc dò nhầm.
+ */
+export interface MissionItemReadiness {
+  sku: string;
+  itemName: string;
+  /** Đơn vị kho đếm. Bản ghi cũ (trước khi thêm trường) không có. */
+  unit?: string;
+  required: number;
+  allocated: number;
+  shortage: number;
+  fulfillment: number;
+  status: MissionReadinessStatus;
+}
+
 export interface MissionReadinessAssessment {
   status: MissionReadinessStatus;
   fulfillment: number;
   warehouseOperationalStatus: MissionReadinessStatus | null;
-  items: {
-    sku: string;
-    itemName: string;
-    /** Đơn vị kho đếm. Bản ghi cũ (trước khi thêm trường) không có. */
-    unit?: string;
-    required: number;
-    allocated: number;
-    shortage: number;
-    fulfillment: number;
-    status: MissionReadinessStatus;
-  }[];
+  items: MissionItemReadiness[];
   blockers: { sku: string; itemName: string; reasons: string[] }[];
   recommendedActions: string[];
 }
@@ -136,6 +146,13 @@ export interface Mission {
   approvedBy?: { id: string; fullName: string; email: string } | null;
   actionPlan: ActionPlan | null;
   readinessAssessment: MissionReadinessAssessment | null;
+  /** Thời điểm kho xác nhận đã nhận lại vật tư; `null` là chưa hoàn trả. */
+  returnedAt?: string | null;
+  /**
+   * Người đã GỬI nhiệm vụ này lên — trưởng thôn báo tình huống, hoặc lực lượng
+   * hiện trường báo từ hiện trường. `null` với nhiệm vụ do ADMIN tự khai trên web.
+   */
+  createdBy?: { id: string; fullName: string | null; email: string; role: string } | null;
   requirements: MissionRequirement[];
   warehousePreparations?: MissionWarehousePreparation[];
   warehouseRequests?: MissionWarehouseRequest[];
@@ -305,6 +322,14 @@ export interface AppNotification {
   /** Số hiệu nhiệm vụ chép lại lúc gửi — thứ người trực gọi nhau qua điện thoại. */
   missionNo?: number | null;
   fieldUpdateId?: string | null;
+  /**
+   * Khoản mượn liên xã mà thông báo này nói tới.
+   *
+   * Có nó thì chuông dựng được phần chi tiết và hai nút đồng ý / từ chối ngay tại
+   * chỗ. Không có thì người nhận chỉ đọc được một câu "xã kia xin mượn 195 áo
+   * phao" rồi phải tự đi tìm nó trong tab Mượn, trả — giữa lúc bên kia đang đợi.
+   */
+  loanId?: string | null;
   /** Tình huống chép lại lúc gửi — thẻ và chuông dùng để chọn biểu tượng, in đậm. */
   incidentType?: string | null;
   affectedPeople?: number | null;
@@ -413,6 +438,48 @@ export const analyzeMission = (
 export const getLatestCoordinationAnalysis = (id: string) =>
   apiFetch<CoordinationAnalysisSnapshot | null>(`/api/missions/${id}/analyses/latest`);
 
+/** Một vật tư ADMIN có thể thêm vào bản tham mưu, kèm số cụm kho còn lấy được. */
+export interface RequirementOption {
+  sku: string;
+  itemName: string;
+  unit: string;
+  /** Số còn lấy ra được ngay ở cả cụm kho trong xã, đã trừ phần hứa cho nhiệm vụ khác. */
+  availableQuantity: number;
+  alreadyInPlan: boolean;
+}
+
+export const listRequirementOptions = (missionId: string) =>
+  apiFetch<RequirementOption[]>(`/api/missions/${missionId}/requirement-options`);
+
+/**
+ * Thêm / sửa / xoá một dòng vật tư của bản tham mưu.
+ *
+ * Trả về nhiệm vụ ĐÃ TÍNH LẠI — phân bổ, mức đáp ứng và đánh giá khả năng đáp ứng
+ * đều đi kèm, nên chỗ gọi không phải tự suy con số mới rồi chờ lượt tải sau xem có
+ * khớp không.
+ */
+export const changeMissionRequirement = (
+  missionId: string,
+  change:
+    | { op: "add"; sku: string; quantity: number }
+    | { op: "update"; sku: string; quantity: number }
+    | { op: "remove"; sku: string },
+) =>
+  apiFetch<Mission>(`/api/missions/${missionId}/requirements`, {
+    method: "POST",
+    body: JSON.stringify(change),
+  });
+
+/**
+ * Phân bổ lại theo tồn kho hiện tại, KHÔNG đụng vào nhu cầu.
+ *
+ * Gọi sau khi hàng mượn của xã lân cận đã nhập kho: bản tham mưu chốt phân bổ lúc
+ * lập nên nó chưa biết kho vừa có thêm hàng, và màn hình vẫn báo thiếu dù người
+ * trực đã mượn xong.
+ */
+export const recalculateMissionSupply = (missionId: string) =>
+  apiFetch<Mission>(`/api/missions/${missionId}/recalculate-supply`, { method: "POST" });
+
 export const getSimulation = (missionId: string, simulationId: string) =>
   apiFetch<CoordinationAnalysisSnapshot>(`/api/missions/${missionId}/simulations/${simulationId}`);
 
@@ -497,6 +564,14 @@ export const approveMission = (id: string) =>
   apiFetch<Mission>(`/api/missions/${id}/approve`, { method: "POST" });
 export const prepareMission = (id: string) =>
   apiFetch<Mission>(`/api/missions/${id}/prepare`, { method: "POST" });
+/**
+ * KHO xác nhận đã nhận lại vật tư — bước cuối, đóng hẳn nhiệm vụ.
+ *
+ * Chỉ tài khoản kho gọi được; máy chủ chốt theo vai và theo việc kho đó có tham
+ * gia nhiệm vụ hay không.
+ */
+export const markSuppliesReturned = (id: string) =>
+  apiFetch<Mission>(`/api/missions/${id}/supplies-returned`, { method: "POST" });
 export const listWarehouseRequests = () =>
   apiFetch<MissionWarehouseRequest[]>("/api/missions/warehouse-requests/own");
 export const acceptWarehouseRequest = (requestId: string, note?: string) =>
