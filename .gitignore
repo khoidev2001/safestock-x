@@ -6,6 +6,8 @@
 .env.local
 .env.*.local
 .env.bak-*
+# Máy chủ thứ hai (các xã lân cận) — cùng loại bí mật với .env.
+.env.lan-can
 **/.env
 !.env.example
 !.env.demo.example

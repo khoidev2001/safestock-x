@@ -70,6 +70,18 @@ export class RequestInterCommuneLoanDto {
   @Min(1)
   quantity!: number;
 
+  /**
+   * Nhiệm vụ mà khoản mượn này đi bù cho.
+   *
+   * Không bắt buộc: tab Mượn, trả vẫn hỏi mượn được mà không gắn với nhiệm vụ nào.
+   * Nhưng khi hỏi mượn TỪ màn hình nhiệm vụ thì phải gửi, nếu không màn hình đó
+   * không biết khoản nào là của mình — xem chú thích `missionId` trong schema.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  missionId?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(500)

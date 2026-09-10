@@ -46,6 +46,7 @@ import {
 } from "@/components/dashboard/map-house-icons";
 import { ColorIcon } from "@/components/shared/color-icon";
 import { formatCoordinate } from "@/lib/coordinate-input";
+import { routeArrowSvg, routeArrows, type RoutePoint } from "@safestock/shared-types";
 
 /**
  * Báo Leaflet đo lại khung mỗi khi vào/ra toàn màn hình.
@@ -481,14 +482,10 @@ export function IncidentMap({
             ))}
             {warehouses.map((w, index) =>
               w.routeStatus === "ROUTED" && w.routeGeometry ? (
-                <Polyline
+                <RouteLine
                   key={`route-${w.id}`}
-                  positions={w.routeGeometry.coordinates.map(([lng, lat]) => [lat, lng])}
-                  pathOptions={{
-                    color: ROUTE_COLORS[index % ROUTE_COLORS.length],
-                    weight: 5,
-                    opacity: 0.9,
-                  }}
+                  color={ROUTE_COLORS[index % ROUTE_COLORS.length]}
+                  points={w.routeGeometry.coordinates.map(([lng, lat]) => [lat, lng])}
                 />
               ) : null,
             )}
@@ -744,6 +741,53 @@ function BoundsForZoom() {
 }
 
 const ROUTE_COLORS = ["#2563eb", "#0284c7", "#4f46e5", "#0891b2", "#1d4ed8"];
+
+/**
+ * Một tuyến kho → điểm nạn: viền trắng, thân màu, và mũi tên chỉ chiều đi.
+ *
+ * Ba lớp chồng nhau, mỗi lớp một việc:
+ *   - viền trắng dày hơn thân, để đường không tan vào ảnh vệ tinh (mái tôn sáng,
+ *     mặt nước, đường bê tông đều gần trắng ở mức phóng thường dùng);
+ *   - thân màu, dày 7px — bản trước để 5px và với bốn năm tuyến chồng nhau ở đoạn
+ *     gần điểm nạn thì không tách được tuyến nào ra khỏi tuyến nào;
+ *   - mũi tên rải theo quãng đường, nói chiều đi. Đường kẻ hai đầu như nhau không
+ *     nói được đi về phía nào, mà đó lại là câu đầu tiên người đi lấy hàng hỏi.
+ *
+ * Mũi tên là `Marker` chứ không phải hoạ tiết của `Polyline`: Leaflet không có
+ * hoạ tiết dọc đường, và bản vá phổ biến cho việc này là một plugin ngoài — thêm
+ * một phụ thuộc chỉ để vẽ mấy hình tam giác thì không đáng.
+ */
+function RouteLine({ color, points }: { color: string; points: RoutePoint[] }) {
+  const arrows = useMemo(() => routeArrows(points), [points]);
+  return (
+    <>
+      <Polyline positions={points} pathOptions={{ color: "#ffffff", weight: 11, opacity: 0.75 }} />
+      <Polyline positions={points} pathOptions={{ color, weight: 7, opacity: 0.95 }} />
+      {arrows.map((arrow, index) => (
+        <Marker
+          key={`${arrow.lat}-${arrow.lng}-${index}`}
+          position={[arrow.lat, arrow.lng]}
+          // Hình trang trí: nuốt cú bấm thì bấm lên tuyến để ghim điểm nạn sẽ trượt.
+          interactive={false}
+          keyboard={false}
+          icon={arrowIcon(arrow.bearing, color)}
+        />
+      ))}
+    </>
+  );
+}
+
+const ARROW_ICON_SIZE = 17;
+function arrowIcon(bearing: number, color: string): L.DivIcon {
+  return L.divIcon({
+    html: routeArrowSvg(bearing, ARROW_ICON_SIZE, color),
+    className: "",
+    iconSize: [ARROW_ICON_SIZE, ARROW_ICON_SIZE],
+    // Neo vào TÂM: mũi tên phải nằm đúng trên tim đường, không treo lủng lẳng bên
+    // dưới như dấu ghim (dấu ghim neo ở chân vì nó "đứng" trên một chỗ).
+    iconAnchor: [ARROW_ICON_SIZE / 2, ARROW_ICON_SIZE / 2],
+  });
+}
 
 /**
  * Một dòng chú giải vẽ ĐÚNG hình đang có trên bản đồ.

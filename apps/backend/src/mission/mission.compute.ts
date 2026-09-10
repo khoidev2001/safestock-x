@@ -139,14 +139,40 @@ export function allocateGreedy(requirement: Requirement, batches: AvailableBatch
 }
 
 /**
- * Mức đáp ứng tổng = MIN qua các loại (mắt xích yếu nhất).
- * Thiếu 1 loại thiết yếu = chưa sẵn sàng, không tính trung bình đẹp.
+ * Mức đáp ứng tổng = TRUNG BÌNH mức đáp ứng của các loại vật tư.
+ *
+ * Trước đây lấy MIN (mắt xích yếu nhất). Nghe thì chặt chẽ, nhưng đọc lên màn
+ * hình là nói sai sự thật: một bản tham mưu 15 loại, kho lo trọn 13 loại và
+ * thiếu 2 loại, vẫn bị ghi "0% khả năng đáp ứng". Người trực nhìn con số 0 rồi
+ * nhìn xuống bảng thấy mười mấy dòng "Đủ" — chỗ nào đó đang nói dối, và họ
+ * ngừng tin cả con số lẫn cái bảng.
+ *
+ * Phần "thiếu một loại là chưa đi được" vẫn còn nguyên, nhưng nó là việc của
+ * `status` (`NOT_DISPATCHABLE` khoá nút phát hành) chứ không phải của con số
+ * phần trăm. Trạng thái nói ĐI ĐƯỢC HAY CHƯA; phần trăm nói CÒN THIẾU BAO
+ * NHIÊU — nhập hai câu hỏi đó vào một con số thì mất cả hai câu trả lời.
+ *
+ * Trung bình theo LOẠI, không theo số lượng: 200 chai nước và 4 chiếc xuồng
+ * không cộng chung được, và cộng chung thì mấy món đếm bằng trăm sẽ dìm mất
+ * mấy món đếm bằng đơn vị — mà xuồng cứu hộ mới là thứ thiếu là không đi nổi.
+ *
  * Loại required=0 bỏ qua (không kéo xuống).
  */
 export function overallFulfillment(allocations: Allocation[]): number {
-  const ratios = allocations.filter((a) => a.required > 0).map((a) => a.allocated / a.required);
+  const ratios = allocations
+    .filter((a) => a.required > 0)
+    // Kẹp trần 1: lấy dư một loại KHÔNG được phép bù cho loại đang thiếu, nếu
+    // không thì một kho dư nước sẽ che mất chuyện cả xã không còn cái xuồng nào.
+    .map((a) => Math.min(1, a.allocated / a.required));
   if (ratios.length === 0) return 100;
-  return Math.round(Math.min(...ratios) * 100);
+  const mean = ratios.reduce((sum, ratio) => sum + ratio, 0) / ratios.length;
+  const percent = Math.round(mean * 100);
+  // Làm tròn KHÔNG được xoá mất phần còn thiếu: 99.6% mà hiện "100%" thì người
+  // duyệt tưởng đủ và ký, còn 0.4% mà hiện "0%" thì tưởng kho trống trơn trong
+  // khi hàng đã gom được một ít. Hai đầu mút giữ lại đúng dấu hiệu "chưa xong".
+  if (percent === 100 && mean < 1) return 99;
+  if (percent === 0 && mean > 0) return 1;
+  return percent;
 }
 
 // ---- helpers ----

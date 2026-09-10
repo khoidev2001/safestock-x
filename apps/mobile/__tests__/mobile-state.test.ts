@@ -18,9 +18,12 @@ import {
   fieldForceActionsFor,
   filterMissionsByNo,
   missionPickupStage,
+  ownWarehouseStage,
+  warehousePickupStates,
   missionStageForViewer,
   missionStageLabel,
   missionStageNeedsAction,
+  missionStageOptions,
   missionWorkStage,
   sortMissionsForFieldForce,
 } from "../mission-state";
@@ -200,6 +203,89 @@ test("nhiều lệnh cùng cần xử lý thì mới nhất trước", () => {
   assert.deepEqual(
     sorted.map((mission) => mission.id),
     ["moi", "cu"],
+  );
+});
+
+test("đội cứu hộ xếp THUẦN theo dòng thời gian: mới nhất lên đầu", () => {
+  // Với vai kho thì "can-di-giao" (READY) lên trước vì tới lượt họ. Đội cứu hộ
+  // nhận việc theo đợt nên câu hỏi của họ là "vừa có việc gì mới" — nhiệm vụ vừa
+  // về mà nằm lọt dưới mấy việc cũ là họ không biết có việc mới.
+  const rows = [
+    { id: "cu-can-lay", status: "READY", createdAt: "2026-07-30T08:00:00.000Z" },
+    { id: "moi-cho-kho", status: "PENDING_WAREHOUSE", createdAt: "2026-07-31T09:00:00.000Z" },
+  ];
+  assert.deepEqual(
+    sortMissionsForFieldForce(rows, { role: "RESCUE" }).map((mission) => mission.id),
+    ["moi-cho-kho", "cu-can-lay"],
+  );
+  assert.deepEqual(
+    sortMissionsForFieldForce(rows, { role: "WAREHOUSE" }).map((mission) => mission.id),
+    ["cu-can-lay", "moi-cho-kho"],
+  );
+});
+
+test("nhiệm vụ vừa xem lên đầu, NHƯNG nhiệm vụ mới hơn vẫn chắn trên nó", () => {
+  const rows = [
+    { id: "cu", status: "READY", createdAt: "2026-07-29T08:00:00.000Z" },
+    { id: "vua-xem", status: "READY", createdAt: "2026-07-30T08:00:00.000Z" },
+    { id: "vua-ve", status: "PENDING_WAREHOUSE", createdAt: "2026-07-31T08:00:00.000Z" },
+  ];
+  // Ghim đè lên cả việc vừa tới là giấu mất một nhiệm vụ mới — đúng thứ người
+  // trực cần thấy trước.
+  assert.deepEqual(
+    sortMissionsForFieldForce(rows, { pinnedMissionId: "vua-xem", role: "RESCUE" }).map(
+      (mission) => mission.id,
+    ),
+    ["vua-ve", "vua-xem", "cu"],
+  );
+});
+
+test("không có nhiệm vụ nào mới hơn thì cái vừa xem đứng đầu thật", () => {
+  const rows = [
+    { id: "moi-hon-nhung-chua-xem", status: "READY", createdAt: "2026-07-29T08:00:00.000Z" },
+    { id: "vua-xem", status: "COMPLETED", createdAt: "2026-07-31T08:00:00.000Z" },
+  ];
+  // Đã đóng nhưng vừa xem: vẫn lên đầu, vì người trực quay lại tìm đúng nó.
+  assert.deepEqual(
+    sortMissionsForFieldForce(rows, { pinnedMissionId: "vua-xem", role: "WAREHOUSE" }).map(
+      (mission) => mission.id,
+    ),
+    ["vua-xem", "moi-hon-nhung-chua-xem"],
+  );
+});
+
+test("nút lọc dùng ĐÚNG chữ trên thẻ, theo vai người đọc", () => {
+  const rescue = missionStageOptions("RESCUE").map((option) => option.label);
+  const warehouse = missionStageOptions("WAREHOUSE").map((option) => option.label);
+  // Nút ghi một đằng, thẻ ghi một nẻo thì không ai nối được hai cái với nhau.
+  assert.deepEqual(rescue, [
+    "Đợi tiếp nhận",
+    "Đợi xuất kho",
+    "Cần tới lấy",
+    "Cần báo cáo kết quả",
+    "Đã hoàn thành",
+  ]);
+  assert.equal(warehouse[2], "Chờ đội cứu hộ lấy");
+  // Theo dòng chảy công việc, không phải bảng chữ cái: người trực đọc hàng nút
+  // này như đọc một quy trình.
+  assert.deepEqual(
+    missionStageOptions("RESCUE").map((option) => option.stage),
+    ["PENDING_ACCEPT", "PENDING_PREPARE", "PREPARED", "PICKED_UP", "COMPLETED"],
+  );
+});
+
+test("nhiệm vụ đã hoàn trả vật tư coi như đã đóng, không còn việc gì phải làm", () => {
+  assert.equal(missionWorkStage("RETURNED", [{ status: "PICKED_UP" }]), "COMPLETED");
+  // Và nó tụt xuống cuối danh sách của kho, cùng nhóm với COMPLETED.
+  assert.deepEqual(
+    sortMissionsForFieldForce(
+      [
+        { id: "da-hoan-tra", status: "RETURNED", createdAt: "2026-08-02T08:00:00.000Z" },
+        { id: "can-xuat", status: "PENDING_WAREHOUSE", createdAt: "2026-07-01T08:00:00.000Z" },
+      ],
+      { role: "WAREHOUSE" },
+    ).map((mission) => mission.id),
+    ["can-xuat", "da-hoan-tra"],
   );
 });
 
@@ -730,6 +816,67 @@ test("nhiệm vụ cũ không có phiếu theo vật tư thì không kẹt ở c
   // khoá luôn, không còn đường đóng nhiệm vụ.
   assert.equal(missionPickupStage("READY", []), "PICKED_UP");
   assert.equal(missionPickupStage("READY", undefined), "PICKED_UP");
+});
+
+test("kho đọc chặng của CHÍNH KHO MÌNH, không phải chặng chung cả nhiệm vụ", () => {
+  const rows = [
+    { warehouseId: "kho-thon", status: "PICKED_UP" },
+    { warehouseId: "kho-tong", status: "ACCEPTED" },
+  ];
+  // Kho thôn xong phần mình từ sáng: màn hình của họ phải chuyển sang biên bản đã
+  // giao, dù kho tổng còn nợ tới chiều.
+  assert.equal(ownWarehouseStage("kho-thon", rows), "HANDED_OVER");
+  assert.equal(ownWarehouseStage("kho-tong", rows), "PREPARING");
+  // Kho không góp gì vào nhiệm vụ này thì không có việc để bày ra.
+  assert.equal(ownWarehouseStage("kho-khac", rows), "NONE");
+  assert.equal(ownWarehouseStage("kho-thon", []), "NONE");
+  assert.equal(ownWarehouseStage("kho-thon", undefined), "NONE");
+});
+
+test("tài khoản kho chưa gán kho thì xét cả nhiệm vụ, không im lặng bảo là không có việc", () => {
+  const rows = [
+    { warehouseId: "kho-thon", status: "PICKED_UP" },
+    { warehouseId: "kho-tong", status: "PICKED_UP" },
+  ];
+  assert.equal(ownWarehouseStage(null, rows), "HANDED_OVER");
+  assert.equal(
+    ownWarehouseStage(undefined, [{ warehouseId: "kho-tong", status: "PREPARED" }]),
+    "PREPARING",
+  );
+});
+
+test("đội cứu hộ biết TỪNG kho đã soạn xong chưa, không phải đợi đủ cả nhóm", () => {
+  const states = warehousePickupStates([
+    { warehouseId: "kho-tong", status: "ACCEPTED", warehouse: { name: "Kho xã Đồng Xuân" } },
+    { warehouseId: "kho-thon", status: "PREPARED", warehouse: { name: "Kho thôn Long Châu" } },
+    { warehouseId: "kho-thon", status: "PICKED_UP", warehouse: { name: "Kho thôn Long Châu" } },
+  ]);
+  // Xếp theo tên nên kho thôn đứng trước kho xã.
+  assert.deepEqual(
+    states.map((state) => [state.name, state.ready, state.pickedUp]),
+    [
+      ["Kho thôn Long Châu", true, false],
+      ["Kho xã Đồng Xuân", false, false],
+    ],
+  );
+});
+
+test("kho chỉ tính là đã soạn xong khi MỌI dòng của nó đã xuất", () => {
+  // Một dòng còn ACCEPTED là cả kho chưa xong: đội tới nơi sẽ thiếu đúng dòng đó.
+  const [state] = warehousePickupStates([
+    { warehouseId: "kho-tong", status: "PREPARED", warehouse: { name: "Kho xã" } },
+    { warehouseId: "kho-tong", status: "ACCEPTED", warehouse: { name: "Kho xã" } },
+  ]);
+  assert.equal(state.ready, false);
+  assert.equal(state.pickedUp, false);
+  // Ký nhận đủ mọi dòng thì mới là đã lấy xong kho đó.
+  const [done] = warehousePickupStates([
+    { warehouseId: "kho-tong", status: "PICKED_UP", warehouse: { name: "Kho xã" } },
+    { warehouseId: "kho-tong", status: "PICKED_UP", warehouse: { name: "Kho xã" } },
+  ]);
+  assert.equal(done.ready, true);
+  assert.equal(done.pickedUp, true);
+  assert.deepEqual(warehousePickupStates([]), []);
 });
 
 // ===== Tab Nhiệm vụ: chặng theo vai, và tìm theo số hiệu =====

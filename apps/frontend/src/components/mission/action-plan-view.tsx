@@ -65,19 +65,6 @@ function describeDispatchOrder(warehouses: ActionPlan["warehouses"]): DispatchSt
   return stops;
 }
 
-/**
- * Số lượng cho bảng cấp phát: chỉ số và đơn vị gốc, KHÔNG kèm quy đổi.
- *
- * Khác `describeItemQuantity` mà danh sách điều phối kho bên dưới dùng: chỗ đó là
- * lệnh cho người đi lấy hàng, biết "300 lít" giúp họ ước được cần bao nhiêu chỗ trên
- * xe. Bảng này là bảng đối chiếu bốn cột số cạnh nhau, thêm ngoặc quy đổi vào từng ô
- * là mỗi hàng dài gấp đôi và cột "Vật tư" bị bóp đến mức tên vật tư vỡ làm ba dòng —
- * trong khi con số cần so ở đây vẫn là số chai.
- */
-function formatQuantity(quantity: number, unit: string): string {
-  return `${quantity.toLocaleString("vi")} ${unit}`;
-}
-
 /** Màu theo mức khẩn cấp 1-5 — trực quan, người chưa rành nghiệp vụ đọc được ngay. */
 const SEVERITY = [
   { label: "Rất thấp", color: "var(--color-ready)" },
@@ -166,65 +153,6 @@ export function ActionPlanView({
         </div>
       </CollapsiblePanel>
 
-      {/* 3. Phương án cấp phát vật tư — thu gọn ngay khi phát hành.
-          Bảng bốn cột Cần/Cấp/Thiếu là căn cứ để người trực quyết định có duyệt hay
-          không. Bấm duyệt xong là đã trả lời câu hỏi đó; từ đó trở đi việc nằm ở kho,
-          và thứ họ cần thấy là danh sách SKU phải xuất ngay bên dưới. Để bảng này mở
-          sẵn chỉ đẩy phần đang chạy xuống dưới màn hình. */}
-      <Panel
-        key={atWarehouseStep ? "da-phat-hanh-cap-phat" : "con-nhap-cap-phat"}
-        defaultOpen={!atWarehouseStep}
-        icon={<ColorIcon name="inventory" size={19} tone="orange" />}
-        title="Phương án cấp phát"
-      >
-        <div className="overflow-x-auto">
-          {/* Kẻ ô đầy đủ, không chỉ gạch ngang giữa các dòng.
-              Bốn cột số nằm sát nhau mà chỉ có gạch ngang thì mắt không biết con số
-              đang đọc thuộc cột nào — "150 chiếc  150 chiếc" đứng cạnh nhau trông
-              như một ô, phải dóng ngược lên hàng tiêu đề mới biết đâu là Cần đâu là
-              Cấp. Nền xám cho hàng tiêu đề để nó tách hẳn khỏi phần dữ liệu. */}
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="bg-[var(--surface-2)] text-left text-xs text-[var(--text-muted)]">
-                <th className="border px-3 py-2 font-medium">Vật tư</th>
-                <th className="border px-3 py-2 text-right font-medium">Cần</th>
-                <th className="border px-3 py-2 text-right font-medium">Cấp</th>
-                <th className="border px-3 py-2 text-right font-medium">Thiếu</th>
-                <th className="border px-3 py-2 font-medium">Lấy từ kho</th>
-              </tr>
-            </thead>
-            <tbody>
-              {plan.allocations.map((a) => (
-                <tr key={a.sku}>
-                  <td className="border px-3 py-2 font-medium">{a.itemName}</td>
-                  {/* Đơn vị nằm NGAY TRONG ô số. Trước đây ba ô này là số trần,
-                      phải đọc một dòng chú thích riêng dưới tên vật tư mới biết đang
-                      đếm theo chai hay theo lít — mà dòng đó chỉ nói cho đúng hai ô
-                      Cần/Cấp, còn ô Thiếu thì người đọc tự suy. */}
-                  <td className="tabular whitespace-nowrap border px-3 py-2 text-right">
-                    {formatQuantity(a.required, a.unit)}
-                  </td>
-                  <td className="tabular whitespace-nowrap border px-3 py-2 text-right">
-                    {formatQuantity(a.allocated, a.unit)}
-                  </td>
-                  <td
-                    className="tabular whitespace-nowrap border px-3 py-2 text-right font-semibold"
-                    style={{
-                      color: a.shortage > 0 ? "var(--color-critical)" : "var(--color-ready)",
-                    }}
-                  >
-                    {a.shortage > 0 ? formatQuantity(a.shortage, a.unit) : "—"}
-                  </td>
-                  <td className="border px-3 py-2 text-xs text-[var(--text-muted)]">
-                    {a.fromWarehouses.join(", ") || "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Panel>
-
       {/* Khối điều phối kho: đi kho nào, xa bao nhiêu, lấy những gì.
           Tên khối nói đúng ba thứ nằm trong nó. Trước đây khối này còn gánh thêm
           danh sách "Mục tiêu 6 giờ đầu" do AI viết, nên tiêu đề phải ghép hai vế
@@ -232,9 +160,9 @@ export function ActionPlanView({
           việc điều phối hay thấy một đoạn văn. */}
       {plan.warehouses.length > 0 && (
         <Panel
-          // Cùng mốc với khối cấp phát. Khối này còn nặng nhất trang vì kèm bản đồ,
-          // nên mở sẵn sau khi phát hành là đẩy khối SKU ngay dưới nó ra khỏi tầm mắt
-          // — đúng khối mà kho cần bấm. Cần xem lại tuyến thì mở ra, một cú bấm.
+          // Cùng mốc với khối đánh giá tình huống. Khối này còn nặng nhất trang vì
+          // kèm bản đồ, nên mở sẵn sau khi phát hành là đẩy khối SKU ngay dưới nó ra
+          // khỏi tầm mắt — đúng khối mà kho cần bấm. Cần xem lại tuyến thì mở ra.
           key={atWarehouseStep ? "da-phat-hanh-dieu-phoi" : "con-nhap-dieu-phoi"}
           defaultOpen={!atWarehouseStep}
           icon={<ColorIcon name="location" size={19} tone="blue" />}

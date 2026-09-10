@@ -5,6 +5,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
   type OnApplicationBootstrap,
 } from "@nestjs/common";
 import { communeNameFromUnitName } from "../auth/commune-name";
@@ -60,6 +61,24 @@ interface MoveStockInput {
  * đường đó đã có kiểm quyền, ghi giao dịch, và tính lại điểm sẵn sàng. Tự cộng
  * trừ ở đây là mất hết những thứ đó, và mất im lặng.
  */
+/**
+ * Kết quả của một lần đẩy yêu cầu sang máy chủ xã lân cận.
+ *
+ * TRƯỚC ĐÂY hàm gửi trả `void` và nuốt mọi lỗi. Hệ quả không nằm ở tầng kỹ thuật
+ * mà nằm trên màn hình: người trực bấm "Mượn xã Xuân Thọ 2 xuồng", màn hình ghi
+ * "chờ xã kia đồng ý", và họ ngồi đợi — trong khi máy chủ Xuân Thọ chưa hề nhận
+ * được gì và sẽ không bao giờ nhận được. Lúc lũ đang lên, một dòng chữ nói sai
+ * như thế tốn của người ta hàng giờ.
+ *
+ * Không gửi được là chuyện BÌNH THƯỜNG và có đường lùi sẵn (gọi điện rồi ghi tay).
+ * Điều không chấp nhận được là không nói ra.
+ */
+interface PeerDelivery {
+  delivered: boolean;
+  /** Vì sao chưa tới — để màn hình nói được việc phải làm tiếp, không chỉ "lỗi". */
+  reason?: string;
+}
+
 @Injectable()
 export class InterCommuneLoanService implements OnApplicationBootstrap {
   private readonly log = new Logger(InterCommuneLoanService.name);
@@ -183,6 +202,7 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
     itemName: string;
     unit: string;
     quantity: number;
+    missionId?: string;
     note?: string;
   }) {
     this.assertQuantity(input.quantity);
@@ -190,6 +210,9 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
       data: {
         organizationId: await this.orgOf(input.userId),
         direction: InterCommuneLoanDirection.INCOMING,
+        // Nhãn để màn hình nhiệm vụ tra ngược đúng khoản của mình. KHÔNG gửi sang
+        // xã kia: số nhiệm vụ là việc nội bộ bên này.
+        missionId: input.missionId?.trim() || null,
         status: InterCommuneLoanStatus.REQUESTED,
         peerCommuneName: input.peerCommuneName.trim(),
         itemSku: input.itemSku.trim(),
@@ -225,9 +248,14 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
     unit: string;
     quantity: number;
     note: string | null;
-  }): Promise<void> {
+  }): Promise<PeerDelivery> {
     const peer = findPeer(parseCommunePeers(process.env), loan.peerCommuneName);
-    if (!peer) return;
+    if (!peer) {
+      return this.recordDeliveryFailure(
+        loan.id,
+        `Chưa khai địa chỉ máy chủ của xã ${loan.peerCommuneName} trong COMMUNE_PEER_*.`,
+      );
+    }
 
     // Hạn chờ ngắn: đây là việc phụ chạy nền, không được giữ tài nguyên khi
     // đường truyền giữa hai xã đang chập chờn.
@@ -263,18 +291,93 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
           note: loan.note ?? undefined,
         }),
       });
-      if (!response.ok) return;
+      if (!response.ok) {
+        return this.recordDeliveryFailure(
+          loan.id,
+          `Máy chủ xã ${loan.peerCommuneName} trả lỗi ${response.status}.`,
+        );
+      }
       const created = (await response.json()) as { id?: string };
-      if (!created?.id) return;
+      if (!created?.id) {
+        return this.recordDeliveryFailure(
+          loan.id,
+          `Máy chủ xã ${loan.peerCommuneName} trả lời không hợp lệ.`,
+        );
+      }
+      // Xoá lý do hỏng của lần trước cùng lúc với việc ghi id bên kia: gửi lại
+      // thành công mà lỗi cũ còn nằm đó thì màn hình vẫn báo đỏ vĩnh viễn.
       await this.prisma.interCommuneLoan.update({
         where: { id: loan.id },
-        data: { peerLoanId: created.id },
+        data: { peerLoanId: created.id, peerDeliveryError: null },
       });
+      return { delivered: true };
     } catch {
-      // Không gửi được thì thôi; bản ghi phía mình vẫn còn nguyên.
+      // Bản ghi phía mình vẫn còn nguyên; chỉ là xã kia CHƯA BIẾT. Nói ra được
+      // điều đó là mục đích của cả hàm này — xem `PeerDelivery`.
+      return this.recordDeliveryFailure(
+        loan.id,
+        `Không liên lạc được với máy chủ xã ${loan.peerCommuneName}.`,
+      );
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  /**
+   * Ghi lý do chưa gửi được vào chính bản ghi, rồi trả kết quả cho bên gọi.
+   *
+   * Phải LƯU chứ không chỉ trả về: lần gửi đầu tiên chạy nền sau khi người dùng
+   * đã nhận phản hồi, nên không còn ai đứng đó mà nghe. Không lưu thì màn hình
+   * chỉ thấy `peerLoanId` rỗng và không phân biệt nổi "đang gửi" với "hỏng rồi".
+   *
+   * Nuốt lỗi ghi: đây đã là đường xử lý hỏng hóc, làm nó ném thêm một lỗi nữa
+   * chỉ che mất nguyên nhân đầu tiên.
+   */
+  private async recordDeliveryFailure(loanId: string, reason: string): Promise<PeerDelivery> {
+    await this.prisma.interCommuneLoan
+      .update({ where: { id: loanId }, data: { peerDeliveryError: reason } })
+      .catch(() => undefined);
+    return { delivered: false, reason };
+  }
+
+  /**
+   * Gửi lại một yêu cầu mượn mà lần trước không tới được xã kia.
+   *
+   * Gửi lại an toàn: khoá chống nhận trùng `loan:<id>` không đổi, nên xã kia nhận
+   * bao nhiêu lần cũng chỉ ra đúng một khoản mượn (xem `receiveRequestFromPeer`).
+   * Nhờ vậy người trực bấm lại được tuỳ ý mà không sợ xin hai lô hàng.
+   */
+  async resendToPeer(userId: string, loanId: string) {
+    const organizationId = await this.orgOf(userId);
+    const loan = await this.prisma.interCommuneLoan.findFirst({
+      where: { id: loanId, organizationId },
+    });
+    if (!loan) throw new NotFoundException("Không tìm thấy khoản mượn");
+    if (loan.direction !== InterCommuneLoanDirection.INCOMING) {
+      throw new BadRequestException("Chỉ gửi lại được yêu cầu do mình đi hỏi mượn");
+    }
+    // Đã có id bên kia tức là họ ĐÃ nhận rồi; gửi lại chỉ làm người dùng tưởng
+    // lần trước hỏng. Trả về như đã xong.
+    if (loan.peerLoanId) return { delivered: true };
+    if (loan.status !== InterCommuneLoanStatus.REQUESTED) {
+      throw new BadRequestException("Khoản mượn này không còn ở bước chờ trả lời");
+    }
+
+    // Xoá dấu hỏng cũ TRƯỚC khi thử lại: trong lúc lần gửi mới đang chạy, trạng
+    // thái đúng là "đang gửi", không phải "hỏng" của lần trước.
+    await this.prisma.interCommuneLoan.update({
+      where: { id: loan.id },
+      data: { peerDeliveryError: null },
+    });
+    const result = await this.sendToPeer(loan);
+    if (!result.delivered) {
+      // 503 chứ không phải 400: người bấm không làm gì sai, phía bên kia chưa với
+      // tới được. Giao diện đọc mã này để mời bấm lại thay vì bắt sửa dữ liệu.
+      throw new ServiceUnavailableException(
+        `${result.reason ?? "Không gửi được"} Yêu cầu vẫn nằm trong sổ; gọi điện báo xã kia rồi ghi tay, hoặc bấm gửi lại khi có mạng.`,
+      );
+    }
+    return { delivered: true };
   }
 
   /**

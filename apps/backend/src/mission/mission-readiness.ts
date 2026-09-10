@@ -108,3 +108,68 @@ export function assessMissionReadiness(
       .map((item) => `Bổ sung ${item.shortage} ${item.itemName} từ kho hoặc nguồn khác.`),
   };
 }
+
+/**
+ * Tính lại % đáp ứng của một ẢNH CHỤP đã lưu trong cơ sở dữ liệu.
+ *
+ * `readinessAssessment` được chốt lại lúc lập phương án và không tính lại khi
+ * đọc — cố ý, vì tính lại phải quét tồn kho cả cụm kho và sẽ cho ra con số khác
+ * với phiếu mà các kho đang cầm. Nhưng khi CÔNG THỨC đổi (min → trung bình theo
+ * loại), mọi bản ghi cũ vẫn mang con số tính bằng công thức cũ, và một nhiệm vụ
+ * đang mở trên màn hình sẽ ghi 0% trong khi bảng bên dưới nó ghi mười ba dòng
+ * "Đủ" — đúng cái mâu thuẫn mà việc đổi công thức sinh ra để dẹp.
+ *
+ * Chỗ này KHÔNG phân bổ lại gì hết: nó chỉ cộng chia trên `items` đã lưu, tức
+ * vẫn đúng những con số mà các kho đang làm theo. Nhờ vậy không cần chạy migration
+ * và cũng không có nguy cơ số trên màn hình lệch khỏi phiếu xuất.
+ *
+ * Trả `null` khi ảnh chụp không đọc được (bản ghi quá cũ, thiếu `items`) — bên
+ * gọi giữ nguyên con số đã lưu, thà cũ còn hơn bịa.
+ */
+export function fulfillmentFromSnapshot(snapshot: unknown): number | null {
+  if (!snapshot || typeof snapshot !== "object") return null;
+  const items = (snapshot as { items?: unknown }).items;
+  if (!Array.isArray(items)) return null;
+
+  const allocations: Allocation[] = [];
+  for (const item of items) {
+    if (!item || typeof item !== "object") return null;
+    const { required, allocated } = item as { required?: unknown; allocated?: unknown };
+    if (typeof required !== "number" || typeof allocated !== "number") return null;
+    allocations.push({
+      sku: "",
+      itemName: "",
+      unit: "",
+      required,
+      allocated,
+      shortage: Math.max(0, required - allocated),
+      batches: [],
+    });
+  }
+  if (allocations.length === 0) return null;
+  return overallFulfillment(allocations);
+}
+
+/**
+ * Gắn lại % đáp ứng tính theo công thức hiện hành vào một nhiệm vụ đọc từ DB.
+ *
+ * Sửa cả hai chỗ cùng lúc — cột `fulfillment` và `fulfillment` trong ảnh chụp —
+ * vì giao diện đọc cả hai: huy hiệu phần trăm lấy từ ảnh chụp, còn danh sách
+ * nhiệm vụ và bản kế hoạch cứu hộ lấy từ cột. Sửa một chỗ là dựng lên đúng kiểu
+ * mâu thuẫn "hai con số khác nhau cho cùng một nhiệm vụ".
+ */
+export function withCurrentFulfillment<
+  T extends { fulfillment: number; readinessAssessment: R },
+  R,
+>(mission: T): T {
+  const recomputed = fulfillmentFromSnapshot(mission.readinessAssessment);
+  if (recomputed === null || recomputed === mission.fulfillment) return mission;
+  return {
+    ...mission,
+    fulfillment: recomputed,
+    readinessAssessment: {
+      ...(mission.readinessAssessment as object),
+      fulfillment: recomputed,
+    } as R,
+  };
+}

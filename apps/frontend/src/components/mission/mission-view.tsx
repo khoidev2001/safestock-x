@@ -23,6 +23,7 @@ import {
   getWarehouseRoutes,
   parseIncident,
   planFromReport,
+  markSuppliesReturned,
   prepareMission,
   transcribeAudio,
   type DeliveryOutcome,
@@ -960,6 +961,7 @@ export function MissionView({
             step.mutate(approveMission, { onError: () => setPendingPublishScroll(false) });
           }}
           onPrepare={() => step.mutate(prepareMission)}
+          onMarkReturned={() => step.mutate(markSuppliesReturned)}
           onCancel={(note) => step.mutate((id) => cancelMission(id, note))}
           busy={genActionPlan.isPending || step.isPending}
         />
@@ -1528,24 +1530,17 @@ export function MissionView({
                   không cần đọc — mới tới việc của mình. */}
               {isPublished ? warehouseRequestPanel : null}
 
-              {mission.readinessAssessment && (
-                <>
-                  {/* Cùng mốc với khối tham mưu: có kế hoạch cứu hộ rồi thì thu
-                      gọn lại. Mức đáp ứng và danh sách vật tư thiếu ở đây đã được
-                      kế hoạch kể lại trong phần "Phương án cấp phát".
+              {/* Nút lập bản tham mưu đứng NGAY TRÊN chính khối tham mưu — đó là
+                  thứ nó sinh ra.
 
-                      `defaultOpen` chỉ đọc một lần lúc dựng, nên `key` phải đổi
-                      theo thì khối mới tự đóng ngay sau khi lập kế hoạch. */}
-                  <MissionReadinessPanel
-                    key={mission.actionPlan ? "da-co-ke-hoach" : "chua-co-ke-hoach"}
-                    assessment={mission.readinessAssessment}
-                    defaultOpen={!mission.actionPlan}
-                  />
-                  {/* Đọc xong kho còn đủ những gì thì mới tới lượt bấm lập tham mưu.
-                      Chỉ hiện cho người đang có form (ADMIN, nhiệm vụ còn nháp) —
-                      nhiệm vụ đã phát hành có nút riêng trong khối tham mưu. */}
-                  {showAnalyzeCta && <section className="app-panel p-5">{analyzeCta}</section>}
-                </>
+                  `readinessVisible` là chốt LOẠI TRỪ với bản nút nằm trong khối
+                  khai tình huống (`showAnalyzeCta && !readinessVisible` ở trên):
+                  đúng một trong hai được hiện. Thiếu chốt này thì nhiệm vụ chưa
+                  có đánh giá khả năng đáp ứng — tức mọi báo cáo vừa nhận từ trưởng
+                  thôn — hiện HAI cặp "Đặt lại / Lập bản tham mưu" chồng nhau, và
+                  người trực không biết cặp nào là thật. */}
+              {showAnalyzeCta && readinessVisible && (
+                <section className="app-panel p-5">{analyzeCta}</section>
               )}
               {/* Bằng chứng hiện trường nằm bên trong khối tham mưu: nó chính là
                   nguồn làm bản tham mưu đổi, tách ra thì phải cuộn qua lại giữa
@@ -1570,7 +1565,13 @@ export function MissionView({
                      Đọc cờ từ `mission` chứ không từ một truy vấn riêng: `mission` đã
                      có sẵn trước khi khối này được dựng, nên không có cảnh khối bật
                      mở rồi tự đóng lại ngay trước mắt người dùng lúc mở trang. */
-                  key={mission.actionPlan ? "da-co-ke-hoach" : "chua-co-ke-hoach"}
+                  /* Tiền tố `tham-muu-` để KHÔNG trùng key với khối khả năng đáp
+                     ứng ngay bên dưới. Hai khối là anh em ruột trong cùng một
+                     fragment và cùng đổi key theo `mission.actionPlan`; trùng key
+                     giữa hai anh em thì React nhân bản hoặc bỏ sót phần tử — đúng
+                     lỗi đã gặp: bấm lập bản tham mưu xong khối này hiện ra bốn năm
+                     lần chồng lên nhau. */
+                  key={mission.actionPlan ? "tham-muu-da-co-ke-hoach" : "tham-muu-chua-co-ke-hoach"}
                   defaultOpen={!mission.actionPlan}
                   missionId={mission.id}
                   fieldUpdateId={fieldUpdateId}
@@ -1589,6 +1590,33 @@ export function MissionView({
                       : () => analyzeCoordination.mutate()
                   }
                   running={coordinationRunning}
+                  requirements={mission.requirements}
+                  /* Sửa vật tư là sửa LỆNH cho kho. Đã duyệt và phát hành thì
+                     các kho đang xuất hàng theo đúng con số này, nên chỉ mở khi
+                     nhiệm vụ còn nháp. Máy chủ chặn lần nữa — ở đây chỉ là không
+                     bày ra nút cho một việc chắc chắn bị từ chối. */
+                  requirementsEditable={isAdmin && !isPublished && mission.status === "DRAFT"}
+                  missionNo={mission.missionNo}
+                />
+              )}
+              {mission.readinessAssessment && (
+                /* Cùng mốc với khối tham mưu: có kế hoạch cứu hộ rồi thì thu gọn
+                   lại. Mức đáp ứng và danh sách vật tư thiếu ở đây được kế hoạch
+                   cứu hộ bên dưới kể lại một lần nữa.
+
+                   ĐỨNG SAU khối tham mưu, không phải trước. Khối tham mưu là nơi
+                   ADMIN chốt CẦN những gì và bao nhiêu; khối này trả lời kho có
+                   đáp ứng nổi từng ấy không. Đảo lại là bắt đọc câu trả lời trước
+                   khi biết câu hỏi — và tệ hơn, sau mỗi lần sửa vật tư ở trên,
+                   con số ở đây đổi theo mà người sửa phải cuộn ngược lên mới thấy.
+
+                   `defaultOpen` chỉ đọc một lần lúc dựng, nên `key` phải đổi theo
+                   thì khối mới tự đóng ngay sau khi lập kế hoạch. */
+                <MissionReadinessPanel
+                  /* Tiền tố `dap-ung-` — xem chú thích ở khối tham mưu bên trên. */
+                  key={mission.actionPlan ? "dap-ung-da-co-ke-hoach" : "dap-ung-chua-co-ke-hoach"}
+                  assessment={mission.readinessAssessment}
+                  defaultOpen={!mission.actionPlan}
                 />
               )}
               {/* Không có kế hoạch cứu hộ thì khối SKU không có chỗ để gá vào. */}
@@ -1694,6 +1722,7 @@ function RoleActions({
   onGenerateActionPlan,
   onPublish,
   onPrepare,
+  onMarkReturned,
   onCancel,
   busy,
 }: {
@@ -1705,6 +1734,7 @@ function RoleActions({
   onGenerateActionPlan: () => void;
   onPublish: () => void;
   onPrepare: () => void;
+  onMarkReturned: () => void;
   onCancel: (note: string) => void;
   busy: boolean;
 }) {
@@ -1721,6 +1751,15 @@ function RoleActions({
     mission.status === "PENDING_WAREHOUSE" &&
     (mission.warehouseRequests?.length ?? 0) === 0 &&
     (Boolean(assignedPreparation && !assignedPreparation.preparedAt) || isLegacySourceWarehouse);
+  /**
+   * Kho này bấm được nút "đã hoàn trả" chưa.
+   *
+   * Điều kiện là nhiệm vụ ĐÃ GIAO XONG (COMPLETED) và người đang xem là kho. Không
+   * đòi kho đó phải có phiếu riêng: hàng thừa thường dồn về một chỗ chứ không chia
+   * lại đúng như lúc xuất, nên bắt từng kho ký riêng là treo nhiệm vụ ở kho không
+   * có gì để nhận về. Máy chủ vẫn chốt lại là kho đó có tham gia nhiệm vụ.
+   */
+  const warehouseCanConfirmReturn = role === "WAREHOUSE" && mission.status === "COMPLETED";
   const warehouseAlreadyPrepared =
     role === "WAREHOUSE" &&
     mission.status === "PENDING_WAREHOUSE" &&
@@ -1816,6 +1855,32 @@ function RoleActions({
           <button className={actionBtn} style={primaryStyle} onClick={onPrepare} disabled={busy}>
             Chuẩn bị và xuất phần của kho này
           </button>
+        )}
+
+        {/* BƯỚC CUỐI, và chỉ KHO bấm được: hàng tái sử dụng phải quay về kho mới
+            khép sổ được, mà người đếm lại nó khi về tới nơi mới ký được. Điều phối
+            thấy nút này thì họ ký hộ, và chữ ký đó rỗng. */}
+        {warehouseCanConfirmReturn && (
+          <button
+            className={actionBtn}
+            style={primaryStyle}
+            onClick={onMarkReturned}
+            disabled={busy}
+          >
+            Xác nhận đã hoàn trả vật tư
+          </button>
+        )}
+
+        {mission.status === "RETURNED" && (
+          <p className="text-sm text-[var(--color-ready)]">
+            Kho đã nhận lại vật tư — nhiệm vụ khép lại.
+          </p>
+        )}
+
+        {isAdmin && mission.status === "COMPLETED" && (
+          <p className="text-sm text-[var(--text-muted)]">
+            Đang chờ kho đếm lại và xác nhận đã hoàn trả vật tư.
+          </p>
         )}
 
         {warehouseAlreadyPrepared && (

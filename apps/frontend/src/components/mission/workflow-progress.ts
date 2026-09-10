@@ -13,14 +13,22 @@ export type WorkflowStatus =
   | "PENDING_WAREHOUSE"
   | "READY"
   | "COMPLETED"
+  | "RETURNED"
   | "PENDING_RESCUE"
   | "RESCUE_CONFIRMED"
   | "REJECTED"
   | "DEFERRED"
   | "CANCELLED";
 
-/** Số bước trên thanh tiến trình: điều phối → kho → hiện trường. */
-export const WORKFLOW_STEP_COUNT = 3;
+/**
+ * Số bước trên thanh: điều phối → kho xuất → hiện trường giao → kho nhận lại.
+ *
+ * Bước thứ tư thêm vào vì giao xong KHÔNG phải là hết việc: áo phao, đèn pin, bạt
+ * che là hàng tái sử dụng và phải quay về kho mới khép sổ được. Trước đây thanh
+ * dừng ở "hiện trường đã hoàn thành", nên phần hàng đang nằm ngoài không có mốc
+ * nào để đóng và tồn kho trên sổ lệch với hàng trên kệ cho tới kỳ kiểm kê.
+ */
+export const WORKFLOW_STEP_COUNT = 4;
 
 /** Một phiếu vật tư, chỉ cần trạng thái để biết đội đã ký nhận chưa. */
 export interface RequestStatusLike {
@@ -74,6 +82,8 @@ export function completedStepIndex(
       return allRequestsPickedUp(requests) ? 1 : 0;
     case "COMPLETED":
       return 2;
+    case "RETURNED":
+      return 3;
     default:
       return -1;
   }

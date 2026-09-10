@@ -20,6 +20,26 @@ import { missionNoFromSlug, missionStageLabel } from "@/lib/mission-inbox-state"
  * đều gọi API theo id. Đổi hết chúng sang số hiệu là sửa hàng chục điểm gọi để
  * tiết kiệm đúng một lượt mạng lúc mở trang.
  */
+/**
+ * "(Trưởng thôn Long Châu báo cáo)" — ai đã gửi nhiệm vụ này lên.
+ *
+ * Một trận lũ làm mười mấy thôn cùng báo về trong một buổi. Số hiệu nhiệm vụ
+ * không nói được tin nào từ ai, nên người trực đọc tới một chi tiết cần hỏi lại
+ * thì không biết gọi cho ai — mà lời kể gốc là thứ duy nhất có thông tin đó.
+ *
+ * CHỈ CÓ Ở WEB. Trên điện thoại, người mở nhiệm vụ chính là người đã báo (trưởng
+ * thôn xem lại tin mình gửi) hoặc là người đi thực hiện — cả hai đều không cần
+ * dòng này, và màn hình điện thoại thì không có chỗ cho một tiêu đề hai dòng.
+ *
+ * `fullName` trong hệ thống đã mang sẵn vai ("Trưởng thôn Long Châu", "Đội cứu hộ
+ * Đồng Xuân") nên KHÔNG ghép thêm nhãn vai vào: ghép vào là ra "Trưởng thôn Trưởng
+ * thôn Long Châu". Thiếu tên thì bỏ hẳn ngoặc — một cặp ngoặc rỗng đọc như lỗi.
+ */
+function reporterSuffix(mission: { createdBy?: { fullName: string | null } | null } | undefined) {
+  const name = mission?.createdBy?.fullName?.trim();
+  return name ? ` (${name} báo cáo)` : "";
+}
+
 export default function MissionByNumberPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const missionNo = missionNoFromSlug(decodeURIComponent(slug));
@@ -56,7 +76,11 @@ export default function MissionByNumberPage({ params }: { params: Promise<{ slug
     <DashboardPage
       // Số hiệu lấy thẳng từ đường dẫn nên tiêu đề hiện ngay, không đợi lượt tra.
       // Trạng thái thì phải chờ dữ liệu — để trống còn hơn nhấp nháy một câu sai.
-      title={missionNo === null ? "Không tìm thấy nhiệm vụ" : `Nhiệm vụ số ${missionNo}`}
+      title={
+        missionNo === null
+          ? "Không tìm thấy nhiệm vụ"
+          : `Nhiệm vụ số ${missionNo}${reporterSuffix(mission)}`
+      }
       subtitle={mission ? missionStageLabel(mission) : ""}
       topSlot={
         <Link

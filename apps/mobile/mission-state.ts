@@ -7,6 +7,7 @@ export const MISSION_STATUS_LABEL: Record<string, string> = {
   PENDING_WAREHOUSE: "Kho đang chuẩn bị",
   READY: "Kho đã sẵn sàng · chờ giao",
   COMPLETED: "Hoàn thành",
+  RETURNED: "Đã hoàn trả vật tư",
   REJECTED: "Đã từ chối",
   DEFERRED: "Tạm hoãn",
   CANCELLED: "Đã huỷ",
@@ -26,7 +27,7 @@ export function fieldForceActionsFor(status: string): MissionAction[] {
 }
 
 /** Lệnh còn đang chạy thì xếp lên trước; việc đã đóng đẩy xuống dưới. */
-const CLOSED_STATUSES = new Set(["COMPLETED", "REJECTED", "CANCELLED"]);
+const CLOSED_STATUSES = new Set(["COMPLETED", "RETURNED", "REJECTED", "CANCELLED"]);
 
 export function isMissionOpen(status: string): boolean {
   return !CLOSED_STATUSES.has(status);
@@ -39,37 +40,58 @@ export interface SortableMission {
 }
 
 /**
- * Xếp danh sách lệnh: việc cần làm ngay lên đầu, rồi tới việc đang chạy, cuối
- * cùng là việc đã đóng. Trong cùng nhóm thì mới nhất trước.
+ * Xếp danh sách lệnh cho danh sách nhiệm vụ trên điện thoại.
  *
- * CHÚ Ý: đây KHÔNG phải xếp theo thời gian. Một nhiệm vụ vừa nhận nhưng kho chưa
- * xuất hàng thì chưa có việc gì cho đội cứu hộ làm, nên nó nằm dưới nhiệm vụ cũ
- * hơn đang chờ người đi lấy. Nhìn vào tưởng danh sách xếp sai, nhưng đổi sang xếp
- * thuần theo giờ thì việc đang cần người lại trôi xuống dưới đống việc chưa tới lượt.
+ * Hai vai đọc danh sách này theo hai cách khác nhau, nên có hai luật:
  *
- * `pinnedMissionId` — nhiệm vụ VỪA XEM — đứng trên tất cả.
+ * - ĐỘI CỨU HỘ đọc theo DÒNG THỜI GIAN: mới nhất lên đầu, hết. Họ nhận việc theo
+ *   đợt — một trận lũ đẻ ra vài nhiệm vụ trong cùng buổi — nên câu hỏi của họ là
+ *   "vừa có việc gì mới", không phải "việc nào tới lượt tôi". Xếp theo mức ưu tiên
+ *   thao tác khiến một nhiệm vụ vừa về nằm lọt dưới mấy nhiệm vụ cũ đang chờ lấy
+ *   hàng, và người trực không biết là có việc mới.
  *
- * Người trực mở một nhiệm vụ, thoát ra làm việc khác rồi quay lại tìm đúng nó.
- * Không ghim thì họ phải cuộn đi tìm giữa sáu chục thẻ trông na ná nhau, mà thẻ
- * họ cần lại là thẻ vừa rời khỏi vài giây trước. Chỉ ghim MỘT: ghim mọi thẻ đã
- * xem thì sau nửa buổi trực, thứ tự danh sách thành lịch sử duyệt web chứ không
- * còn nói được việc nào cần làm trước.
+ * - TRƯỞNG THÔN / KHO vẫn đọc theo VIỆC PHẢI LÀM: việc cần thao tác lên trước,
+ *   rồi việc đang chạy, cuối cùng là việc đã đóng. Kho có thể ôm mấy chục phiếu
+ *   cùng lúc và thứ họ cần là phiếu nào còn nợ chữ ký của mình.
+ *
+ * `pinnedMissionId` — nhiệm vụ VỪA XEM — được đẩy lên đầu, NHƯNG không chắn được
+ * nhiệm vụ mới hơn nó. Người trực mở một nhiệm vụ rồi thoát ra làm việc khác, quay
+ * lại phải tìm thấy ngay đúng nó; nhưng nếu trong lúc đó có nhiệm vụ MỚI về thì
+ * cái mới mới là thứ họ cần thấy trước — ghim đè lên nó là giấu mất một việc vừa
+ * tới. Chỉ ghim MỘT: ghim mọi thẻ đã xem thì sau nửa buổi trực, thứ tự danh sách
+ * thành lịch sử duyệt web chứ không còn nói được việc nào cần làm trước.
  */
 export function sortMissionsForFieldForce<T extends SortableMission>(
   missions: T[],
-  options?: { pinnedMissionId?: string | null },
+  options?: {
+    pinnedMissionId?: string | null;
+    /** Vai của người đang đọc. `RESCUE` xếp thuần theo dòng thời gian. */
+    role?: string | null;
+  },
 ): T[] {
   const pinnedId = options?.pinnedMissionId ?? null;
+  const timelineOnly = options?.role === "RESCUE";
+  const pinned = pinnedId ? missions.find((mission) => mission.id === pinnedId) : undefined;
+  const pinnedAt = pinned ? Date.parse(pinned.createdAt ?? "") : Number.NaN;
+  const createdAtOf = (mission: T): number => Date.parse(mission.createdAt ?? "");
+
   const rank = (mission: T): number => {
-    if (pinnedId && mission.id === pinnedId) return -1;
-    if (fieldForceActionsFor(mission.status).length > 0) return 0;
-    return isMissionOpen(mission.status) ? 1 : 2;
+    if (pinned) {
+      // Mới hơn cái vừa xem thì đứng TRÊN nó — đó là việc vừa tới, chưa ai thấy.
+      const at = createdAtOf(mission);
+      if (Number.isFinite(at) && Number.isFinite(pinnedAt) && at > pinnedAt) return 0;
+      if (mission.id === pinnedId) return 1;
+    }
+    if (timelineOnly) return 2;
+    if (fieldForceActionsFor(mission.status).length > 0) return 2;
+    return isMissionOpen(mission.status) ? 3 : 4;
   };
+
   return [...missions].sort((left, right) => {
     const byRank = rank(left) - rank(right);
     if (byRank !== 0) return byRank;
-    const leftAt = Date.parse(left.createdAt ?? "");
-    const rightAt = Date.parse(right.createdAt ?? "");
+    const leftAt = createdAtOf(left);
+    const rightAt = createdAtOf(right);
     if (!Number.isFinite(leftAt) || !Number.isFinite(rightAt)) return 0;
     return rightAt - leftAt;
   });
@@ -126,6 +148,78 @@ export function missionPickupStage(
 }
 
 /**
+ * Chặng của CHÍNH kho đang đăng nhập trong một nhiệm vụ.
+ *
+ * Khác `missionWorkStage` ở chỗ nó chỉ xét các phiếu của kho mình. Một nhiệm vụ
+ * lớn trải qua chục kho, và kho thôn xong phần của mình từ sáng vẫn phải chờ kho
+ * tổng tới chiều — bắt màn hình của họ kể chặng CHUNG là bắt họ nhìn một danh
+ * sách việc đã xong mà không biết mình còn nợ gì.
+ *
+ * - `NONE`: nhiệm vụ chưa phát hành tới kho này, hoặc kho này không góp gì.
+ * - `PREPARING`: còn ít nhất một dòng chưa có chữ ký nhận của người đi lấy.
+ * - `HANDED_OVER`: mọi dòng đã có chữ ký nhận — hàng đã rời tay kho.
+ */
+export type OwnWarehouseStage = "NONE" | "PREPARING" | "HANDED_OVER";
+
+export function ownWarehouseStage(
+  assignedWarehouseId: string | null | undefined,
+  requests: { warehouseId: string; status: string }[] | null | undefined,
+): OwnWarehouseStage {
+  if (!requests || requests.length === 0) return "NONE";
+  // Không có kho được gán (điều phối xã mở bằng tài khoản kho chưa cấu hình) thì
+  // xét cả nhiệm vụ: thà kể chặng chung còn hơn khẳng định "không có việc của bạn".
+  const own = assignedWarehouseId
+    ? requests.filter((request) => request.warehouseId === assignedWarehouseId)
+    : requests;
+  if (own.length === 0) return "NONE";
+  return own.every((request) => request.status === "PICKED_UP") ? "HANDED_OVER" : "PREPARING";
+}
+
+/** Một kho trong mắt người đi lấy hàng: đã soạn xong chưa, đã ký nhận chưa. */
+export interface WarehousePickupState {
+  warehouseId: string;
+  name: string;
+  /** Kho đã xuất xong MỌI dòng của mình — tới lấy được. */
+  ready: boolean;
+  /** Người đi lấy đã ký nhận đủ mọi dòng của kho này. */
+  pickedUp: boolean;
+}
+
+/**
+ * Từng kho đã sẵn sàng chưa, để đội cứu hộ đi ĐƯỢC KHO NÀO HAY KHO ẤY.
+ *
+ * Trước đây màn hình chỉ nói một câu duy nhất, và câu đó chỉ đổi khi TẤT CẢ các
+ * kho xong. Nhưng hàng ở kho thôn xong từ sáng thì đội hoàn toàn chạy được một
+ * chuyến ngay, không có lý do gì ngồi chờ kho tổng — mà đường vào vùng vừa có
+ * thiên tai thì mỗi giờ trôi qua lại xấu đi. Máy chủ đã báo theo từng kho từ
+ * trước; đây là phần màn hình nói lại đúng như vậy.
+ */
+export function warehousePickupStates(
+  requests:
+    | { warehouseId: string; status: string; warehouse?: { name: string } | null }[]
+    | null
+    | undefined,
+): WarehousePickupState[] {
+  if (!requests || requests.length === 0) return [];
+  const byWarehouse = new Map<string, { name: string; ready: boolean; pickedUp: boolean }>();
+  for (const request of requests) {
+    const entry = byWarehouse.get(request.warehouseId) ?? {
+      name: request.warehouse?.name ?? "Kho chưa rõ tên",
+      ready: true,
+      pickedUp: true,
+    };
+    const exported = request.status === "PREPARED" || request.status === "PICKED_UP";
+    entry.ready = entry.ready && exported;
+    entry.pickedUp = entry.pickedUp && request.status === "PICKED_UP";
+    if (request.warehouse?.name) entry.name = request.warehouse.name;
+    byWarehouse.set(request.warehouseId, entry);
+  }
+  return [...byWarehouse.entries()]
+    .map(([warehouseId, entry]) => ({ warehouseId, ...entry }))
+    .sort((left, right) => left.name.localeCompare(right.name, "vi"));
+}
+
+/**
  * Chặng công việc của một nhiệm vụ, chung cho cả hai bên nhìn vào nó.
  *
  * Một chuỗi việc, hai người theo dõi: kho soạn hàng rồi giao tay, đội cứu hộ
@@ -150,7 +244,9 @@ export function missionWorkStage(
   missionStatus: string,
   requests: { status: string }[] | null | undefined,
 ): MissionWorkStage {
-  if (missionStatus === "COMPLETED") return "COMPLETED";
+  // Hoàn trả là mốc SAU khi giao xong; với người đọc trên điện thoại thì cả hai
+  // đều là "đã xong", không có việc gì phải làm nữa.
+  if (missionStatus === "COMPLETED" || missionStatus === "RETURNED") return "COMPLETED";
   if (!requests || requests.length === 0) return "PICKED_UP";
   if (requests.some((request) => request.status === "PENDING")) return "PENDING_ACCEPT";
   if (requests.some((request) => request.status === "ACCEPTED")) return "PENDING_PREPARE";
@@ -187,6 +283,34 @@ const FIELD_FORCE_STAGE_LABEL: Record<MissionWorkStage, string> = {
 
 export function missionStageLabel(role: string, stage: MissionWorkStage): string {
   return role === "RESCUE" ? FIELD_FORCE_STAGE_LABEL[stage] : WAREHOUSE_STAGE_LABEL[stage];
+}
+
+/**
+ * Thứ tự các mốc, dùng cho hàng nút lọc trên danh sách nhiệm vụ.
+ *
+ * Theo đúng DÒNG CHẢY CÔNG VIỆC chứ không xếp theo bảng chữ cái: người trực đọc
+ * hàng nút này như đọc một quy trình, và mốc đang cần họ nằm ở đâu đó giữa chừng.
+ * Xếp lung tung thì mỗi lần lọc phải đọc lại cả hàng.
+ *
+ * Chữ trên nút lấy đúng chữ trên thẻ (`missionStageLabel`), theo vai người đọc:
+ * nút ghi "Cần tới lấy" mà thẻ ghi "Chờ đội cứu hộ lấy" thì không ai nối được hai
+ * cái với nhau.
+ */
+const STAGE_ORDER: MissionWorkStage[] = [
+  "PENDING_ACCEPT",
+  "PENDING_PREPARE",
+  "PREPARED",
+  "PICKED_UP",
+  "COMPLETED",
+];
+
+export interface MissionStageOption {
+  stage: MissionWorkStage;
+  label: string;
+}
+
+export function missionStageOptions(role: string): MissionStageOption[] {
+  return STAGE_ORDER.map((stage) => ({ stage, label: missionStageLabel(role, stage) }));
 }
 
 /**

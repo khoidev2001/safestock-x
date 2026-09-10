@@ -534,6 +534,14 @@ function LoanRow({
             {isLender ? " mượn" : ""} · {statusLabel(loan.status)}
             {loan.recordedManually ? " · ghi tay" : ""}
           </p>
+          {/* "Chờ bên kia quyết" chỉ đúng khi bên kia ĐÃ nhận được yêu cầu.
+              `peerLoanId` rỗng nghĩa là tin chưa rời khỏi máy chủ mình — không
+              nói ra thì người trực ngồi đợi một câu trả lời không ai sẽ gửi. */}
+          {loan.direction === "INCOMING" && loan.status === "REQUESTED" && !loan.peerLoanId ? (
+            <p className="mt-1 text-xs font-semibold text-[var(--color-critical)]">
+              Chưa gửi được sang xã {loan.peerCommuneName} — họ chưa nhận được yêu cầu này.
+            </p>
+          ) : null}
         </div>
         <div className="text-right">
           <p className="font-mono text-sm font-semibold">

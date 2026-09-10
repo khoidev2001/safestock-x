@@ -1,14 +1,20 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { incidentTypeLabel } from "@safestock/shared-types";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { incidentTypeLabel, Permission, roleHasPermission } from "@safestock/shared-types";
 import { ColorIcon } from "@/components/shared/color-icon";
 import { incidentIconName } from "@/lib/incident-visuals";
 import { useEffect, useState } from "react";
 import { io, type Socket } from "socket.io-client";
-import { BASE } from "@/lib/api";
+import { ApiError, BASE } from "@/lib/api";
 import { useAuth } from "@/lib/auth-store";
 import { getNotifications, markAllRead } from "@/lib/mission-api";
+import {
+  advanceInterCommuneLoan,
+  getInterCommuneLoans,
+  type InterCommuneLoan,
+} from "@/lib/dashboard-api";
+import { loanActions, statusLabel } from "@/components/dashboard/inter-commune-loan-actions";
 import { useMissionFocus } from "@/lib/mission-focus-store";
 
 export function NotificationBell({
@@ -52,6 +58,23 @@ export function NotificationBell({
 
   const items = notifQuery.data ?? [];
   const unread = items.filter((n) => !n.read).length;
+  const canManageLoans = Boolean(role && roleHasPermission(role, Permission.LOAN_MANAGE));
+  const hasLoanNotification = items.some((n) => n.loanId);
+
+  /**
+   * Sổ mượn liên xã, để thẻ thông báo dựng được phần chi tiết và hai nút.
+   *
+   * Thông báo chỉ mang `loanId`; mọi thứ người duyệt cần biết trước khi bấm —
+   * xin bao nhiêu, món gì, hiện đang ở bước nào — nằm trong sổ. Chỉ tải khi
+   * chuông ĐANG MỞ và thật sự có thông báo mượn: phần lớn lượt mở chuông là để
+   * đọc tin nhiệm vụ, không việc gì phải quét sổ mượn cho những lượt đó.
+   */
+  const loanQuery = useQuery({
+    queryKey: ["inter-commune-loans"],
+    queryFn: getInterCommuneLoans,
+    enabled: open && canManageLoans && hasLoanNotification,
+  });
+  const loanById = new Map((loanQuery.data ?? []).map((loan) => [loan.id, loan]));
 
   async function toggle() {
     const next = !open;
@@ -103,7 +126,14 @@ export function NotificationBell({
                 </p>
               ) : (
                 items.map((n) =>
-                  n.missionId ? (
+                  n.loanId && canManageLoans ? (
+                    <LoanNotificationCard
+                      key={n.id}
+                      notification={n}
+                      loan={loanById.get(n.loanId)}
+                      loading={loanQuery.isPending}
+                    />
+                  ) : n.missionId ? (
                     <button
                       key={n.id}
                       type="button"
@@ -148,6 +178,209 @@ export function NotificationBell({
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Thẻ thông báo mượn liên xã: bấm ra chi tiết, duyệt ngay tại chỗ.
+ *
+ * Trước đây thẻ này là một `<div>` chết, kết bằng câu "Mở tab Mượn trả để xem chi
+ * tiết". Người bên xã cho mượn đọc xong phải nhớ tên xã và số lượng, rời chuông,
+ * đi tìm đúng dòng đó giữa danh sách — trong lúc xã bên kia đang đợi để biết có
+ * hàng hay không. Việc phải làm ở ngay đây, nên nút cũng phải ở ngay đây.
+ *
+ * Vẫn giữ đường sang tab Mượn, trả: phần trả hàng và trả từng phần nằm bên đó, và
+ * thẻ này cố ý không gánh cả vòng đời khoản mượn.
+ */
+function LoanNotificationCard({
+  notification,
+  loan,
+  loading,
+}: {
+  notification: { title: string; body: string };
+  /** `undefined` khi sổ chưa tải xong, hoặc khoản mượn đã bị xoá khỏi sổ. */
+  loan?: InterCommuneLoan;
+  loading: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [expanded, setExpanded] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const advance = useMutation({
+    mutationFn: (input: { to: string; reason?: string }) =>
+      advanceInterCommuneLoan(loan!.id, input),
+    onMutate: () => setError(null),
+    onSuccess: () => {
+      setRejecting(false);
+      setReason("");
+      queryClient.invalidateQueries({ queryKey: ["inter-commune-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["loan-stock-marks"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    },
+    onError: (e) =>
+      setError(
+        e instanceof ApiError || e instanceof Error ? e.message : "Không cập nhật được khoản mượn.",
+      ),
+  });
+
+  // Đúng những bước máy chủ sẽ chấp nhận, không hơn: bày một nút rồi để máy chủ
+  // từ chối là dạy người dùng rằng nút trên màn hình không đáng tin.
+  const actions = loan ? loanActions(loan.direction, loan.status, loan.recordedManually) : [];
+
+  return (
+    <div className="border-b px-4 py-3 last:border-0">
+      <button
+        aria-expanded={expanded}
+        className="block w-full text-left"
+        onClick={() => setExpanded((value) => !value)}
+        type="button"
+      >
+        <p className="flex items-center gap-1.5 text-sm font-medium">
+          <ColorIcon name="loan" size={16} tone="amber" />
+          {notification.title}
+        </p>
+        <p className="mt-0.5 line-clamp-3 text-xs text-[var(--text-muted)]">{notification.body}</p>
+        <p className="mt-1 text-[11px] font-semibold text-[var(--color-accent)]">
+          {expanded ? "Thu gọn" : "Xem chi tiết và duyệt →"}
+        </p>
+      </button>
+
+      {expanded ? (
+        <div className="mt-2 space-y-2 rounded-md border bg-[var(--surface-2)] p-2.5">
+          {loading ? (
+            <p className="text-xs text-[var(--text-muted)]">Đang tra sổ mượn…</p>
+          ) : !loan ? (
+            /* Khoản mượn không còn trong sổ: thông báo cũ hơn dữ liệu. Nói thẳng
+               thay vì hiện một thẻ trống, và vẫn chỉ đường sang tab để tra lại. */
+            <p className="text-xs text-[var(--text-muted)]">
+              Không còn thấy khoản mượn này trong sổ. Mở tab Mượn, trả để tra lại.
+            </p>
+          ) : (
+            <>
+              <dl className="space-y-1 text-xs">
+                <DetailRow
+                  label={loan.direction === "OUTGOING" ? "Xã xin mượn" : "Hỏi mượn xã"}
+                  value={loan.peerCommuneName}
+                />
+                <DetailRow label="Vật tư" value={loan.itemName} />
+                <DetailRow
+                  label="Số lượng"
+                  value={`${loan.quantity.toLocaleString("vi")} ${loan.unit}`}
+                />
+                <DetailRow label="Trạng thái" value={statusLabel(loan.status)} />
+                {loan.note ? <DetailRow label="Ghi chú" value={loan.note} /> : null}
+              </dl>
+
+              {rejecting ? (
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-medium text-[var(--text-muted)]">
+                    Lý do từ chối (xã kia đọc được)
+                    <input
+                      autoFocus
+                      className="mt-1 w-full rounded-md border bg-[var(--surface)] px-2 py-1.5 text-xs"
+                      onChange={(event) => setReason(event.target.value.slice(0, 300))}
+                      placeholder="Ví dụ: kho bên mình cũng đang thiếu"
+                      value={reason}
+                    />
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    <CardButton
+                      disabled={advance.isPending}
+                      onClick={() =>
+                        advance.mutate({ to: "REJECTED", reason: reason.trim() || undefined })
+                      }
+                      tone="critical"
+                    >
+                      {advance.isPending ? "Đang gửi…" : "Xác nhận từ chối"}
+                    </CardButton>
+                    <CardButton disabled={advance.isPending} onClick={() => setRejecting(false)}>
+                      Quay lại
+                    </CardButton>
+                  </div>
+                </div>
+              ) : actions.length === 0 ? (
+                <p className="text-xs text-[var(--text-muted)]">
+                  Không còn bước nào phải làm ở đây. Phần trả hàng nằm trong tab Mượn, trả.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {actions
+                    // Trả từng phần cần ô nhập số lượng — việc đó thuộc tab Mượn,
+                    // trả. Chuông chỉ lo bước quyết định: đồng ý hay không.
+                    .filter((action) => !action.needsQuantity)
+                    .map((action) => (
+                      <CardButton
+                        disabled={advance.isPending}
+                        key={action.to}
+                        onClick={() => {
+                          if (action.to === "REJECTED") {
+                            setRejecting(true);
+                            return;
+                          }
+                          advance.mutate({ to: action.to });
+                        }}
+                        tone={
+                          action.tone === "danger"
+                            ? "critical"
+                            : action.tone === "primary"
+                              ? "accent"
+                              : undefined
+                        }
+                      >
+                        {advance.isPending ? "Đang xử lý…" : action.label}
+                      </CardButton>
+                    ))}
+                </div>
+              )}
+            </>
+          )}
+          <div aria-live="polite">
+            {error ? <p className="text-xs text-[var(--color-critical)]">{error}</p> : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex gap-2">
+      <dt className="shrink-0 text-[var(--text-muted)]">{label}</dt>
+      <dd className="min-w-0 flex-1 font-medium">{value}</dd>
+    </div>
+  );
+}
+
+function CardButton({
+  children,
+  disabled,
+  onClick,
+  tone,
+}: {
+  children: React.ReactNode;
+  disabled?: boolean;
+  onClick: () => void;
+  tone?: "accent" | "critical";
+}) {
+  return (
+    <button
+      className="rounded-md border bg-[var(--surface)] px-2.5 py-1 text-xs font-semibold transition hover:bg-[var(--surface-3)] active:translate-y-px disabled:opacity-60"
+      disabled={disabled}
+      onClick={onClick}
+      style={
+        tone === "critical"
+          ? { borderColor: "var(--color-critical)", color: "var(--color-critical)" }
+          : tone === "accent"
+            ? { borderColor: "var(--color-accent)", color: "var(--color-accent)" }
+            : undefined
+      }
+      type="button"
+    >
+      {children}
+    </button>
   );
 }
 

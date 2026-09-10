@@ -522,6 +522,29 @@ export interface InterCommuneLoan {
     | "RETURNED"
     | "CANCELLED";
   peerCommuneName: string;
+  /**
+   * Id của bản ghi đối ứng bên xã kia — bằng chứng DUY NHẤT là họ đã nhận được.
+   *
+   * `null` mà trạng thái vẫn REQUESTED nghĩa là yêu cầu chưa rời khỏi máy chủ
+   * mình: xã kia chưa thấy gì và sẽ không tự thấy. Màn hình phải nói ra, không
+   * được gộp chung với "đang chờ họ trả lời".
+   */
+  peerLoanId: string | null;
+  /**
+   * Nhiệm vụ mà khoản mượn này đi bù cho — chỉ có ở khoản do mình đi mượn.
+   *
+   * Màn hình nhiệm vụ PHẢI lọc theo trường này. Lọc theo mã vật tư thôi thì mọi
+   * nhiệm vụ đang thiếu cùng một món đều hiện chung một danh sách, và một nhiệm
+   * vụ vừa lập xong đã ghi "đã gửi sang xã Xuân Thọ 4 chiếc" trong khi chưa ai
+   * bấm gì.
+   */
+  missionId: string | null;
+  /**
+   * Vì sao lần gửi gần nhất sang xã kia không tới nơi. `null` = không có lỗi.
+   *
+   * Đi CÙNG `peerLoanId` mới đọc ra được ba bước gửi. Xem `loan-progress.ts`.
+   */
+  peerDeliveryError: string | null;
   itemSku: string;
   itemName: string;
   unit: string;
@@ -543,8 +566,14 @@ export const requestInterCommuneLoan = (body: {
   itemName: string;
   unit: string;
   quantity: number;
+  /** Gửi khi hỏi mượn TỪ màn hình nhiệm vụ, để khoản mượn tra ngược được về đó. */
+  missionId?: string;
   note?: string;
 }) => apiFetch("/api/loans/inter-commune/request", { method: "POST", body: JSON.stringify(body) });
+
+/** Gửi lại một yêu cầu chưa tới được máy chủ xã kia. An toàn khi bấm nhiều lần. */
+export const resendInterCommuneLoan = (id: string) =>
+  apiFetch<{ delivered: boolean }>(`/api/loans/inter-commune/${id}/resend`, { method: "POST" });
 
 export const recordManualInterCommuneLoan = (body: {
   direction: "OUTGOING" | "INCOMING";

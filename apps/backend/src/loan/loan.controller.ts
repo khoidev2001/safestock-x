@@ -77,6 +77,18 @@ export class LoanController {
     });
   }
 
+  /**
+   * Gửi lại yêu cầu mượn mà lần trước không tới được máy chủ xã kia.
+   *
+   * Cần một nút riêng vì chỗ hỏng nằm ở đường truyền, không ở dữ liệu: bản ghi
+   * phía mình vẫn đúng, chỉ là xã kia chưa biết. Không có nút này thì cách duy
+   * nhất để thử lại là huỷ đi rồi hỏi mượn lại từ đầu.
+   */
+  @Post("inter-commune/:id/resend")
+  resendInterCommune(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.interCommune.resendToPeer(req.user.userId, id);
+  }
+
   @Post("inter-commune/:id/advance")
   advanceInterCommune(
     @Request() req: AuthenticatedRequest,

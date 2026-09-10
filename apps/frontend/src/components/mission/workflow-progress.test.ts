@@ -9,7 +9,7 @@ import {
 } from "./workflow-progress";
 
 /** Tên bước theo đúng thứ tự hiển thị, dùng để đọc kết quả cho dễ hiểu. */
-const STEP_NAME = ["điều phối", "kho", "hiện trường"] as const;
+const STEP_NAME = ["điều phối", "kho", "hiện trường", "kho nhận lại"] as const;
 
 function waitingOn(status: WorkflowStatus): string {
   const index = activeStepIndex(status);
@@ -31,9 +31,16 @@ test("kho xuất xong thì chờ hiện trường đi giao và báo kết quả"
   assert.equal(waitingOn("READY"), "hiện trường");
 });
 
-test("hoàn thành thì không còn bước nào đang chờ", () => {
-  assert.equal(completedStepIndex("COMPLETED"), WORKFLOW_STEP_COUNT - 1);
-  assert.equal(waitingOn("COMPLETED"), "không chờ ai");
+test("hiện trường báo xong thì tới lượt KHO nhận lại vật tư", () => {
+  // Trước đây COMPLETED là bước cuối. Nhưng hàng tái sử dụng phải quay về kho mới
+  // khép sổ được, nên còn một bước nữa — và bước đó thuộc về kho.
+  assert.equal(completedStepIndex("COMPLETED"), WORKFLOW_STEP_COUNT - 2);
+  assert.equal(waitingOn("COMPLETED"), "kho nhận lại");
+});
+
+test("kho nhận lại xong thì không còn bước nào đang chờ", () => {
+  assert.equal(completedStepIndex("RETURNED"), WORKFLOW_STEP_COUNT - 1);
+  assert.equal(waitingOn("RETURNED"), "không chờ ai");
 });
 
 test("trạng thái luồng cũ vẫn xếp sau bước phát hành, không tụt về đầu", () => {
@@ -86,4 +93,9 @@ test("kho soạn xong chưa phải là kho đã giao xong", () => {
 
   // Đã báo kết quả thì mọi phiếu bên dưới không đổi được gì nữa.
   assert.equal(completedStepIndex("COMPLETED", prepared), 2);
+});
+
+test("thanh tiến trình có ĐỦ BỐN bước, kể cả bước hoàn trả", () => {
+  assert.equal(WORKFLOW_STEP_COUNT, 4);
+  assert.equal(activeStepIndex("RETURNED"), null);
 });

@@ -18,6 +18,10 @@ const TRANSITIONS: Record<string, MissionStatus[]> = {
   [MissionStatus.PENDING_WAREHOUSE]: [MissionStatus.READY, MissionStatus.CANCELLED],
   // Vật tư đã sẵn ở kho: việc còn lại là đi giao và báo kết quả thực tế.
   [MissionStatus.READY]: [MissionStatus.COMPLETED],
+  // Giao xong CHƯA phải là hết việc: áo phao, đèn pin, bạt che là hàng tái sử
+  // dụng và phải quay về kho. Chỉ KHO đi được bước này — họ là bên đếm lại hàng
+  // khi nó về tới nơi; xem `markReturnedByWarehouse`.
+  [MissionStatus.COMPLETED]: [MissionStatus.RETURNED],
   // Các trạng thái cũ không còn được tạo mới; ADMIN vẫn có thể đóng dữ liệu lịch sử.
   [MissionStatus.PENDING_RESCUE]: [MissionStatus.CANCELLED],
   [MissionStatus.RESCUE_CONFIRMED]: [MissionStatus.CANCELLED],

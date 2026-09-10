@@ -24,6 +24,20 @@ export interface CreateUserInput {
   /** Bắt buộc khi role = ADMIN: email nhận cảnh báo + mã 6 số đã gửi tới chính nó. */
   notificationEmail?: string;
   verificationCode?: string;
+  /** Chỉ dùng khi role = ADMIN: xã mà quản trị viên mới phụ trách. */
+  organizationId?: string;
+}
+
+/** Một xã trong hệ thống — danh sách để super admin chọn khi tạo quản trị viên. */
+export interface AdminCommune {
+  id: string;
+  name: string;
+  warehouseCount: number;
+  userCount: number;
+}
+
+export function listCommunes(): Promise<AdminCommune[]> {
+  return apiFetch<AdminCommune[]>("/api/admin/users/communes");
 }
 
 export function listUsers(): Promise<AdminUser[]> {

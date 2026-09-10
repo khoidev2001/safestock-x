@@ -31,6 +31,7 @@ export function navPathForNotification(kind: string): string | null {
     case "MISSION_DEFERRED":
     case "MISSION_CANCELLED":
     case "MISSION_COMPLETED":
+    case "MISSION_SUPPLIES_RETURNED":
     case "INCIDENT_REPORTED":
     case "FIELD_UPDATE_REPORTED":
     case "WAREHOUSE_REQUESTED":

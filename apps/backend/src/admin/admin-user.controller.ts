@@ -67,6 +67,20 @@ class CreateUserDto {
   warehouseId?: string; // gán kho khi tạo trưởng thôn
 
   /**
+   * Xã (đơn vị) mà tài khoản QUẢN TRỊ mới thuộc về.
+   *
+   * Chỉ có nghĩa với role ADMIN và chỉ super admin gửi được. Trước đây mọi tài
+   * khoản đều rơi vào đơn vị ĐẦU TIÊN trong cơ sở dữ liệu, đúng chừng nào hệ
+   * thống còn phục vụ một xã duy nhất — nhưng mượn liên xã đòi phải có nhiều xã,
+   * và khi đó "đơn vị đầu tiên" là một phép chọn ngẫu nhiên theo thứ tự bảng.
+   *
+   * Bỏ trống thì giữ nguyên nếp cũ: cùng đơn vị với người đang tạo.
+   */
+  @IsOptional()
+  @IsString()
+  organizationId?: string;
+
+  /**
    * Chỉ dùng khi role = ADMIN: email nhận cảnh báo của quản trị viên mới, kèm mã 6 số
    * vừa gửi tới chính địa chỉ đó. Không có cặp này thì tài khoản ADMIN không được tạo —
    * quản trị viên là người nhận cảnh báo sự cố nên email phải là hộp thư có thật.
@@ -121,8 +135,14 @@ export class AdminUserController {
   constructor(private users: AdminUserService) {}
 
   @Get()
-  list() {
-    return this.users.list();
+  list(@Request() req: AuthenticatedRequest) {
+    return this.users.list(req.user.userId);
+  }
+
+  /** Danh sách xã để super admin chọn khi tạo tài khoản quản trị xã. */
+  @Get("communes")
+  communes(@Request() req: AuthenticatedRequest) {
+    return this.users.listCommunes(req.user.userId);
   }
 
   /** Super admin xin mã 6 số cho email của tài khoản ADMIN sắp tạo. */

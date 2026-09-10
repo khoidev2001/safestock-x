@@ -9,16 +9,24 @@ import { ApiError } from "@/lib/api";
 import {
   getLatestCoordinationAnalysis,
   type CoordinationAnalysisSnapshot,
+  type MissionRequirement,
 } from "@/lib/mission-api";
+import { RequirementEditor } from "./requirement-editor";
+import { InterCommuneBorrowSection } from "./inter-commune-borrow";
 
 export function CoordinationAnalysisPanel({
   missionId,
+  missionNo,
   fieldUpdateId,
   onRun,
   running = false,
   defaultOpen,
+  requirements,
+  requirementsEditable = false,
 }: {
   missionId: string;
+  /** Số nhiệm vụ, đi kèm yêu cầu mượn để xã lân cận biết hàng xin về làm gì. */
+  missionNo?: number;
   /** Bằng chứng cần cuộn tới khi mở từ chuông thông báo. */
   fieldUpdateId?: string | null;
   /**
@@ -42,6 +50,17 @@ export function CoordinationAnalysisPanel({
    * chỗ gọi phải đổi luôn `key` — xem `MissionView`.
    */
   defaultOpen?: boolean;
+  /**
+   * Vật tư ĐANG dùng của nhiệm vụ, đọc thẳng từ bản ghi nhiệm vụ.
+   *
+   * Không lấy từ ảnh chụp phân tích: ảnh chụp là bất biến theo thiết kế, nên ngay
+   * sau khi ADMIN sửa một dòng thì nó vẫn kể lại bộ số cũ. Bảng ở đây phải là bộ
+   * số mà khối "Khả năng đáp ứng nhiệm vụ" đang tính trên đó, nếu không hai khối
+   * cạnh nhau nói hai điều khác nhau về cùng một nhiệm vụ.
+   */
+  requirements: MissionRequirement[];
+  /** ADMIN còn sửa được danh sách vật tư không (nhiệm vụ chưa phát hành). */
+  requirementsEditable?: boolean;
 }) {
   const latest = useQuery({
     queryKey: ["mission", missionId, "coordination-analysis"],
@@ -90,7 +109,14 @@ export function CoordinationAnalysisPanel({
       ) : !analysis ? (
         <EmptyState />
       ) : (
-        <AnalysisBody analysis={analysis} snapshot={snapshot} />
+        <AnalysisBody
+          analysis={analysis}
+          snapshot={snapshot}
+          missionId={missionId}
+          missionNo={missionNo}
+          requirements={requirements}
+          requirementsEditable={requirementsEditable}
+        />
       )}
       {/* Không bọc trong div có viền: chưa có bằng chứng thì khối này trả về null,
           mà cái viền vẫn ở lại thành một vạch kẻ cụt không thuộc về gì cả. */}
@@ -102,9 +128,17 @@ export function CoordinationAnalysisPanel({
 function AnalysisBody({
   analysis,
   snapshot,
+  missionId,
+  missionNo,
+  requirements,
+  requirementsEditable,
 }: {
   analysis: CoordinationAnalysis;
   snapshot: CoordinationAnalysisSnapshot;
+  missionId: string;
+  missionNo?: number;
+  requirements: MissionRequirement[];
+  requirementsEditable: boolean;
 }) {
   // Phân bổ chỉ mang mã SKU; tên và đơn vị lấy từ bảng nhu cầu ngay phía trên.
   const itemBySku = new Map(
@@ -128,17 +162,33 @@ function AnalysisBody({
         />
       </div>
 
-      <Section title="Nhu cầu theo định mức của hệ thống">
-        <DataTable
-          headers={["Vật tư", "Nhu cầu", "Cơ sở"]}
-          rows={analysis.requirements.items.map((item) => [
-            item.name,
-            // Nước hiện cả hai con số: kho bốc theo CHAI, định mức đối chiếu theo LÍT.
-            describeItemQuantity(item.sku, item.totalQuantity, item.unit),
-            item.basis,
-          ])}
-          empty={analysis.requirements.reason ?? "Chưa có nhu cầu để hiển thị."}
+      {/* Bảng nhu cầu là thứ ADMIN sửa được, nên nó đọc từ bản ghi nhiệm vụ chứ
+          không từ ảnh chụp phân tích — xem chú thích ở prop `requirements`. Phần
+          "cơ sở tính" của ảnh chụp vẫn giữ, nhưng xuống dưới dạng chú thích: nó
+          giải thích con số ban đầu từ đâu ra, không phải con số đang dùng. */}
+      <Section title="Vật tư trong bản tham mưu">
+        <RequirementEditor
+          missionId={missionId}
+          requirements={requirements}
+          editable={requirementsEditable}
         />
+        <details className="mt-2 rounded-md border bg-[var(--surface-2)] px-3 py-2">
+          <summary className="cursor-pointer text-sm font-semibold">
+            Định mức hệ thống đã tính ban đầu
+          </summary>
+          <div className="mt-2">
+            <DataTable
+              headers={["Vật tư", "Nhu cầu theo định mức", "Cơ sở"]}
+              rows={analysis.requirements.items.map((item) => [
+                item.name,
+                // Nước hiện cả hai con số: kho bốc theo CHAI, định mức đối chiếu theo LÍT.
+                describeItemQuantity(item.sku, item.totalQuantity, item.unit),
+                item.basis,
+              ])}
+              empty={analysis.requirements.reason ?? "Chưa có nhu cầu để hiển thị."}
+            />
+          </div>
+        </details>
       </Section>
 
       <Section title="Điều phối nội xã">
@@ -151,7 +201,20 @@ function AnalysisBody({
         />
       </Section>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* Đứng NGAY SAU bảng điều phối nội xã: hai khối là hai nửa của cùng một
+          câu hỏi "lấy hàng ở đâu". Nửa trên trả lời bằng kho trong xã, nửa dưới
+          lo phần trong xã không còn. Tách chúng ra hai chỗ trên màn hình là bắt
+          người trực nhớ danh sách thiếu rồi cuộn đi tìm nút. */}
+      <Section title="Mượn vật tư liên xã">
+        <InterCommuneBorrowSection
+          missionId={missionId}
+          missionNo={missionNo}
+          requirements={requirements}
+          canRecalculate={requirementsEditable}
+        />
+      </Section>
+
+      <div>
         {/* Dự báo là thông tin nền, không phải việc phải làm ngay: gấp lại để
             phần điều phối lên trên màn hình, ai cần thì mở ra đọc. */}
         <details className="self-start rounded-md border bg-[var(--surface-2)] px-3 py-2">
@@ -172,27 +235,6 @@ function AnalysisBody({
             </ul>
           )}
         </details>
-        <Section title="Liên xã khi thiếu nội xã">
-          {analysis.coordination.externalContacts.length === 0 ? (
-            <p className="text-sm text-[var(--text-muted)]">
-              Chưa kích hoạt: phương án nội xã chưa thiếu hoặc chưa đủ dữ kiện.
-            </p>
-          ) : (
-            <ul className="space-y-2 text-sm" role="list">
-              {analysis.coordination.externalContacts.map((contact) => (
-                <li
-                  key={contact.communeName}
-                  className="rounded-md border bg-[var(--surface-2)] p-2"
-                >
-                  <span className="font-medium">{contact.referencePoint.name}</span>
-                  <span className="block text-xs text-[var(--text-muted)]">
-                    {contact.phone ?? "Chưa có số liên hệ"} · {contact.disclaimer}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Section>
       </div>
 
       {/* Chỉ giữ câu tóm tắt và giờ tính. Vân tay bản ghi cùng phiên bản định mức
