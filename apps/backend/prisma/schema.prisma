@@ -126,6 +126,8 @@ model User {
   missionRequestsPickedUp     MissionWarehouseRequest[]     @relation("MissionWarehouseRequestPickedUpBy")
   analysisSnapshots           MissionAnalysisSnapshot[]     @relation("MissionAnalysisActor")
   missionsApproved            Mission[]                     @relation("MissionApprovedBy")
+  missionsReported            Mission[]                     @relation("MissionReportedBy")
+  missionsReturned            Mission[]                     @relation("MissionReturnedBy")
   fieldUpdates                MissionFieldUpdate[]          @relation("MissionFieldUpdateActor")
   sensorSubmissions           SensorSubmission[]
   emailVerifications          EmailVerification[]
@@ -582,7 +584,25 @@ enum MissionStatus {
   READY // kho đã chuẩn bị xong, sẵn sàng giao
   APPROVED // (cũ, giữ tương thích)
   IN_PROGRESS // đang thực hiện
-  COMPLETED // hoàn thành
+  /// Hai giá trị của luồng "hiện trường tự quyết" ĐÃ BỎ. Không nhiệm vụ mới nào
+  /// rơi vào đây nữa, nhưng dữ liệu cũ vẫn mang chúng.
+  ///
+  /// PHẢI giữ trong enum: Prisma đối chiếu giá trị đọc lên từ bảng với enum của
+  /// client, nên bỏ đi là MỌI truy vấn chạm phải một hàng cũ đều ném lỗi — kể cả
+  /// `findMany` của hộp nhiệm vụ, tức là cả danh sách sập chứ không riêng hàng đó.
+  /// Cùng lý do `APPROVED` và `IN_PROGRESS` còn nằm đây.
+  PENDING_FIELD_DECISION
+  FIELD_DECIDED
+  COMPLETED // hoàn thành — đội cứu hộ đã giao và báo kết quả
+  /// Kho đã nhận lại phần vật tư còn thừa / mượn về và chốt sổ.
+  ///
+  /// Bước CUỐI, sau COMPLETED. Giao xong không phải là hết việc: áo phao, đèn pin,
+  /// bạt che là hàng tái sử dụng, phải quay về kho rồi mới tính là khép lại. Trước
+  /// đây nhiệm vụ dừng ở COMPLETED nên phần hàng cho mượn đó không có mốc nào để
+  /// đóng, và tồn kho trên sổ lệch với hàng trên kệ cho tới kỳ kiểm kê.
+  ///
+  /// Chỉ KHO xác nhận được: họ là bên đếm lại hàng khi nó về tới nơi.
+  RETURNED
   REJECTED // đội cứu hộ từ chối (kèm lý do), chờ admin xử lý
   DEFERRED // admin tiếp nhận đơn từ chối → tạm hoãn, sửa + gửi lại sau
   CANCELLED // admin huỷ nhiệm vụ (kèm lý do) — kết thúc luồng
@@ -632,6 +652,11 @@ model Mission {
   deliveryOutcome       DeliveryOutcome? // kết quả giao hiện trường (đội cứu hộ xác nhận khi hoàn tất)
   deliveryNote          String? // ghi chú kết quả giao (vd: thiếu 20 áo phao, đường tắc phải giao điểm khác)
   completedAt           DateTime? // thời điểm đội cứu hộ xác nhận đã giao
+  returnedAt            DateTime? // thời điểm kho xác nhận đã nhận lại vật tư
+  returnedByUserId      String?
+  /// Người của KHO đã đếm lại hàng về và chốt sổ. Giữ tên để truy được khi đối
+  /// chiếu cuối kỳ — cùng lý do với `approvedBy`.
+  returnedBy            User?                         @relation("MissionReturnedBy", fields: [returnedByUserId], references: [id], onDelete: SetNull)
   actionPlan            Json? // Incident Action Plan (8 mục, ActionPlanResponse từ AI)
   hamletId              String?
   hamlet                Hamlet?                       @relation(fields: [hamletId], references: [id], onDelete: SetNull)
@@ -639,6 +664,17 @@ model Mission {
   incidentLat           Float? // toạ độ điểm nạn (ghim tay) — tính khoảng cách kho gần nhất
   incidentLng           Float?
   createdByUserId       String?
+  /// Người đã GỬI nhiệm vụ này lên: trưởng thôn báo tình huống của thôn mình, hoặc
+  /// lực lượng hiện trường báo từ chỗ đang xảy ra sự việc.
+  ///
+  /// Cột `createdByUserId` vốn đã có từ đầu nhưng chỉ là một id trần — không tra
+  /// ngược ra tên được. Một trận lũ làm mười mấy thôn cùng báo về; người trực đọc
+  /// tới một chi tiết cần hỏi lại thì phải biết gọi cho ai, mà số hiệu nhiệm vụ
+  /// không nói điều đó.
+  ///
+  /// `SetNull` chứ không `Cascade`: xoá một tài khoản không được phép xoá theo cả
+  /// những nhiệm vụ họ từng báo — đó là hồ sơ của một sự việc có thật.
+  createdBy             User?                         @relation("MissionReportedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   reportRequestId       String? // khóa retry do client gửi, chỉ có ý nghĩa trong scope người báo
   approvedByUserId      String?
   /// Người bấm "Duyệt và phát hành". Một xã có nhiều quản trị viên cùng duyệt để
@@ -977,6 +1013,7 @@ enum NotificationKind {
   WAREHOUSE_REQUESTED // admin phát hành/cập nhật yêu cầu SKU → báo kho
   WAREHOUSE_REQUEST_ACCEPTED // kho xác nhận tiếp nhận một SKU → báo admin
   WAREHOUSE_REQUEST_REVIEW // kho báo thiếu/sai, cần admin xem lại
+  MISSION_SUPPLIES_RETURNED // kho xác nhận đã nhận lại vật tư → báo admin + đội cứu hộ
 }
 
 model Notification {
@@ -1072,6 +1109,20 @@ model InterCommuneLoan {
   /// hai lần do gửi lại.
   peerLoanId      String? @unique
 
+  /// Vì sao lần gửi gần nhất sang xã kia KHÔNG tới nơi. Rỗng = không có lỗi.
+  ///
+  /// Cần một trường riêng vì `peerLoanId` rỗng mang HAI nghĩa hoàn toàn khác nhau:
+  /// "vừa tạo xong, đang trên đường gửi" và "đã gửi và hỏng". Suy đoán từ mình nó
+  /// thì mọi yêu cầu vừa bấm đều hiện đỏ "xã kia CHƯA nhận được" trong vài giây
+  /// đầu, rồi tự đổi sang "chờ xã kia đồng ý" — người điều phối thấy một lỗi
+  /// không có thật rồi thấy nó biến mất, và từ đó không tin dòng trạng thái nữa.
+  ///
+  /// Ba trạng thái gửi đọc ra từ hai trường:
+  ///   peerLoanId có          → ĐÃ TỚI
+  ///   chưa có, lỗi rỗng      → ĐANG GỬI
+  ///   chưa có, có lỗi        → CHƯA GỬI ĐƯỢC (kèm lý do đọc được)
+  peerDeliveryError String?
+
   /// Khoá chống nhận trùng cho yêu cầu tới từ xã kia.
   ///
   /// Đường truyền giữa hai xã là thứ hay đứt nhất trong cả hệ thống, nên xã gửi
@@ -1097,6 +1148,22 @@ model InterCommuneLoan {
   warehouseId String?
   warehouse   Warehouse? @relation(fields: [warehouseId], references: [id])
 
+  /// Nhiệm vụ mà khoản mượn này đi bù cho — chỉ có ở phía ĐI MƯỢN.
+  ///
+  /// Thiếu nó thì màn hình nhiệm vụ không phân biệt được khoản mượn nào thuộc về
+  /// nhiệm vụ nào: lọc theo mã vật tư thôi là mọi nhiệm vụ đang thiếu xuồng đều
+  /// hiện chung một danh sách, và một nhiệm vụ vừa lập xong đã ghi "đã gửi sang
+  /// xã Xuân Thọ 4 chiếc" trong khi chưa ai bấm gì. Nói sai kiểu đó còn tệ hơn
+  /// không hiện gì, vì người trực tin là đã hỏi rồi và ngồi đợi.
+  ///
+  /// KHÔNG đặt khoá ngoại: xoá một nhiệm vụ không được phép xoá theo khoản nợ với
+  /// xã khác — nợ đó có thật ngoài đời và vẫn phải trả. Đây là nhãn để tra ngược,
+  /// không phải quan hệ sở hữu.
+  ///
+  /// Trống ở bản ghi phía CHO MƯỢN (số nhiệm vụ là việc nội bộ của xã kia) và ở
+  /// mọi khoản ghi tay hoặc tạo từ tab Mượn, trả.
+  missionId String?
+
   /// true khi bản ghi do người nhập tay vì lúc đó không gửi được qua mạng.
   recordedManually Boolean @default(false)
   // Việc chuyển kho ĐÃ HỨA nhưng chưa chắc đã xong.
@@ -1121,5 +1188,6 @@ model InterCommuneLoan {
   createdByUserId String?
 
   @@index([organizationId, direction, status])
+  @@index([organizationId, missionId])
   @@index([peerLoanId])
 }

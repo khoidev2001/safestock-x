@@ -16,6 +16,8 @@
  * bên dưới vẫn đọc được từ bản lưu.
  */
 
+import { houseSvg, routeArrowSvg, routeArrows, sosPinSvg, villaSvg } from "@safestock/shared-types";
+
 export interface MissionMapPoint {
   lat: number;
   lng: number;
@@ -38,6 +40,25 @@ export interface MissionMapData {
   incidentLabel: string;
   warehouses: MissionMapWarehouse[];
 }
+
+/**
+ * Màu tuyến — XANH DƯƠNG, đúng màu web đang vẽ.
+ *
+ * Trước đây điện thoại vẽ cam. Cùng một chuyến đi mà điều phối viên nhìn đường
+ * xanh còn người đi lấy hàng nhìn đường cam thì hai bên không gọi tên được cùng
+ * một thứ qua điện thoại — "đi theo đường xanh" không có nghĩa gì với người đang
+ * cầm máy.
+ */
+const ROUTE_COLOR = "#2563eb";
+
+/**
+ * Kho vẽ MỘT màu, không phân biệt kho tổng với kho thôn bằng màu.
+ *
+ * Hình dáng đã nói điều đó rồi (nhà lớn có cửa sổ / nhà thường), đúng cách web
+ * làm. Trước đây điện thoại dùng hai chấm tròn xanh dương và xanh lá, nên người
+ * đi lấy hàng phải tra chú giải mới biết chấm nào là kho nào.
+ */
+const WAREHOUSE_COLOR = "#2f9e6e";
 
 const LEAFLET_CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
 const LEAFLET_JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
@@ -71,6 +92,19 @@ function embedJson(value: unknown): string {
 
 export function buildMissionMapHtml(data: MissionMapData): string {
   const center = data.incident ?? data.warehouses[0] ?? DEFAULT_CENTER;
+  /**
+   * Mũi tên chỉ hướng, tính SẴN Ở ĐÂY rồi nhúng xuống trang.
+   *
+   * Trang Leaflet là một chuỗi HTML, không import được gì. Tính ở TypeScript thì
+   * điện thoại và web dùng chung đúng một hàm (`routeArrows`), nên mũi tên rơi vào
+   * cùng những chỗ ở cả hai màn hình — và luật đặt mũi tên khoá được bằng test mà
+   * không phải dựng bản đồ nào.
+   */
+  const arrowsByWarehouse = data.warehouses.map((warehouse) =>
+    routeArrows(
+      (warehouse.routeCoordinates ?? []).map(([lng, lat]) => [lat, lng] as [number, number]),
+    ).map((arrow) => ({ ...arrow, svg: routeArrowSvg(arrow.bearing, 17, ROUTE_COLOR) })),
+  );
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -86,6 +120,7 @@ export function buildMissionMapHtml(data: MissionMapData): string {
   }
   .legend .row { display: flex; align-items: center; gap: 6px; }
   .legend .swatch { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .legend svg { flex: none; }
   .legend .line { width: 14px; height: 3px; border-radius: 2px; flex: none; }
   .offline {
     position: absolute; inset: 0; z-index: 600; display: none;
@@ -103,14 +138,15 @@ export function buildMissionMapHtml(data: MissionMapData): string {
 <body>
 <div id="map"></div>
 <div class="legend">
-  <div class="row"><span class="swatch" style="background:#d64545"></span><span>Điểm gặp nạn</span></div>
-  <div class="row"><span class="swatch" style="background:#0B5FC6"></span><span>Kho trung tâm</span></div>
-  <div class="row"><span class="swatch" style="background:#15803D"></span><span>Kho thôn</span></div>
-  <div class="row"><span class="line" style="background:#EA7A12"></span><span>Tuyến kho → điểm nạn</span></div>
+  <div class="row">${sosPinSvg(15)}<span>Điểm gặp nạn</span></div>
+  <div class="row">${villaSvg(WAREHOUSE_COLOR, 16)}<span>Kho trung tâm</span></div>
+  <div class="row">${houseSvg(WAREHOUSE_COLOR, 14)}<span>Kho thôn</span></div>
+  <div class="row"><span class="line" style="background:${ROUTE_COLOR}"></span><span>Tuyến kho → điểm nạn</span></div>
 </div>
 <div class="offline" id="offline">Không tải được bản đồ.<br />Kiểm tra mạng — danh sách kho và vật tư bên dưới vẫn đọc được.</div>
 <script>
   var DATA = ${embedJson(data)};
+  var ARROWS = ${embedJson(arrowsByWarehouse)};
 
   function send(payload) {
     var text = JSON.stringify(payload);
@@ -138,13 +174,20 @@ export function buildMissionMapHtml(data: MissionMapData): string {
     return w.distanceKm.toFixed(1) + ' km · ~' + w.etaMinutes + ' phút';
   }
 
-  function dotIcon(L, color, size) {
+  var HOUSE_SVG = ${embedJson(houseSvg(WAREHOUSE_COLOR, 28))};
+  var VILLA_SVG = ${embedJson(villaSvg(WAREHOUSE_COLOR, 34))};
+  var SOS_SVG = ${embedJson(sosPinSvg(38))};
+
+  /**
+   * Hình neo ở CHÂN, không neo vào tâm: ngôi nhà và mũi ghim phải "đứng" trên
+   * đúng toạ độ. Neo vào tâm thì cả hình lơ lửng cao hơn chỗ thật nửa thân hình.
+   */
+  function pinIcon(L, svg, size) {
     return L.divIcon({
       className: '',
-      html: '<div style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;background:' +
-        color + ';border:3px solid #fff;box-shadow:0 0 0 2px rgba(0,0,0,0.25)"></div>',
+      html: svg,
       iconSize: [size, size],
-      iconAnchor: [size / 2, size / 2],
+      iconAnchor: [size / 2, size],
     });
   }
 
@@ -177,21 +220,36 @@ export function buildMissionMapHtml(data: MissionMapData): string {
       var coords = DATA.warehouses[i].routeCoordinates;
       if (!coords || coords.length < 2) continue;
       var latlngs = coords.map(function (pair) { return [pair[1], pair[0]]; });
-      // Viền trắng bên dưới: đường cam đơn độc trên ảnh vệ tinh (mái tôn, đường
-      // đất) có chỗ gần như biến mất.
-      L.polyline(latlngs, { color: '#FFFFFF', weight: 7, opacity: 0.85 }).addTo(map);
-      L.polyline(latlngs, { color: '#EA7A12', weight: 4, opacity: 0.95 }).addTo(map);
+      // Viền trắng bên dưới, dày hơn thân: đường xanh đơn độc trên ảnh vệ tinh
+      // (mái tôn, mặt nước, đường bê tông) có chỗ gần như biến mất.
+      L.polyline(latlngs, { color: '#FFFFFF', weight: 11, opacity: 0.75 }).addTo(map);
+      L.polyline(latlngs, { color: '${ROUTE_COLOR}', weight: 7, opacity: 0.95 }).addTo(map);
+      // Mũi tên nói CHIỀU ĐI. Một đường kẻ hai đầu như nhau không nói được đi về
+      // phía nào, mà với vài tuyến chồng nhau ở đoạn gần điểm nạn thì không còn
+      // suy ra được từ hai đầu nữa.
+      var arrows = ARROWS[i] || [];
+      for (var a = 0; a < arrows.length; a++) {
+        L.marker([arrows[a].lat, arrows[a].lng], {
+          icon: L.divIcon({ className: '', html: arrows[a].svg, iconSize: [17, 17], iconAnchor: [8.5, 8.5] }),
+          interactive: false,
+          keyboard: false,
+        }).addTo(map);
+      }
       for (var j = 0; j < latlngs.length; j++) bounds.push(latlngs[j]);
     }
 
     for (var k = 0; k < DATA.warehouses.length; k++) {
       var w = DATA.warehouses[k];
-      var color = w.kind === 'HAMLET' ? '#15803D' : '#0B5FC6';
-      L.marker([w.lat, w.lng], { icon: dotIcon(L, color, 16), interactive: false })
+      var isHamlet = w.kind === 'HAMLET';
+      var size = isHamlet ? 28 : 34;
+      L.marker([w.lat, w.lng], {
+        icon: pinIcon(L, isHamlet ? HOUSE_SVG : VILLA_SVG, size),
+        interactive: false,
+      })
         .addTo(map)
         .bindTooltip(
           '<b>' + esc(shortName(w.name)) + '</b><br />' + esc(travelText(w)),
-          { permanent: true, direction: 'right', offset: [10, 0], className: 'pin-label' }
+          { permanent: true, direction: 'right', offset: [size / 2 + 2, -size / 2], className: 'pin-label' }
         );
       bounds.push([w.lat, w.lng]);
     }
@@ -202,14 +260,17 @@ export function buildMissionMapHtml(data: MissionMapData): string {
         dashArray: '6 5', fillColor: '#d64545', fillOpacity: 0.12,
       }).addTo(map);
       L.marker([DATA.incident.lat, DATA.incident.lng], {
-        icon: dotIcon(L, '#d64545', 22),
+        icon: pinIcon(L, SOS_SVG, 38),
+        // Điểm nạn luôn nằm trên cùng: kho có thể ghim trùng toạ độ với nó, và
+        // trong hai thứ đó thì chỗ đang xảy ra sự việc mới là thứ không được che.
+        zIndexOffset: 1000,
         // Không kéo được: đây là điểm trưởng thôn đã ghim và điều phối đã duyệt.
         draggable: false,
         interactive: false,
       })
         .addTo(map)
         .bindTooltip(esc(DATA.incidentLabel || 'Điểm gặp nạn'), {
-          permanent: true, direction: 'top', offset: [0, -14], className: 'pin-label',
+          permanent: true, direction: 'top', offset: [0, -40], className: 'pin-label',
         });
       bounds.push([DATA.incident.lat, DATA.incident.lng]);
     }

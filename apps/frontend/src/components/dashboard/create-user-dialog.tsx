@@ -3,7 +3,12 @@
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { ColorIcon } from "@/components/shared/color-icon";
-import { createUser, requestAdminEmailCode, type AdminUser } from "@/lib/admin-api";
+import {
+  createUser,
+  listCommunes,
+  requestAdminEmailCode,
+  type AdminUser,
+} from "@/lib/admin-api";
 import { getClusterWarehouses } from "@/lib/mission-api";
 import { useQuery } from "@tanstack/react-query";
 import { FIELD_FORCE_ROLE_LABEL } from "@safestock/shared-types";
@@ -23,6 +28,7 @@ const EMPTY_FORM = {
   fullName: "",
   role: "WAREHOUSE",
   warehouseId: "",
+  organizationId: "",
   notificationEmail: "",
   verificationCode: "",
 };
@@ -53,6 +59,19 @@ export function CreateUserDialog({
   });
   const warehouses = whQuery.data ?? [];
   const roles = isSuperAdmin ? [...BASE_ROLES, ADMIN_ROLE] : BASE_ROLES;
+  /**
+   * Danh sách xã, chỉ tải cho super admin.
+   *
+   * ADMIN thường không chọn được xã nào khác xã mình, nên tải danh sách cho họ là
+   * một lượt gọi để dựng một ô chỉ có đúng một lựa chọn.
+   */
+  const communeQuery = useQuery({
+    queryKey: ["admin-communes"],
+    queryFn: listCommunes,
+    enabled: isOpen && isSuperAdmin,
+    staleTime: 5 * 60 * 1000,
+  });
+  const communes = communeQuery.data ?? [];
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [err, setErr] = useState<string | null>(null);
@@ -90,6 +109,10 @@ export function CreateUserDialog({
         fullName: form.fullName,
         role: form.role as AdminUser["role"],
         warehouseId: form.role === "WAREHOUSE" && form.warehouseId ? form.warehouseId : undefined,
+        // Xã chỉ đi kèm tài khoản quản trị: tài khoản kho và hiện trường gắn với
+        // kho/địa bàn cụ thể nên chúng luôn thuộc xã của người tạo.
+        organizationId:
+          form.role === "ADMIN" && form.organizationId ? form.organizationId : undefined,
         notificationEmail: needsEmailVerification ? emailInput : undefined,
         verificationCode: needsEmailVerification ? form.verificationCode.trim() : undefined,
       }),
@@ -211,6 +234,37 @@ export function CreateUserDialog({
               ))}
             </select>
           </Field>
+
+          {/* Chọn xã đứng NGAY DƯỚI ô vai trò, trên khối xác minh email: thứ tự
+              câu hỏi phải là "quản trị của xã nào" rồi mới tới "email nào nhận
+              cảnh báo" — email là thuộc tính của con người, xã là phạm vi quyền,
+              mà phạm vi quyền mới là thứ quyết định tài khoản này làm được gì. */}
+          {isSuperAdmin && form.role === "ADMIN" && (
+            <Field label="Xã phụ trách">
+              <select
+                className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+                disabled={communeQuery.isPending}
+                onChange={(e) => setForm({ ...form, organizationId: e.target.value })}
+                value={form.organizationId}
+              >
+                <option value="">
+                  {communeQuery.isPending ? "Đang tải danh sách xã…" : "— Xã của tôi (mặc định) —"}
+                </option>
+                {communes.map((commune) => (
+                  <option key={commune.id} value={commune.id}>
+                    {commune.name} ({commune.warehouseCount} kho)
+                  </option>
+                ))}
+              </select>
+              {/* Nói rõ hệ quả. Chọn nhầm xã là tạo ra một quản trị viên nhìn thấy
+                  kho của xã khác, và tài khoản đã tạo thì không đổi xã được ở màn
+                  này — phải xoá đi tạo lại. */}
+              <p className="mt-1 text-xs text-[var(--text-muted)]">
+                Quản trị viên chỉ thấy kho, tồn kho và nhiệm vụ của xã này. Xã bên kia là bên đối
+                ứng khi mượn — trả vật tư liên xã.
+              </p>
+            </Field>
+          )}
 
           {needsEmailVerification && (
             <div className="space-y-3 rounded-md border border-dashed bg-[var(--surface-2)] p-3">

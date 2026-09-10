@@ -97,6 +97,9 @@ export function missionStageLabel(mission: MissionInboxItem): string {
   // ai phải làm gì nữa. `COMPLETED` chỉ được đặt ở đúng một chỗ — bước hiện trường
   // xác nhận đã giao (mission.service.ts `confirmDelivery`) — nên đọc thẳng ra
   // "đã hoàn thành" là đúng, không cần dò thêm dấu vết nào.
+  // Hoàn trả là mốc SAU khi giao xong, nên xét trước — nếu không thì nhiệm vụ đã
+  // khép sổ vẫn đọc ra "Đã hoàn thành" và bước cuối không bao giờ hiện ra ở đâu.
+  if (mission.status === "RETURNED") return "Đã hoàn trả vật tư";
   if (mission.status === "COMPLETED") return "Đã hoàn thành";
 
   // Còn nháp: đọc dấu vết, muộn nhất thắng.

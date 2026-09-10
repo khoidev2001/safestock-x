@@ -21,6 +21,7 @@
     "prisma:strip-login-domain": "ts-node prisma/strip-login-domain.ts",
     "prisma:rename-central-warehouses": "ts-node prisma/rename-central-warehouses.ts",
     "prisma:promote-super-admin": "ts-node prisma/promote-super-admin.ts",
+    "prisma:communes": "ts-node prisma/create-communes.ts",
     "device:issue": "ts-node prisma/device-gateway.ts issue",
     "device:revoke": "ts-node prisma/device-gateway.ts revoke",
     "device:monitor": "ts-node prisma/device-gateway.ts monitor",

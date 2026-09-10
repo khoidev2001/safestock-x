@@ -21,12 +21,15 @@ interface CreateUserInput {
   /** Chỉ dùng khi tạo ADMIN: email nhận cảnh báo, phải kèm mã đã gửi tới chính nó. */
   notificationEmail?: string;
   verificationCode?: string;
+  /** Xã của tài khoản ADMIN mới. Chỉ super admin chọn được; bỏ trống = xã của người tạo. */
+  organizationId?: string;
 }
 
 interface Actor {
   id: string;
   role: UserRole;
   isSuperAdmin: boolean;
+  organizationId: string;
 }
 
 /** Role được scope vào 1 kho: phụ trách kho, đồng thời là trưởng thôn của thôn đó. */
@@ -52,8 +55,23 @@ export class AdminUserService {
     private verification: EmailVerificationService,
   ) {}
 
-  list() {
+  /**
+   * Danh sách tài khoản mà người đang đăng nhập được phép nhìn thấy.
+   *
+   * TRƯỚC ĐÂY KHÔNG LỌC GÌ CẢ — trả về mọi tài khoản trong cơ sở dữ liệu. Đúng
+   * chừng nào hệ thống còn phục vụ một xã duy nhất; từ xã thứ hai trở đi thì
+   * quản trị viên xã Xuân Thọ mở màn Tài khoản là thấy trọn danh sách trưởng thôn
+   * của Đồng Xuân, kèm số điện thoại và email nhận cảnh báo của họ. Và vì màn đó
+   * có sẵn nút Sửa/Xoá, nhìn thấy đồng nghĩa với đụng được.
+   *
+   * Super admin vẫn nhìn được cả huyện: đó là bậc dựng và thu hồi tài khoản quản
+   * trị cho từng xã (xem `resolveOrganization`), không quản được thì việc đó
+   * không làm được. Quản trị viên xã thì chỉ thấy người của xã mình.
+   */
+  async list(actorId: string) {
+    const actor = await this.loadActor(actorId);
     return this.prisma.user.findMany({
+      where: actor.isSuperAdmin ? {} : { organizationId: actor.organizationId },
       select: {
         id: true,
         email: true,
@@ -104,7 +122,10 @@ export class AdminUserService {
     const exists = await this.prisma.user.findUnique({ where: { email: input.email } });
     if (exists) throw new BadRequestException("Email đã tồn tại");
 
-    await this.assertWarehouseValid(input.role, input.warehouseId);
+    // Xã của tài khoản mới phải chốt TRƯỚC khi kiểm kho: kho hợp lệ hay không là
+    // câu hỏi "có thuộc xã đó không", nên hỏi ngược lại thì không trả lời được.
+    const organizationId = await this.resolveOrganization(actor, input);
+    await this.assertWarehouseValid(input.role, input.warehouseId, organizationId);
 
     // Bước 2 của luồng tạo ADMIN: mã phải đúng VÀ phải là mã của chính địa chỉ
     // đang nhập, nếu không thì đổi email ở phút chót là qua mặt được bước xác minh.
@@ -123,13 +144,9 @@ export class AdminUserService {
       });
     }
 
-    // 1 org/xã duy nhất trong MVP — tạo user cùng org hiện có.
-    const org = await this.prisma.organization.findFirst();
-    if (!org) throw new BadRequestException("Chưa có tổ chức (org) nào");
-
     const user = await this.prisma.user.create({
       data: {
-        organizationId: org.id,
+        organizationId,
         email: input.email,
         passwordHash: bcrypt.hashSync(input.password, 10),
         fullName: input.fullName,
@@ -156,6 +173,7 @@ export class AdminUserService {
     const actor = await this.loadActor(actorId);
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException("Không tìm thấy user");
+    this.assertSameCommune(actor, user.organizationId);
     if (isSimulationSystemActorEmail(user.email)) {
       throw new ForbiddenException("Không được sửa actor hệ thống");
     }
@@ -167,7 +185,11 @@ export class AdminUserService {
 
     const role = (patch.role ?? user.role) as UserRole;
     if (patch.warehouseId !== undefined || patch.role !== undefined) {
-      await this.assertWarehouseValid(role, patch.warehouseId ?? user.warehouseId);
+      await this.assertWarehouseValid(
+        role,
+        patch.warehouseId ?? user.warehouseId,
+        user.organizationId,
+      );
     }
 
     return this.prisma.user.update({
@@ -202,6 +224,7 @@ export class AdminUserService {
     const actor = await this.loadActor(actorId);
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException("Không tìm thấy user");
+    this.assertSameCommune(actor, user.organizationId);
     if (isSimulationSystemActorEmail(user.email)) {
       throw new ForbiddenException("Không được xóa actor hệ thống");
     }
@@ -230,13 +253,76 @@ export class AdminUserService {
     return { deleted: true };
   }
 
+  /**
+   * Các xã có trong hệ thống, để super admin chọn khi tạo tài khoản quản trị.
+   *
+   * Kèm SỐ KHO của mỗi xã: tên đơn vị một mình không phân biệt được xã đã dựng
+   * xong với xã mới tạo còn trống — mà tạo quản trị viên cho một xã chưa có kho
+   * nào là tạo một tài khoản đăng nhập vào màn hình rỗng.
+   */
+  async listCommunes(actorId: string) {
+    // Chỉ super admin. Quản trị viên xã không tạo được tài khoản cho xã khác
+    // (`resolveOrganization` chặn), nên với họ danh sách này không mở ra việc gì —
+    // nó chỉ kể tên mọi xã trong huyện kèm số kho và số tài khoản của từng xã.
+    const actor = await this.loadActor(actorId);
+    if (!actor.isSuperAdmin) {
+      throw new ForbiddenException("Chỉ super admin mới xem được danh sách xã");
+    }
+    const organizations = await this.prisma.organization.findMany({
+      select: {
+        id: true,
+        name: true,
+        _count: { select: { warehouses: true, users: true } },
+      },
+      orderBy: { name: "asc" },
+    });
+    return organizations.map((organization) => ({
+      id: organization.id,
+      name: organization.name,
+      warehouseCount: organization._count.warehouses,
+      userCount: organization._count.users,
+    }));
+  }
+
+  /**
+   * Tài khoản mới thuộc xã nào.
+   *
+   * Mặc định là xã của NGƯỜI TẠO, không phải "đơn vị đầu tiên trong bảng". Hai
+   * cách này trùng nhau chừng nào hệ thống còn đúng một xã; từ xã thứ hai trở đi
+   * thì cách cũ ném tài khoản mới sang một xã tuỳ theo thứ tự bảng trả về.
+   *
+   * Chỉ SUPER ADMIN chỉ định được xã khác, và chỉ cho tài khoản QUẢN TRỊ XÃ: tài
+   * khoản kho và hiện trường gắn với kho/địa bàn cụ thể, nên chúng phải ở cùng xã
+   * với người quản lý chúng.
+   */
+  private async resolveOrganization(actor: Actor, input: CreateUserInput): Promise<string> {
+    const requested = input.organizationId?.trim();
+    if (!requested || requested === actor.organizationId) return actor.organizationId;
+    if (!actor.isSuperAdmin) {
+      throw new ForbiddenException("Chỉ super admin mới tạo được tài khoản cho xã khác");
+    }
+    if (input.role !== UserRole.ADMIN) {
+      throw new BadRequestException(
+        "Chỉ tài khoản quản trị xã mới chọn được xã. Tài khoản kho và hiện trường thuộc cùng xã với người tạo.",
+      );
+    }
+    const organization = await this.prisma.organization.findUnique({ where: { id: requested } });
+    if (!organization) throw new NotFoundException("Xã được chọn không tồn tại");
+    return organization.id;
+  }
+
   private async loadActor(actorId: string): Promise<Actor> {
     const actor = await this.prisma.user.findUnique({
       where: { id: actorId },
-      select: { id: true, role: true, isSuperAdmin: true },
+      select: { id: true, role: true, isSuperAdmin: true, organizationId: true },
     });
     if (!actor) throw new ForbiddenException("Tài khoản thực hiện không tồn tại");
-    return { id: actor.id, role: actor.role as UserRole, isSuperAdmin: actor.isSuperAdmin };
+    return {
+      id: actor.id,
+      role: actor.role as UserRole,
+      isSuperAdmin: actor.isSuperAdmin,
+      organizationId: actor.organizationId,
+    };
   }
 
   /** ADMIN thường chỉ đụng được tới các bậc dưới; ADMIN là bậc chỉ super admin quản. */
@@ -246,13 +332,45 @@ export class AdminUserService {
     }
   }
 
-  /** warehouseId (nếu có) phải trỏ tới kho có thật; chỉ role scope kho được gán. */
-  private async assertWarehouseValid(role: UserRole, warehouseId?: string | null): Promise<void> {
+  /**
+   * warehouseId (nếu có) phải trỏ tới kho CÓ THẬT VÀ THUỘC ĐÚNG XÃ của tài khoản.
+   *
+   * Thiếu vế thứ hai thì gán được một trưởng thôn của xã này vào kho của xã kia:
+   * tài khoản đó đăng nhập vào là thấy tồn kho, phiếu xuất và nhiệm vụ của một xã
+   * không phải xã mình — mà mọi lớp kiểm quyền phía sau đều tin vào `warehouseId`
+   * nên không lớp nào chặn lại.
+   */
+  private async assertWarehouseValid(
+    role: UserRole,
+    warehouseId: string | null | undefined,
+    organizationId: string,
+  ): Promise<void> {
     if (!warehouseId) return;
     if (!isWarehouseScopedRole(role)) {
       throw new BadRequestException("Chỉ tài khoản phụ trách kho mới gán được kho");
     }
-    const wh = await this.prisma.warehouse.findUnique({ where: { id: warehouseId } });
-    if (!wh) throw new NotFoundException("Kho gán không tồn tại");
+    const wh = await this.prisma.warehouse.findUnique({
+      where: { id: warehouseId },
+      select: { organizationId: true },
+    });
+    // Kho của xã khác trả lời y như kho không tồn tại: người hỏi không có việc gì
+    // ở đó, nên câu trả lời cũng không nên xác nhận là nó có.
+    if (!wh || wh.organizationId !== organizationId) {
+      throw new NotFoundException("Kho gán không tồn tại");
+    }
+  }
+
+  /**
+   * Tài khoản bị tác động phải cùng xã với người thực hiện.
+   *
+   * Báo KHÔNG TÌM THẤY chứ không phải KHÔNG CÓ QUYỀN: "không có quyền" là một câu
+   * xác nhận rằng id đó có tồn tại, và ai cũng dò được id để đếm xem xã bên cạnh
+   * có bao nhiêu tài khoản. Cùng lối trả lời với phạm vi nhiệm vụ (`mission.service`).
+   */
+  private assertSameCommune(actor: Actor, targetOrganizationId: string): void {
+    if (actor.isSuperAdmin) return;
+    if (targetOrganizationId !== actor.organizationId) {
+      throw new NotFoundException("Không tìm thấy user");
+    }
   }
 }

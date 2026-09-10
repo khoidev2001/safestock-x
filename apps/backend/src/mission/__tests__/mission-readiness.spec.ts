@@ -1,5 +1,9 @@
 import { Allocation } from "../mission.compute";
-import { assessMissionReadiness } from "../mission-readiness";
+import {
+  assessMissionReadiness,
+  fulfillmentFromSnapshot,
+  withCurrentFulfillment,
+} from "../mission-readiness";
 
 function allocation(sku: string, required: number, allocated: number): Allocation {
   return {
@@ -32,7 +36,9 @@ describe("assessMissionReadiness", () => {
     ]);
 
     expect(result.status).toBe("NEEDS_ACTION");
-    expect(result.fulfillment).toBe(80);
+    // Trung bình theo loại: nước 80% + áo phao 100% = 90%. Con số này nói "còn
+    // thiếu bao nhiêu"; việc "chưa đi được" do `status` nói.
+    expect(result.fulfillment).toBe(90);
     expect(result.items[0]).toEqual(
       expect.objectContaining({ sku: "WATER-01", status: "NEEDS_ACTION", shortage: 20 }),
     );
@@ -103,5 +109,47 @@ describe("assessMissionReadiness — lý do cho loại thiếu MỘT PHẦN", ()
 
     expect(assessment.status).toBe("NOT_DISPATCHABLE");
     expect(assessment.blockers[0].sku).toBe("TORCH-01");
+  });
+});
+
+describe("tính lại % đáp ứng cho ảnh chụp đã lưu", () => {
+  const snapshot = {
+    status: "NOT_DISPATCHABLE",
+    // Con số công thức CŨ (min qua loại) để lại trong cơ sở dữ liệu.
+    fulfillment: 0,
+    items: [
+      { sku: "WATER-01", required: 200, allocated: 200 },
+      { sku: "RICE-01", required: 35, allocated: 35 },
+      { sku: "LIFE-ADULT", required: 150, allocated: 0 },
+      { sku: "BOAT-01", required: 4, allocated: 0 },
+    ],
+  };
+
+  it("đọc lại tỉ lệ từ items chứ không tin con số đã lưu", () => {
+    expect(fulfillmentFromSnapshot(snapshot)).toBe(50);
+  });
+
+  it("trả null khi ảnh chụp không đọc được, để bên gọi giữ số cũ", () => {
+    expect(fulfillmentFromSnapshot(null)).toBeNull();
+    expect(fulfillmentFromSnapshot({})).toBeNull();
+    expect(fulfillmentFromSnapshot({ items: [] })).toBeNull();
+    expect(fulfillmentFromSnapshot({ items: [{ sku: "X" }] })).toBeNull();
+  });
+
+  it("sửa cả cột fulfillment lẫn con số trong ảnh chụp, không để lệch nhau", () => {
+    const mission = { fulfillment: 0, readinessAssessment: snapshot, missionNo: 777 };
+    const fixed = withCurrentFulfillment(mission);
+
+    expect(fixed.fulfillment).toBe(50);
+    expect(fixed.readinessAssessment.fulfillment).toBe(50);
+    // Phần còn lại của ảnh chụp phải nguyên vẹn: các kho đang cầm phiếu theo nó.
+    expect(fixed.readinessAssessment.items).toEqual(snapshot.items);
+    expect(fixed.readinessAssessment.status).toBe("NOT_DISPATCHABLE");
+    expect(fixed.missionNo).toBe(777);
+  });
+
+  it("không đụng vào nhiệm vụ không có ảnh chụp", () => {
+    const mission = { fulfillment: 42, readinessAssessment: null };
+    expect(withCurrentFulfillment(mission)).toBe(mission);
   });
 });

@@ -332,3 +332,27 @@ export class GeneratePlanDto extends IncidentCoordinatesDto {
   @Type(() => IncidentDto)
   incident?: IncidentDto;
 }
+
+/**
+ * ADMIN sửa danh sách vật tư của bản tham mưu.
+ *
+ * Ba việc chung một DTO vì chúng dùng chung khoá vật tư và chỉ khác nhau ở chỗ
+ * có kèm số lượng hay không. Tách ba lớp thì ba route, ba lần khai lại cùng một
+ * ràng buộc mã SKU — mà ràng buộc đó mới là phần dễ lệch.
+ */
+export class ChangeRequirementDto {
+  @IsIn(["add", "update", "remove"])
+  op!: "add" | "update" | "remove";
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  sku!: string;
+
+  /** Bắt buộc cho thêm/sửa, vô nghĩa với xoá — service chốt lại lần nữa. */
+  @ValidateIf((dto: ChangeRequirementDto) => dto.op !== "remove")
+  @IsInt()
+  @Min(1)
+  @Max(1_000_000)
+  quantity?: number;
+}

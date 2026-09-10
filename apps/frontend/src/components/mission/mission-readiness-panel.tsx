@@ -35,10 +35,36 @@ const ITEM_REASONS: Readonly<Record<string, string>> = {
     "Bão tốc mái: che tạm chỗ ở và che hàng cứu trợ khỏi mưa trong lúc chờ lợp lại. Cấp theo nhóm hộ, không phải theo đầu người.",
 };
 
-const STATUS_META: Record<MissionReadinessStatus, { label: string; color: string }> = {
-  READY: { label: "Đủ khả năng đáp ứng", color: "var(--color-ready)" },
-  NEEDS_ACTION: { label: "Đáp ứng một phần", color: "var(--color-attention)" },
-  NOT_DISPATCHABLE: { label: "Chưa thể điều phối", color: "var(--color-critical)" },
+/**
+ * Nhãn nói TÌNH TRẠNG, không nói việc phải làm.
+ *
+ * Khối này nay chỉ còn một việc: soi lại xem đủ hay chưa. Mọi hành động — hỏi
+ * mượn xã lân cận, gửi lại yêu cầu, phân bổ lại — đã dời lên khối "Mượn vật tư
+ * liên xã" nằm ngay dưới bảng điều phối nội xã, nơi người trực đang nhìn danh
+ * sách kho nào cấp gì. Để nút ở cả hai nơi là mời bấm hai lần cho một chỗ thiếu.
+ *
+ * `label` là câu cho dòng tiêu đề khối; `itemLabel` là câu ngắn cho cột bên phải
+ * của từng vật tư — chỗ đó hẹp, câu dài xuống dòng làm vỡ cả hàng.
+ */
+const STATUS_META: Record<
+  MissionReadinessStatus,
+  { label: string; itemLabel: string; color: string }
+> = {
+  READY: {
+    label: "Đã đáp ứng đủ",
+    itemLabel: "Đủ",
+    color: "var(--color-ready)",
+  },
+  NEEDS_ACTION: {
+    label: "Chưa đáp ứng đủ",
+    itemLabel: "Thiếu một phần",
+    color: "var(--color-attention)",
+  },
+  NOT_DISPATCHABLE: {
+    label: "Chưa đáp ứng đủ",
+    itemLabel: "Chưa có hàng",
+    color: "var(--color-critical)",
+  },
 };
 
 export function MissionReadinessPanel({
@@ -56,6 +82,9 @@ export function MissionReadinessPanel({
   defaultOpen?: boolean;
 }) {
   const meta = STATUS_META[assessment.status];
+  const shortCount = assessment.items.filter((item) => item.shortage > 0).length;
+  const readyCount = assessment.items.length - shortCount;
+
   return (
     <CollapsiblePanel
       defaultOpen={defaultOpen}
@@ -68,44 +97,19 @@ export function MissionReadinessPanel({
       subtitle={
         <span className="font-semibold" style={{ color: meta.color }}>
           {meta.label}
+          {/* Con số nói thẳng cái mà người đọc vừa tự đếm trên bảng bên dưới.
+              Không có nó thì một tỉ lệ như 87% treo lơ lửng, và câu hỏi kế tiếp
+              luôn là "87% của cái gì". */}
+          {assessment.items.length > 0 ? (
+            <span className="font-normal text-[var(--text-muted)]">
+              {" "}
+              · {readyCount}/{assessment.items.length} loại vật tư đã đủ
+            </span>
+          ) : null}
         </span>
       }
       badge={<span className="tabular text-sm font-semibold">{assessment.fulfillment}%</span>}
     >
-      {assessment.blockers.length > 0 && (
-        <div className="mb-3 space-y-2 rounded-md bg-[color-mix(in_oklch,var(--color-critical)_6%,transparent)] px-4 py-3">
-          {assessment.blockers.map((blocker) => {
-            // Khối này trước đây chỉ nhận loại KHÔNG lấy được cái nào, nên nhãn ghi
-            // cứng "Thiếu hoàn toàn". Nay nó nhận cả loại thiếu một phần — giữ nhãn
-            // cũ là nói sai hẳn về một loại đã lấy được 13/100.
-            const item = assessment.items.find((row) => row.sku === blocker.sku);
-            const isCompletelyMissing = !item || item.allocated === 0;
-            return (
-              <div key={blocker.sku}>
-                <p className="text-sm font-semibold">
-                  {isCompletelyMissing
-                    ? `Thiếu hoàn toàn: ${blocker.itemName}`
-                    : `Thiếu ${item.shortage.toLocaleString("vi")}${item.unit ? ` ${item.unit}` : ""}: ${blocker.itemName}`}
-                </p>
-                {/* Mỗi lý do MỘT DÒNG, không nối bằng dấu chấm giữa.
-                    Một xã có mười mấy kho, nối hết lại thành một khối chữ đặc dài
-                    năm sáu dòng — người trực nhìn vào chỉ thấy "có gì đó hỏng",
-                    không đọc ra được kho nào còn bao nhiêu. Mà đây lại đúng là chỗ
-                    trả lời câu hỏi "vì sao thiếu". */}
-                <ul className="mt-1.5 space-y-1 text-xs text-[var(--text-muted)]">
-                  {blocker.reasons.map((reason, i) => (
-                    <li className="flex gap-1.5" key={i}>
-                      <span aria-hidden="true">–</span>
-                      <span>{reason}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
       <div className="divide-y rounded-md border">
         {assessment.items.map((item) => (
           <div className="grid grid-cols-[1fr_auto] gap-3 px-4 py-3" key={item.sku}>
@@ -132,14 +136,23 @@ export function MissionReadinessPanel({
               )}
             </div>
             <span
-              className="self-center text-xs font-semibold"
+              className="self-center whitespace-nowrap text-xs font-semibold"
               style={{ color: STATUS_META[item.status].color }}
             >
-              {STATUS_META[item.status].label}
+              {STATUS_META[item.status].itemLabel}
             </span>
           </div>
         ))}
       </div>
+
+      {/* Một câu chỉ đường, KHÔNG phải một nút. Khối này cố ý không có hành động
+          nào; nói ra chỗ có hành động thì người đọc không phải đi tìm. */}
+      {shortCount > 0 ? (
+        <p className="mt-3 text-xs text-[var(--text-muted)]">
+          Phần còn thiếu hỏi mượn ở khối “Mượn vật tư liên xã”, ngay dưới bảng điều phối nội xã của
+          bản tham mưu. Hàng về kho là con số ở đây tự cập nhật.
+        </p>
+      ) : null}
     </CollapsiblePanel>
   );
 }

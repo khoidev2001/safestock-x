@@ -57,13 +57,28 @@ import {
   computeRequirements,
   countVulnerablePeople,
   IncidentInput,
+  Requirement,
 } from "./mission.compute";
-import { assessMissionReadiness, MissionReadinessAssessment } from "./mission-readiness";
+import {
+  assessMissionReadiness,
+  MissionReadinessAssessment,
+  withCurrentFulfillment,
+} from "./mission-readiness";
 import { normalizeHamletName } from "../admin/hamlet-normalization";
 import { findHamletInReport } from "./hamlet-in-report";
 import { readReportSignal } from "./report-signal";
 import { decodeReportAudio } from "./report-audio";
 import { buildWarehouseRequestCreates, requestBatchItems } from "./mission-warehouse-request";
+
+/**
+ * Trần cho số lượng nhu cầu ADMIN gõ tay vào bản tham mưu.
+ *
+ * Không phải giới hạn nghiệp vụ — không xã nào cần một triệu áo phao — mà là chốt
+ * chặn gõ nhầm: thêm vài số 0 vào ô số lượng thì phép phân bổ vẫn chạy đúng nhưng
+ * mức đáp ứng tụt về gần 0 và nhiệm vụ bị khoá là "chưa thể điều phối", trong khi
+ * kho thật ra vẫn đủ hàng.
+ */
+const MAX_REQUIREMENT_QUANTITY = 1_000_000;
 
 /** Gợi ý mượn kho lân cận cho 1 SKU thiếu. */
 interface NeighborSuggestion {
@@ -564,6 +579,16 @@ export class MissionService {
         // Một xã có nhiều quản trị viên cùng duyệt, nên "ai đã duyệt" là thông
         // tin điều hành thật: người trực cần biết gọi ai để hỏi lại phương án.
         approvedBy: { select: { id: true, fullName: true, email: true } },
+        /**
+         * Người GỬI nhiệm vụ này lên — trưởng thôn báo tình huống, hoặc lực lượng
+         * hiện trường báo từ hiện trường.
+         *
+         * Cùng một xã có mười mấy thôn cùng báo về trong một trận lũ; số hiệu
+         * nhiệm vụ không nói được tin nào từ ai, nên người trực muốn hỏi lại một
+         * chi tiết trong lời kể thì không biết gọi cho ai. `createdByUserId` vốn
+         * đã lưu sẵn, chỉ là chưa bao giờ được trả ra.
+         */
+        createdBy: { select: { id: true, fullName: true, email: true, role: true } },
         // CHỈ phần mô tả, không kèm `data`: mỗi ảnh vài trăm KB, nhét vào JSON
         // chi tiết nhiệm vụ là bắt mọi lượt mở nhiệm vụ tải cả tập ảnh — kể cả
         // lượt của người chỉ liếc trạng thái trên điện thoại giữa vùng sóng yếu.
@@ -594,7 +619,11 @@ export class MissionService {
       if (!actor || !warehouse || actor.organizationId !== warehouse.organizationId)
         throw new NotFoundException("Khong tim thay nhiem vu");
     }
-    return withCoordinationAnalysisFlag(mission);
+    // Tính lại % đáp ứng theo công thức hiện hành trước khi trả ra. Ảnh chụp
+    // đã lưu giữ nguyên các con số phân bổ; chỉ riêng tỉ lệ phần trăm được tính
+    // lại, để nhiệm vụ lập từ trước lúc đổi công thức không hiện 0% giữa một
+    // bảng toàn dòng "Đủ" — xem `withCurrentFulfillment`.
+    return withCoordinationAnalysisFlag(withCurrentFulfillment(mission));
   }
 
   /**
@@ -684,6 +713,311 @@ export class MissionService {
       name: hamlet.name,
       point: { lat: hamlet.lat, lng: hamlet.lng },
     };
+  }
+
+
+  /**
+   * Vật tư ADMIN có thể THÊM vào bản tham mưu của một nhiệm vụ.
+   *
+   * Luật đúng một câu: chỉ hiện thứ mà cụm kho của xã còn ÍT NHẤT MỘT đơn vị lấy
+   * ra được ngay. Thêm một món cả xã không có là ghi vào phương án một dòng chắc
+   * chắn thiếu 100% — nó không giúp ai chuẩn bị gì, chỉ kéo tụt số đáp ứng và đẩy
+   * nhiệm vụ sang "chưa thể điều phối".
+   *
+   * "Còn lấy ra được" dùng lại đúng `loadClusterBatches` mà lượt lập phương án
+   * dùng: cùng bộ lọc lô (hạn dùng, tình trạng, kệ khoá, kho có blocker) và cùng
+   * phép trừ phần đã hứa cho nhiệm vụ khác. Đếm thẳng `ItemBatch.quantity` sẽ ra
+   * một con số to hơn thực tế, và người dùng thêm vào rồi mới biết là không có.
+   */
+  async listRequirementOptions(
+    missionId: string,
+    actorUserId?: string,
+    scopeWarehouseId?: string | null,
+  ) {
+    const mission = await this.getMission(missionId, actorUserId, scopeWarehouseId);
+    if (!mission) throw new NotFoundException("Không tìm thấy nhiệm vụ");
+    const warehouse = await this.prisma.warehouse.findUnique({
+      where: { id: mission.warehouseId },
+      select: { organizationId: true, communeId: true },
+    });
+    if (!warehouse) throw new NotFoundException("Không tìm thấy kho");
+
+    // Danh mục vật tư của chính đơn vị này. Lọc theo tồn kho thật ở bước sau —
+    // ở đây chỉ cần tên và đơn vị để hiện cho người chọn.
+    const items = await this.prisma.item.findMany({
+      where: { batches: { some: { shelf: { zone: { warehouse: { organizationId: warehouse.organizationId, communeId: warehouse.communeId } } } } } },
+      // Đơn vị đếm nằm ở NHÓM vật tư, không nằm trên chính vật tư: cả nhóm
+      // "nước đóng chai" đếm theo chai, không có chuyện hai mã trong cùng nhóm
+      // đếm khác nhau.
+      select: { sku: true, name: true, category: { select: { unit: true } } },
+      orderBy: { name: "asc" },
+    });
+    if (items.length === 0) return [];
+
+    const pool = await this.loadClusterBatches(
+      warehouse.organizationId,
+      warehouse.communeId,
+      items.map((item) => item.sku),
+      mission.incidentLat != null && mission.incidentLng != null
+        ? { lat: mission.incidentLat, lng: mission.incidentLng }
+        : undefined,
+      missionId,
+    );
+    const availableBySku = new Map<string, number>();
+    for (const batch of pool.available) {
+      availableBySku.set(batch.sku, (availableBySku.get(batch.sku) ?? 0) + batch.quantity);
+    }
+    const alreadyInPlan = new Set(mission.requirements.map((requirement) => requirement.sku));
+
+    return items
+      .map((item) => ({
+        sku: item.sku,
+        itemName: item.name,
+        unit: item.category.unit,
+        availableQuantity: availableBySku.get(item.sku) ?? 0,
+        alreadyInPlan: alreadyInPlan.has(item.sku),
+      }))
+      .filter((option) => option.availableQuantity >= 1);
+  }
+
+  /**
+   * ADMIN thêm / sửa / xoá một dòng vật tư trong bản tham mưu, rồi hệ thống
+   * TÍNH LẠI khả năng đáp ứng theo đúng con số vừa sửa.
+   *
+   * Tính lại toàn bộ chứ không vá một dòng: phân bổ là bài toán tranh giành cùng
+   * một kho hàng giữa các loại vật tư, nên sửa số của một loại có thể đổi kho
+   * nào cấp cho loại khác. Vá một dòng thì các dòng còn lại giữ nguyên phân bổ cũ
+   * và tổng số đáp ứng không còn khớp với bất kỳ phép cộng nào.
+   *
+   * CHỈ khi nhiệm vụ còn NHÁP. Đã duyệt và phát hành thì các kho đang cầm phiếu
+   * xuất theo đúng con số cũ; đổi nhu cầu lúc đó là đổi lệnh dưới tay người đang
+   * bốc hàng.
+   */
+  async changeRequirement(
+    missionId: string,
+    change:
+      | { op: "add"; sku: string; quantity: number }
+      | { op: "update"; sku: string; quantity: number }
+      | { op: "remove"; sku: string },
+    actorUserId?: string,
+    scopeWarehouseId?: string | null,
+  ) {
+    const mission = await this.getMission(missionId, actorUserId, scopeWarehouseId);
+    if (!mission) throw new NotFoundException("Không tìm thấy nhiệm vụ");
+    if (mission.status !== MissionStatus.DRAFT) {
+      throw new BadRequestException(
+        "Chỉ sửa được vật tư khi nhiệm vụ còn là bản nháp. Nhiệm vụ đã phát hành thì các kho đang xuất theo đúng con số cũ.",
+      );
+    }
+    const sku = change.sku.trim();
+    if (!sku) throw new BadRequestException("Thiếu mã vật tư");
+
+    const warehouse = await this.prisma.warehouse.findUnique({
+      where: { id: mission.warehouseId },
+      select: { organizationId: true, communeId: true },
+    });
+    if (!warehouse) throw new NotFoundException("Không tìm thấy kho");
+
+    const existing = mission.requirements.find((requirement) => requirement.sku === sku);
+    const desired: Requirement[] = mission.requirements.map((requirement) => ({
+      sku: requirement.sku,
+      itemName: requirement.itemName,
+      unit: requirement.unit,
+      required: requirement.required,
+    }));
+
+    if (change.op === "remove") {
+      if (!existing) throw new NotFoundException("Vật tư này không có trong bản tham mưu");
+      const index = desired.findIndex((requirement) => requirement.sku === sku);
+      desired.splice(index, 1);
+    } else {
+      this.assertRequirementQuantity(change.quantity);
+      if (change.op === "update") {
+        if (!existing) throw new NotFoundException("Vật tư này không có trong bản tham mưu");
+        const index = desired.findIndex((requirement) => requirement.sku === sku);
+        desired[index] = { ...desired[index], required: change.quantity };
+      } else {
+        if (existing) {
+          throw new BadRequestException(
+            `${existing.itemName} đã có trong bản tham mưu — sửa số lượng ở dòng đó thay vì thêm mới.`,
+          );
+        }
+        // Chốt "có thật trong xã" NGAY TẠI ĐÂY, không tin màn hình đã lọc sẵn:
+        // danh sách chọn tải về từ vài phút trước, và trong vài phút đó một
+        // nhiệm vụ khác hoàn toàn có thể đã lấy hết món này.
+        const options = await this.listRequirementOptions(missionId, actorUserId, scopeWarehouseId);
+        const option = options.find((candidate) => candidate.sku === sku);
+        if (!option) {
+          throw new BadRequestException(
+            "Không kho nào trong xã còn vật tư này, nên không thêm vào bản tham mưu được.",
+          );
+        }
+        desired.push({
+          sku: option.sku,
+          itemName: option.itemName,
+          unit: option.unit,
+          required: change.quantity,
+        });
+      }
+    }
+
+    const pool = await this.loadClusterBatches(
+      warehouse.organizationId,
+      warehouse.communeId,
+      desired.map((requirement) => requirement.sku),
+      mission.incidentLat != null && mission.incidentLng != null
+        ? { lat: mission.incidentLat, lng: mission.incidentLng }
+        : undefined,
+      missionId,
+    );
+    const allocations = desired.map((requirement) => allocateGreedy(requirement, pool.available));
+    const readinessAssessment = assessMissionReadiness(allocations, pool.unavailableReasonsBySku);
+    const neighbors = await this.prisma.neighborWarehouse.findMany({
+      where: { warehouseId: mission.warehouseId },
+    });
+
+    return this.prisma.$transaction(async (tx) => {
+      // Giành lại trạng thái NHÁP trước khi ghi: giữa lúc tính lại, một người
+      // khác hoàn toàn có thể vừa bấm duyệt. Không có chốt này thì con số nhu cầu
+      // đổi ngay dưới tay các kho vừa nhận phiếu.
+      const claimed = await tx.mission.updateMany({
+        where: { id: missionId, status: MissionStatus.DRAFT },
+        data: {
+          fulfillment: readinessAssessment.fulfillment,
+          readinessAssessment: {
+            ...readinessAssessment,
+          } as unknown as Prisma.InputJsonValue,
+          // Kế hoạch cứu hộ được viết TỪ bộ số vừa bị sửa, nên nó không còn đúng.
+          // Giữ lại là bày ra một bản kể chuyện về những con số không còn tồn tại;
+          // xoá đi thì nút "Lập kế hoạch cứu hộ" hiện lại và bản mới lập trên số mới.
+          actionPlan: Prisma.DbNull,
+          explanation: null,
+        },
+      });
+      if (claimed.count === 0) {
+        throw new BadRequestException(
+          "Nhiệm vụ vừa được duyệt ở nơi khác nên không sửa vật tư được nữa. Tải lại trang để xem trạng thái mới.",
+        );
+      }
+      await tx.missionRequirement.deleteMany({ where: { missionId } });
+      await tx.mission.update({
+        where: { id: missionId },
+        data: { requirements: { create: this.buildRequirementCreates(allocations, neighbors) } },
+      });
+      return tx.mission.findUniqueOrThrow({
+        where: { id: missionId },
+        include: { requirements: true },
+      });
+    });
+  }
+
+  /**
+   * Phân bổ lại theo TỒN KHO HIỆN TẠI, giữ nguyên nhu cầu.
+   *
+   * Dành cho lúc hàng mượn từ xã khác vừa về kho. Bản tham mưu chốt phân bổ ở
+   * thời điểm lập, nên sau khi xã lân cận đồng ý và hàng đã nhập kho thì con số
+   * "đáp ứng 0/150" vẫn nằm nguyên trên màn hình — người trực đi mượn xong, hàng
+   * đã nằm trong kho, mà hệ thống vẫn báo thiếu.
+   *
+   * Khác `changeRequirement` ở chỗ KHÔNG đụng vào nhu cầu: cùng bộ `required`,
+   * chỉ chạy lại phép chia hàng trên kho mới. Nhờ vậy nó không phải là một lần
+   * sửa lệnh, và gọi lại bao nhiêu lần cũng ra cùng kết quả nếu kho không đổi.
+   *
+   * Kế hoạch cứu hộ chỉ bị xoá KHI phân bổ thật sự đổi. Bấm tính lại mà kho y
+   * nguyên thì không có lý do gì bắt lập lại kế hoạch — đó là cách nhanh nhất
+   * dạy người dùng đừng bấm nút này.
+   */
+  async recalculateSupply(
+    missionId: string,
+    actorUserId?: string,
+    scopeWarehouseId?: string | null,
+  ) {
+    const mission = await this.getMission(missionId, actorUserId, scopeWarehouseId);
+    if (!mission) throw new NotFoundException("Không tìm thấy nhiệm vụ");
+    if (mission.status !== MissionStatus.DRAFT) {
+      throw new BadRequestException(
+        "Chỉ tính lại được khi nhiệm vụ còn là bản nháp. Nhiệm vụ đã phát hành thì các kho đang xuất theo đúng con số cũ.",
+      );
+    }
+    if (mission.requirements.length === 0) {
+      throw new BadRequestException("Bản tham mưu chưa có vật tư nào để tính lại.");
+    }
+
+    const warehouse = await this.prisma.warehouse.findUnique({
+      where: { id: mission.warehouseId },
+      select: { organizationId: true, communeId: true },
+    });
+    if (!warehouse) throw new NotFoundException("Không tìm thấy kho");
+
+    const desired: Requirement[] = mission.requirements.map((requirement) => ({
+      sku: requirement.sku,
+      itemName: requirement.itemName,
+      unit: requirement.unit,
+      required: requirement.required,
+    }));
+
+    const pool = await this.loadClusterBatches(
+      warehouse.organizationId,
+      warehouse.communeId,
+      desired.map((requirement) => requirement.sku),
+      mission.incidentLat != null && mission.incidentLng != null
+        ? { lat: mission.incidentLat, lng: mission.incidentLng }
+        : undefined,
+      missionId,
+    );
+    const allocations = desired.map((requirement) => allocateGreedy(requirement, pool.available));
+    const readinessAssessment = assessMissionReadiness(allocations, pool.unavailableReasonsBySku);
+    const neighbors = await this.prisma.neighborWarehouse.findMany({
+      where: { warehouseId: mission.warehouseId },
+    });
+
+    // So theo phần ĐÃ LẤY ĐƯỢC của từng loại: đó là thứ duy nhất mà việc mượn về
+    // làm đổi, và cũng là thứ quyết định kế hoạch cứu hộ có còn đúng hay không.
+    const allocatedBefore = new Map(
+      mission.requirements.map((requirement) => [requirement.sku, requirement.allocated]),
+    );
+    const changed = allocations.some(
+      (allocation) => allocatedBefore.get(allocation.sku) !== allocation.allocated,
+    );
+
+    return this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.mission.updateMany({
+        where: { id: missionId, status: MissionStatus.DRAFT },
+        data: {
+          fulfillment: readinessAssessment.fulfillment,
+          readinessAssessment: {
+            ...readinessAssessment,
+          } as unknown as Prisma.InputJsonValue,
+          ...(changed ? { actionPlan: Prisma.DbNull, explanation: null } : {}),
+        },
+      });
+      if (claimed.count === 0) {
+        throw new BadRequestException(
+          "Nhiệm vụ vừa được duyệt ở nơi khác nên không tính lại được. Tải lại trang để xem trạng thái mới.",
+        );
+      }
+      await tx.missionRequirement.deleteMany({ where: { missionId } });
+      await tx.mission.update({
+        where: { id: missionId },
+        data: { requirements: { create: this.buildRequirementCreates(allocations, neighbors) } },
+      });
+      return tx.mission.findUniqueOrThrow({
+        where: { id: missionId },
+        include: { requirements: true },
+      });
+    });
+  }
+
+  /** Số lượng nhu cầu: nguyên dương, và có trần để một lần gõ nhầm không thành 900 triệu. */
+  private assertRequirementQuantity(quantity: number): void {
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      throw new BadRequestException("Số lượng phải là số nguyên dương");
+    }
+    if (quantity > MAX_REQUIREMENT_QUANTITY) {
+      throw new BadRequestException(
+        `Số lượng vượt trần cho phép (${MAX_REQUIREMENT_QUANTITY.toLocaleString("vi")}).`,
+      );
+    }
   }
 
   private async assertWarehouseAccess(
@@ -1190,11 +1524,89 @@ export class MissionService {
         // Không lặp lại loại thiên tai và số người: cả thẻ thông báo lẫn hộp nổi
         // đều đã hiện sẵn hai thứ đó từ dữ liệu có cấu trúc. Lặp lại bằng chữ chỉ
         // tổ in ra mã enum thô ("FLOOD") bên cạnh chính cái nhãn tiếng Việt của nó.
-        body: `${missionLabel(mission.missionNo)} — kết quả: ${label}.${note ? ` Ghi chú: ${note}` : ""}${photoNote}${stockNote}`,
+        body: `${missionLabel(mission.missionNo)} — kết quả: ${label}.${note ? ` Ghi chú: ${note}` : ""}${photoNote}${stockNote}${
+          role === UserRole.WAREHOUSE
+            ? " Kho đếm lại hàng về rồi bấm xác nhận đã hoàn trả để đóng nhiệm vụ."
+            : ""
+        }`,
         missionId: id,
       });
     }
     return updated;
+  }
+
+  /**
+   * KHO xác nhận đã nhận lại vật tư — bước cuối, đóng hẳn nhiệm vụ.
+   *
+   * Giao xong không phải là hết việc. Áo phao, đèn pin, bạt che là hàng tái sử
+   * dụng: chúng phải quay về kho rồi mới tính là khép lại. Trước đây nhiệm vụ dừng
+   * ở COMPLETED nên phần hàng đó không có mốc nào để đóng, và người trực không có
+   * cách nào phân biệt "đã giao xong" với "đã thu hồi xong" — hai việc cách nhau
+   * có khi vài ngày.
+   *
+   * CHỈ KHO bấm được, không phải điều phối: người đếm lại hàng khi nó về tới nơi
+   * mới là người biết nó về đủ hay không. Điều phối ký hộ thì chữ ký đó rỗng.
+   */
+  async markReturnedByWarehouse(id: string, userId: string, scopeWarehouseId?: string | null) {
+    const mission = await this.prisma.mission.findUnique({ where: { id } });
+    if (!mission) throw new NotFoundException("Không tìm thấy nhiệm vụ");
+    await this.assertActorInMissionOrganization(userId, mission.warehouseId);
+    const actor = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    if (actor?.role !== UserRole.WAREHOUSE) {
+      throw new ForbiddenException(
+        "Chỉ tài khoản kho mới xác nhận được việc hoàn trả vật tư — kho là bên đếm lại hàng khi nó về.",
+      );
+    }
+    /*
+      KHÔNG dùng `assertWarehouseInScope(scope, mission.warehouseId)` ở đây.
+
+      `mission.warehouseId` là kho đã TIẾP NHẬN báo cáo, thường là kho thôn nơi
+      xảy ra sự việc — không phải kho đã xuất hàng. Chốt theo nó thì mọi kho khác
+      tham gia phương án đều bị chặn, kể cả kho tổng vừa xuất phần lớn số hàng.
+
+      Điều kiện đúng là kho của người bấm CÓ THAM GIA nhiệm vụ này: hoặc là kho
+      nhận báo cáo, hoặc có phiếu vật tư trong phương án. Một nhiệm vụ huy động
+      nhiều kho, và hàng thừa thường dồn về một chỗ chứ không chia lại đúng như
+      lúc xuất — bắt từng kho ký riêng thì nhiệm vụ treo mãi ở kho không có gì để
+      nhận về.
+    */
+    if (scopeWarehouseId && scopeWarehouseId !== mission.warehouseId) {
+      const participates = await this.prisma.missionWarehouseRequest.count({
+        where: { missionId: id, warehouseId: scopeWarehouseId },
+      });
+      if (participates === 0) {
+        throw new ForbiddenException("Kho của bạn không tham gia nhiệm vụ này");
+      }
+    }
+    this.guardTransition(mission.status, MissionStatus.RETURNED);
+    const claim = await this.prisma.mission.updateMany({
+      where: { id, status: MissionStatus.COMPLETED },
+      data: {
+        status: MissionStatus.RETURNED,
+        returnedAt: new Date(),
+        returnedByUserId: userId,
+      },
+    });
+    if (claim.count === 0) {
+      const current = await this.prisma.mission.findUnique({ where: { id } });
+      if (!current) throw new NotFoundException("Không tìm thấy nhiệm vụ");
+      this.guardTransition(current.status, MissionStatus.RETURNED);
+      throw new BadRequestException("Nhiệm vụ vừa được cập nhật, vui lòng tải lại");
+    }
+
+    for (const role of [UserRole.ADMIN, UserRole.RESCUE]) {
+      await this.notifications.create({
+        recipientRole: role,
+        kind: NotificationKind.MISSION_SUPPLIES_RETURNED,
+        title: "Kho đã nhận lại vật tư — nhiệm vụ khép lại",
+        body: `${missionLabel(mission.missionNo)}: kho xác nhận đã thu hồi và đếm lại vật tư. Không còn bước nào phải làm.`,
+        missionId: id,
+      });
+    }
+    return this.prisma.mission.findUniqueOrThrow({ where: { id } });
   }
 
   /**
@@ -1477,7 +1889,7 @@ export class MissionService {
       },
       take: 100,
     });
-    return missions.map(withCoordinationAnalysisFlag);
+    return missions.map((mission) => withCoordinationAnalysisFlag(withCurrentFulfillment(mission)));
   }
 
   /**
@@ -2026,7 +2438,13 @@ export class MissionService {
     const reason = blocker
       ? `${blocker.itemName}: ${blocker.reasons[0] ?? "không có lô đủ điều kiện"}`
       : "Không đủ vật tư thiết yếu đủ điều kiện";
-    throw new BadRequestException(`Chưa thể điều phối nhiệm vụ: ${reason}.`);
+    // Nói VIỆC PHẢI LÀM chứ không chỉ nói đã chặn. Người trực đọc "chưa thể điều
+    // phối" xong không biết bước kế tiếp, trong khi hệ thống có sẵn đường đi —
+    // mượn xã lân cận rồi phát hành lại. Kho trong xã hết hàng không phải là hết
+    // cách, đó là lúc phải hỏi xã bên cạnh.
+    throw new BadRequestException(
+      `Kho trong xã chưa đủ để phát hành — ${reason}. Hỏi mượn xã lân cận ở tab Mượn, trả rồi phát hành lại.`,
+    );
   }
 
   private assertMissionHasIncidentPoint(mission: {
@@ -2072,7 +2490,13 @@ export class MissionService {
     }));
 
     const warehouses = await this.warehouseEtas(mission);
-    const severity = scoreSeverity(incident, fulfillment);
+    // Loại trắng kho (cần mà lấy được 0) đi thẳng vào chấm mức khẩn cấp: mức đáp
+    // ứng nay là trung bình theo loại nên nó không còn tự tụt xuống khi một loại
+    // mất sạch — xem chú thích trong `scoreSeverity`.
+    const unavailableItemNames = allocations
+      .filter((allocation) => allocation.required > 0 && allocation.allocated === 0)
+      .map((allocation) => allocation.itemName);
+    const severity = scoreSeverity(incident, fulfillment, unavailableItemNames);
     const forecasts = computeForecasts(incident, fulfillment);
 
     // LLM viết phần diễn giải; lỗi → template.

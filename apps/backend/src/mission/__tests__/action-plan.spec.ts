@@ -72,6 +72,21 @@ describe("scoreSeverity", () => {
   it("nhất quán: cùng input → cùng kết quả", () => {
     expect(scoreSeverity(flood, 50)).toEqual(scoreSeverity(flood, 50));
   });
+
+  it("mức đáp ứng cao nhưng có loại trắng kho → vẫn cộng điểm và gọi tên món", () => {
+    // 13/15 loại đủ nên trung bình là 87%, quá ngưỡng 70% cũ. Nhưng không có
+    // xuồng thì không ra tới nơi được, và mức khẩn cấp phải phản ánh điều đó.
+    const withNames = scoreSeverity(minor, 87, ["Xuồng cứu hộ", "Áo phao người lớn"]);
+    const withoutNames = scoreSeverity(minor, 87);
+    expect(withNames.level).toBe(withoutNames.level + 1);
+    expect(withNames.reasons.join(" ")).toContain("Xuồng cứu hộ");
+  });
+
+  it("không cộng điểm hai lần cho cùng một chuyện kho không lo nổi", () => {
+    const both = scoreSeverity(minor, 40, ["Xuồng cứu hộ"]);
+    const onlyLowFulfillment = scoreSeverity(minor, 40);
+    expect(both.level).toBe(onlyLowFulfillment.level);
+  });
 });
 
 describe("computeForecasts", () => {

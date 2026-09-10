@@ -6,19 +6,78 @@ import { useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-store";
 import { listReports, uploadReport, type StockReport } from "@/lib/report-api";
 import { Pagination, usePagination } from "@/components/shared/pagination";
+import {
+  REPORT_SECTION_DESCRIPTIONS,
+  REPORT_SECTION_LABELS,
+  REPORT_SECTIONS,
+  type ReportSection,
+} from "@/lib/report-sections";
+import { DisasterStatisticsView } from "./disaster-statistics-view";
 import { ReportReviewDialog } from "./report-review-dialog";
 
-/** Báo cáo kiểm kê tháng: trưởng thôn gửi tệp, quản trị xã duyệt và cập nhật kho. */
+/**
+ * Tab "Báo cáo" — gộp hai việc cùng họ vào một chỗ:
+ *
+ *  - Báo cáo tháng: kiểm kê định kỳ của thôn, gửi lên rồi chờ xã duyệt.
+ *  - Thống kê sau thiên tai: mỗi đợt đã tiêu hết bao nhiêu, mất bao nhiêu.
+ *
+ * Hai phần này đọc chung một câu hỏi của cán bộ xã ("kho đã đi những đâu"),
+ * nhưng khác chu kỳ, nên tách thành hai phần trong cùng một tab thay vì hai tab
+ * riêng ở thanh điều hướng vốn đã dài.
+ */
 export function ReportView({ warehouseId }: { warehouseId: string }) {
   const role = useAuth((s) => s.user?.role);
   const scopeWarehouseId = useAuth((s) => s.user?.warehouseId);
   const isAdmin = role === "ADMIN";
+  const [section, setSection] = useState<ReportSection>(REPORT_SECTIONS[0]);
 
   return (
     <div className="space-y-4">
-      {!isAdmin && <UploadCard warehouseId={scopeWarehouseId ?? warehouseId} />}
-      <ReportList isAdmin={isAdmin} />
+      <SectionBar active={section} onChange={setSection} />
+
+      {section === "monthly" ? (
+        <>
+          {!isAdmin && <UploadCard warehouseId={scopeWarehouseId ?? warehouseId} />}
+          <ReportList isAdmin={isAdmin} />
+        </>
+      ) : (
+        <DisasterStatisticsView />
+      )}
     </div>
+  );
+}
+
+function SectionBar({
+  active,
+  onChange,
+}: {
+  active: ReportSection;
+  onChange: (section: ReportSection) => void;
+}) {
+  return (
+    <section className="rounded-md border bg-[var(--surface)] px-5 py-4">
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Phần của tab Báo cáo">
+        {REPORT_SECTIONS.map((key) => {
+          const isActive = key === active;
+          return (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={isActive}
+              onClick={() => onChange(key)}
+              className={`min-h-9 rounded-full border px-4 text-sm font-medium transition active:translate-y-px ${
+                isActive
+                  ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--color-accent-fg)]"
+                  : "bg-[var(--surface)] hover:bg-[var(--surface-2)]"
+              }`}
+            >
+              {REPORT_SECTION_LABELS[key]}
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-2 text-sm text-[var(--text-muted)]">{REPORT_SECTION_DESCRIPTIONS[active]}</p>
+    </section>
   );
 }
 

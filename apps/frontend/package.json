@@ -26,7 +26,8 @@
     "test:nav-route-match": "tsc --target ES2021 --module commonjs --moduleResolution node --esModuleInterop --skipLibCheck --outDir .next/nav-route-match-test src/lib/nav-route-match.ts src/lib/nav-route-match.test.ts && node --test .next/nav-route-match-test/nav-route-match.test.js",
     "test:mission-draft": "tsc --target ES2021 --module commonjs --moduleResolution node --esModuleInterop --skipLibCheck --outDir .next/mission-draft-test src/lib/mission-draft.ts src/lib/mission-draft.test.ts && node --test .next/mission-draft-test/mission-draft.test.js",
     "test:coordinate-input": "tsc --target ES2021 --module commonjs --moduleResolution node --esModuleInterop --skipLibCheck --outDir .next/coordinate-input-test src/lib/geo.ts src/lib/coordinate-input.ts src/lib/coordinate-input.test.ts && node --test .next/coordinate-input-test/coordinate-input.test.js",
-    "test:hamlet-match": "tsc --target ES2021 --module commonjs --moduleResolution node --esModuleInterop --skipLibCheck --outDir .next/hamlet-match-test src/lib/hamlet-match.ts src/lib/hamlet-match.test.ts && node --test .next/hamlet-match-test/hamlet-match.test.js"
+    "test:hamlet-match": "tsc --target ES2021 --module commonjs --moduleResolution node --esModuleInterop --skipLibCheck --outDir .next/hamlet-match-test src/lib/hamlet-match.ts src/lib/hamlet-match.test.ts && node --test .next/hamlet-match-test/hamlet-match.test.js",
+    "test:loan-progress": "tsc --target ES2021 --module commonjs --moduleResolution node --esModuleInterop --skipLibCheck --outDir .next/loan-progress-test src/components/mission/loan-progress.ts src/components/mission/loan-progress.test.ts && node --test .next/loan-progress-test/loan-progress.test.js"
   },
   "dependencies": {
     "@icon-park/react": "^1.4.2",

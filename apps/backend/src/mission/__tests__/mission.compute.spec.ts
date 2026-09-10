@@ -190,7 +190,7 @@ describe("allocateGreedy (K1 — kho gần điểm nạn trước)", () => {
   });
 });
 
-describe("overallFulfillment (min = weakest link)", () => {
+describe("overallFulfillment (trung bình theo loại vật tư)", () => {
   const alloc = (sku: string, required: number, allocated: number) => ({
     sku,
     itemName: sku,
@@ -201,14 +201,44 @@ describe("overallFulfillment (min = weakest link)", () => {
     batches: [],
   });
 
-  it("should return the minimum ratio, not average", () => {
-    // áo phao 100% nhưng nước 60% → đáp ứng = 60 (mắt xích yếu)
+  it("should average the per-item ratios", () => {
+    // áo phao 100% và nước 60% → (100 + 60) / 2 = 80
     const result = overallFulfillment([alloc("LIFE-ADULT", 100, 100), alloc("WATER-01", 100, 60)]);
-    expect(result).toBe(60);
+    expect(result).toBe(80);
+  });
+
+  it("should not report 0% when only a couple of item types are missing", () => {
+    // Đúng cảnh trên màn hình: 13 loại kho lo trọn, 2 loại không còn cái nào.
+    // Công thức MIN cũ trả 0% trong khi bảng bên dưới ghi 13 dòng "Đủ".
+    const allocations = [
+      ...Array.from({ length: 13 }, (_, i) => alloc(`OK-${i}`, 100, 100)),
+      alloc("LIFE-ADULT", 150, 0),
+      alloc("BOAT-01", 4, 0),
+    ];
+    expect(overallFulfillment(allocations)).toBe(87);
   });
 
   it("should return 100 when everything fully allocated", () => {
     expect(overallFulfillment([alloc("A", 50, 50), alloc("B", 20, 20)])).toBe(100);
+  });
+
+  it("should never round a shortage up to a clean 100%", () => {
+    // 500/500 và 499/500 → 99.9% thật, nhưng vẫn còn thiếu 1 nên không được
+    // hiện "100%" cho người duyệt.
+    expect(overallFulfillment([alloc("A", 500, 500), alloc("B", 500, 499)])).toBe(99);
+  });
+
+  it("should never round a partial pickup down to a bare 0%", () => {
+    expect(overallFulfillment([alloc("A", 1000, 1), alloc("B", 1000, 0)])).toBe(1);
+  });
+
+  it("should keep 0% when nothing at all could be allocated", () => {
+    expect(overallFulfillment([alloc("A", 100, 0), alloc("B", 20, 0)])).toBe(0);
+  });
+
+  it("should not let a surplus item mask a missing one", () => {
+    // Kho dư nước không bù được cho việc cả xã không còn chiếc xuồng nào.
+    expect(overallFulfillment([alloc("WATER-01", 100, 300), alloc("BOAT-01", 4, 0)])).toBe(50);
   });
 
   it("should ignore zero-requirement items", () => {

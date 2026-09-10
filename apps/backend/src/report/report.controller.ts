@@ -19,7 +19,8 @@ import { JwtAuthGuard } from "../auth/guards";
 import { PermissionGuard } from "../rbac/permission.guard";
 import { RequirePermission } from "../rbac/permissions.decorator";
 import { ReportService } from "./report.service";
-import { RejectReportDto, SubmitStockReportDto } from "./dto";
+import { DisasterStatisticsService } from "./disaster-statistics.service";
+import { DisasterStatisticsQueryDto, RejectReportDto, SubmitStockReportDto } from "./dto";
 
 interface UploadedExcel {
   buffer: Buffer;
@@ -29,7 +30,10 @@ interface UploadedExcel {
 @UseGuards(JwtAuthGuard, PermissionGuard)
 @Controller("reports")
 export class ReportController {
-  constructor(private reports: ReportService) {}
+  constructor(
+    private reports: ReportService,
+    private disasterStatistics: DisasterStatisticsService,
+  ) {}
 
   /** Trưởng thôn upload Excel kiểm kê tháng → PENDING. multipart field "file", body: warehouseId, period. */
   @RequirePermission(Permission.REPORT_SUBMIT)
@@ -72,6 +76,21 @@ export class ReportController {
   @Get()
   list(@Request() req: AuthenticatedRequest, @Query("status") status?: ReportStatus) {
     return this.reports.list(req.user.userId, status, req.user.warehouseId);
+  }
+
+  /**
+   * Thống kê sau thiên tai — mỗi đợt đã tiêu bao nhiêu, mất bao nhiêu, thu về bao nhiêu.
+   *
+   * PHẢI khai trước `@Get(":id")`: Nest so khớp theo thứ tự khai báo, nên để sau
+   * thì "disaster-statistics" bị nuốt thành một id báo cáo và luôn trả 404.
+   */
+  @RequirePermission(Permission.REPORT_VIEW)
+  @Get("disaster-statistics")
+  disasterStatisticsReport(
+    @Request() req: AuthenticatedRequest,
+    @Query() query: DisasterStatisticsQueryDto,
+  ) {
+    return this.disasterStatistics.getStatistics(req.user.userId, req.user.warehouseId, query);
   }
 
   @RequirePermission(Permission.REPORT_VIEW)
