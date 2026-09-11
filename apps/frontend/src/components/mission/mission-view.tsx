@@ -792,8 +792,24 @@ export function MissionView({
    * đi — và trước đây nút "Lập bản tham mưu" ẩn theo, khiến nhiệm vụ đã phát hành
    * không còn đường nào lập tham mưu. Khối tham mưu phải tự có nút của nó cho
    * đúng trường hợp đó.
+   *
+   * LẬP KẾ HOẠCH CỨU HỘ XONG thì khối này cũng ẩn, dù nhiệm vụ vẫn còn nháp.
+   * Lúc đó hai cột của nó — "Quy mô ảnh hưởng" và "Vị trí các kho và điểm gặp
+   * nạn" — chỉ còn kể lại thứ kế hoạch bên dưới đã kể kỹ hơn: bảng số liệu nằm
+   * nguyên trong bản tham mưu, còn tuyến và các dấu ghim nằm trong chính kế hoạch.
+   * Để lại thì người trực mở nhiệm vụ ra phải cuộn qua gần một màn hình hình ảnh
+   * lặp trước khi tới phần phải đọc, và ô kể chuyện ở đầu cột trái thì đã bị khoá
+   * sẵn (`planLocked`) nên nó chỉ còn là chỗ chiếm chỗ.
+   *
+   * Sửa số liệu sự việc sau khi đã có kế hoạch vẫn làm được, nhưng bằng đường
+   * đúng của nó: sửa vật tư trong bản tham mưu, hoặc xoá kế hoạch để lập lại —
+   * cả hai đều tính lại phân bổ, còn form ở đây thì không.
    */
-  const composerVisible = isAdmin && variant === "khai-bao" && (!isDetailPage || isMissionEditable);
+  const composerVisible =
+    isAdmin &&
+    variant === "khai-bao" &&
+    (!isDetailPage || isMissionEditable) &&
+    !(isDetailPage && Boolean(mission?.actionPlan));
 
   /**
    * Có số liệu để admin soát lại chưa.
