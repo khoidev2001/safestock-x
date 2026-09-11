@@ -390,10 +390,23 @@ export class MissionController {
     return this.missions.listRequirementOptions(id, req.user.userId, req.user.warehouseId);
   }
 
-  /** ADMIN thêm / sửa / xoá một dòng vật tư rồi nhận lại nhiệm vụ đã tính lại. */
+  /**
+   * ADMIN thêm / sửa / xoá một dòng vật tư rồi nhận lại nhiệm vụ đã tính lại.
+   *
+   * Bản tham mưu được chụp LẠI ngay sau đó. Nhu cầu và phân bổ kho có mặt ở hai
+   * nơi trên cùng một trang: bảng "Khả năng đáp ứng" đọc thẳng từ nhiệm vụ nên nó
+   * đổi ngay, còn bảng "Điều phối nội xã" nằm trong ảnh chụp phân tích bất biến.
+   * Không chụp lại thì hai bảng cạnh nhau nói hai điều khác nhau, và bảng nói sai
+   * lại chính là bảng ghi kho nào phải đi lấy những gì.
+   *
+   * Đứng ở tầng controller chứ không trong `MissionService`: dịch vụ phân tích
+   * vốn đã phụ thuộc vào `MissionService`, gọi ngược lại từ trong đó là đóng một
+   * vòng phụ thuộc. Controller là chỗ ghép hai việc lại mà không bên nào phải
+   * biết bên kia.
+   */
   @RequirePermission(Permission.MISSION_CREATE)
   @Post(":id/requirements")
-  changeRequirement(
+  async changeRequirement(
     @Request() req: AuthenticatedRequest,
     @Param("id") id: string,
     @Body(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
@@ -403,7 +416,18 @@ export class MissionController {
       dto.op === "remove"
         ? ({ op: "remove", sku: dto.sku } as const)
         : ({ op: dto.op, sku: dto.sku, quantity: dto.quantity as number } as const);
-    return this.missions.changeRequirement(id, change, req.user.userId, req.user.warehouseId);
+    const mission = await this.missions.changeRequirement(
+      id,
+      change,
+      req.user.userId,
+      req.user.warehouseId,
+    );
+    await this.coordinationAnalysis.tryRecomputeAfterRequirementChange(
+      id,
+      req.user.userId,
+      req.user.warehouseId,
+    );
+    return mission;
   }
 
   /**
@@ -414,8 +438,20 @@ export class MissionController {
    */
   @RequirePermission(Permission.MISSION_CREATE)
   @Post(":id/recalculate-supply")
-  recalculateSupply(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
-    return this.missions.recalculateSupply(id, req.user.userId, req.user.warehouseId);
+  async recalculateSupply(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    const mission = await this.missions.recalculateSupply(
+      id,
+      req.user.userId,
+      req.user.warehouseId,
+    );
+    // Cùng lý do với lượt sửa vật tư: phân bổ kho vừa đổi, nên bảng điều phối
+    // trong bản tham mưu phải được chụp lại theo.
+    await this.coordinationAnalysis.tryRecomputeAfterRequirementChange(
+      id,
+      req.user.userId,
+      req.user.warehouseId,
+    );
+    return mission;
   }
 
   /** Snapshot phân tích AI để ADMIN đối chiếu nguồn và phiên bản đã dùng. */

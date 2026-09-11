@@ -1,4 +1,5 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
+import { randomUUID } from "crypto";
 import {
   CoordinationFactKey,
   incidentTypeLabel,
@@ -21,6 +22,8 @@ export interface AnalyzeMissionInput {
  */
 @Injectable()
 export class CoordinationAnalysisService {
+  private readonly log = new Logger(CoordinationAnalysisService.name);
+
   constructor(
     private readonly missions: MissionService,
     private readonly ai: AiClientService,
@@ -84,6 +87,92 @@ export class CoordinationAnalysisService {
       sourceId,
       sourceType,
     });
+  }
+
+  /**
+   * Tính lại bản tham mưu sau khi bộ vật tư của nhiệm vụ đổi — KHÔNG gọi lại AI.
+   *
+   * Bản tham mưu là một ẢNH CHỤP bất biến, nên sau khi ADMIN thêm / sửa / xoá một
+   * dòng vật tư thì bảng "Điều phối nội xã" trong đó vẫn kể lại phân bổ của bộ số
+   * cũ: nó nói kho Long Châu chuẩn bị ba thứ trong khi một thứ vừa bị bỏ khỏi
+   * phương án, hoặc bỏ sót thứ vừa được thêm vào. Khối "Khả năng đáp ứng" ngay
+   * bên dưới thì đọc thẳng từ bản ghi nhiệm vụ nên nó đổi ngay — và hai khối cạnh
+   * nhau nói hai điều khác nhau về cùng một nhiệm vụ, không có gì trên màn hình
+   * cho biết bên nào mới là bên đang có hiệu lực.
+   *
+   * Cách chữa là chụp một ảnh MỚI, không phải sửa ảnh cũ: ảnh cũ vẫn nằm nguyên
+   * trong lịch sử để truy vết "lúc ấy phương án là gì".
+   *
+   * Dùng lại đúng phần AI đã bóc từ lời kể ở ảnh trước — lời kể không đổi khi
+   * người ta sửa số thùng mì, nên gọi lại LLM chỉ tốn một lượt chạy hai chục giây
+   * để nhận về cùng bộ dữ kiện, và tệ hơn là nhận về một bộ HƠI KHÁC. Phần thay
+   * đổi thật (nhu cầu, phân bổ kho, tuyến, mức đáp ứng) đều do hệ thống tính, và
+   * `compute` tính lại toàn bộ từ bản ghi nhiệm vụ vừa sửa.
+   *
+   * Chưa từng có bản tham mưu nào thì không có gì để tính lại: trả `null`, vì sinh
+   * một bản đầu tiên ở đây là lập tham mưu sau lưng người dùng.
+   */
+  async recomputeAfterRequirementChange(
+    missionId: string,
+    actorId: string,
+    scopeWarehouseId: string | null | undefined,
+  ) {
+    const snapshots = await this.persistence.listAnalysisSnapshots(
+      missionId,
+      actorId,
+      scopeWarehouseId,
+    );
+    const baseline = snapshots.find((snapshot) => snapshot["kind"] === "BASELINE");
+    if (!baseline) return null;
+    const previousInput = baseline["input"] as { extraction?: unknown } | null;
+    const extraction = previousInput?.extraction;
+    if (!extraction) return null;
+
+    const previousProvenance = (baseline["provenance"] ?? {}) as Record<string, unknown>;
+    const extractionSource =
+      previousProvenance["extractionSource"] === "AI_SERVICE" ? "AI_SERVICE" : "BACKEND_FALLBACK";
+    const computed = await this.snapshots.compute(missionId, extraction, {});
+    return this.persist(
+      missionId,
+      actorId,
+      scopeWarehouseId,
+      // Khoá riêng mỗi lượt: hai lần sửa vật tư liên tiếp là hai ảnh chụp khác
+      // nhau, dùng chung khoá thì lượt sau bị nhận nhầm là gửi lại lượt trước.
+      { requestId: `requirement-change-${randomUUID()}` },
+      computed,
+      {
+        extractionSource,
+        sourceId: missionId,
+        sourceType: "USER_REPORT",
+      },
+    );
+  }
+
+  /**
+   * Bọc `recomputeAfterRequirementChange` để một lỗi ở đây không nuốt mất việc đã làm xong.
+   *
+   * Vật tư đã được ghi xuống nhiệm vụ TRƯỚC khi hàm này chạy. Ném lỗi ra ngoài
+   * thì màn hình báo "không cập nhật được vật tư" trong khi vật tư đã đổi thật —
+   * và người dùng bấm lại, sửa thêm một lần nữa lên bộ số đã sửa.
+   *
+   * Hỏng ở đây chỉ có nghĩa là bảng điều phối trong bản tham mưu còn kể chuyện cũ,
+   * đúng như trước khi có hàm này; lượt sửa sau hoặc nút lập lại tham mưu sẽ dựng
+   * lại nó.
+   */
+  async tryRecomputeAfterRequirementChange(
+    missionId: string,
+    actorId: string,
+    scopeWarehouseId: string | null | undefined,
+  ) {
+    try {
+      await this.recomputeAfterRequirementChange(missionId, actorId, scopeWarehouseId);
+    } catch (error) {
+      this.log.warn(
+        `Không tính lại được bản tham mưu sau khi sửa vật tư của nhiệm vụ ${missionId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 
   /** Bốn dữ kiện thuộc quyền của biểu mẫu: AI đọc lời kể, người điều phối mới quyết. */

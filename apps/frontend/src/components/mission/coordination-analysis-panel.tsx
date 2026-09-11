@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { describeItemQuantity, type CoordinationAnalysis } from "@safestock/shared-types";
+import { type CoordinationAnalysis } from "@safestock/shared-types";
 import { CollapsiblePanel } from "@/components/shared/collapsible-panel";
 import { FieldUpdateTimeline } from "./field-update-timeline";
 import { ColorIcon } from "@/components/shared/color-icon";
@@ -163,32 +163,20 @@ function AnalysisBody({
       </div>
 
       {/* Bảng nhu cầu là thứ ADMIN sửa được, nên nó đọc từ bản ghi nhiệm vụ chứ
-          không từ ảnh chụp phân tích — xem chú thích ở prop `requirements`. Phần
-          "cơ sở tính" của ảnh chụp vẫn giữ, nhưng xuống dưới dạng chú thích: nó
-          giải thích con số ban đầu từ đâu ra, không phải con số đang dùng. */}
+          không từ ảnh chụp phân tích — xem chú thích ở prop `requirements`.
+
+          KHÔNG còn khối "định mức hệ thống đã tính ban đầu" kèm theo. Nó liệt kê
+          lại gần đúng những vật tư ngay bên trên với một bộ số khác — bộ số của
+          lúc mới lập, trước mọi lần sửa — nên người trực mở ra là thấy hai bảng
+          chọi nhau mà không có gì nói bảng nào đang có hiệu lực. Con số đang dùng
+          nằm ở bảng trên; còn cơ sở tính ban đầu vẫn nằm nguyên trong ảnh chụp
+          phân tích để truy vết khi cần. */}
       <Section title="Vật tư trong bản tham mưu">
         <RequirementEditor
           missionId={missionId}
           requirements={requirements}
           editable={requirementsEditable}
         />
-        <details className="mt-2 rounded-md border bg-[var(--surface-2)] px-3 py-2">
-          <summary className="cursor-pointer text-sm font-semibold">
-            Định mức hệ thống đã tính ban đầu
-          </summary>
-          <div className="mt-2">
-            <DataTable
-              headers={["Vật tư", "Nhu cầu theo định mức", "Cơ sở"]}
-              rows={analysis.requirements.items.map((item) => [
-                item.name,
-                // Nước hiện cả hai con số: kho bốc theo CHAI, định mức đối chiếu theo LÍT.
-                describeItemQuantity(item.sku, item.totalQuantity, item.unit),
-                item.basis,
-              ])}
-              empty={analysis.requirements.reason ?? "Chưa có nhu cầu để hiển thị."}
-            />
-          </div>
-        </details>
       </Section>
 
       <Section title="Điều phối nội xã">
