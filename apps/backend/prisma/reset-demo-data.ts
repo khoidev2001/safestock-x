@@ -2,7 +2,8 @@
  * Dọn sạch mọi dấu vết của một lượt chạy thử, để diễn tập lại từ đầu.
  *
  * GIỮ NGUYÊN: kho, khu, kệ, thiết bị IoT, tồn kho, toạ độ thôn đã ghim, tài khoản.
- * XOÁ: nhiệm vụ điều phối, sự cố, số liệu cảm biến, thông báo, thư cảnh báo.
+ * XOÁ: nhiệm vụ điều phối, sự cố, số liệu cảm biến, thông báo, thư cảnh báo,
+ * và khoản mượn liên xã CHƯA chuyển hàng.
  *
  * Khác `pnpm be:db`: lệnh đó dựng lại toàn bộ cơ sở dữ liệu, cuốn theo cả toạ độ
  * thôn ghim tay, tài khoản đã đổi tên lẫn tài khoản riêng của app IoT.
@@ -30,6 +31,7 @@ async function main() {
     sensorEvents: await prisma.sensorEvent.count(),
     notifications: await prisma.notification.count(),
     alertEmails: await prisma.alertEmailOutbox.count(),
+    interCommuneLoans: await prisma.interCommuneLoan.count(),
   };
   console.log("Truoc khi don:", before);
 
@@ -72,6 +74,30 @@ async function main() {
 
     // 5. Thông báo: xoá hết, kể cả thông báo sự cố không gắn nhiệm vụ nào.
     await tx.notification.deleteMany({});
+
+    // 6. Khoản mượn liên xã — CHỈ những khoản chưa động tới kho.
+    //
+    //    Bấm "Mượn xã khác" trong lúc diễn tập là sinh ra một cặp bản ghi; không
+    //    dọn thì lượt sau mở màn Mượn trả ra đã thấy đầy rác của lượt trước.
+    //
+    //    Nhưng khoản đã sang APPROVED trở đi thì hàng ĐÃ trừ kho bên cho mượn và
+    //    cộng vào kho bên mượn. Xoá bản ghi mà không đảo lại là tồn kho lệch vĩnh
+    //    viễn, không còn gì giải thích vì sao — đúng cái bẫy nêu ở đầu tệp. Còn
+    //    đảo lại thì sai kiểu khác: một chu kỳ mượn-rồi-trả đã tự khép sổ, đảo
+    //    thêm lần nữa là cộng khống. Nên ở đây dừng lại và BÁO RA để người xử tay.
+    const chuaDongKho = await tx.interCommuneLoan.deleteMany({
+      where: { status: { in: ["REQUESTED", "REJECTED", "CANCELLED"] } },
+    });
+    if (chuaDongKho.count > 0) {
+      console.log(`Da xoa ${chuaDongKho.count} khoan muon lien xa chua dong toi kho.`);
+    }
+    const conLai = await tx.interCommuneLoan.count();
+    if (conLai > 0) {
+      console.log(
+        `CHU Y: con ${conLai} khoan muon lien xa da chuyen hang that. ` +
+          "Khong tu xoa vi se lam lech ton kho — xem man Muon tra va xu tay neu can.",
+      );
+    }
   });
 
   const after = {
@@ -81,6 +107,7 @@ async function main() {
     sensorEvents: await prisma.sensorEvent.count(),
     notifications: await prisma.notification.count(),
     alertEmails: await prisma.alertEmailOutbox.count(),
+    interCommuneLoans: await prisma.interCommuneLoan.count(),
     // Đối chiếu: những thứ PHẢI còn nguyên.
     warehouses: await prisma.warehouse.count(),
     devices: await prisma.virtualDevice.count(),
