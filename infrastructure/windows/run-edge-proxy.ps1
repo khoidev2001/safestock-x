@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $configPath = Join-Path $projectRoot "infrastructure\caddy\Caddyfile.hybrid"
@@ -10,6 +10,7 @@ $logFile = Join-Path $logDirectory "edge-proxy.log"
 
 New-Item -ItemType Directory -Path $stateDirectory -Force | Out-Null
 New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
+. (Join-Path $PSScriptRoot "rotate-log.ps1")
 
 if (-not (Test-Path -LiteralPath $caddyPath)) {
   Add-Content -LiteralPath $logFile -Value "[$(Get-Date -Format o)] Caddy not found: $caddyPath"
@@ -38,6 +39,7 @@ if ($validateExitCode -ne 0) {
 }
 
 while ($true) {
+  Invoke-LogRotation -LogFile $logFile
   Add-Content -LiteralPath $logFile -Value "[$(Get-Date -Format o)] Starting LAN edge proxy"
   $previousErrorActionPreference = $ErrorActionPreference
   $ErrorActionPreference = "Continue"

@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $frontendRoot = Join-Path $projectRoot "apps\frontend"
@@ -9,6 +9,7 @@ $logDirectory = Join-Path $env:ProgramData "UngPhoNhanh\logs"
 $logFile = Join-Path $logDirectory "frontend.log"
 
 New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
+. (Join-Path $PSScriptRoot "rotate-log.ps1")
 
 if (-not (Test-Path -LiteralPath $nodePath)) {
   Add-Content -LiteralPath $logFile -Value "[$(Get-Date -Format o)] Node.js not found: $nodePath"
@@ -29,6 +30,7 @@ Set-Location -LiteralPath $frontendRoot
 $env:NODE_ENV = "production"
 
 while ($true) {
+  Invoke-LogRotation -LogFile $logFile
   Add-Content -LiteralPath $logFile -Value "[$(Get-Date -Format o)] Starting frontend"
   # Caddy is the only LAN ingress. Keeping Next on loopback prevents a direct
   # http://server:3200 path from bypassing the one-domain HTTPS boundary.
