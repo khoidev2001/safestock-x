@@ -5,7 +5,7 @@ const configuredApiBase = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
  * trên thiết bị thật nó trỏ vào chính điện thoại, không phải máy chạy backend.
  */
 export const API_BASE =
-  configuredApiBase?.replace(/\/$/, "") ?? (__DEV__ ? "http://localhost:3100" : "");
+  configuredApiBase?.replace(/\/$/, "") ?? (__DEV__ ? "http://localhost:3110" : "");
 
 export function requireApiBase(): string {
   if (!API_BASE) {

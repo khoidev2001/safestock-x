@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $aiServiceRoot = Join-Path $projectRoot "apps\ai-service"
@@ -8,6 +8,7 @@ $logDirectory = Join-Path $env:ProgramData "UngPhoNhanh\logs"
 $logFile = Join-Path $logDirectory "ai-service.log"
 
 New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
+. (Join-Path $PSScriptRoot "rotate-log.ps1")
 
 if (-not (Test-Path -LiteralPath $pythonPath)) {
   Add-Content -LiteralPath $logFile -Value "[$(Get-Date -Format o)] Python venv not found: $pythonPath"
@@ -25,6 +26,7 @@ Set-Location -LiteralPath $aiServiceRoot
 $env:PYTHONIOENCODING = "utf-8"
 
 while ($true) {
+  Invoke-LogRotation -LogFile $logFile
   Add-Content -LiteralPath $logFile -Value "[$(Get-Date -Format o)] Starting AI service"
   # Uvicorn writes normal startup logs to stderr; do not treat those lines as fatal PowerShell errors.
   $previousErrorActionPreference = $ErrorActionPreference

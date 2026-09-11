@@ -24,7 +24,7 @@ Chỉ **kho trung tâm** được cấp khoá gateway; thử với kho thôn s�
 ## Bước 2 — Gửi số liệu như một cảm biến
 
 ```bash
-curl -X POST http://localhost:3100/api/telemetry/snapshots \
+curl -X POST http://localhost:3110/api/telemetry/snapshots \
   -H 'Content-Type: application/json' \
   -H 'X-Device-Token: upn_....' \
   -d '{"warehouseId":"<mã kho>","idempotencyKey":"demo-1",

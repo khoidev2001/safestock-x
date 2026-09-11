@@ -66,11 +66,11 @@ pnpm fe:dev
 pnpm ai:dev
 ```
 
-- Backend health: `http://localhost:3100/api/health`
+- Backend health: `http://localhost:3110/api/health`
 - Frontend: `http://localhost:3200`
 - AI health: `http://localhost:8000/health`
 - Local routing (OSRM, khi đã dựng graph Đồng Xuân): `http://localhost:5000/route/v1/driving/...`
-- Desktop simulator: `pnpm desktop:dev` (host mặc định `localhost:3100`)
+- Desktop simulator: `pnpm desktop:dev` (host mặc định `localhost:3110`)
 
 ### Dựng OSRM local cho Đồng Xuân
 

@@ -9,6 +9,7 @@
  * Z_SCORE_THRESHOLD=3 (chuẩn thống kê, ~99.7% dữ liệu bình thường nằm trong ngưỡng).
  */
 
+import { describeDevice } from "./device-label";
 import {
   RULES,
   type DetectedIncident,
@@ -99,7 +100,7 @@ export function detectStatisticalAnomaly(history: SensorSignal[]): DetectedIncid
       kind: "STAT_ANOMALY",
       severity: Math.abs(z) >= ANOMALY_RULES.zScoreHigh ? "HIGH" : "MEDIUM",
       confidence: Math.min(1, Math.abs(z) / 6),
-      title: `Bất thường cảm biến ${latest.deviceCode}`,
+      title: `Bất thường ở ${describeDevice(latest.deviceType, latest.deviceCode)}`,
       evidence: [
         {
           ...toEvidence(latest),
@@ -140,7 +141,7 @@ export function detectPredictiveWarning(history: SensorSignal[]): DetectedIncide
       kind: "PREDICTIVE_WARNING",
       severity,
       confidence: 0.8,
-      title: `Dự đoán ${latest.deviceCode} sẽ vượt ngưỡng`,
+      title: `Dự đoán ${describeDevice(latest.deviceType, latest.deviceCode)} sẽ vượt ngưỡng`,
       evidence: [
         {
           ...toEvidence(latest),

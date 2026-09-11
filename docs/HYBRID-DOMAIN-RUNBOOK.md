@@ -31,7 +31,7 @@ Worker gọi đến.
 1. Giữ domain `ungphonhanh.life` đã xác minh trong Vercel project; đây là web
    public. Đẩy commit vào Production Branch để Vercel cập nhật giao diện.
 2. Tạo hostname tunnel `api.ungphonhanh.life`, dùng mẫu ingress đã liên kết ở
-   trên và để service đích là `127.0.0.1:3100`. Không công khai PostgreSQL,
+   trên và để service đích là `127.0.0.1:3110`. Không công khai PostgreSQL,
    Redis hay port Node trực tiếp.
 3. Deploy Worker từ thư mục gốc repository bằng tài khoản Cloudflare quản lý
    zone. Wrangler hiện hành cần Node 22+, nên dùng terminal Node 22 cho bước

@@ -535,7 +535,7 @@ thích về dải excluded TCP của Windows (profile demo giữ port riêng đ�
   (`test_situation_analysis.py`, `test_field_update_intent.py`).
 
 - **Kiểm chứng trực tiếp bằng ứng dụng thật (BrowserOS + Electron, backend demo
-  `SAFESTOCK_RUNTIME=demo` cổng 3110 — không đụng stack vận hành 3100):**
+  `SAFESTOCK_RUNTIME=demo` cổng 3110 — không đụng stack vận hành 3110):**
   - **Desktop simulator (Electron `apps/desktop`, chạy từ bản build `out/` thật):**
     đăng nhập admin tới host `127.0.0.1:3110`, WebSocket báo *“Realtime đang chạy”*,
     mở kho “Kho xã Đồng Xuân”. **Luồng 1 — chỉnh tay:** kéo slider

@@ -62,3 +62,4 @@ prisma/*.db
 
 # Báo cáo xuất cục bộ; dữ liệu có thể chứa thông tin vận hành và được sinh lại khi cần
 /apps/backend/baocao-*.xlsx
+anh-thuyet-minh/

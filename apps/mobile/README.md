@@ -40,7 +40,7 @@ Bấm vào 1 thông báo (có `missionId`) → mở **màn chi tiết**: loại 
 Cần **3 tiến trình** (mở 3 terminal, chạy từ thư mục gốc repo):
 
 ```bash
-# 1. Backend (cổng 3100) — DB phải đã push + seed
+# 1. Backend (cổng 3110) — DB phải đã push + seed
 pnpm be:dev
 
 # 2. Dashboard web (để bấm Điều phối) — cổng 3200
@@ -117,11 +117,11 @@ Tại lần build ghi trong tài liệu này, `adb devices -l` chưa thấy thi�
 
 ```bash
 # Lấy token admin
-TOKEN=$(curl -s localhost:3100/api/auth/login -H 'Content-Type: application/json' \
+TOKEN=$(curl -s localhost:3110/api/auth/login -H 'Content-Type: application/json' \
   -d '{"email":"superadmindongxuan","password":"admin123"}' | node -pe 'JSON.parse(require("fs").readFileSync(0)).accessToken')
 
 # Lấy 1 mission DRAFT bất kỳ rồi dispatch (thay <MISSION_ID>)
-curl -s -X POST localhost:3100/api/missions/<MISSION_ID>/dispatch -H "Authorization: Bearer $TOKEN"
+curl -s -X POST localhost:3110/api/missions/<MISSION_ID>/dispatch -H "Authorization: Bearer $TOKEN"
 ```
 
 ## APK/device gate (bắt buộc)

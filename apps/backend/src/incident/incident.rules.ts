@@ -1,4 +1,5 @@
 import { SIMULATOR_ALARM_POLICY } from "../simulation/simulation-policy";
+import { describeDevice } from "./device-label";
 
 /**
  * Rule engine phát hiện sự cố — hàm THUẦN (không DB, test được).
@@ -109,7 +110,7 @@ export function detectSilentDevices(devices: DeviceSilenceSignal[], now: Date): 
       kind: "DEVICE_SILENT",
       severity,
       confidence: severity === "HIGH" ? 0.95 : 0.8,
-      title: `Mất tín hiệu thiết bị ${device.deviceCode}`,
+      title: `Mất tín hiệu ${describeDevice(device.deviceType, device.deviceCode)}`,
       evidence: [
         {
           deviceCode: device.deviceCode,

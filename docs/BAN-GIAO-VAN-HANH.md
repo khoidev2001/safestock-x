@@ -26,7 +26,7 @@ bản `.next` đã build. Sửa mã mà không build thì restart xong vẫn là
 
 | Dịch vụ | Cổng | Lệnh build trước khi restart |
 |---|---|---|
-| Backend | 3100 | `pnpm --filter @safestock/backend exec nest build` |
+| Backend | 3110 | `pnpm --filter @safestock/backend exec nest build` |
 | Frontend | 3200 | `pnpm --filter @safestock/frontend exec next build` |
 | AI service | 8000 | không cần (Python) |
 | Ollama | 11434 | không phải task, chạy nền riêng |
@@ -47,7 +47,7 @@ sống thì demo mới chạy, rồi in bảng trạng thái:
 [  OK  ] Redis (cổng 16379)
 [  OK  ] OSRM (cổng 5000)
 [  OK  ] Ollama giữ model trong VRAM     qwen3.5:4b, nomic-embed-text
-[  OK  ] Backend (3100)                  đang chạy sẵn
+[  OK  ] Backend (3110)                  đang chạy sẵn
 [  OK  ] Frontend (3200)                 đang chạy sẵn
 [  OK  ] AI service (8000)               đang chạy sẵn
 [  OK  ] Edge proxy (Caddy)
@@ -164,7 +164,7 @@ Backend phải mở ra LAN trước:
 .env:  BIND_ADDRESS=0.0.0.0
        CORS_ALLOWED_ORIGINS=...,http://<IP-LAN>:3200,http://<IP-LAN>:8081
 ```
-kèm rule tường lửa cho cổng 3100 và 8081 (mạng Private).
+kèm rule tường lửa cho cổng 3110 và 8081 (mạng Private).
 
 Điện thoại dùng **IP LAN**, không dùng `ungphonhanh.life` — tên miền đó trả **403**
 (Cloudflare), không trỏ về máy này.
@@ -211,7 +211,7 @@ Ba tham số, mỗi cái sửa một lỗi thật:
 
 Chạy Metro:
 ```powershell
-$env:EXPO_PUBLIC_API_BASE_URL = "http://<IP-LAN>:3100"
+$env:EXPO_PUBLIC_API_BASE_URL = "http://<IP-LAN>:3110"
 npx expo start --dev-client --port 8082 --host lan
 ```
 Biến `EXPO_PUBLIC_API_BASE_URL` được nhúng **lúc đóng gói JS**, nên phải đặt khi
@@ -357,7 +357,7 @@ ngắn không rẻ hơn bao nhiêu — đó là sàn, không phải lỗi.
 
 ## 8. Khi có gì đó "không chạy" — thứ tự dò
 
-1. Dịch vụ có sống không: `/api/health` (3100), `:3200`, `:8000/health`, `/api/ps`.
+1. Dịch vụ có sống không: `/api/health` (3110), `:3200`, `:8000/health`, `/api/ps`.
 2. Có build lại trước khi restart task không.
 3. Nếu là điện thoại: đúng IP LAN chưa, `adb reverse` còn không, Metro còn sống không.
 4. Nếu là app IoT: có bấm **Xác nhận và gửi** chưa (kéo thanh trượt thôi là chưa gửi).

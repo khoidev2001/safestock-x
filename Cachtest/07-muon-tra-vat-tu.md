@@ -74,7 +74,7 @@ Xem chi tiết ở [08 · Kiểm kê tháng](08-kiem-ke-thang.md).
 ## Kiểm chứng bằng lệnh
 
 ```bash
-API=http://localhost:3100/api
+API=http://localhost:3110/api
 STAFF=<mã đăng nhập của staff@>
 
 # cho mượn 2 đơn vị

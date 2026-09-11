@@ -83,7 +83,7 @@ Chống trùng dựa trên khoá do ứng dụng sinh cho mỗi thao tác.
 ## Kiểm chứng bằng lệnh
 
 ```bash
-API=http://localhost:3100/api
+API=http://localhost:3110/api
 STAFF=<mã đăng nhập của staff@>
 
 # tra cứu theo mã vật tư, đúng thứ nút QR làm phía sau

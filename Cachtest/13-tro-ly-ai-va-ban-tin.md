@@ -60,7 +60,7 @@ Kiểm chứng bằng lệnh:
 ```bash
 curl -s -H 'Content-Type: application/json' -H "Authorization: Bearer $STAFF" \
   -d '{"question":"Kho còn bao nhiêu nước uống?"}' \
-  http://localhost:3100/api/assistant/warehouses/<mã kho>/ask
+  http://localhost:3110/api/assistant/warehouses/<mã kho>/ask
 ```
 
 Thử với kho không thuộc quyền → **403**.
@@ -71,7 +71,7 @@ Thử với kho không thuộc quyền → **403**.
 
 ```bash
 curl -s -H "Authorization: Bearer $STAFF" \
-  http://localhost:3100/api/insights/warehouses/<mã kho>/daily-briefing
+  http://localhost:3110/api/insights/warehouses/<mã kho>/daily-briefing
 ```
 
 **Kỳ vọng:** tóm tắt vài dòng: hàng sắp hết hạn, tồn thiếu, sự cố đang mở, nhiệm vụ

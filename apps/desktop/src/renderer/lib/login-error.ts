@@ -40,10 +40,10 @@ export function describeLoginError(error: Error, host: string, password: string)
 
   const hostname = host.trim().toLowerCase();
   if (hostname.includes("ungphonhanh.life")) {
-    hints.push("Đang gọi ra Internet. Khi máy chủ chạy ngay trên máy này, điền localhost:3100.");
+    hints.push("Đang gọi ra Internet. Khi máy chủ chạy ngay trên máy này, điền localhost:3110.");
   }
 
   // Luôn nói rõ đã gọi vào đâu: cùng một câu "sai mật khẩu" có thể đến từ một máy
   // chủ hoàn toàn khác với máy người dùng đang nghĩ tới.
-  return [baseMessage, ...hints, `(đã gọi tới ${host.trim() || "localhost:3100"})`].join(" ");
+  return [baseMessage, ...hints, `(đã gọi tới ${host.trim() || "localhost:3110"})`].join(" ");
 }

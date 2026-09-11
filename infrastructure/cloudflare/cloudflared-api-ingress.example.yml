@@ -8,5 +8,5 @@ ingress:
   # Public authenticated API origin proxied by the Cloudflare Worker for the
   # user-facing /api and /socket.io paths. Do not point browser clients here.
   - hostname: api.ungphonhanh.life
-    service: http://127.0.0.1:3100
+    service: http://127.0.0.1:3110
   - service: http_status:404

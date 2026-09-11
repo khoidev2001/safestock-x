@@ -19,7 +19,7 @@ interface AuthState {
 }
 
 const auth: AuthState = {
-  base: "http://localhost:3100",
+  base: "http://localhost:3110",
   accessToken: null,
   refreshToken: null,
   user: null,
@@ -42,11 +42,11 @@ export function refreshAccessToken(): Promise<boolean> {
   return tryRefresh();
 }
 
-/** Chuẩn hoá host người dùng nhập ("192.168.1.5", "localhost:3100", "http://x") → URL đầy đủ. */
+/** Chuẩn hoá host người dùng nhập ("192.168.1.5", "localhost:3110", "http://x") → URL đầy đủ. */
 export function setBase(raw: string): void {
   const value = raw.trim().replace(/\/+$/, "");
   if (!value) {
-    auth.base = "http://localhost:3100";
+    auth.base = "http://localhost:3110";
     return;
   }
 
@@ -56,14 +56,14 @@ export function setBase(raw: string): void {
   }
 
   // Public HTTPS is intentionally exact: never turn ungphonhanh.life into
-  // ungphonhanh.life:3100. A LAN hostname/IP remains the direct backend port.
+  // ungphonhanh.life:3110. A LAN hostname/IP remains the direct backend port.
   if (value.toLowerCase() === "ungphonhanh.life") {
     auth.base = "https://ungphonhanh.life";
     return;
   }
 
   const url = new URL(`http://${value}`);
-  if (!url.port) url.port = "3100";
+  if (!url.port) url.port = "3110";
   auth.base = url.toString().replace(/\/+$/, "");
 }
 

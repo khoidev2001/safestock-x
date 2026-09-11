@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $backendRoot = Join-Path $projectRoot "apps\backend"
@@ -8,6 +8,7 @@ $logDirectory = Join-Path $env:ProgramData "UngPhoNhanh\logs"
 $logFile = Join-Path $logDirectory "backend.log"
 
 New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
+. (Join-Path $PSScriptRoot "rotate-log.ps1")
 
 if (-not (Test-Path -LiteralPath $nodePath)) {
   Add-Content -LiteralPath $logFile -Value "[$(Get-Date -Format o)] Node.js not found: $nodePath"
@@ -23,6 +24,7 @@ Set-Location -LiteralPath $backendRoot
 $env:NODE_ENV = "production"
 
 while ($true) {
+  Invoke-LogRotation -LogFile $logFile
   Add-Content -LiteralPath $logFile -Value "[$(Get-Date -Format o)] Starting backend"
   $previousErrorActionPreference = $ErrorActionPreference
   $ErrorActionPreference = "Continue"

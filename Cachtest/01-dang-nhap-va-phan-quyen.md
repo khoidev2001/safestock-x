@@ -59,7 +59,7 @@ thanh điều hướng là chưa đủ — người biết địa chỉ vẫn g�
 ## Test 4 — Máy chủ chặn thật, không chỉ giao diện
 
 ```bash
-API=http://localhost:3100/api
+API=http://localhost:3110/api
 TOKEN=$(curl -s -H 'Content-Type: application/json' \
   -d '{"email":"rescue","password":"rescue123"}' \
   $API/auth/login | grep -o '"accessToken":"[^"]*' | cut -d'"' -f4)

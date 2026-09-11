@@ -24,7 +24,7 @@ $tasks = @(
   @{
     Name = "UngPhoNhanh-Backend"
     Script = Join-Path $PSScriptRoot "run-backend.ps1"
-    Description = "Starts the Ung Pho Nhanh NestJS backend on port 3100."
+    Description = "Starts the Ung Pho Nhanh NestJS backend on port 3110."
   },
   @{
     Name = "UngPhoNhanh-Frontend"

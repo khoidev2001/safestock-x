@@ -5,7 +5,7 @@ const STORAGE_KEY = "ung-pho-nhanh:co-phien-web";
  * khi chắc chắn không có gì để khôi phục.
  *
  * Vì sao phải đánh dấu ở máy khách: cookie phiên là `httpOnly` và thuộc về cổng
- * 3100, còn giao diện chạy ở cổng 3200 — `document.cookie` không bao giờ nhìn
+ * 3110, còn giao diện chạy ở cổng 3200 — `document.cookie` không bao giờ nhìn
  * thấy nó. Không có cách nào hỏi trình duyệt "tôi còn phiên không?".
  *
  * Nên trước đây mỗi lần mở trang, app đều gọi `/api/auth/refresh` để dò. Với

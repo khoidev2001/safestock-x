@@ -22,7 +22,7 @@ lại. Tiến trình Node đang giữ tệp thư viện của Prisma.
 
 | Ứng dụng | Lệnh | Địa chỉ |
 |---|---|---|
-| Máy chủ | `pnpm be:dev` | http://localhost:3100 |
+| Máy chủ | `pnpm be:dev` | http://localhost:3110 |
 | Web | `pnpm fe:dev` | http://localhost:3200 |
 | Desktop | `pnpm desktop:dev` | cửa sổ riêng |
 | Trí tuệ nhân tạo | `cd apps/ai-service && uvicorn main:app --port 8000` | http://localhost:8000 |
@@ -31,7 +31,7 @@ lại. Tiến trình Node đang giữ tệp thư viện của Prisma.
 ## Bước 3 — Kiểm tra mọi thứ đã sống
 
 ```bash
-curl http://localhost:3100/api/health
+curl http://localhost:3110/api/health
 ```
 
 **Kỳ vọng:**
@@ -43,7 +43,7 @@ curl http://localhost:3100/api/health
 Kiểm nhanh cả cụm:
 
 ```bash
-curl -s -o /dev/null -w "may chu: %{http_code}\n"  http://localhost:3100/api/health
+curl -s -o /dev/null -w "may chu: %{http_code}\n"  http://localhost:3110/api/health
 curl -s -o /dev/null -w "web:     %{http_code}\n"  http://localhost:3200/
 curl -s -o /dev/null -w "AI:      %{http_code}\n"  http://localhost:8000/health
 ```

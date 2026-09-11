@@ -46,7 +46,7 @@ const DEFAULT_ADMIN_EMAIL = import.meta.env.RENDERER_VITE_ADMIN_EMAIL ?? "";
 const DEFAULT_ADMIN_PASSWORD = import.meta.env.RENDERER_VITE_ADMIN_PASSWORD ?? "";
 
 export function App() {
-  const [host, setHost] = useState("localhost:3100");
+  const [host, setHost] = useState("localhost:3110");
   const [email, setEmail] = useState(DEFAULT_ADMIN_EMAIL);
   const [password, setPassword] = useState(DEFAULT_ADMIN_PASSWORD);
   const [authed, setAuthed] = useState(false);
