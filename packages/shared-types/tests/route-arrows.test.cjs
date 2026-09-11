@@ -112,5 +112,36 @@ test("hình mũi tên xoay theo phương vị và có viền trắng để khôn
   const svg = routeArrowSvg(90, 16, "#1d4ed8");
   assert.match(svg, /rotate\(90\.0deg\)/);
   assert.match(svg, /stroke="#ffffff"/);
-  assert.match(svg, /fill="#1d4ed8"/);
+  assert.match(svg, /stroke="#1d4ed8"/);
+});
+
+test("mũi tên là một GẠCH có đầu nhọn, không phải hình tam giác trơn", () => {
+  // Tam giác trơn giữa tuyến đọc ra thành một dấu ghim hay mảnh vụn của lớp bản
+  // đồ: không có thân thì mắt không bắt được trục, phải nhìn kỹ mới biết nó chỉ
+  // đâu. Khoá lại bằng test vì đây là khác biệt người dùng nhìn thấy, không phải
+  // chuyện thẩm mỹ nội bộ.
+  const svg = routeArrowSvg(0, 16, "#1d4ed8");
+  // Có phần THÂN: một nét thẳng chạy dọc trục giữa khung 24×24.
+  assert.match(svg, /M12 20\.6 L12 5\.4/);
+  // Và có ĐẦU NHỌN gắn vào đầu thân đó.
+  assert.match(svg, /L12 4\.2/);
+  // Nét, không phải mảng tô — mảng tô chính là hình tam giác của bản trước.
+  assert.match(svg, /fill="none"/);
+  assert.doesNotMatch(svg, /fill="#1d4ed8"/);
+});
+
+test("mũi tên rải THƯA để hai cái liền nhau không dính thành một vệt", () => {
+  /*
+    Hình nay dài gấp đôi hình cũ, nên khoảng cách mặc định cũng phải rộng ra theo.
+    Đo bằng khoảng cách giữa hai mũi tên liền nhau trên một tuyến thẳng dài, chứ
+    không đọc lại hằng số — hằng số chỉ là cách hàm đạt được điều này.
+  */
+  const arrows = routeArrows([
+    [13.3, 109.1],
+    [13.4, 109.1],
+  ]);
+  assert.ok(arrows.length >= 2, `cần ít nhất hai mũi tên để đo: ${arrows.length}`);
+  // 1 độ vĩ ≈ 111 km, nên 0,004 độ ≈ 445 m.
+  const gap = Math.abs(arrows[1].lat - arrows[0].lat);
+  assert.ok(gap > 0.004, `hai mũi tên chỉ cách nhau ${(gap * 111000).toFixed(0)} m`);
 });
