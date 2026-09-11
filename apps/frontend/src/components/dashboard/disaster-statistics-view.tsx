@@ -10,10 +10,17 @@ import {
   type DisasterCategoryTotals,
   type DisasterQuantityTotals,
   type DisasterStatisticsEvent,
+  type DisasterStatisticsMission,
 } from "@/lib/disaster-statistics-api";
 
 /**
  * Thống kê sau thiên tai.
+ *
+ * ĐỢT ở đây là một cơn bão, một trận lũ — "bão số 5", "bão số 6" — chứ không phải
+ * một nhiệm vụ. Một cơn bão đi qua xã sinh ra hàng chục nhiệm vụ rải suốt nhiều
+ * ngày, và câu hỏi người ta mang tới bảng này luôn là "cơn bão vừa rồi xã tiêu
+ * hết bao nhiêu". Máy chủ gộp nhiệm vụ thành đợt theo nhịp xuất hiện của chúng;
+ * mở một đợt ra thì thấy từng nhiệm vụ bên trong.
  *
  * Bảng này cố ý KHÔNG gộp "đã xuất kho" với "đã ký nhận" thành một con số duy
  * nhất, và cố ý không gọi phần chênh lệch giữa hai con số đó là thất thoát: kho
@@ -66,11 +73,12 @@ export function DisasterStatisticsView() {
       <SummaryCard
         totals={data.totals}
         eventCount={data.events.length}
+        missionCount={data.events.reduce((sum, event) => sum + event.missionCount, 0)}
         generatedAt={data.generatedAt}
         isRefreshing={statisticsQuery.isFetching}
         onRefresh={() => void statisticsQuery.refetch()}
       />
-      <EventList events={data.events} />
+      <EventList events={data.events} episodeGapDays={data.episodeGapDays} />
     </div>
   );
 }
@@ -78,12 +86,15 @@ export function DisasterStatisticsView() {
 function SummaryCard({
   totals,
   eventCount,
+  missionCount,
   generatedAt,
   isRefreshing,
   onRefresh,
 }: {
   totals: DisasterQuantityTotals;
   eventCount: number;
+  /** Tổng nhiệm vụ nằm trong ngần ấy đợt — nói rõ đợt KHÁC nhiệm vụ. */
+  missionCount: number;
   generatedAt: string;
   isRefreshing: boolean;
   onRefresh: () => void;
@@ -94,11 +105,14 @@ function SummaryCard({
         <div>
           <div className="flex items-center gap-2 text-sm font-semibold text-[var(--color-accent)]">
             <ColorIcon name="insights" size={20} tone="green" />
-            <span>Tổng hợp {eventCount} đợt thiên tai</span>
+            <span>
+              Tổng hợp {eventCount} đợt thiên tai · {formatNumber(missionCount)} nhiệm vụ
+            </span>
           </div>
           <p className="mt-1 text-sm text-[var(--text-muted)]">
-            Cộng dồn toàn bộ các đợt đã phát hành phương án. Phương án còn ở dạng nháp chưa xuất
-            hàng nên không được tính vào đây.
+            Cộng dồn toàn bộ các đợt đã phát hành phương án. Một đợt là một cơn bão hay một trận lũ,
+            gồm tất cả nhiệm vụ phát sinh trong đợt đó. Phương án còn ở dạng nháp chưa xuất hàng nên
+            không được tính vào đây.
           </p>
         </div>
         <div className="text-right">
@@ -232,7 +246,13 @@ function toneVariable(tone: "green" | "blue" | "amber" | "orange" | "red"): stri
   return "accent";
 }
 
-function EventList({ events }: { events: DisasterStatisticsEvent[] }) {
+function EventList({
+  events,
+  episodeGapDays,
+}: {
+  events: DisasterStatisticsEvent[];
+  episodeGapDays: number;
+}) {
   const pagination = usePagination(events);
 
   if (events.length === 0) {
@@ -249,12 +269,17 @@ function EventList({ events }: { events: DisasterStatisticsEvent[] }) {
   return (
     <section className="rounded-md border bg-[var(--surface)] p-5">
       <h3 className="text-sm font-semibold">Từng đợt thiên tai</h3>
+      {/* Nói thẳng luật gộp. Người đọc thấy hai nhiệm vụ cách nhau mười ngày nằm ở
+          hai đợt khác nhau thì câu hỏi đầu tiên là "sao lại tách ra" — trả lời sẵn
+          ở đây rẻ hơn nhiều so với để họ đi hỏi. */}
       <p className="mt-1 text-sm text-[var(--text-muted)]">
-        Mở một đợt để xem chi tiết theo nhóm hàng và từng mã hàng.
+        Mỗi đợt là một cơn bão hay một trận lũ: các nhiệm vụ nối tiếp nhau được gộp làm một đợt, và
+        đợt khép lại khi qua {episodeGapDays} ngày không có nhiệm vụ mới. Mở một đợt để xem chi tiết
+        theo nhóm hàng và từng nhiệm vụ trong đợt.
       </p>
       <ul className="mt-4 space-y-3">
         {pagination.pageItems.map((event) => (
-          <EventCard key={event.missionId} event={event} />
+          <EventCard key={event.episodeId} event={event} episodeGapDays={episodeGapDays} />
         ))}
       </ul>
       <Pagination
@@ -268,9 +293,15 @@ function EventList({ events }: { events: DisasterStatisticsEvent[] }) {
   );
 }
 
-function EventCard({ event }: { event: DisasterStatisticsEvent }) {
+function EventCard({
+  event,
+  episodeGapDays,
+}: {
+  event: DisasterStatisticsEvent;
+  episodeGapDays: number;
+}) {
   const [expanded, setExpanded] = useState(false);
-  const place = event.hamletName ?? event.location ?? "Chưa xác định địa điểm";
+  const places = episodePlaces(event);
 
   return (
     <li className="rounded-md border">
@@ -282,21 +313,41 @@ function EventCard({ event }: { event: DisasterStatisticsEvent }) {
       >
         <div className="min-w-0">
           <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+            {/* Tên đợt là KHOẢNG NGÀY + loại tình huống. Hệ thống không có chỗ nào
+                ghi "bão số 5", và bịa ra một cái tên không dữ liệu nào chống lưng
+                thì tệ hơn hẳn việc gọi đúng cái đang biết chắc. */}
             <span>
-              Đợt số {event.missionNo} · {incidentTypeLabel(event.incidentType)}
+              Đợt {formatDateRange(event.startedAt, event.lastMissionAt)} ·{" "}
+              {describeIncidentTypes(event.incidentTypes)}
             </span>
-            <StatusBadge status={event.status} outcome={event.deliveryOutcome} />
+            {event.ongoing ? (
+              <span
+                className="rounded-md px-2 py-0.5 text-[11px] font-semibold"
+                style={{
+                  background: "color-mix(in oklch, var(--color-attention) 14%, transparent)",
+                  color: "var(--color-attention)",
+                }}
+              >
+                Đang diễn ra
+              </span>
+            ) : null}
           </p>
           <p className="mt-1 text-xs text-[var(--text-muted)]">
-            {place} · {formatNumber(event.affectedPeople)} người ảnh hưởng ·{" "}
+            {formatNumber(event.missionCount)} nhiệm vụ · {places} ·{" "}
+            {formatNumber(event.peakAffectedPeople)} người ảnh hưởng (lúc cao nhất) ·{" "}
             {event.warehouses.length} kho tham gia
           </p>
           <dl className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--text-muted)]">
-            <TimeFact label="Ghi nhận" value={event.startedAt} />
-            <TimeFact label="Duyệt phát hành" value={event.approvedAt} />
-            <TimeFact label="Hoàn tất giao" value={event.completedAt} />
+            <TimeFact label="Bắt đầu" value={event.startedAt} />
+            <TimeFact label="Nhiệm vụ gần nhất" value={event.lastMissionAt} />
             <TimeFact label="Cập nhật gần nhất" value={event.lastActivityAt} />
           </dl>
+          {event.ongoing ? (
+            <p className="mt-1 text-xs text-[var(--color-attention)]">
+              Số liệu còn đổi: nhiệm vụ mới trong {episodeGapDays} ngày tới vẫn được tính vào đợt
+              này.
+            </p>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-4">
           <div className="text-right">
@@ -307,9 +358,101 @@ function EventCard({ event }: { event: DisasterStatisticsEvent }) {
         </div>
       </button>
 
-      {expanded ? <EventBreakdown event={event} /> : null}
+      {expanded ? (
+        <>
+          <EventBreakdown event={event} />
+          <EpisodeMissions missions={event.missions} />
+        </>
+      ) : null}
     </li>
   );
+}
+
+/**
+ * Danh sách nhiệm vụ trong đợt.
+ *
+ * Bảng phía trên trả lời "cả đợt tiêu hết bao nhiêu"; khối này trả lời câu hỏi
+ * ngay sau đó — "tiêu vào những việc nào". Không có nó thì đợt là một con số
+ * không kiểm chứng được, và người đối soát mất đường lần ngược về từng nhiệm vụ.
+ */
+function EpisodeMissions({ missions }: { missions: DisasterStatisticsMission[] }) {
+  return (
+    <div className="border-t p-4">
+      <h4 className="text-xs font-semibold text-[var(--text-muted)]">
+        {formatNumber(missions.length)} nhiệm vụ trong đợt
+      </h4>
+      <ul className="mt-2 space-y-2">
+        {missions.map((mission) => (
+          <li
+            key={mission.missionId}
+            className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-[var(--surface-2)] px-3 py-2 text-xs"
+          >
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold">Nhiệm vụ số {mission.missionNo}</span>
+              <StatusBadge status={mission.status} outcome={mission.deliveryOutcome} />
+              <span className="text-[var(--text-muted)]">
+                {mission.hamletName ?? mission.location ?? "Chưa xác định địa điểm"} ·{" "}
+                {formatNumber(mission.affectedPeople)} người · {formatDateTime(mission.startedAt)}
+              </span>
+            </span>
+            <span className="tabular-nums text-[var(--text-muted)]">
+              Đã xuất{" "}
+              <span className="font-semibold text-[var(--text)]">
+                {formatNumber(mission.totals.issued)}
+              </span>{" "}
+              · đã ký nhận {formatNumber(mission.totals.pickedUp)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * Các thôn có nhiệm vụ trong đợt.
+ *
+ * Liệt kê tối đa ba tên rồi gộp phần còn lại: một cơn bão lớn chạm cả chục thôn,
+ * và một dòng phụ dài ba hàng thì không ai đọc.
+ */
+function episodePlaces(event: DisasterStatisticsEvent): string {
+  const names = [
+    ...new Set(
+      event.missions
+        .map((mission) => mission.hamletName ?? mission.location)
+        .filter((name): name is string => Boolean(name?.trim())),
+    ),
+  ];
+  if (names.length === 0) return "Chưa xác định địa điểm";
+  if (names.length <= 3) return names.join(", ");
+  return `${names.slice(0, 3).join(", ")} +${names.length - 3} thôn`;
+}
+
+/** Loại tình huống chính của đợt; còn loại khác thì nói có bao nhiêu loại nữa. */
+function describeIncidentTypes(incidentTypes: string[]): string {
+  if (incidentTypes.length === 0) return "Chưa rõ tình huống";
+  const primary = incidentTypeLabel(incidentTypes[0]);
+  return incidentTypes.length === 1 ? primary : `${primary} +${incidentTypes.length - 1} loại`;
+}
+
+/**
+ * Khoảng ngày của đợt, dạng ngắn: "05/09 – 18/09/2026".
+ *
+ * Đây là DANH TÍNH của đợt trên màn hình, nên nó phải đọc lướt là nhận ra, không
+ * phải một mốc thời gian đầy đủ tới giây như các cột bên dưới. Gói gọn trong một
+ * ngày thì chỉ hiện một ngày.
+ */
+function formatDateRange(startedAt: string, endedAt: string): string {
+  const start = new Date(startedAt);
+  const end = new Date(endedAt);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "—";
+  const startLabel = start.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
+  const endLabel = end.toLocaleDateString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+  return startLabel === endLabel.slice(0, 5) ? endLabel : `${startLabel} – ${endLabel}`;
 }
 
 function EventBreakdown({ event }: { event: DisasterStatisticsEvent }) {
@@ -325,13 +468,6 @@ function EventBreakdown({ event }: { event: DisasterStatisticsEvent }) {
 
   return (
     <div className="border-t p-4">
-      {event.deliveryNote ? (
-        <p className="mb-3 rounded-md border bg-[var(--surface-2)] p-3 text-xs">
-          <span className="font-semibold">Ghi chú kết quả giao: </span>
-          {event.deliveryNote}
-        </p>
-      ) : null}
-
       <div className="overflow-x-auto">
         <table className="w-full min-w-[46rem] border-collapse text-sm">
           <thead>

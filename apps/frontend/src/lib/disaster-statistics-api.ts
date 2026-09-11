@@ -43,7 +43,13 @@ export interface DisasterCategoryTotals extends DisasterQuantityTotals {
   items: DisasterItemTotals[];
 }
 
-export interface DisasterStatisticsEvent {
+/**
+ * MỘT NHIỆM VỤ trong một đợt.
+ *
+ * Một cơn bão sinh ra nhiều nhiệm vụ; đây là một trong số đó, giữ nguyên bộ cột
+ * của đợt để mở ra đối chiếu "việc nào tiêu gì".
+ */
+export interface DisasterStatisticsMission {
   missionId: string;
   missionNo: number;
   incidentType: string;
@@ -65,9 +71,40 @@ export interface DisasterStatisticsEvent {
   totals: DisasterQuantityTotals;
 }
 
+/**
+ * MỘT ĐỢT THIÊN TAI — một cơn bão, một trận lũ, không phải một nhiệm vụ.
+ *
+ * Máy chủ gộp các nhiệm vụ nối tiếp nhau thành đợt: còn nhiệm vụ mới trong vòng
+ * `episodeGapDays` ngày thì thiên tai còn đang diễn ra, im lặng đủ lâu thì đợt
+ * khép lại. Câu hỏi mang tới báo cáo này luôn là "cơn bão vừa rồi xã tiêu hết bao
+ * nhiêu", nên đợt mới là đơn vị để cộng số.
+ */
+export interface DisasterStatisticsEvent {
+  episodeId: string;
+  /** Các loại tình huống trong đợt, loại có nhiều nhiệm vụ nhất đứng đầu. */
+  incidentTypes: string[];
+  missionCount: number;
+  /** Số người ảnh hưởng lớn nhất ghi nhận trong đợt. */
+  peakAffectedPeople: number;
+  /** Mốc lập nhiệm vụ đầu tiên của đợt. */
+  startedAt: string;
+  /** Mốc lập nhiệm vụ gần nhất — chỗ bắt đầu đếm những ngày im lặng. */
+  lastMissionAt: string;
+  /** Mốc mới nhất có thao tác thật (xuất kho, ký nhận, hoàn trả) trong đợt. */
+  lastActivityAt: string;
+  /** Đợt còn có thể nhận thêm nhiệm vụ — số liệu của nó CÒN ĐỔI. */
+  ongoing: boolean;
+  warehouses: { id: string; name: string }[];
+  categories: DisasterCategoryTotals[];
+  totals: DisasterQuantityTotals;
+  missions: DisasterStatisticsMission[];
+}
+
 export interface DisasterStatisticsResponse {
   /** Thời điểm máy chủ chốt số của chính lần gọi này. */
   generatedAt: string;
+  /** Bao nhiêu ngày không có nhiệm vụ mới thì một đợt được coi là đã khép lại. */
+  episodeGapDays: number;
   events: DisasterStatisticsEvent[];
   totals: DisasterQuantityTotals;
 }

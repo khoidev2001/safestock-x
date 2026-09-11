@@ -1,10 +1,16 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { MissionStatus, Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { EPISODE_GAP_DAYS, groupIntoEpisodes, isEpisodeOngoing } from "./disaster-episodes";
 
 /**
  * Thống kê sau thiên tai: mỗi đợt thiên tai đã tiêu tốn bao nhiêu vật tư, mất
  * bao nhiêu và thu hồi lại được bao nhiêu.
+ *
+ * ĐỢT ở đây là một cơn bão, một trận lũ — không phải một nhiệm vụ. Một cơn bão
+ * sinh ra hàng chục nhiệm vụ rải suốt nhiều ngày, và câu hỏi người ta mang tới
+ * báo cáo này luôn là "cơn bão vừa rồi xã tiêu hết bao nhiêu", chứ không phải
+ * "nhiệm vụ số 820 tiêu hết bao nhiêu". Luật gộp nằm ở `disaster-episodes.ts`.
  *
  * Nguyên tắc "không bịa số" của sản phẩm áp vào đây thành ba ràng buộc:
  *
@@ -188,14 +194,26 @@ export class DisasterStatisticsService {
       else loansByMission.set(loan.missionId, [loan]);
     }
 
-    const events = missions.map((mission) =>
-      this.buildEvent(mission, loansByMission.get(mission.id) ?? [], metadataBySku),
+    const now = new Date();
+    // Nhiệm vụ gộp thành đợt TRƯỚC khi cộng số: bảng phải kê theo cơn bão, và
+    // mỗi dòng "tổng đợt" phải là tổng của đúng những nhiệm vụ thuộc cơn bão đó.
+    const events = groupIntoEpisodes(
+      missions.map((mission) => ({ id: mission.id, startedAt: mission.createdAt, mission })),
+    ).map((group) =>
+      this.buildEpisode(
+        group.map((member) => member.mission),
+        loansByMission,
+        metadataBySku,
+        now,
+      ),
     );
 
     return {
       // Mốc chốt số của chính lần gọi này. Màn hình hiện lại đúng mốc đó để
       // người đọc biết bảng đang cũ bao nhiêu, thay vì tin là luôn tươi.
-      generatedAt: new Date().toISOString(),
+      generatedAt: now.toISOString(),
+      /** Số ngày im lặng để khép một đợt — màn hình nói lại cho người đọc. */
+      episodeGapDays: EPISODE_GAP_DAYS,
       events,
       totals: sumTotals(events.map((event) => event.totals)),
     };
@@ -225,73 +243,93 @@ export class DisasterStatisticsService {
     );
   }
 
-  private buildEvent(
+  /**
+   * Một ĐỢT thiên tai: cộng số của mọi nhiệm vụ trong đợt, kèm danh sách nhiệm vụ.
+   *
+   * Cộng thẳng từ nhiệm vụ chứ không cộng lại các dòng tổng của từng nhiệm vụ:
+   * hai nhiệm vụ cùng lấy một mã hàng phải nhập vào CÙNG một dòng mã hàng của
+   * đợt, nếu không bảng chi tiết hiện hai dòng "Mì tôm cứu trợ" và người đọc phải
+   * tự cộng bằng mắt. Dùng lại đúng bộ tích luỹ của từng nhiệm vụ
+   * (`accumulateMission`) nên hai mức số liệu không thể lệch nhau về luật.
+   */
+  private buildEpisode(
+    missions: MissionRow[],
+    loansByMission: Map<string, LoanRow[]>,
+    metadataBySku: Map<string, SkuMetadata>,
+    now: Date,
+  ) {
+    const categories = new Map<string, MutableCategory>();
+    const warehouses = new Map<string, { id: string; name: string }>();
+    // Nhiệm vụ trong đợt: mới nhất trước, giống mọi danh sách khác của sản phẩm.
+    const ordered = [...missions].sort(
+      (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
+    );
+    let lastActivityAt = ordered[ordered.length - 1].createdAt;
+    for (const mission of ordered) {
+      lastActivityAt = latest(
+        lastActivityAt,
+        accumulateMission(
+          categories,
+          warehouses,
+          mission,
+          loansByMission.get(mission.id) ?? [],
+          metadataBySku,
+        ),
+      );
+    }
+
+    const missionSummaries = ordered.map((mission) =>
+      this.buildMission(mission, loansByMission.get(mission.id) ?? [], metadataBySku),
+    );
+    const firstMission = ordered[ordered.length - 1];
+    const lastMission = ordered[0];
+    const categoryList = sortCategories(categories);
+
+    return {
+      /*
+        Khoá của đợt là id nhiệm vụ MỞ MÀN.
+
+        Nó bền đúng chừng nào cần: thêm nhiệm vụ mới vào đợt đang chạy thì khoá
+        giữ nguyên, nên khối người dùng đang mở không bị đóng sập lại sau mỗi lần
+        làm tươi. Lấy nhiệm vụ cuối làm khoá thì mỗi tình huống mới lại đổi khoá
+        của cả đợt.
+      */
+      episodeId: `dot-${firstMission.id}`,
+      /** Các loại tình huống có trong đợt, nhiều nhất trước — tên gọi của đợt. */
+      incidentTypes: rankIncidentTypes(ordered),
+      missionCount: ordered.length,
+      /** Số người ảnh hưởng lớn nhất ghi nhận trong đợt. */
+      peakAffectedPeople: Math.max(...ordered.map((mission) => mission.affectedPeople)),
+      /** Mốc lập nhiệm vụ ĐẦU TIÊN của đợt. */
+      startedAt: firstMission.createdAt.toISOString(),
+      /** Mốc lập nhiệm vụ GẦN NHẤT — chính là mốc bắt đầu đếm 7 ngày im lặng. */
+      lastMissionAt: lastMission.createdAt.toISOString(),
+      /** Mốc mới nhất có thao tác thật (xuất kho, ký nhận, hoàn trả) trong đợt. */
+      lastActivityAt: lastActivityAt.toISOString(),
+      /**
+       * Đợt còn có thể nhận thêm nhiệm vụ không.
+       *
+       * Con số của đợt đang diễn ra CÒN ĐỔI, nên người đọc phải biết trước khi
+       * mang nó đi quyết toán hay đi xin cấp bù.
+       */
+      ongoing: isEpisodeOngoing(lastMission.createdAt, now),
+      warehouses: [...warehouses.values()].sort((a, b) => a.name.localeCompare(b.name, "vi")),
+      categories: categoryList,
+      totals: sumTotals(categoryList.map(toTotals)),
+      missions: missionSummaries,
+    };
+  }
+
+  /** Một nhiệm vụ trong đợt — cùng bộ cột, để mở ra xem việc nào tiêu gì. */
+  private buildMission(
     mission: MissionRow,
     loans: LoanRow[],
     metadataBySku: Map<string, SkuMetadata>,
   ) {
     const categories = new Map<string, MutableCategory>();
     const warehouses = new Map<string, { id: string; name: string }>();
-    /** Mốc hoạt động mới nhất — dùng cho cột "cập nhật lúc" của từng đợt. */
-    let lastActivityAt = mission.createdAt;
-
-    for (const request of mission.warehouseRequests) {
-      const metadata = metadataBySku.get(request.sku);
-      const unit = request.unit || metadata?.unit || UNKNOWN_UNIT;
-      const category = ensureCategory(
-        categories,
-        metadata?.categoryName ?? UNCATEGORIZED_LABEL,
-        unit,
-        metadata?.consumable ?? true,
-      );
-      const item = ensureItem(category, request.sku, request.itemName, unit, category.consumable);
-
-      // pickedUpQuantity để rỗng nghĩa là CHƯA AI KÝ NHẬN — khác hẳn ký nhận 0.
-      // Cộng null thành 0 sẽ biến "chưa lấy" thành "lấy về tay không", tức là
-      // bịa ra một khoản thiếu chưa hề xảy ra.
-      const pickedUp = request.pickedUpQuantity ?? 0;
-      const gap =
-        request.pickedUpQuantity === null ? 0 : Math.max(0, request.preparedQuantity - pickedUp);
-
-      addRequest(category, request.requestedQuantity, request.preparedQuantity, pickedUp, gap);
-      addRequest(item, request.requestedQuantity, request.preparedQuantity, pickedUp, gap);
-
-      warehouses.set(request.warehouse.id, request.warehouse);
-      lastActivityAt = latest(
-        lastActivityAt,
-        request.updatedAt,
-        request.preparedAt,
-        request.pickedUpAt,
-      );
-    }
-
-    for (const loan of loans) {
-      const sku = loan.batch.item.sku;
-      const metadata = metadataBySku.get(sku);
-      const unit = metadata?.unit ?? UNKNOWN_UNIT;
-      const category = ensureCategory(
-        categories,
-        metadata?.categoryName ?? UNCATEGORIZED_LABEL,
-        unit,
-        metadata?.consumable ?? false,
-      );
-      const item = ensureItem(category, sku, loan.batch.item.name, unit, category.consumable);
-      const stillOnLoan = Math.max(
-        0,
-        loan.quantity - loan.returnedOk - loan.returnedDamaged - loan.lost,
-      );
-
-      addLoan(category, loan, stillOnLoan);
-      addLoan(item, loan, stillOnLoan);
-      lastActivityAt = latest(lastActivityAt, loan.borrowedAt, loan.closedAt);
-    }
-
-    const categoryList = [...categories.values()]
-      .map((category) => ({
-        ...stripItems(category),
-        items: [...category.items.values()].sort((a, b) => b.issued - a.issued),
-      }))
-      .sort((a, b) => b.issued - a.issued || a.categoryName.localeCompare(b.categoryName, "vi"));
+    const lastActivityAt = accumulateMission(categories, warehouses, mission, loans, metadataBySku);
+    const categoryList = sortCategories(categories);
 
     return {
       missionId: mission.id,
@@ -313,6 +351,105 @@ export class DisasterStatisticsService {
       totals: sumTotals(categoryList.map(toTotals)),
     };
   }
+}
+
+/**
+ * Dồn số của MỘT nhiệm vụ vào bộ tích luỹ đang mở, trả về mốc hoạt động muộn nhất.
+ *
+ * Nhận `categories` và `warehouses` từ bên ngoài để cùng một hàm dùng được cho cả
+ * hai mức: gọi với bộ riêng thì ra số của một nhiệm vụ, gọi lần lượt vào cùng một
+ * bộ thì ra số của cả đợt. Chép ra hai vòng cộng riêng là chỗ để hai mức số liệu
+ * âm thầm lệch nhau — mà lệch ở đây thì không ai phát hiện được bằng mắt.
+ */
+function accumulateMission(
+  categories: Map<string, MutableCategory>,
+  warehouses: Map<string, { id: string; name: string }>,
+  mission: MissionRow,
+  loans: LoanRow[],
+  metadataBySku: Map<string, SkuMetadata>,
+): Date {
+  /** Mốc hoạt động mới nhất — dùng cho cột "cập nhật lúc". */
+  let lastActivityAt = mission.createdAt;
+
+  for (const request of mission.warehouseRequests) {
+    const metadata = metadataBySku.get(request.sku);
+    const unit = request.unit || metadata?.unit || UNKNOWN_UNIT;
+    const category = ensureCategory(
+      categories,
+      metadata?.categoryName ?? UNCATEGORIZED_LABEL,
+      unit,
+      metadata?.consumable ?? true,
+    );
+    const item = ensureItem(category, request.sku, request.itemName, unit, category.consumable);
+
+    // pickedUpQuantity để rỗng nghĩa là CHƯA AI KÝ NHẬN — khác hẳn ký nhận 0.
+    // Cộng null thành 0 sẽ biến "chưa lấy" thành "lấy về tay không", tức là
+    // bịa ra một khoản thiếu chưa hề xảy ra.
+    const pickedUp = request.pickedUpQuantity ?? 0;
+    const gap =
+      request.pickedUpQuantity === null ? 0 : Math.max(0, request.preparedQuantity - pickedUp);
+
+    addRequest(category, request.requestedQuantity, request.preparedQuantity, pickedUp, gap);
+    addRequest(item, request.requestedQuantity, request.preparedQuantity, pickedUp, gap);
+
+    warehouses.set(request.warehouse.id, request.warehouse);
+    lastActivityAt = latest(
+      lastActivityAt,
+      request.updatedAt,
+      request.preparedAt,
+      request.pickedUpAt,
+    );
+  }
+
+  for (const loan of loans) {
+    const sku = loan.batch.item.sku;
+    const metadata = metadataBySku.get(sku);
+    const unit = metadata?.unit ?? UNKNOWN_UNIT;
+    const category = ensureCategory(
+      categories,
+      metadata?.categoryName ?? UNCATEGORIZED_LABEL,
+      unit,
+      metadata?.consumable ?? false,
+    );
+    const item = ensureItem(category, sku, loan.batch.item.name, unit, category.consumable);
+    const stillOnLoan = Math.max(
+      0,
+      loan.quantity - loan.returnedOk - loan.returnedDamaged - loan.lost,
+    );
+
+    addLoan(category, loan, stillOnLoan);
+    addLoan(item, loan, stillOnLoan);
+    lastActivityAt = latest(lastActivityAt, loan.borrowedAt, loan.closedAt);
+  }
+
+  return lastActivityAt;
+}
+
+/** Nhóm hàng tiêu nhiều nhất lên đầu; bằng nhau thì xếp theo tên tiếng Việt. */
+function sortCategories(categories: Map<string, MutableCategory>) {
+  return [...categories.values()]
+    .map((category) => ({
+      ...stripItems(category),
+      items: [...category.items.values()].sort((a, b) => b.issued - a.issued),
+    }))
+    .sort((a, b) => b.issued - a.issued || a.categoryName.localeCompare(b.categoryName, "vi"));
+}
+
+/**
+ * Các loại tình huống trong đợt, loại có nhiều nhiệm vụ nhất đứng trước.
+ *
+ * Một đợt thường pha nhiều thứ: bão đổ bộ rồi ngập, ngập rồi sạt lở. Màn hình
+ * gọi tên đợt bằng loại đứng đầu và nói thêm "+2 loại" nếu còn, thay vì bịa ra
+ * một cái tên chung chung mà không dữ liệu nào chống lưng.
+ */
+function rankIncidentTypes(missions: MissionRow[]): string[] {
+  const counts = new Map<string, number>();
+  for (const mission of missions) {
+    counts.set(mission.incidentType, (counts.get(mission.incidentType) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .map(([incidentType]) => incidentType);
 }
 
 type MissionRow = {
