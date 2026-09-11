@@ -2158,11 +2158,22 @@ export class MissionService {
     return this.getMission(found.id, actorUserId, scopeWarehouseId);
   }
 
-  /** Danh sách nhiệm vụ (lọc theo trạng thái nếu truyền) — mới nhất trước. */
+  /**
+   * Danh sách nhiệm vụ (lọc theo trạng thái nếu truyền) — mới nhất trước.
+   *
+   * `page.cursor` + `page.limit` cho lối cuộn vô tận của điện thoại: con trỏ là id
+   * nhiệm vụ CUỐI trang trước. Bỏ trống thì vẫn trả 100 nhiệm vụ mới nhất như
+   * trước, nên các màn hình đọc một phát cả danh sách không phải sửa gì.
+   *
+   * Sắp xếp thêm `id` sau `createdAt`: một lượt seed hoặc một lượt nhập hàng loạt
+   * sinh ra nhiều nhiệm vụ trong cùng mili giây, và con trỏ rơi vào giữa cụm đó
+   * thì trang sau lặp lại hoặc nhảy cóc mất vài dòng.
+   */
   async listMissions(
     statuses?: MissionStatus[],
     actorUserId?: string,
     scopeWarehouseId?: string | null,
+    page: { limit?: number; cursor?: string } = {},
   ) {
     const actor = actorUserId
       ? await this.prisma.user.findUnique({
@@ -2171,6 +2182,9 @@ export class MissionService {
         })
       : null;
     if (actorUserId && !actor) throw new NotFoundException("Không tìm thấy người dùng");
+    const requested = Number.isFinite(page.limit) ? Math.trunc(page.limit as number) : 100;
+    const limit = Math.min(Math.max(requested, 1), 100);
+    const cursor = page.cursor?.trim();
     const missions = await this.prisma.mission.findMany({
       where: {
         ...(statuses && statuses.length > 0 ? { status: { in: statuses } } : {}),
@@ -2184,7 +2198,7 @@ export class MissionService {
           : {}),
         ...(actor ? { warehouse: { organizationId: actor.organizationId } } : {}),
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       include: {
         requirements: true,
         warehousePreparations: true,
@@ -2194,7 +2208,8 @@ export class MissionService {
         },
         ...COORDINATION_ANALYSIS_COUNT,
       },
-      take: 100,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      take: limit,
     });
     return missions.map((mission) => withCoordinationAnalysisFlag(withCurrentFulfillment(mission)));
   }

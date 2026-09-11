@@ -1,6 +1,7 @@
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState, type ComponentProps } from "react";
 import {
+  ActivityIndicator,
   AppState,
   FlatList,
   Image,
@@ -36,6 +37,7 @@ import { c, styles } from "./styles";
 import { NotificationToasts } from "./NotificationToasts";
 import { useNotificationFeed, type NotificationFeed } from "./use-notification-feed";
 import { filterNotificationsByMissionNo } from "./notification-feed-state";
+import { PAGE_SIZE } from "./paged-list-state";
 import { missionWorkStage, type MissionWorkStage } from "./mission-state";
 import {
   initialTabForRole,
@@ -688,6 +690,47 @@ function NotificationsScreen({
               onPress={item.missionId ? () => onOpenMission(item.missionId!) : undefined}
             />
           )}
+          /* Cuộn tới đâu tải tới đó. Sau một đêm bão hộp này dài hàng trăm dòng;
+             tải hết một lượt là người trực ngồi nhìn màn hình trắng vài giây
+             trước khi thấy dòng đầu tiên — mà dòng đầu tiên mới là dòng họ cần.
+
+             Ngưỡng 0.6: bắn khi còn hơn nửa màn hình nữa mới tới đáy, để trang
+             sau kịp về trước lúc người dùng cuộn tới nơi. Bắn đúng lúc chạm đáy
+             thì lần nào cuộn nhanh cũng thấy khựng lại một nhịp. */
+          onEndReached={() => feed.loadMore()}
+          onEndReachedThreshold={0.6}
+          ListFooterComponent={
+            feed.loadingMore ? (
+              <View style={{ paddingVertical: 16, alignItems: "center" }}>
+                <ActivityIndicator color={c.primary} />
+              </View>
+            ) : feed.moreError ? (
+              /* Tải thêm hỏng KHÁC HẲN đã xem hết: phần chưa tải vẫn còn đó, và
+                 người dùng cần biết để thử lại chứ không phải yên tâm đóng máy. */
+              <Pressable
+                onPress={() => feed.loadMore()}
+                accessibilityRole="button"
+                style={{ paddingVertical: 16 }}
+              >
+                <Text style={{ color: c.amber, fontSize: 12, textAlign: "center" }}>
+                  Chưa tải thêm được thông báo cũ hơn. Chạm để thử lại.
+                </Text>
+              </Pressable>
+            ) : feed.hasMore ? null : items.length > PAGE_SIZE ? (
+              /* Chỉ nói "hết" khi đã cuộn qua ít nhất một trang: với hộp chỉ có
+                 dăm dòng thì câu này là chữ thừa dưới một danh sách ngắn tũn. */
+              <Text
+                style={{
+                  color: c.muted,
+                  fontSize: 12,
+                  textAlign: "center",
+                  paddingVertical: 16,
+                }}
+              >
+                Đã xem hết thông báo.
+              </Text>
+            ) : null
+          }
         />
       )}
     </View>

@@ -213,14 +213,27 @@ export class MissionController {
     );
   }
 
-  /** Danh sách nhiệm vụ, lọc theo trạng thái (vd ?status=DEFERRED,REJECTED). */
+  /**
+   * Danh sách nhiệm vụ, lọc theo trạng thái (vd ?status=DEFERRED,REJECTED).
+   *
+   * `cursor` + `limit` cho lối cuộn vô tận của điện thoại; bỏ trống thì vẫn là 100
+   * nhiệm vụ mới nhất như trước.
+   */
   @RequirePermission(Permission.MISSION_VIEW)
   @Get()
-  list(@Request() req: AuthenticatedRequest, @Query("status") status?: string) {
+  list(
+    @Request() req: AuthenticatedRequest,
+    @Query("status") status?: string,
+    @Query("limit") limit?: string,
+    @Query("cursor") cursor?: string,
+  ) {
     const statuses = status
       ? (status.split(",").filter((s) => s in MissionStatus) as MissionStatus[])
       : undefined;
-    return this.missions.listMissions(statuses, req.user.userId, req.user.warehouseId);
+    return this.missions.listMissions(statuses, req.user.userId, req.user.warehouseId, {
+      limit: limit ? Number.parseInt(limit, 10) : undefined,
+      cursor: cursor || undefined,
+    });
   }
 
   /**

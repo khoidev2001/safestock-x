@@ -274,13 +274,36 @@ export async function logout(token: string): Promise<void> {
   if (!res.ok) throw await apiFailure(res, "Đăng xuất phía máy chủ thất bại");
 }
 
-/** Danh sách thông báo của role hiện tại (mới nhất trước). */
-export async function fetchNotifications(token: string): Promise<Notification[]> {
-  const res = await request(apiUrl("/api/notifications"), {
+/**
+ * Danh sách thông báo của role hiện tại (mới nhất trước).
+ *
+ * `cursor` là id thông báo cuối cùng đang có trên màn hình; máy chủ trả tiếp từ
+ * sau nó. Không truyền gì thì nhận trang đầu.
+ */
+export async function fetchNotifications(
+  token: string,
+  page: { limit?: number; cursor?: string | null } = {},
+): Promise<Notification[]> {
+  const res = await request(apiUrl(`/api/notifications${pageQuery(page)}`), {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error("Không tải được danh sách thông báo");
   return res.json();
+}
+
+/**
+ * Phần `?limit=&cursor=` của một đường dẫn có phân trang.
+ *
+ * Một hàm dùng chung cho mọi danh sách cuộn được: ghép tay ở từng chỗ gọi là chỗ
+ * để quên mã hoá con trỏ, mà con trỏ là id do máy chủ sinh ra chứ không phải thứ
+ * do mình đặt tên.
+ */
+function pageQuery(page: { limit?: number; cursor?: string | null }): string {
+  const params = new URLSearchParams();
+  if (page.limit != null) params.set("limit", String(page.limit));
+  if (page.cursor) params.set("cursor", page.cursor);
+  const query = params.toString();
+  return query ? `?${query}` : "";
 }
 
 /** Giọng nói (WAV 16kHz base64) → text tiếng Việt bằng PhoWhisper local (proxy AI). */
@@ -530,8 +553,13 @@ export async function fetchMission(token: string, id: string): Promise<MissionDe
  * trôi đi là mất luôn đường vào. Lực lượng hiện trường phải có chỗ để hỏi "tôi
  * đang có lệnh nào?".
  */
-export async function fetchMissions(token: string): Promise<MissionDetail[]> {
-  const res = await request(apiUrl("/api/missions"), { headers: authHeader(token) });
+export async function fetchMissions(
+  token: string,
+  page: { limit?: number; cursor?: string | null } = {},
+): Promise<MissionDetail[]> {
+  const res = await request(apiUrl(`/api/missions${pageQuery(page)}`), {
+    headers: authHeader(token),
+  });
   if (!res.ok) throw await apiFailure(res, "Không tải được danh sách nhiệm vụ");
   return res.json();
 }
