@@ -132,9 +132,9 @@ try {
 
   docker exec safestock_redis redis-cli ping 2>&1 | Out-Null
   $redisOk = $LASTEXITCODE -eq 0
-  # Cổng 16379 chứ không phải 56380: dải kia nằm trong vùng Windows giữ trước,
+  # Cổng 16380 chứ không phải 56380: dải kia nằm trong vùng Windows giữ trước,
   # backend sẽ treo lúc khởi động mà không báo gì.
-  Ghi-KetQua "Redis (cổng 16379)" $redisOk
+  Ghi-KetQua "Redis (cổng 16380)" $redisOk
 } finally {
   Pop-Location
 }
@@ -144,14 +144,34 @@ Viet-TieuDe "Bản đồ đường đi (OSRM)"
 
 Push-Location $GocDuAn
 try {
-  if (-not (Test-DichVu "http://localhost:5000/route/v1/driving/106.7,10.8;106.71,10.81" 5)) {
+  # Toạ độ thật trong xã: kho trung tâm Đồng Xuân -> kho thôn Kỳ Đu. Bản cũ thử
+  # bằng toạ độ TP.HCM, nằm ngoài đồ thị nên OSRM vẫn trả 200 kèm quãng đường 0 —
+  # nạp nhầm bản đồ tỉnh khác thì phép thử vẫn xanh, đúng kiểu hỏng im lặng.
+  $TuyenThu = "http://localhost:5000/route/v1/driving/109.104259,13.3782428;109.062318,13.3636977?overview=false"
+
+  # Sống là chưa đủ: phải ra được quãng đường dương thì bản đồ mới đúng vùng.
+  function Test-TuyenThat {
+    param([string]$Url)
+    try {
+      $r = Invoke-RestMethod -Uri $Url -TimeoutSec 15
+      return ($r.code -eq "Ok" -and $r.routes[0].distance -gt 0)
+    } catch { return $false }
+  }
+
+  if (-not (Test-TuyenThat $TuyenThu)) {
     Viet-Dong "Đang bật OSRM..." "DarkGray"
     & pnpm osrm:up 2>&1 | Out-String | Out-Null
     Start-Sleep -Seconds 5
   }
-  $osrmOk = Cho-DichVu "http://localhost:5000/route/v1/driving/106.7,10.8;106.71,10.81" 60 "OSRM"
+  $osrmOk = $false
+  $hetOsrm = (Get-Date).AddSeconds(60)
+  while ((Get-Date) -lt $hetOsrm) {
+    if (Test-TuyenThat $TuyenThu) { $osrmOk = $true; break }
+    Start-Sleep -Seconds 3
+  }
   if ($osrmOk) {
-    Ghi-KetQua "OSRM (cổng 5000)" $true
+    $km = [Math]::Round((Invoke-RestMethod -Uri $TuyenThu -TimeoutSec 15).routes[0].distance / 1000, 1)
+    Ghi-KetQua "OSRM (cổng 5000)" $true ("tuyến thật $km km")
   } else {
     # Thiếu OSRM thì vẫn demo được, chỉ là quãng đường tính theo đường chim bay —
     # mất đúng cái điểm "tuyến tính bằng bản đồ đường thật" khi trình bày.
@@ -396,11 +416,14 @@ if ($CanhBao.Count -gt 0) {
 }
 
 Write-Host ""
-Write-Host "   Tài khoản:  admin / admin123@              (điều phối xã, cửa sổ thường)" -ForegroundColor DarkGray
+Write-Host "   Tài khoản:  admin / admin123               (điều phối xã, cửa sổ thường)" -ForegroundColor DarkGray
 Write-Host "               longchau / truongthon123   (kho thôn, cửa sổ ẩn danh)" -ForegroundColor DarkGray
+Write-Host "               iot / iot123456            (đăng nhập trong app IoT Simulator)" -ForegroundColor DarkGray
 Write-Host ""
-Write-Host "   Hai bẫy: gõ tiếng Việt CÓ DẤU khi khai tình huống; nút" -ForegroundColor DarkGray
-Write-Host "   'Lập kế hoạch cứu hộ' mất ~40 giây, bấm rồi nói tiếp." -ForegroundColor DarkGray
+Write-Host "   Khai tình huống đi HAI bước, đúng tên nút trên màn:" -ForegroundColor DarkGray
+Write-Host "     1. 'Phân tích bằng AI'         ~5 giây, điền số vào bảng" -ForegroundColor DarkGray
+Write-Host "     2. 'Lập bản tham mưu bằng AI'  ~25 giây, bấm rồi nói tiếp" -ForegroundColor DarkGray
+Write-Host "   Nhớ gõ tiếng Việt CÓ DẤU khi kể tình huống." -ForegroundColor DarkGray
 Write-Host "   Cần app IoT thì bấm 'App IoT - Simulator.bat' ngoài Desktop." -ForegroundColor DarkGray
 Write-Host ""
 
