@@ -934,7 +934,11 @@ export function MissionView({
     /* `scroll-mt`: thanh tiêu đề trang là `sticky top-0`. Cuộn sát mép trên thì
        mép khối chui xuống dưới nó và mất luôn bước đầu của thanh tiến trình. */
     <section className="app-panel scroll-mt-24 p-5" ref={workflowRef}>
-      <WorkflowStepper status={mission.status} warehouseRequests={mission.warehouseRequests} />
+      <WorkflowStepper
+        status={mission.status}
+        warehouseRequests={mission.warehouseRequests}
+        hasReturnableSupplies={mission.hasReturnableSupplies}
+      />
       {/* Ai chốt phương án này. Một xã có nhiều quản trị viên cùng duyệt để chia
           tải, nên khi phải hỏi lại thì phải biết gọi ai — trước đây hệ thống có lưu
           id người duyệt nhưng không hiện ra đâu cả. */}
@@ -1760,6 +1764,25 @@ function RoleActions({
    * có gì để nhận về. Máy chủ vẫn chốt lại là kho đó có tham gia nhiệm vụ.
    */
   const warehouseCanConfirmReturn = role === "WAREHOUSE" && mission.status === "COMPLETED";
+  /**
+   * Nhiệm vụ không có vật tư tái sử dụng nào đang nằm ngoài kho.
+   *
+   * Chỉ tin khi máy chủ khẳng định `false`; để trống là CHƯA BIẾT, và lúc chưa
+   * biết thì phải hỏi như cũ chứ không được tuyên bố là không cần trả.
+   */
+  const nothingToReturn = mission.hasReturnableSupplies === false;
+  const isWarehouse = role === "WAREHOUSE";
+  const isReturned = mission.status === "RETURNED";
+  /**
+   * Những thứ đội đã thật sự ký nhận mang đi.
+   *
+   * Liệt kê ra cạnh câu "không cần hoàn trả" để người trực đối chiếu được: kết
+   * luận này đúng hay sai là nhìn vào danh sách mà biết, chứ không phải tin lời
+   * hệ thống. Chỉ dòng ĐÃ ký nhận — phần còn nằm trên kệ không liên quan.
+   */
+  const handedOverItems = (mission.warehouseRequests ?? []).filter(
+    (request) => (request.pickedUpQuantity ?? 0) > 0,
+  );
   const warehouseAlreadyPrepared =
     role === "WAREHOUSE" &&
     mission.status === "PENDING_WAREHOUSE" &&
@@ -1860,7 +1883,7 @@ function RoleActions({
         {/* BƯỚC CUỐI, và chỉ KHO bấm được: hàng tái sử dụng phải quay về kho mới
             khép sổ được, mà người đếm lại nó khi về tới nơi mới ký được. Điều phối
             thấy nút này thì họ ký hộ, và chữ ký đó rỗng. */}
-        {warehouseCanConfirmReturn && (
+        {warehouseCanConfirmReturn && !nothingToReturn && (
           <button
             className={actionBtn}
             style={primaryStyle}
@@ -1871,7 +1894,32 @@ function RoleActions({
           </button>
         )}
 
-        {mission.status === "RETURNED" && (
+        {/* KHÔNG có gì để thu hồi: không bày nút nào cả.
+
+            Một nút "xác nhận đã hoàn trả" ở đây là cái bẫy — kho bấm cho xong việc
+            và nhiệm vụ ghi vào sổ một lượt thu hồi chưa từng xảy ra. Thay bằng câu
+            trả lời dứt điểm, kèm ĐÚNG những thứ đã cấp đi, để người trực tự đối
+            chiếu chứ không phải tin lời máy. */}
+        {isWarehouse && nothingToReturn && (mission.status === "COMPLETED" || isReturned) && (
+          <div className="w-full rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3">
+            <p className="text-sm font-medium">Không cần hoàn trả vật tư</p>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">
+              Nhiệm vụ này không có vật tư tái sử dụng nào. Toàn bộ phần đã cấp là đồ tiêu hao, phát
+              cho dân là xong — kho không phải nhận lại gì.
+            </p>
+            {handedOverItems.length > 0 && (
+              <ul className="mt-2 space-y-0.5 text-sm text-[var(--text-muted)]">
+                {handedOverItems.map((item) => (
+                  <li key={item.id}>
+                    • {item.itemName}: {item.pickedUpQuantity} {item.unit}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {isReturned && !nothingToReturn && (
           <p className="text-sm text-[var(--color-ready)]">
             Kho đã nhận lại vật tư — nhiệm vụ khép lại.
           </p>
@@ -1879,7 +1927,9 @@ function RoleActions({
 
         {isAdmin && mission.status === "COMPLETED" && (
           <p className="text-sm text-[var(--text-muted)]">
-            Đang chờ kho đếm lại và xác nhận đã hoàn trả vật tư.
+            {nothingToReturn
+              ? "Không cần trả vật tư — nhiệm vụ không có gì để thu hồi."
+              : "Đang chờ kho đếm lại và xác nhận đã hoàn trả vật tư."}
           </p>
         )}
 

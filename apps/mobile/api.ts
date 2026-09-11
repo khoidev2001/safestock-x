@@ -420,6 +420,14 @@ export interface MissionDetail {
   incidentLng?: number | null;
   requirements: MissionRequirement[];
   warehouseRequests?: WarehouseMaterialRequest[];
+  /**
+   * Có vật tư tái sử dụng nào đang nằm ngoài kho không.
+   *
+   * `false` là KHÔNG CẦN TRẢ — nhiệm vụ chỉ phát đồ tiêu hao, phát xong là xong.
+   * Để trống là máy chủ cũ chưa trả cờ này; lúc đó phải hỏi như cũ chứ không được
+   * tự kết luận là không cần trả.
+   */
+  hasReturnableSupplies?: boolean;
   /** Ảnh bằng chứng đã gửi kèm lúc báo hoàn thành — chỉ phần mô tả, không có bytes. */
   deliveryPhotos?: MissionDeliveryPhoto[];
 }

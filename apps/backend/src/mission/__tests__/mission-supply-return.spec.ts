@@ -180,6 +180,56 @@ describe("kho xác nhận hoàn trả vật tư", () => {
     );
   });
 
+  /**
+   * Cờ `hasReturnableSupplies` trên chi tiết nhiệm vụ.
+   *
+   * Giao diện dựa vào đúng cờ này để thôi hỏi "đội hoàn trả vật tư chưa?" và để
+   * ghi "không cần trả" thay cho "đang chờ". Đọc sai theo hướng `false` là xoá sổ
+   * một khoản nợ có thật, nên nó phải khớp từng điều kiện với
+   * `listReturnableSupplies`: chỉ hàng TÁI SỬ DỤNG, và chỉ dòng đội ĐÃ ký nhận.
+   */
+  describe("cờ 'nhiệm vụ này có gì phải trả không'", () => {
+    async function flagFor(warehouseRequests: Record<string, unknown>[]) {
+      const state = makeService([]);
+      state.prisma.mission.findUnique = jest.fn().mockResolvedValue({
+        id: MISSION_ID,
+        missionNo: 824,
+        warehouseId: "warehouse-a",
+        status: MissionStatus.COMPLETED,
+        fulfillment: 100,
+        readinessAssessment: null,
+        warehouseRequests,
+      }) as never;
+      const mission = await state.service.getMission(MISSION_ID, "user-1", "warehouse-a");
+      return (mission as { hasReturnableSupplies: boolean }).hasReturnableSupplies;
+    }
+
+    it("chỉ phát đồ tiêu hao thì KHÔNG cần trả", async () => {
+      // Mì tôm đã phát cho dân: phát xong là xong, không ai phải mang gì về kho.
+      expect(await flagFor([{ sku: "NOODLE-01", pickedUpQuantity: 5 }])).toBe(false);
+    });
+
+    it("có hàng tái sử dụng đội đã mang đi thì CẦN trả", async () => {
+      expect(
+        await flagFor([
+          { sku: "NOODLE-01", pickedUpQuantity: 5 },
+          { sku: "VEST-ADULT", pickedUpQuantity: 10 },
+        ]),
+      ).toBe(true);
+    });
+
+    it("hàng tái sử dụng còn nằm trên kệ thì chưa có gì để đòi về", async () => {
+      // Chưa ai ký nhận mang đi — áo phao vẫn ở kho, không phải đang ở ngoài.
+      expect(await flagFor([{ sku: "VEST-ADULT", pickedUpQuantity: null }])).toBe(false);
+    });
+
+    it("nhiệm vụ cũ không có phiếu vật tư nào thì không ngã", async () => {
+      // Dữ liệu trước khi tách phiếu theo vật tư: ngã ở đây là hỏng cả lượt mở
+      // nhiệm vụ, chỉ vì một cờ hiển thị.
+      expect(await flagFor([])).toBe(false);
+    });
+  });
+
   it("kho không khai hộ được dòng của kho khác", async () => {
     const state = makeService([requestRow({ warehouseId: "warehouse-b" })]);
 

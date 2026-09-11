@@ -633,7 +633,48 @@ export class MissionService {
     // đã lưu giữ nguyên các con số phân bổ; chỉ riêng tỉ lệ phần trăm được tính
     // lại, để nhiệm vụ lập từ trước lúc đổi công thức không hiện 0% giữa một
     // bảng toàn dòng "Đủ" — xem `withCurrentFulfillment`.
-    return withCoordinationAnalysisFlag(withCurrentFulfillment(mission));
+    const [withFlags] = await this.withReturnableSupplyFlags([
+      withCoordinationAnalysisFlag(withCurrentFulfillment(mission)),
+    ]);
+    return withFlags;
+  }
+
+  /**
+   * Gắn cờ "nhiệm vụ này có gì để thu hồi không" vào một loạt nhiệm vụ.
+   *
+   * Có nhiệm vụ chỉ phát đồ tiêu hao — mì tôm, nước đóng chai, lương khô. Phát
+   * xong là hết, không ai phải mang gì về kho. Trước đây giao diện không phân
+   * biệt được chuyện đó với "có hàng phải trả mà chưa trả", nên kho vẫn bị hỏi
+   * "đội hoàn trả vật tư chưa?" và điều phối vẫn thấy một bước treo ở trạng thái
+   * chờ, cho một khoản nợ không tồn tại.
+   *
+   * Đọc đúng theo `listReturnableSupplies` — cùng điều kiện "đội đã ký nhận mang
+   * đi" và cùng phép lọc hàng tái sử dụng — để cờ này với danh sách đếm lại
+   * không bao giờ nói hai điều khác nhau.
+   *
+   * Phạm vi TOÀN nhiệm vụ, không theo kho người hỏi: một lượt xác nhận hoàn trả
+   * đóng cả nhiệm vụ, nên chừng nào còn một kho có hàng ngoài kia thì nhiệm vụ
+   * vẫn cần được trả.
+   *
+   * Nhận cả MẢNG chứ không phải từng nhiệm vụ một: danh sách trả về tới 100 dòng,
+   * mà tra danh mục từng dòng là 100 lượt hỏi cơ sở dữ liệu cho một câu trả lời
+   * gộp lại được thành một.
+   */
+  private async withReturnableSupplyFlags<
+    T extends { warehouseRequests?: { sku: string; pickedUpQuantity: number | null }[] | null },
+  >(missions: T[]): Promise<(T & { hasReturnableSupplies: boolean })[]> {
+    // Chưa ký nhận mang đi thì chưa có gì ở ngoài kho để mà đòi về. Không có phiếu
+    // nào cũng vậy — nhiệm vụ cũ từ trước khi tách phiếu theo vật tư không có gì
+    // để đòi, và ngã ở đây thì cả lượt mở nhiệm vụ hỏng theo.
+    const handedOver = (mission: T) =>
+      (mission.warehouseRequests ?? []).filter((request) => (request.pickedUpQuantity ?? 0) > 0);
+    const reusable = await this.reusableSkus(
+      missions.flatMap((mission) => handedOver(mission).map((request) => request.sku)),
+    );
+    return missions.map((mission) => ({
+      ...mission,
+      hasReturnableSupplies: handedOver(mission).some((request) => reusable.has(request.sku)),
+    }));
   }
 
   /**
@@ -2042,7 +2083,7 @@ export class MissionService {
     });
 
     return {
-      items: items.map(withCoordinationAnalysisFlag),
+      items: await this.withReturnableSupplyFlags(items.map(withCoordinationAnalysisFlag)),
       total,
       totalAll,
       page,

@@ -167,6 +167,9 @@ describe("MissionService warehouse participation", () => {
     await expect(service.getMission("mission-1", "user-b", "warehouse-b")).resolves.toEqual({
       ...expected,
       hasCoordinationAnalysis: false,
+      // Nhiệm vụ dựng trong test chưa có dòng nào đội ký nhận mang đi, nên chưa có
+      // gì ở ngoài kho để đòi về.
+      hasReturnableSupplies: false,
     });
   });
 

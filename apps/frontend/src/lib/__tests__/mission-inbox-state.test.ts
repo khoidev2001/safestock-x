@@ -159,7 +159,10 @@ test("chưa kho nào xuất thì không ghi 0/3 cho rối", () => {
 });
 
 test("hiện trường báo kết quả xong thì nhiệm vụ đã đóng, không còn là chặng phát hành", () => {
-  assert.equal(missionStageLabel({ ...stageBase, status: "COMPLETED" }), "Đã hoàn thành");
+  assert.equal(
+    missionStageLabel({ ...stageBase, status: "COMPLETED" }),
+    "Đã hoàn thành (chưa hoàn vật tư)",
+  );
   // Dấu vết của các bước trước không được kéo nhãn ngược về giai đoạn cũ.
   assert.equal(
     missionStageLabel({
@@ -169,7 +172,36 @@ test("hiện trường báo kết quả xong thì nhiệm vụ đã đóng, khô
       actionPlan: {},
       warehousePreparations: [{ warehouseId: "w1", preparedAt: null }],
     }),
-    "Đã hoàn thành",
+    "Đã hoàn thành (chưa hoàn vật tư)",
+  );
+});
+
+test("giao xong và thu hồi xong là hai câu khác nhau, cùng đọc ra 'đã hoàn thành'", () => {
+  // Đã khép sổ: nhãn phải nói CẢ hai việc — giao xong, và hàng đã về.
+  assert.equal(
+    missionStageLabel({ ...stageBase, status: "RETURNED" }),
+    "Đã hoàn thành (đã trả vật tư)",
+  );
+  // Nhiệm vụ chỉ phát đồ tiêu hao: không có gì để đòi về, nên không được ghi
+  // "chưa hoàn" — đó là dựng lên một khoản nợ không tồn tại.
+  assert.equal(
+    missionStageLabel({ ...stageBase, status: "COMPLETED", hasReturnableSupplies: false }),
+    "Đã hoàn thành (không cần trả vật tư)",
+  );
+  // Và kể cả khi đã bị đẩy sang RETURNED: "đã trả vật tư" ở đây là khai một lượt
+  // thu hồi chưa từng xảy ra.
+  assert.equal(
+    missionStageLabel({ ...stageBase, status: "RETURNED", hasReturnableSupplies: false }),
+    "Đã hoàn thành (không cần trả vật tư)",
+  );
+  assert.equal(
+    missionStageLabel({ ...stageBase, status: "COMPLETED", hasReturnableSupplies: true }),
+    "Đã hoàn thành (chưa hoàn vật tư)",
+  );
+  // Cờ để TRỐNG là chưa biết, không phải "không cần trả": phải đọc thận trọng.
+  assert.equal(
+    missionStageLabel({ ...stageBase, status: "COMPLETED", hasReturnableSupplies: undefined }),
+    "Đã hoàn thành (chưa hoàn vật tư)",
   );
 });
 

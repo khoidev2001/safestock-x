@@ -769,12 +769,22 @@ export function MissionDetailScreen({
                   Hỏi thẳng thành HAI lựa chọn thay vì chỉ bày một nút "xác nhận":
                   câu trả lời thường gặp lúc mới giao xong là "chưa về", và một
                   màn hình chỉ có nút đồng ý thì người đang vội bấm nó cho xong. */}
-              {role === "WAREHOUSE" && mission.status === "COMPLETED" ? (
+              {role === "WAREHOUSE" &&
+              (mission.status === "COMPLETED" ||
+                // Nhiệm vụ không có gì để thu hồi mà đã bị đẩy sang RETURNED (kho
+                // lỡ bấm xác nhận lúc còn bày nút): vẫn phải đọc ra "không cần
+                // trả", chứ không phải "đã nhận lại vật tư" — câu đó khai một lượt
+                // thu hồi chưa từng xảy ra.
+                (mission.status === "RETURNED" && mission.hasReturnableSupplies === false)) ? (
                 <SuppliesReturnPanel
                   pending={returnPending === true}
                   busy={returnBusy}
                   offline={Boolean(cacheStoredAt)}
                   outstanding={outstandingReturns}
+                  nothingToReturn={mission.hasReturnableSupplies === false}
+                  handedOver={(mission.warehouseRequests ?? []).filter(
+                    (request) => (request.pickedUpQuantity ?? 0) > 0,
+                  )}
                   onConfirm={() => void confirmSuppliesReturned()}
                   onSubmitCounts={(items) => void submitReturnCounts(items)}
                   onMarkPending={() => void markReturnPending(true)}
@@ -785,7 +795,9 @@ export function MissionDetailScreen({
 
               {/* Đã khép sổ: nói rõ chứ không chỉ đổi nhãn trạng thái ở cuối trang,
                   vì đây là chỗ vừa nãy còn là câu hỏi. */}
-              {role === "WAREHOUSE" && mission.status === "RETURNED" ? (
+              {role === "WAREHOUSE" &&
+              mission.status === "RETURNED" &&
+              mission.hasReturnableSupplies !== false ? (
                 <View style={local.returnedBox}>
                   <MaterialCommunityIcons name="check-decagram" size={20} color={c.green} />
                   <Text style={local.returnedText}>
@@ -2191,6 +2203,8 @@ function SuppliesReturnPanel({
   busy,
   offline,
   outstanding,
+  nothingToReturn,
+  handedOver,
   onConfirm,
   onSubmitCounts,
   onMarkPending,
@@ -2202,6 +2216,10 @@ function SuppliesReturnPanel({
   offline: boolean;
   /** Phần còn thiếu đã ghi nhận ở lượt đếm trước — rỗng là chưa đếm lần nào. */
   outstanding: ReturnableSupply[];
+  /** Nhiệm vụ không có vật tư tái sử dụng nào đang nằm ngoài kho. */
+  nothingToReturn: boolean;
+  /** Những thứ đội đã ký nhận mang đi — để người trực tự đối chiếu kết luận trên. */
+  handedOver: WarehouseMaterialRequest[];
   onConfirm: () => void;
   onSubmitCounts: (items: { sku: string; returnedQuantity: number }[]) => void;
   onMarkPending: () => void;
@@ -2257,6 +2275,43 @@ function SuppliesReturnPanel({
     );
   }
 
+  /**
+   * Nhiệm vụ không có gì để đòi về — chỉ phát đồ tiêu hao.
+   *
+   * KHÔNG bày nút nào cả, kể cả một nút "khép sổ". Chừng nào còn một nút ở đây
+   * thì nó còn là cái bẫy: kho bấm cho xong việc và nhiệm vụ ghi vào sổ một lượt
+   * thu hồi chưa từng xảy ra — đúng chuyện đã xảy ra với nhiệm vụ 828, bấm xong
+   * thì trạng thái đọc ra "đã trả vật tư" cho một thùng mì tôm.
+   *
+   * Thay bằng một câu trả lời dứt điểm, kèm ĐÚNG những thứ đã cấp đi để người
+   * trực tự đối chiếu — kết luận này đúng hay sai là nhìn danh sách mà biết, chứ
+   * không phải tin lời máy.
+   */
+  if (nothingToReturn) {
+    return (
+      <View style={local.returnBox}>
+        <View style={local.returnHead}>
+          <MaterialCommunityIcons name="check-decagram" size={20} color={c.green} />
+          <Text style={local.returnTitle}>Không cần hoàn trả vật tư</Text>
+        </View>
+        <Text style={local.returnHint}>
+          Nhiệm vụ này không có vật tư tái sử dụng nào. Toàn bộ phần đã cấp là đồ tiêu hao, phát cho
+          dân là xong — kho không phải nhận lại gì.
+        </Text>
+        {handedOver.length > 0 ? (
+          <View style={local.returnOutstanding}>
+            <Text style={local.returnOutstandingTitle}>Đã cấp cho đội:</Text>
+            {handedOver.map((item) => (
+              <Text key={item.id} style={local.returnOutstandingRow}>
+                • {item.itemName}: {item.pickedUpQuantity} {item.unit}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+      </View>
+    );
+  }
+
   return (
     <View style={local.returnBox}>
       <View style={local.returnHead}>
@@ -2297,8 +2352,8 @@ function SuppliesReturnPanel({
             <Text style={local.returnError}>{loadError}</Text>
           ) : rows && rows.length === 0 ? (
             <Text style={local.returnHint}>
-              Nhiệm vụ này không có vật tư tái sử dụng nào phải thu hồi — bấm “Đã hoàn trả đủ” để
-              khép sổ.
+              Kho của bạn không có vật tư nào cần hoàn trả ở nhiệm vụ này — bấm “Đóng” rồi “Đã hoàn
+              trả đủ” để khép sổ.
             </Text>
           ) : (
             <>
