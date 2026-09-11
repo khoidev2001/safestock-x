@@ -7,7 +7,7 @@
 
   Vì sao cần: AndroidManifest của bản debug đã khai usesCleartextTraffic="true",
   nhưng khi có android:networkSecurityConfig thì cấu hình mạng ĐÈ LÊN cờ đó. Kết
-  quả là app debug vẫn bị chặn khi gọi backend LAN qua http://<ip>:3100, báo
+  quả là app debug vẫn bị chặn khi gọi backend LAN qua http://<ip>:3110, báo
   "Network request failed" mà không có dấu vết gì trong log mạng.
 
   Chỉ dùng khi chạy thử trên mạng nội bộ; bản giao cho người dùng không có file này.
