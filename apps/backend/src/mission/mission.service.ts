@@ -22,7 +22,7 @@ import { LatLng } from "../geo/haversine";
 import { LocalRoutingService } from "../geo/local-routing.service";
 import { InventoryService } from "../inventory/inventory.service";
 import { assertWarehouseInScope } from "../inventory/warehouse-scope";
-import { NotificationService } from "../notification/notification.service";
+import { NotificationService, type CreateNotification } from "../notification/notification.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { ReadinessService } from "../readiness/readiness.service";
 import { assessBatchEligibility } from "./batch-eligibility";
@@ -1190,17 +1190,37 @@ export class MissionService {
         affectedPeople: mission.affectedPeople,
         locationName: mission.hamletName ?? mission.location ?? null,
       };
-      const warehouseNotification = await tx.notification.create({
-        data: {
-          recipientRole: UserRole.WAREHOUSE,
-          kind: NotificationKind.MISSION_ASSIGNED,
-          title: "Phương án vật tư mới cần chuẩn bị",
-          body: `${incidentTypeLabel(mission.incidentType)} — ${mission.affectedPeople} người. Chuẩn bị phần vật tư được phân bổ cho kho.`,
-          missionId: id,
-          organizationId: mission.warehouse.organizationId,
-          ...context,
-        },
-      });
+      /*
+        MỘT thông báo cho MỖI kho tham gia, mỗi cái ghi đích danh kho nhận.
+
+        Trước đây đây là một thông báo duy nhất không ghi kho, và thông báo không
+        ghi kho thì mọi kho trong xã đều nhận. Lệnh "chuẩn bị vật tư" của nhiệm vụ
+        chỉ giao cho kho thôn Long Châu nổ chuông ở cả kho Đồng Xuân lẫn kho Tân
+        Bình: hai kho không có phần việc nào vẫn tưởng tới lượt mình, mở ra không
+        thấy dòng vật tư nào của mình, và lần sau họ bỏ qua tiếng chuông — kể cả
+        tiếng chuông thật.
+
+        `warehouseIds` là đúng bộ kho vừa được ghi phiếu chuẩn bị ngay phía trên,
+        nên không có kho nào nhận lệnh mà không có việc, và không kho nào có việc
+        mà không nhận được lệnh.
+      */
+      const warehouseNotifications: Awaited<ReturnType<typeof tx.notification.create>>[] = [];
+      for (const warehouseId of warehouseIds) {
+        warehouseNotifications.push(
+          await tx.notification.create({
+            data: {
+              recipientRole: UserRole.WAREHOUSE,
+              kind: NotificationKind.MISSION_ASSIGNED,
+              title: "Phương án vật tư mới cần chuẩn bị",
+              body: `${incidentTypeLabel(mission.incidentType)} — ${mission.affectedPeople} người. Chuẩn bị phần vật tư được phân bổ cho kho.`,
+              missionId: id,
+              warehouseId,
+              organizationId: mission.warehouse.organizationId,
+              ...context,
+            },
+          }),
+        );
+      }
       const fieldForceNotification = await tx.notification.create({
         data: {
           recipientRole: UserRole.RESCUE,
@@ -1216,12 +1236,43 @@ export class MissionService {
         where: { id },
         include: { requirements: true, warehousePreparations: true },
       });
-      return { updated, notifications: [warehouseNotification, fieldForceNotification] };
+      return { updated, notifications: [...warehouseNotifications, fieldForceNotification] };
     });
     for (const notification of result.notifications) {
       this.notifications.pushPersisted(notification);
     }
     return result.updated;
+  }
+
+  /**
+   * Gửi một thông báo kho tới ĐÚNG những kho có phần việc trong nhiệm vụ.
+   *
+   * Không ghi kho thì thông báo là tin chung của cả xã và mọi kho đều nhận — đúng
+   * cho "nhiệm vụ đã huỷ" nếu mọi kho đều đang chuẩn bị, nhưng sai hoàn toàn cho
+   * một nhiệm vụ chỉ huy động một kho. Mà phần lớn nhiệm vụ chỉ huy động một kho.
+   *
+   * Danh sách kho lấy từ phiếu chuẩn bị — bản ghi được tạo đúng lúc phát hành,
+   * nên nó là câu trả lời chính thức cho "kho nào có việc ở nhiệm vụ này".
+   *
+   * Nhiệm vụ cũ không có phiếu chuẩn bị nào thì lùi về kho đã nhận báo cáo: đó là
+   * kho chịu trách nhiệm mặc định, và vẫn hẹp hơn hẳn việc gửi cho cả xã.
+   */
+  private async notifyMissionWarehouses(
+    missionId: string,
+    fallbackWarehouseId: string,
+    notification: Omit<CreateNotification, "warehouseId" | "missionId">,
+  ) {
+    const preparations = await this.prisma.missionWarehousePreparation.findMany({
+      where: { missionId },
+      select: { warehouseId: true },
+    });
+    const warehouseIds =
+      preparations.length > 0
+        ? preparations.map((preparation) => preparation.warehouseId)
+        : [fallbackWarehouseId];
+    for (const warehouseId of warehouseIds) {
+      await this.notifications.create({ ...notification, missionId, warehouseId });
+    }
   }
 
   /** Lưu giải thích AI (proxy từ ai-service) vào nhiệm vụ. */
@@ -1307,12 +1358,11 @@ export class MissionService {
         include: { requirements: true, warehousePreparations: true },
       });
     });
-    await this.notifications.create({
+    await this.notifyMissionWarehouses(id, mission.warehouseId, {
       recipientRole: UserRole.WAREHOUSE,
       kind: NotificationKind.RESCUE_CONFIRMED,
       title: "Cứu hộ đã xác nhận — chuẩn bị vật tư",
       body: `${mission.incidentType} — ${mission.affectedPeople} người. Chuẩn bị và xuất kho theo phương án.`,
-      missionId: id,
     });
     return updated;
   }
@@ -1353,12 +1403,11 @@ export class MissionService {
     });
     // Đội rút khi kho đang chờ/chuẩn bị → báo kho dừng, chưa xuất thì khỏi xuất.
     if (afterConfirm) {
-      await this.notifications.create({
+      await this.notifyMissionWarehouses(id, mission.warehouseId, {
         recipientRole: UserRole.WAREHOUSE,
         kind: NotificationKind.MISSION_REJECTED,
         title: `Tạm dừng chuẩn bị — ${FIELD_FORCE_ROLE_LABEL} đã rút`,
         body: `${mission.incidentType} — ${mission.affectedPeople} người. ${FIELD_FORCE_ROLE_LABEL} không tiếp tục được, chờ điều phối xử lý.`,
-        missionId: id,
       });
     }
     return updated;
@@ -1451,12 +1500,11 @@ export class MissionService {
       missionId: id,
     });
     if (warehouseWasWaiting) {
-      await this.notifications.create({
+      await this.notifyMissionWarehouses(id, mission.warehouseId, {
         recipientRole: UserRole.WAREHOUSE,
         kind: NotificationKind.MISSION_CANCELLED,
         title: "Nhiệm vụ đã huỷ — dừng chuẩn bị",
         body: `${mission.incidentType} — ${mission.affectedPeople} người. Điều phối đã huỷ, không cần xuất kho.${note ? ` Lý do: ${note}` : ""}`,
-        missionId: id,
       });
     }
     return updated;

@@ -18,7 +18,12 @@ describe("authenticated Socket.IO rooms", () => {
   let httpServer: HttpServer;
   let server: Server;
   let baseUrl: string;
-  let notifications: { push?: (organizationId: string, role: UserRole, payload: unknown) => void };
+  let notifications: {
+    push?: (
+      target: { organizationId: string; role: UserRole; warehouseId: string | null },
+      payload: unknown,
+    ) => void;
+  };
 
   beforeEach(async () => {
     users.clear();
@@ -116,7 +121,10 @@ describe("authenticated Socket.IO rooms", () => {
       { sub: "user-a", role: UserRole.ADMIN, sessionVersion: 0, sid: "sess-user-a" },
       { secret: SECRET },
     );
-    const adminToken = await jwt.signAsync({ sub: "admin", sessionVersion: 0, sid: "sess-admin" }, { secret: SECRET });
+    const adminToken = await jwt.signAsync(
+      { sub: "admin", sessionVersion: 0, sid: "sess-admin" },
+      { secret: SECRET },
+    );
     const adminBToken = await jwt.signAsync(
       { sub: "admin-b", sessionVersion: 0, sid: "sess-admin-b" },
       { secret: SECRET },
@@ -142,12 +150,55 @@ describe("authenticated Socket.IO rooms", () => {
 
     warehouseClient.emit("join-role", { role: UserRole.ADMIN });
     await delay(30);
-    notifications.push?.("org-a", UserRole.ADMIN, { id: "admin-only" });
+    notifications.push?.(
+      { organizationId: "org-a", role: UserRole.ADMIN, warehouseId: null },
+      { id: "admin-only" },
+    );
     await delay(50);
 
     expect(warehouseNotifications).toEqual([]);
     expect(adminNotifications).toEqual(["admin-only"]);
     expect(adminBNotifications).toEqual([]);
+  });
+
+  it("lệnh gửi đích danh một kho KHÔNG nổ chuông ở kho khác cùng xã", async () => {
+    /*
+      Đây là lỗi đã gặp thật: nhiệm vụ chỉ huy động kho thôn Long Châu nhưng kho
+      Đồng Xuân và kho Tân Bình cũng nhận được thông báo "chuẩn bị vật tư". Kho
+      không có việc mở ra không thấy dòng nào của mình, và bài học họ rút ra là bỏ
+      qua tiếng chuông.
+    */
+    const tokenA = await jwt.signAsync(
+      { sub: "user-a", sessionVersion: 0, sid: "sess-user-a" },
+      { secret: SECRET },
+    );
+    const tokenB = await jwt.signAsync(
+      { sub: "user-b", sessionVersion: 0, sid: "sess-user-b" },
+      { secret: SECRET },
+    );
+    const [clientA, clientB] = await Promise.all([
+      connect(baseUrl, tokenA),
+      connect(baseUrl, tokenB),
+    ]);
+    clients.push(clientA, clientB);
+    const receivedA: string[] = [];
+    const receivedB: string[] = [];
+    clientA.on("notification", (payload: { id: string }) => receivedA.push(payload.id));
+    clientB.on("notification", (payload: { id: string }) => receivedB.push(payload.id));
+
+    notifications.push?.(
+      { organizationId: "org-a", role: UserRole.WAREHOUSE, warehouseId: "wh-a" },
+      { id: "chi-kho-a" },
+    );
+    // Tin chung của cả xã (không ghi kho) thì vẫn tới mọi kho như trước.
+    notifications.push?.(
+      { organizationId: "org-a", role: UserRole.WAREHOUSE, warehouseId: null },
+      { id: "ca-xa" },
+    );
+    await delay(50);
+
+    expect(receivedA).toEqual(["chi-kho-a", "ca-xa"]);
+    expect(receivedB).toEqual(["ca-xa"]);
   });
 });
 

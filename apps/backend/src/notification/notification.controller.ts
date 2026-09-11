@@ -13,10 +13,23 @@ import { NotificationService } from "./notification.service";
 export class NotificationController {
   constructor(private notifications: NotificationService) {}
 
-  /** Thông báo của role người dùng hiện tại. */
+  /**
+   * Thông báo của role người dùng hiện tại.
+   *
+   * `cursor` + `limit` để điện thoại cuộn tới đâu tải tới đó; bỏ trống thì vẫn là
+   * 50 dòng mới nhất như trước.
+   */
   @Get()
-  list(@Request() req: AuthenticatedRequest, @Query("unread") unread?: string) {
-    return this.notifications.list(req.user.userId, req.user.role as UserRole, unread === "true");
+  list(
+    @Request() req: AuthenticatedRequest,
+    @Query("unread") unread?: string,
+    @Query("limit") limit?: string,
+    @Query("cursor") cursor?: string,
+  ) {
+    return this.notifications.list(req.user.userId, req.user.role as UserRole, unread === "true", {
+      limit: limit ? Number.parseInt(limit, 10) : undefined,
+      cursor: cursor || undefined,
+    });
   }
 
   @Post(":id/read")

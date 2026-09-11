@@ -143,8 +143,23 @@ describe("MissionService warehouse participation", () => {
         approvedByUserId: "admin-1",
       }),
     });
-    expect(notification.create).toHaveBeenCalledTimes(2);
-    expect(notifications.pushPersisted).toHaveBeenCalledTimes(2);
+    /*
+      MỖI kho tham gia một thông báo ghi đích danh kho đó, cộng một thông báo cho
+      đội cứu hộ: hai kho thì ba thông báo.
+
+      Trước đây chỉ có MỘT thông báo kho, không ghi kho nào — mà thông báo không
+      ghi kho thì mọi kho trong xã đều đọc được. Nhiệm vụ chỉ huy động kho thôn
+      Long Châu vẫn nổ chuông ở kho Đồng Xuân và kho Tân Bình, và hai kho đó mở ra
+      không thấy dòng vật tư nào của mình.
+    */
+    expect(notification.create).toHaveBeenCalledTimes(3);
+    expect(notifications.pushPersisted).toHaveBeenCalledTimes(3);
+    const warehouseNotifications = notification.create.mock.calls
+      .map((call) => call[0].data)
+      .filter((data: { recipientRole: string }) => data.recipientRole === "WAREHOUSE");
+    expect(
+      warehouseNotifications.map((data: { warehouseId?: string }) => data.warehouseId),
+    ).toEqual(["warehouse-a", "warehouse-b"]);
   });
 
   it("kho tham gia đọc được mission dù không phải kho nguồn", async () => {
