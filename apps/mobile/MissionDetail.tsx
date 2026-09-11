@@ -495,10 +495,7 @@ export function MissionDetailScreen({
    * Dừng ngay ở lỗi ĐẦU TIÊN. Chạy tiếp là giấu mất chỗ hỏng: người dùng thấy
    * "xong" trong khi một dòng đã trượt, mà chính dòng đó mới là dòng có chuyện.
    */
-  async function runBulkWarehouseAction(
-    kind: BulkActionKind,
-    rows: WarehouseMaterialRequest[],
-  ) {
+  async function runBulkWarehouseAction(kind: BulkActionKind, rows: WarehouseMaterialRequest[]) {
     setBulkBusy(true);
     setError(null);
     try {
@@ -2521,10 +2518,7 @@ function SupplyCard({ req }: { req: MissionDetail["requirements"][number] }) {
               nên phân biệt đó không mất đi — chỉ là nó không cần chen vào dòng
               tên vật tư nữa. */}
           <Text
-            style={[
-              styles.supplyStatusText,
-              { color: prog.status === "FULL" ? c.green : c.red },
-            ]}
+            style={[styles.supplyStatusText, { color: prog.status === "FULL" ? c.green : c.red }]}
           >
             {prog.label}
           </Text>
