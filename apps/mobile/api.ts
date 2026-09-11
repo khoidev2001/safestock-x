@@ -550,6 +550,57 @@ export async function completeMission(
 }
 
 /**
+ * KHO xác nhận đã nhận lại vật tư — bước CUỐI, đóng hẳn nhiệm vụ.
+ *
+ * Giao xong chưa phải là xong: phao cứu sinh, đèn pin, loa cầm tay là hàng tái
+ * sử dụng, phải quay về kho rồi mới khép sổ được. Người ký là người ĐẾM LẠI hàng
+ * khi nó về tới nơi, nên máy chủ chỉ nhận tài khoản kho có tham gia nhiệm vụ.
+ */
+export function markSuppliesReturned(
+  token: string,
+  missionId: string,
+  /**
+   * Số đã nhận lại của từng dòng. Bỏ trống nghĩa là "về đủ hết" — đường một nút
+   * bấm; có danh sách là kho đếm từng dòng và nhiệm vụ chỉ khép khi không còn
+   * dòng nào thiếu.
+   */
+  items?: { sku: string; returnedQuantity: number }[],
+): Promise<MissionDetail & { outstandingReturns?: ReturnableSupply[] }> {
+  return postAuthorized(
+    token,
+    `/api/missions/${missionId}/supplies-returned`,
+    items ? { items } : {},
+  );
+}
+
+/** Một dòng vật tư tái sử dụng kho phải đếm lại khi đội mang đồ về. */
+export interface ReturnableSupply {
+  sku: string;
+  itemName: string;
+  unit: string;
+  warehouseId: string;
+  warehouseName: string;
+  /** Số đội đã ký nhận mang đi — trần của số có thể trả về. */
+  handedOverQuantity: number;
+  /** `null` = kho chưa đếm dòng này, khác hẳn "đã đếm và về 0". */
+  returnedQuantity: number | null;
+  outstandingQuantity: number;
+}
+
+/** Danh sách vật tư phải thu hồi của nhiệm vụ, theo phạm vi kho đang đăng nhập. */
+export async function fetchReturnableSupplies(
+  token: string,
+  missionId: string,
+): Promise<ReturnableSupply[]> {
+  const res = await request(apiUrl(`/api/missions/${missionId}/returnable-supplies`), {
+    headers: authHeader(token),
+  });
+  if (!res.ok) throw await apiFailure(res, "Không tải được danh sách vật tư phải thu hồi");
+  const data: { items?: ReturnableSupply[] } = await res.json();
+  return data.items ?? [];
+}
+
+/**
  * Bytes một ảnh bằng chứng đã gửi, trả về data URI để gắn thẳng vào `<Image>`.
  *
  * Không đưa đường API vào `uri` được: đường ảnh đòi Bearer token, mà `<Image>`

@@ -34,12 +34,15 @@ import {
   fetchMissionWarehouseRoutes,
   fetchWarehouseMaterialRequests,
   confirmWarehousePickup,
+  fetchReturnableSupplies,
+  markSuppliesReturned,
   prepareWarehouseMaterialRequest,
   reportWarehouseMaterialDiscrepancy,
   transcribe,
   type MissionDeliveryPhoto,
   type MissionDetail,
   type MissionWarehouseRoute,
+  type ReturnableSupply,
   type WarehouseMaterialRequest,
 } from "./api";
 import { c, styles } from "./styles";
@@ -150,6 +153,27 @@ export function MissionDetailScreen({
   const [warehouseActionId, setWarehouseActionId] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [warehouseNotes, setWarehouseNotes] = useState<Record<string, string>>({});
+  /** Đang gửi lượt xác nhận "đội đã hoàn trả vật tư". */
+  const [returnBusy, setReturnBusy] = useState(false);
+  /**
+   * Kho đã tự trả lời "CHƯA hoàn trả" cho nhiệm vụ này chưa.
+   *
+   * Giữ lại trong bộ lưu chứ không chỉ trong bộ nhớ: người giữ kho mở nhiệm vụ,
+   * thấy đội chưa mang đồ về, bấm "Chưa hoàn trả" rồi đi làm việc khác. Mở lại
+   * mà câu hỏi hiện y như cũ thì màn hình quên mất câu trả lời vừa nhận, và nó
+   * hỏi lại mỗi lần — thứ người dùng học được từ đó là bỏ qua câu hỏi.
+   *
+   * `null` là chưa đọc xong bộ lưu; khác `false` ở chỗ chưa biết gì để mà vẽ.
+   */
+  const [returnPending, setReturnPending] = useState<boolean | null>(null);
+  /**
+   * Phần vật tư tái sử dụng CÒN THIẾU theo lượt đếm gần nhất.
+   *
+   * Giữ ở màn hình chứ không tính lại từ nhiệm vụ: nhiệm vụ chỉ mang trạng thái
+   * chung (còn ở COMPLETED nghĩa là chưa thu hồi xong), không nói dòng nào thiếu
+   * bao nhiêu — mà đó mới là thứ người giữ kho cần đọc lần sau.
+   */
+  const [outstandingReturns, setOutstandingReturns] = useState<ReturnableSupply[]>([]);
   const [pickedQuantities, setPickedQuantities] = useState<Record<string, string>>({});
   const [routes, setRoutes] = useState<MissionWarehouseRoute[]>([]);
   const [routesLoading, setRoutesLoading] = useState(role === "RESCUE");
@@ -171,6 +195,26 @@ export function MissionDetailScreen({
     },
     [],
   );
+
+  // Câu trả lời "chưa hoàn trả" của chính kho này, cho chính nhiệm vụ này.
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const stored = await readOfflineCache<{ pending: boolean }>(
+          userId,
+          `mission-return-pending.${missionId}`,
+        );
+        if (active) setReturnPending(stored?.data.pending === true);
+      } catch {
+        // Không đọc được thì coi như chưa trả lời: câu hỏi hiện ra, không mất gì.
+        if (active) setReturnPending(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [userId, missionId]);
 
   const load = useCallback(async () => {
     setError(null);
@@ -479,6 +523,78 @@ export function MissionDetailScreen({
     }
   }
 
+  /**
+   * Kho ký nhận đã thu hồi đủ vật tư — bước cuối, đóng hẳn nhiệm vụ.
+   *
+   * Hỏi lại trước khi gửi: đây là chữ ký chốt sổ, sau nó nhiệm vụ không còn bước
+   * nào và không lùi lại được.
+   */
+  async function confirmSuppliesReturned() {
+    const agreed = await confirmAction({
+      title: "Đội đã hoàn trả đủ vật tư?",
+      message:
+        "Xác nhận là đã đếm lại và nhận đủ phần vật tư mang về. Nhiệm vụ khép lại sau bước này.",
+      confirmLabel: "Đã nhận đủ",
+    });
+    if (!agreed) return;
+    setReturnBusy(true);
+    setError(null);
+    try {
+      await markSuppliesReturned(token, missionId);
+      setOutstandingReturns([]);
+      await markReturnPending(false);
+      await load();
+      notify("Đã ghi nhận", "Nhiệm vụ đã khép lại. Điều phối và đội cứu hộ nhận được thông báo.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Chưa gửi được xác nhận hoàn trả vật tư");
+    } finally {
+      setReturnBusy(false);
+    }
+  }
+
+  /**
+   * Ghi số đã nhận lại của từng dòng vật tư.
+   *
+   * Về đủ hết thì máy chủ tự khép nhiệm vụ; còn thiếu thì nó trả lại đúng những
+   * dòng đang thiếu để màn hình bày ra — người giữ kho không phải nhớ trong đầu
+   * tới chuyến sau.
+   */
+  async function submitReturnCounts(items: { sku: string; returnedQuantity: number }[]) {
+    if (items.length === 0) {
+      notify("Chưa có số nào", "Nhập số đã nhận lại cho ít nhất một loại vật tư.");
+      return;
+    }
+    setReturnBusy(true);
+    setError(null);
+    try {
+      const result = await markSuppliesReturned(token, missionId, items);
+      const outstanding = result.outstandingReturns ?? [];
+      setOutstandingReturns(outstanding);
+      await markReturnPending(false);
+      await load();
+      notify(
+        "Đã ghi nhận",
+        outstanding.length === 0
+          ? "Đã nhận đủ toàn bộ vật tư. Nhiệm vụ khép lại."
+          : `Đã ghi số nhận lại. Còn ${outstanding.length} loại chưa về đủ, nhiệm vụ vẫn đang chờ thu hồi.`,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Chưa ghi được số vật tư đã nhận lại");
+    } finally {
+      setReturnBusy(false);
+    }
+  }
+
+  /** Ghi nhớ câu trả lời "chưa hoàn trả" (hoặc xoá nó) cho riêng máy này. */
+  async function markReturnPending(pending: boolean) {
+    setReturnPending(pending);
+    try {
+      await writeOfflineCache(userId, `mission-return-pending.${missionId}`, { pending });
+    } catch {
+      // Không ghi được thì lần mở sau câu hỏi hiện lại — phiền, nhưng không sai.
+    }
+  }
+
   const fieldForce = role === "RESCUE";
   const pickupStage = missionPickupStage(mission?.status ?? "", mission?.warehouseRequests);
   const completed = mission?.status === "COMPLETED" || mission?.status === "RETURNED";
@@ -644,6 +760,40 @@ export function MissionDetailScreen({
           {completed ? (
             <>
               <CompletedReportPanel token={token} mission={mission} />
+              {/* Đội đã giao xong thì việc của kho chưa hết: phao, đèn pin, loa cầm
+                  tay là hàng tái sử dụng, phải quay về kho rồi mới khép sổ được.
+                  Trước đây điện thoại không có chỗ nào ký việc đó, nên kho dùng
+                  máy phải mở trang web mới đóng được nhiệm vụ — mà kho thì làm
+                  việc ngay tại kệ hàng, bằng điện thoại.
+
+                  Hỏi thẳng thành HAI lựa chọn thay vì chỉ bày một nút "xác nhận":
+                  câu trả lời thường gặp lúc mới giao xong là "chưa về", và một
+                  màn hình chỉ có nút đồng ý thì người đang vội bấm nó cho xong. */}
+              {role === "WAREHOUSE" && mission.status === "COMPLETED" ? (
+                <SuppliesReturnPanel
+                  pending={returnPending === true}
+                  busy={returnBusy}
+                  offline={Boolean(cacheStoredAt)}
+                  outstanding={outstandingReturns}
+                  onConfirm={() => void confirmSuppliesReturned()}
+                  onSubmitCounts={(items) => void submitReturnCounts(items)}
+                  onMarkPending={() => void markReturnPending(true)}
+                  onReopen={() => void markReturnPending(false)}
+                  loadReturnable={() => fetchReturnableSupplies(token, missionId)}
+                />
+              ) : null}
+
+              {/* Đã khép sổ: nói rõ chứ không chỉ đổi nhãn trạng thái ở cuối trang,
+                  vì đây là chỗ vừa nãy còn là câu hỏi. */}
+              {role === "WAREHOUSE" && mission.status === "RETURNED" ? (
+                <View style={local.returnedBox}>
+                  <MaterialCommunityIcons name="check-decagram" size={20} color={c.green} />
+                  <Text style={local.returnedText}>
+                    Kho đã nhận lại vật tư — nhiệm vụ khép lại, không còn bước nào phải làm.
+                  </Text>
+                </View>
+              ) : null}
+
               {/* Một nút duy nhất cho cả mảng nội dung cũ: bản đồ, tuyến lấy hàng
                   và bảng vật tư đều là chuyện trước lúc giao xong. Gấp riêng từng
                   khối thì người muốn đối chiếu lại phải bấm ba lần. */}
@@ -2020,6 +2170,281 @@ function ExportedSupplyCard({ request }: { request: WarehouseMaterialRequest }) 
   );
 }
 
+/**
+ * Ô xác nhận hoàn trả vật tư, chỉ kho thấy và chỉ sau khi đội đã giao xong.
+ *
+ * BA câu trả lời, vì thực tế ở kho có ba tình huống khác nhau:
+ *
+ *   - "Đã hoàn trả đủ": một nút, đóng nhiệm vụ. Trường hợp thường gặp nhất, nên
+ *     nó không được bắt ai gõ thêm con số nào.
+ *   - "Trả chưa đủ": mở bảng đếm từng dòng. Đội mang về 6 trên 10 cái áo phao là
+ *     chuyện bình thường (xe đầy, một phần còn ở điểm tập kết) — trước đây không
+ *     có chỗ nào ghi con số 6 đó, nên nó chỉ nằm trong đầu người trực tới lúc
+ *     quên mất.
+ *   - "Chưa hoàn trả": chưa có gì về cả, chỉ ghi nhớ để màn hình thôi hỏi lại.
+ *
+ * Ngoại tuyến thì không bày nút ký: nút bấm vào là báo lỗi còn tệ hơn không có
+ * nút, nhất là với người đang đứng giữa kho lúc mất sóng.
+ */
+function SuppliesReturnPanel({
+  pending,
+  busy,
+  offline,
+  outstanding,
+  onConfirm,
+  onSubmitCounts,
+  onMarkPending,
+  onReopen,
+  loadReturnable,
+}: {
+  pending: boolean;
+  busy: boolean;
+  offline: boolean;
+  /** Phần còn thiếu đã ghi nhận ở lượt đếm trước — rỗng là chưa đếm lần nào. */
+  outstanding: ReturnableSupply[];
+  onConfirm: () => void;
+  onSubmitCounts: (items: { sku: string; returnedQuantity: number }[]) => void;
+  onMarkPending: () => void;
+  onReopen: () => void;
+  loadReturnable: () => Promise<ReturnableSupply[]>;
+}) {
+  /** Đang mở bảng đếm từng dòng. */
+  const [counting, setCounting] = useState(false);
+  const [rows, setRows] = useState<ReturnableSupply[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  /**
+   * Số đang gõ cho từng mã hàng, GIỮ DẠNG CHUỖI.
+   *
+   * Giữ số thì ô nhập không xoá trắng được: xoá ký tự cuối ra chuỗi rỗng, mà rỗng
+   * đổi thành 0 thì con số 0 nhảy lại vào ô ngay dưới ngón tay người đang gõ.
+   */
+  const [counts, setCounts] = useState<Record<string, string>>({});
+  /** Mã hàng đang mở ô nhập; các dòng khác chỉ hiện con số. */
+  const [editingSku, setEditingSku] = useState<string | null>(null);
+
+  async function openCounting() {
+    setCounting(true);
+    setLoadError(null);
+    if (rows) return;
+    setLoading(true);
+    try {
+      const items = await loadReturnable();
+      setRows(items);
+      // Điền sẵn phần đã đếm ở lượt trước; chưa đếm thì để trống chứ không điền 0 —
+      // số 0 điền sẵn là một lời khai người dùng chưa hề nói.
+      setCounts(
+        Object.fromEntries(
+          items
+            .filter((item) => item.returnedQuantity != null)
+            .map((item) => [item.sku, String(item.returnedQuantity)]),
+        ),
+      );
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Không tải được danh sách vật tư phải thu hồi");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function submitCounts() {
+    if (!rows) return;
+    onSubmitCounts(
+      rows
+        // Dòng chưa gõ gì thì KHÔNG gửi: im lặng khác hẳn với khai "về 0 cái".
+        .filter((row) => (counts[row.sku] ?? "").trim() !== "")
+        .map((row) => ({ sku: row.sku, returnedQuantity: Number(counts[row.sku]) })),
+    );
+  }
+
+  return (
+    <View style={local.returnBox}>
+      <View style={local.returnHead}>
+        <MaterialCommunityIcons name="package-variant-closed" size={20} color={c.amber} />
+        <Text style={local.returnTitle}>Đội cứu hộ đã hoàn trả vật tư chưa?</Text>
+      </View>
+      <Text style={local.returnHint}>
+        Đội đã giao xong tại hiện trường. Phần vật tư tái sử dụng (phao, đèn pin, loa cầm tay…) phải
+        về lại kho thì nhiệm vụ mới khép sổ được.
+      </Text>
+
+      {/* Phần còn thiếu của lượt đếm trước, hiện ngay cả khi bảng đếm đang đóng:
+          đây là khoản nợ đang treo, không phải một chi tiết phải đi tìm. */}
+      {outstanding.length > 0 && !counting ? (
+        <View style={local.returnOutstanding}>
+          <Text style={local.returnOutstandingTitle}>Còn thiếu {outstanding.length} loại:</Text>
+          {outstanding.map((item) => (
+            <Text key={item.sku} style={local.returnOutstandingRow}>
+              • {item.itemName}: thiếu {item.outstandingQuantity} {item.unit} (đã nhận{" "}
+              {item.returnedQuantity ?? 0}/{item.handedOverQuantity})
+            </Text>
+          ))}
+        </View>
+      ) : null}
+
+      {offline ? (
+        <Text style={local.returnOffline}>
+          Đang ngoại tuyến — kết nối lại rồi mới ký xác nhận được.
+        </Text>
+      ) : counting ? (
+        <View style={{ marginTop: 12 }}>
+          {loading ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <ActivityIndicator color={c.amber} />
+              <Text style={local.returnHint}>Đang tra phần vật tư phải thu hồi…</Text>
+            </View>
+          ) : loadError ? (
+            <Text style={local.returnError}>{loadError}</Text>
+          ) : rows && rows.length === 0 ? (
+            <Text style={local.returnHint}>
+              Nhiệm vụ này không có vật tư tái sử dụng nào phải thu hồi — bấm “Đã hoàn trả đủ” để
+              khép sổ.
+            </Text>
+          ) : (
+            <>
+              <Text style={local.returnCountHint}>
+                Chạm vào số để sửa, hoặc bấm “Đủ” nếu dòng đó về đủ. Dòng nào chưa đếm thì để trống.
+              </Text>
+              {(rows ?? []).map((row) => {
+                const typed = counts[row.sku] ?? "";
+                const full = typed !== "" && Number(typed) === row.handedOverQuantity;
+                return (
+                  <View key={row.sku} style={local.returnRow}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={local.returnRowName} numberOfLines={2}>
+                        {row.itemName}
+                      </Text>
+                      <Text style={local.returnRowMeta}>
+                        Đã giao ra {row.handedOverQuantity} {row.unit}
+                        {typed !== "" && Number(typed) < row.handedOverQuantity
+                          ? ` · còn thiếu ${row.handedOverQuantity - Number(typed)}`
+                          : ""}
+                      </Text>
+                    </View>
+                    {editingSku === row.sku ? (
+                      <TextInput
+                        style={local.returnInput}
+                        value={typed}
+                        onChangeText={(value) => {
+                          const digits = value.replace(/\D/g, "").slice(0, 7);
+                          // Chặn ngay tại chỗ gõ: nhận về nhiều hơn số đã đưa đi là
+                          // gõ nhầm, và máy chủ sẽ từ chối cả lượt gửi vì một dòng.
+                          const capped =
+                            digits === ""
+                              ? ""
+                              : String(Math.min(Number(digits), row.handedOverQuantity));
+                          setCounts((current) => ({ ...current, [row.sku]: capped }));
+                        }}
+                        onBlur={() => setEditingSku(null)}
+                        keyboardType="number-pad"
+                        autoFocus
+                        accessibilityLabel={`Số ${row.itemName} đã nhận lại`}
+                      />
+                    ) : (
+                      <Pressable
+                        onPress={() => setEditingSku(row.sku)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Nhập số ${row.itemName} đã nhận lại`}
+                        style={local.returnCountBox}
+                      >
+                        <Text style={local.returnCountText}>{typed === "" ? "—" : typed}</Text>
+                      </Pressable>
+                    )}
+                    <Pressable
+                      onPress={() => {
+                        setEditingSku(null);
+                        setCounts((current) => ({
+                          ...current,
+                          [row.sku]: String(row.handedOverQuantity),
+                        }));
+                      }}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: full }}
+                      accessibilityLabel={`${row.itemName} đã trả đủ`}
+                      style={[local.returnFullChip, full && local.returnFullChipOn]}
+                    >
+                      <MaterialCommunityIcons
+                        name={full ? "check-circle" : "check-circle-outline"}
+                        size={16}
+                        color={full ? "#FFFFFF" : c.green}
+                      />
+                      <Text style={[local.returnFullText, full && { color: "#FFFFFF" }]}>Đủ</Text>
+                    </Pressable>
+                  </View>
+                );
+              })}
+              <View style={local.returnActions}>
+                <Pressable
+                  onPress={submitCounts}
+                  disabled={busy || !rows || rows.length === 0}
+                  accessibilityRole="button"
+                  style={[local.returnButton, local.returnButtonYes, busy && { opacity: 0.6 }]}
+                >
+                  <MaterialCommunityIcons name="content-save-outline" size={18} color="#FFFFFF" />
+                  <Text style={local.returnButtonYesText}>
+                    {busy ? "Đang gửi…" : "Ghi số đã trả"}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setCounting(false)}
+                  disabled={busy}
+                  accessibilityRole="button"
+                  style={[local.returnButton, local.returnButtonNo, busy && { opacity: 0.6 }]}
+                >
+                  <Text style={local.returnButtonNoText}>Đóng</Text>
+                </Pressable>
+              </View>
+            </>
+          )}
+        </View>
+      ) : pending ? (
+        <>
+          <Text style={local.returnPending}>
+            Đã ghi: CHƯA hoàn trả. Nhiệm vụ vẫn nằm ở bước chờ thu hồi vật tư.
+          </Text>
+          <Pressable
+            onPress={onReopen}
+            accessibilityRole="button"
+            style={[local.returnButton, local.returnButtonGhost]}
+          >
+            <Text style={local.returnButtonGhostText}>Đội vừa mang về — xác nhận lại</Text>
+          </Pressable>
+        </>
+      ) : (
+        <View style={local.returnActions}>
+          <Pressable
+            onPress={onConfirm}
+            disabled={busy}
+            accessibilityRole="button"
+            style={[local.returnButton, local.returnButtonYes, busy && { opacity: 0.6 }]}
+          >
+            <MaterialCommunityIcons name="check-circle-outline" size={18} color="#FFFFFF" />
+            <Text style={local.returnButtonYesText}>{busy ? "Đang gửi…" : "Đã hoàn trả đủ"}</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => void openCounting()}
+            disabled={busy}
+            accessibilityRole="button"
+            style={[local.returnButton, local.returnButtonPartial, busy && { opacity: 0.6 }]}
+          >
+            <MaterialCommunityIcons name="scale-balance" size={18} color={c.amber} />
+            <Text style={local.returnButtonPartialText}>Trả chưa đủ</Text>
+          </Pressable>
+          <Pressable
+            onPress={onMarkPending}
+            disabled={busy}
+            accessibilityRole="button"
+            style={[local.returnButton, local.returnButtonNo, busy && { opacity: 0.6 }]}
+          >
+            <MaterialCommunityIcons name="clock-outline" size={18} color={c.muted} />
+            <Text style={local.returnButtonNoText}>Chưa hoàn trả</Text>
+          </Pressable>
+        </View>
+      )}
+    </View>
+  );
+}
+
 /** Một dòng vật tư: icon lớn nhận diện · tên · số lượng cấp/cần · thanh đáp ứng. */
 function SupplyCard({ req }: { req: MissionDetail["requirements"][number] }) {
   const meta = supplyOf(req.sku, req.itemName);
@@ -2080,6 +2505,118 @@ function SupplyCard({ req }: { req: MissionDetail["requirements"][number] }) {
 }
 
 const local = StyleSheet.create({
+  returnBox: {
+    marginTop: 4,
+    marginBottom: 12,
+    backgroundColor: c.amberSoft,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.amber,
+    padding: 14,
+  },
+  returnHead: { flexDirection: "row", alignItems: "center", gap: 8 },
+  returnTitle: { color: c.text, fontSize: 15, fontWeight: "800", flex: 1 },
+  returnHint: { color: c.text, fontSize: 13, lineHeight: 19, marginTop: 8 },
+  returnActions: { flexDirection: "row", gap: 10, marginTop: 14 },
+  returnButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+  },
+  returnButtonYes: { backgroundColor: c.green },
+  returnButtonYesText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
+  returnButtonNo: { backgroundColor: c.surface, borderWidth: 1, borderColor: c.border },
+  returnButtonNoText: { color: c.muted, fontSize: 13, fontWeight: "800" },
+  returnButtonPartial: { backgroundColor: c.surface, borderWidth: 1, borderColor: c.amber },
+  returnButtonPartialText: { color: c.amber, fontSize: 13, fontWeight: "800" },
+  returnError: { color: c.red, fontSize: 13, fontWeight: "700" },
+  returnCountHint: { color: c.muted, fontSize: 12, lineHeight: 17, marginBottom: 8 },
+  returnRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: c.surface,
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+  returnRowName: { color: c.text, fontSize: 13, fontWeight: "700" },
+  returnRowMeta: { color: c.muted, fontSize: 12, marginTop: 2 },
+  returnCountBox: {
+    minWidth: 54,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+  },
+  returnCountText: { color: c.text, fontSize: 15, fontWeight: "800" },
+  returnInput: {
+    minWidth: 54,
+    borderWidth: 1,
+    borderColor: c.amber,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    color: c.text,
+    fontSize: 15,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  returnFullChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderWidth: 1,
+    borderColor: c.green,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  returnFullChipOn: { backgroundColor: c.green },
+  returnFullText: { color: c.green, fontSize: 12, fontWeight: "800" },
+  returnOutstanding: {
+    marginTop: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: c.red,
+    backgroundColor: "rgba(220,38,38,0.06)",
+    padding: 10,
+  },
+  returnOutstandingTitle: { color: c.red, fontSize: 12, fontWeight: "800" },
+  returnOutstandingRow: { color: c.text, fontSize: 12, marginTop: 3, lineHeight: 17 },
+  returnButtonGhost: {
+    marginTop: 12,
+    backgroundColor: c.surface,
+    borderWidth: 1,
+    borderColor: c.green,
+  },
+  returnButtonGhostText: { color: c.green, fontSize: 13, fontWeight: "800" },
+  returnPending: { color: c.text, fontSize: 13, fontWeight: "700", marginTop: 12 },
+  returnOffline: { color: c.muted, fontSize: 13, fontWeight: "700", marginTop: 12 },
+  returnedBox: {
+    marginTop: 4,
+    marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(21,128,61,0.08)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.green,
+    padding: 14,
+  },
+  returnedText: { color: c.text, fontSize: 13, fontWeight: "700", flex: 1, lineHeight: 19 },
   doneBox: {
     backgroundColor: "rgba(21,128,61,0.08)",
     borderRadius: 12,
