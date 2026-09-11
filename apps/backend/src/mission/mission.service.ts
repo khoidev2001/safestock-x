@@ -162,6 +162,16 @@ export function missionOrderBy(sort: MissionListSort): Prisma.MissionOrderByWith
   }
 }
 
+/**
+ * Kho khai số vật tư tái sử dụng đã nhận lại.
+ *
+ * Bỏ trống `items` nghĩa là "về đủ hết" — đường một nút bấm, giữ nguyên như trước.
+ * Có `items` là kho đếm từng dòng, và dòng nào còn thiếu thì nhiệm vụ chưa khép.
+ */
+export interface SupplyReturnInput {
+  items?: { sku: string; returnedQuantity: number }[];
+}
+
 @Injectable()
 export class MissionService {
   private readonly log = new Logger(MissionService.name);
@@ -1536,6 +1546,79 @@ export class MissionService {
   }
 
   /**
+   * Những dòng vật tư kho phải ĐẾM LẠI khi đội cứu hộ xong việc.
+   *
+   * Chỉ hàng TÁI SỬ DỤNG, và chỉ những dòng đội đã thật sự ký nhận mang đi. Mì
+   * tôm, nước đóng chai, lương khô đã phát cho dân thì không có gì để trả — bày
+   * chúng ra trong danh sách "trả chưa đủ" là mời người trực khai một khoản thiếu
+   * không tồn tại, và con số đó sẽ nằm lại trong báo cáo thất thoát.
+   *
+   * Phạm vi theo kho của người hỏi: mỗi kho đếm lại đúng phần mình đã giao ra.
+   */
+  async listReturnableSupplies(
+    missionId: string,
+    actorUserId: string,
+    scopeWarehouseId?: string | null,
+  ) {
+    const mission = await this.getMission(missionId, actorUserId, scopeWarehouseId);
+    const requests = await this.prisma.missionWarehouseRequest.findMany({
+      where: {
+        missionId,
+        ...(scopeWarehouseId ? { warehouseId: scopeWarehouseId } : {}),
+        pickedUpQuantity: { gt: 0 },
+      },
+      orderBy: [{ warehouseId: "asc" }, { itemName: "asc" }],
+      select: {
+        sku: true,
+        itemName: true,
+        unit: true,
+        pickedUpQuantity: true,
+        returnedQuantity: true,
+        warehouse: { select: { id: true, name: true } },
+      },
+    });
+    const reusableSkus = await this.reusableSkus(requests.map((request) => request.sku));
+
+    return {
+      missionStatus: mission.status,
+      items: requests
+        .filter((request) => reusableSkus.has(request.sku))
+        .map((request) => {
+          const handedOver = request.pickedUpQuantity ?? 0;
+          const returned = request.returnedQuantity ?? 0;
+          return {
+            sku: request.sku,
+            itemName: request.itemName,
+            unit: request.unit,
+            warehouseId: request.warehouse.id,
+            warehouseName: request.warehouse.name,
+            handedOverQuantity: handedOver,
+            /** `null` = kho chưa đếm dòng này, khác hẳn "đã đếm và về 0". */
+            returnedQuantity: request.returnedQuantity,
+            outstandingQuantity: Math.max(0, handedOver - returned),
+          };
+        }),
+    };
+  }
+
+  /**
+   * Lọc ra mã hàng TÁI SỬ DỤNG trong một danh sách mã.
+   *
+   * Mã không có trong danh mục thì coi là tái sử dụng: thà hỏi thừa một dòng còn
+   * hơn lặng lẽ bỏ sót một cái loa cầm tay không bao giờ được ai đòi về.
+   */
+  private async reusableSkus(skus: string[]): Promise<Set<string>> {
+    const unique = [...new Set(skus)];
+    if (unique.length === 0) return new Set();
+    const items = await this.prisma.item.findMany({
+      where: { sku: { in: unique } },
+      select: { sku: true, consumable: true },
+    });
+    const consumable = new Set(items.filter((item) => item.consumable).map((item) => item.sku));
+    return new Set(unique.filter((sku) => !consumable.has(sku)));
+  }
+
+  /**
    * KHO xác nhận đã nhận lại vật tư — bước cuối, đóng hẳn nhiệm vụ.
    *
    * Giao xong không phải là hết việc. Áo phao, đèn pin, bạt che là hàng tái sử
@@ -1546,8 +1629,23 @@ export class MissionService {
    *
    * CHỈ KHO bấm được, không phải điều phối: người đếm lại hàng khi nó về tới nơi
    * mới là người biết nó về đủ hay không. Điều phối ký hộ thì chữ ký đó rỗng.
+   *
+   * Hai đường vào, và chúng nói hai điều khác nhau:
+   *
+   *   - KHÔNG truyền `items`: "về đủ hết". Mọi dòng tái sử dụng của nhiệm vụ được
+   *     ghi là đã về đủ và nhiệm vụ khép sổ — giữ nguyên hành vi cũ, gồm cả việc
+   *     một kho ký thay được cho cả nhiệm vụ (hàng thừa thường dồn về một chỗ).
+   *   - CÓ `items`: kho đếm từng dòng. Số đếm được ghi lại NGAY, kể cả khi còn
+   *     thiếu — thiếu mà không ghi thì con số đó chỉ nằm trong đầu người trực, và
+   *     tới chuyến sau không ai còn nhớ đội đang nợ bao nhiêu cái loa. Nhiệm vụ
+   *     chỉ khép sổ khi không còn dòng nào thiếu.
    */
-  async markReturnedByWarehouse(id: string, userId: string, scopeWarehouseId?: string | null) {
+  async markReturnedByWarehouse(
+    id: string,
+    userId: string,
+    scopeWarehouseId?: string | null,
+    input: SupplyReturnInput = {},
+  ) {
     const mission = await this.prisma.mission.findUnique({ where: { id } });
     if (!mission) throw new NotFoundException("Không tìm thấy nhiệm vụ");
     await this.assertActorInMissionOrganization(userId, mission.warehouseId);
@@ -1582,6 +1680,22 @@ export class MissionService {
       }
     }
     this.guardTransition(mission.status, MissionStatus.RETURNED);
+    await this.recordReturnedQuantities(id, scopeWarehouseId, input);
+
+    /*
+      Còn dòng nào chưa về đủ thì nhiệm vụ CHƯA khép sổ.
+
+      Đếm trên toàn nhiệm vụ chứ không chỉ phần của kho vừa bấm: khép sổ là tuyên
+      bố "không còn gì ở ngoài nữa", mà kho A không biết kho B đã nhận về chưa.
+    */
+    const outstanding = await this.outstandingReturns(id);
+    if (outstanding.length > 0) {
+      return {
+        ...(await this.prisma.mission.findUniqueOrThrow({ where: { id } })),
+        outstandingReturns: outstanding,
+      };
+    }
+
     const claim = await this.prisma.mission.updateMany({
       where: { id, status: MissionStatus.COMPLETED },
       data: {
@@ -1606,7 +1720,111 @@ export class MissionService {
         missionId: id,
       });
     }
-    return this.prisma.mission.findUniqueOrThrow({ where: { id } });
+    return {
+      ...(await this.prisma.mission.findUniqueOrThrow({ where: { id } })),
+      outstandingReturns: [],
+    };
+  }
+
+  /**
+   * Ghi số đã nhận về cho từng dòng vật tư tái sử dụng.
+   *
+   * Không truyền `items` nghĩa là "về đủ hết": mọi dòng tái sử dụng của NHIỆM VỤ
+   * (không chỉ của kho đang bấm) được ghi bằng đúng số đã giao ra.
+   */
+  private async recordReturnedQuantities(
+    missionId: string,
+    scopeWarehouseId: string | null | undefined,
+    input: SupplyReturnInput,
+  ) {
+    const requests = await this.prisma.missionWarehouseRequest.findMany({
+      where: { missionId, pickedUpQuantity: { gt: 0 } },
+      select: {
+        id: true,
+        sku: true,
+        itemName: true,
+        warehouseId: true,
+        pickedUpQuantity: true,
+      },
+    });
+    const reusable = await this.reusableSkus(requests.map((request) => request.sku));
+    const returnableRows = requests.filter((request) => reusable.has(request.sku));
+    if (returnableRows.length === 0) return;
+    const now = new Date();
+
+    if (!input.items) {
+      await this.prisma.$transaction(
+        returnableRows.map((row) =>
+          this.prisma.missionWarehouseRequest.update({
+            where: { id: row.id },
+            data: { returnedQuantity: row.pickedUpQuantity ?? 0, returnedAt: now },
+          }),
+        ),
+      );
+      return;
+    }
+
+    // Kho chỉ đếm được phần CHÍNH MÌNH đã giao ra; dòng của kho khác không phải
+    // việc của họ, và nhận bừa ở đây là để một kho sửa sổ của kho bên cạnh.
+    const editable = new Map(
+      returnableRows
+        .filter((row) => !scopeWarehouseId || row.warehouseId === scopeWarehouseId)
+        .map((row) => [row.sku, row]),
+    );
+    const updates = input.items.map((item) => {
+      const row = editable.get(item.sku);
+      if (!row) {
+        throw new BadRequestException(
+          `Vật tư ${item.sku} không thuộc phần kho của bạn đã giao ra trong nhiệm vụ này.`,
+        );
+      }
+      const handedOver = row.pickedUpQuantity ?? 0;
+      if (!Number.isInteger(item.returnedQuantity) || item.returnedQuantity < 0) {
+        throw new BadRequestException(`${row.itemName}: số đã trả phải là số nguyên không âm.`);
+      }
+      if (item.returnedQuantity > handedOver) {
+        throw new BadRequestException(
+          `${row.itemName}: nhận về ${item.returnedQuantity} trong khi chỉ giao ra ${handedOver}. Kiểm tra lại số đếm.`,
+        );
+      }
+      return this.prisma.missionWarehouseRequest.update({
+        where: { id: row.id },
+        data: { returnedQuantity: item.returnedQuantity, returnedAt: now },
+      });
+    });
+    if (updates.length > 0) await this.prisma.$transaction(updates);
+  }
+
+  /** Những dòng tái sử dụng của nhiệm vụ còn thiếu — rỗng nghĩa là khép sổ được. */
+  private async outstandingReturns(missionId: string) {
+    const requests = await this.prisma.missionWarehouseRequest.findMany({
+      where: { missionId, pickedUpQuantity: { gt: 0 } },
+      select: {
+        sku: true,
+        itemName: true,
+        unit: true,
+        pickedUpQuantity: true,
+        returnedQuantity: true,
+        warehouse: { select: { id: true, name: true } },
+      },
+    });
+    const reusable = await this.reusableSkus(requests.map((request) => request.sku));
+    return requests
+      .filter((request) => reusable.has(request.sku))
+      .map((request) => ({
+        sku: request.sku,
+        itemName: request.itemName,
+        unit: request.unit,
+        warehouseId: request.warehouse.id,
+        warehouseName: request.warehouse.name,
+        handedOverQuantity: request.pickedUpQuantity ?? 0,
+        returnedQuantity: request.returnedQuantity,
+        outstandingQuantity: Math.max(
+          0,
+          (request.pickedUpQuantity ?? 0) - (request.returnedQuantity ?? 0),
+        ),
+      }))
+      .filter((item) => item.outstandingQuantity > 0);
   }
 
   /**

@@ -32,6 +32,7 @@ import {
   PlanFromReportDto,
   ReviewWarehouseRequestDto,
   SubmitReportDto,
+  SupplyReturnDto,
   TranscribeDto,
   WarehouseRequestDiscrepancyDto,
   WarehouseRequestNoteDto,
@@ -574,10 +575,29 @@ export class MissionController {
    * nơi mới là người ký được vào bước này. Service chốt thêm một lần theo vai và
    * theo việc kho đó có tham gia nhiệm vụ hay không.
    */
+  /**
+   * Những dòng vật tư kho phải đếm lại — chỉ hàng tái sử dụng đội đã mang đi.
+   *
+   * Đứng riêng khỏi chi tiết nhiệm vụ vì nó phải tra danh mục để biết mã nào là
+   * hàng tái sử dụng, và màn hình chỉ hỏi tới nó đúng lúc kho ngồi đếm hàng về.
+   */
+  @RequirePermission(Permission.MISSION_VIEW)
+  @Get(":id/returnable-supplies")
+  returnableSupplies(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.missions.listReturnableSupplies(id, req.user.userId, req.user.warehouseId);
+  }
+
   @RequirePermission(Permission.MISSION_FULFILL)
   @Post(":id/supplies-returned")
-  markSuppliesReturned(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
-    return this.missions.markReturnedByWarehouse(id, req.user.userId, req.user.warehouseId);
+  markSuppliesReturned(
+    @Request() req: AuthenticatedRequest,
+    @Param("id") id: string,
+    @Body(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
+    dto: SupplyReturnDto,
+  ) {
+    return this.missions.markReturnedByWarehouse(id, req.user.userId, req.user.warehouseId, {
+      items: dto.items,
+    });
   }
 
   /**
