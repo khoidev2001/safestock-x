@@ -483,13 +483,10 @@ export function MissionView({
   /**
    * Bộ huỷ cho các lượt gọi AI đang chạy, tra theo tên việc.
    *
-   * Lượt gọi mô hình có thể treo — mạng rớt, mô hình không trả lời, hoặc lâu hơn
-   * mức người dùng chờ được. Không có đường thoát thì hộp thoại chờ khoá cứng màn
-   * hình và cách duy nhất là tải lại cả trang, mất luôn phần đang gõ dở ở form.
-   *
-   * Bấm dừng chỉ cắt được PHÍA MÌNH: máy chủ có thể vẫn chạy nốt và ghi kết quả.
-   * Nên sau khi cắt phải tải lại dữ liệu từ máy chủ — hiện đúng thứ đã xảy ra
-   * thật, thay vì giả vờ như chưa có gì xảy ra rồi để hai bên lệch nhau.
+   * Không còn nút dừng cho người dùng bấm — cắt phía máy khách trong lúc máy chủ
+   * đã ghi xong làm màn hình và dữ liệu lệch nhau. Chỗ duy nhất còn huỷ là lúc MỞ
+   * một lượt mới cùng tên việc: lượt cũ phải chết trước, nếu không nó trả lời muộn
+   * và ghi đè kết quả của lượt mới lên form.
    */
   const aiAbortRef = useRef<Record<string, AbortController | undefined>>({});
   const newAiSignal = useCallback((key: string) => {
@@ -498,16 +495,7 @@ export function MissionView({
     aiAbortRef.current[key] = controller;
     return controller.signal;
   }, []);
-  const cancelAi = useCallback(
-    (key: string) => {
-      aiAbortRef.current[key]?.abort();
-      aiAbortRef.current[key] = undefined;
-      refreshMissionAfterConflict();
-    },
-    [refreshMissionAfterConflict],
-  );
-
-  /** Người dùng tự bấm dừng thì không phải lỗi — đừng hiện dòng đỏ trách họ. */
+  /** Lượt bị lượt mới hơn cắt thì không phải lỗi — đừng hiện dòng đỏ cho nó. */
   const isUserAbort = (error: unknown) =>
     error instanceof DOMException && error.name === "AbortError";
 
@@ -1268,7 +1256,6 @@ export function MissionView({
           chữ trang trí cho có vẻ bận rộn. */}
       <AiProgressDialog
         open={analyze.isPending}
-        onCancel={() => cancelAi("parse")}
         title="Phân tích lời kể thành số liệu"
         estimate="7 giây"
         steps={[
@@ -1280,7 +1267,6 @@ export function MissionView({
       />
       <AiProgressDialog
         open={coordinationRunning || replanningAfterEdit}
-        onCancel={() => cancelAi("coordination")}
         title="Lập bản tham mưu điều phối"
         estimate="20 giây"
         steps={[
@@ -1292,7 +1278,6 @@ export function MissionView({
       />
       <AiProgressDialog
         open={genActionPlan.isPending}
-        onCancel={() => cancelAi("action-plan")}
         title="Lập kế hoạch cứu hộ"
         estimate="40 giây"
         steps={[
