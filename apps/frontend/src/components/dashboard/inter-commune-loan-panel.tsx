@@ -1,8 +1,9 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { ColorIcon } from "@/components/shared/color-icon";
+import { formatTimeAndDate } from "@/lib/date-format";
 import {
   advanceInterCommuneLoan,
   acceptInterCommuneReturn,
@@ -222,29 +223,33 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
         <button
           className="rounded-md px-3 py-2 text-xs font-semibold text-white"
           onClick={() => {
-            setBorrowFormOpen((previous) => !previous);
-            setManualFormOpen(false);
+            setError(null);
+            setBorrowFormOpen(true);
           }}
           style={{ background: "var(--color-accent)" }}
           type="button"
         >
-          {borrowFormOpen ? "Đóng" : "Gửi yêu cầu mượn xã khác"}
+          Gửi yêu cầu mượn xã khác
         </button>
         <button
           className="rounded-md border px-3 py-2 text-xs font-semibold"
           onClick={() => {
-            setManualFormOpen((previous) => !previous);
-            setBorrowFormOpen(false);
+            setError(null);
+            setManualFormOpen(true);
           }}
           type="button"
         >
-          {manualFormOpen ? "Đóng" : "Ghi tay khoản đã thoả thuận qua điện thoại"}
+          Ghi tay khoản đã thoả thuận qua điện thoại
         </button>
       </div>
 
-      {borrowFormOpen ? (
+      <FormDialog
+        isOpen={borrowFormOpen}
+        onClose={() => setBorrowFormOpen(false)}
+        title="Gửi yêu cầu mượn xã khác"
+      >
         <form
-          className="mt-3 space-y-3 rounded-md border p-4"
+          className="space-y-3 px-5 py-4"
           onSubmit={(event) => {
             event.preventDefault();
             borrowMutation.mutate();
@@ -331,6 +336,12 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
             </div>
           </div>
 
+          {error ? (
+            <p className="rounded-md border border-[var(--color-critical)] p-3 text-sm text-[var(--color-critical)]">
+              {error}
+            </p>
+          ) : null}
+
           <button
             className="rounded-md px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
             disabled={borrowMutation.isPending}
@@ -340,11 +351,15 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
             {borrowMutation.isPending ? "Đang gửi…" : "Gửi yêu cầu"}
           </button>
         </form>
-      ) : null}
+      </FormDialog>
 
-      {manualFormOpen ? (
+      <FormDialog
+        isOpen={manualFormOpen}
+        onClose={() => setManualFormOpen(false)}
+        title="Ghi tay khoản đã thoả thuận qua điện thoại"
+      >
         <form
-          className="mt-3 space-y-3 rounded-md border p-4"
+          className="space-y-3 px-5 py-4"
           onSubmit={(event) => {
             event.preventDefault();
             manualMutation.mutate();
@@ -463,6 +478,12 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
             />
           </div>
 
+          {error ? (
+            <p className="rounded-md border border-[var(--color-critical)] p-3 text-sm text-[var(--color-critical)]">
+              {error}
+            </p>
+          ) : null}
+
           <button
             className="rounded-md border px-3 py-2 text-xs font-semibold disabled:opacity-60"
             disabled={manualMutation.isPending}
@@ -471,7 +492,7 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
             {manualMutation.isPending ? "Đang ghi…" : "Ghi vào sổ"}
           </button>
         </form>
-      ) : null}
+      </FormDialog>
 
       {error ? (
         <p className="mt-3 rounded-md border border-[var(--color-critical)] p-3 text-sm text-[var(--color-critical)]">
@@ -560,6 +581,39 @@ function LoanRow({
     ? loan.returnedQuantity - loan.returnAcceptedQuantity
     : 0;
 
+  // Mốc thời gian ghi thẳng ngày giờ, KHÔNG viết "2 ngày trước": đây là con số cán
+  // bộ xã đọc cho nhau qua điện thoại và chép vào biên bản giấy. "2 ngày trước"
+  // chép vào biên bản thì tuần sau không ai tra ngược ra được mốc nào.
+  const milestones: { label: string; value: string }[] = [
+    {
+      // Bản ghi tay không "gửi" đi đâu cả — người trực chép lại một thoả thuận đã
+      // xong qua điện thoại. Gọi nó là "gửi yêu cầu" là mô tả sai việc đã xảy ra.
+      label: loan.recordedManually ? "Ghi vào sổ" : "Gửi yêu cầu",
+      value: formatTimeAndDate(loan.requestedAt),
+    },
+  ];
+
+  // Khoản ghi tay không đi qua bước duyệt nào, nên không dựng dòng duyệt rỗng.
+  if (!loan.recordedManually) {
+    milestones.push({
+      label:
+        loan.status === "REJECTED"
+          ? "Từ chối yêu cầu"
+          : loan.status === "CANCELLED"
+            ? "Huỷ yêu cầu"
+            : "Duyệt yêu cầu",
+      // Nói thẳng là chưa có, không bỏ trống: dòng trống đọc ra thành "mất dữ liệu".
+      value: loan.decidedAt ? formatTimeAndDate(loan.decidedAt) : "Chưa duyệt",
+    });
+  }
+
+  if (loan.receivedAt) {
+    milestones.push({ label: "Giao nhận hàng", value: formatTimeAndDate(loan.receivedAt) });
+  }
+  if (loan.returnedAt) {
+    milestones.push({ label: "Trả xong", value: formatTimeAndDate(loan.returnedAt) });
+  }
+
   return (
     <li className="rounded-md border p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -591,6 +645,15 @@ function LoanRow({
           </p>
         </div>
       </div>
+
+      <dl className="mt-3 grid gap-x-6 gap-y-1 border-t pt-3 text-xs sm:grid-cols-2">
+        {milestones.map((milestone) => (
+          <div className="flex flex-wrap items-baseline gap-x-2" key={milestone.label}>
+            <dt className="text-[var(--text-muted)]">{milestone.label}:</dt>
+            <dd className="font-mono font-medium">{milestone.value}</dd>
+          </div>
+        ))}
+      </dl>
 
       {dangTrenDuongVe > 0 ? (
         <div className="mt-3 flex flex-wrap items-end gap-2 border-t pt-3">
@@ -665,5 +728,67 @@ function LoanRow({
         </div>
       ) : null}
     </li>
+  );
+}
+
+/**
+ * Vỏ hộp thoại cho hai biểu mẫu mượn — trả liên xã.
+ *
+ * Dùng <dialog> gốc như các hộp thoại khác trong dự án: trình duyệt tự lo lớp
+ * phủ, bẫy tiêu điểm và phím Esc, không phải dựng lại bằng tay.
+ *
+ * Chỉ dựng nội dung khi đang mở — giữ nguyên nếp cũ là biểu mẫu chỉ tồn tại lúc
+ * người dùng thật sự cần, không nằm sẵn trong cây DOM.
+ */
+function FormDialog({
+  children,
+  isOpen,
+  onClose,
+  title,
+}: {
+  children: ReactNode;
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (isOpen && !dialog.open) dialog.showModal();
+    else if (!isOpen && dialog.open) dialog.close();
+  }, [isOpen]);
+
+  return (
+    <dialog
+      aria-labelledby={titleId}
+      className="fixed inset-0 m-auto max-h-[calc(100dvh-2rem)] w-[min(94vw,40rem)] overflow-y-auto rounded-lg border bg-[var(--surface)] p-0 text-[var(--text)] shadow-2xl backdrop:bg-slate-950/45"
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+      onClose={onClose}
+      ref={dialogRef}
+    >
+      <header className="flex items-start justify-between gap-3 border-b px-5 py-4">
+        <h2 className="text-lg font-semibold" id={titleId}>
+          {title}
+        </h2>
+        <button
+          aria-label="Đóng"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md transition hover:bg-[var(--surface-2)]"
+          onClick={onClose}
+          type="button"
+        >
+          <ColorIcon name="close" size={18} tone="blue" />
+        </button>
+      </header>
+      {isOpen ? children : null}
+    </dialog>
   );
 }
