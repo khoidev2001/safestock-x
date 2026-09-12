@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { foldVietnamese } from "../vietnamese-text";
 import { MAX_RECORDING_MS, selectRecordingBackend } from "../audio-platform-state";
 import { parseOfflineEnvelope, serializeOfflineEnvelope } from "../offline-cache-state";
 import {
@@ -1004,4 +1005,33 @@ test("con trỏ là dòng CUỐI của danh sách đã ghép, không phải củ
   */
   assert.equal(nextCursor([{ id: "a" }, { id: "b" }]), "b");
   assert.equal(nextCursor([]), null);
+});
+
+/*
+  Bỏ dấu để tìm kiếm.
+
+  Phép thử đi qua ĐÚNG những chuỗi có thật trong kho, không phải chữ bịa: tên vật
+  tư mới là thứ người trực gõ vội, và mỗi tên hỏng một kiểu khác nhau.
+*/
+test("bỏ dấu đưa chuỗi về dạng gõ vội vẫn tìm ra", () => {
+  assert.equal(foldVietnamese("Nước uống đóng chai"), "nuoc uong dong chai");
+  assert.equal(foldVietnamese("Bạt che chống thấm"), "bat che chong tham");
+  assert.equal(foldVietnamese("Đèn pin"), "den pin");
+  assert.equal(foldVietnamese("Áo phao người lớn"), "ao phao nguoi lon");
+  assert.equal(foldVietnamese("Bộ sơ cứu"), "bo so cuu");
+});
+
+test("chữ đ hoa và thường đều thành d", () => {
+  // "đ" KHÔNG phải "d" kèm dấu mà là một chữ cái khác, nên mọi cách bóc dấu tự
+  // động đều bỏ sót nó. Đây là chốt giữ cho việc khai riêng trong bảng.
+  assert.equal(foldVietnamese("Đồng Xuân"), "dong xuan");
+  assert.equal(foldVietnamese("ĐỒNG"), "dong");
+  assert.equal(foldVietnamese("đ"), "d");
+});
+
+test("chuỗi không dấu và mã vật tư giữ nguyên, chỉ hạ chữ thường", () => {
+  // Mã vật tư đi qua cùng một hàm với tên, nên phải chắc nó không bị méo.
+  assert.equal(foldVietnamese("WATER-01"), "water-01");
+  assert.equal(foldVietnamese("CANVAS-01-LONG-CHAU"), "canvas-01-long-chau");
+  assert.equal(foldVietnamese(""), "");
 });

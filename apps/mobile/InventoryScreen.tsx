@@ -56,6 +56,7 @@ import {
 } from "./inventory-state";
 import { readOfflineCache, writeOfflineCache } from "./offline-cache";
 import { c } from "./styles";
+import { foldVietnamese } from "./vietnamese-text";
 
 interface InventorySnapshot {
   warehouse: WarehouseSummary;
@@ -279,7 +280,10 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
       const skus = new Set(semanticSkus);
       return snapshot.batches.filter((batch) => skus.has(batch.item.sku));
     }
-    const keyword = query.trim().toLocaleLowerCase("vi");
+    // Bỏ dấu cả hai vế: gõ "nuoc" phải ra "Nước uống đóng chai". Gõ có dấu trên
+    // điện thoại chậm gấp mấy lần, mà không ra kết quả thì người trực tưởng kho
+    // hết hàng chứ không nghĩ là mình thiếu dấu.
+    const keyword = foldVietnamese(query.trim());
     if (!snapshot || !keyword) return snapshot?.batches ?? [];
     return snapshot.batches.filter((batch) =>
       [
@@ -290,7 +294,7 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
         batch.shelf.zone.name,
       ]
         .filter(Boolean)
-        .some((value) => String(value).toLocaleLowerCase("vi").includes(keyword)),
+        .some((value) => foldVietnamese(String(value)).includes(keyword)),
     );
   }, [query, semanticSkus, snapshot]);
 
