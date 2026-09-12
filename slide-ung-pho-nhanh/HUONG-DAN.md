@@ -1,6 +1,6 @@
 # Slide thuyết trình — Ứng Phó Nhanh
 
-24 slide, tỷ lệ 16:9 (13.333 × 7.5 inch), nền lấy từ ảnh brand của hệ thống,
+23 slide, tỷ lệ 16:9 (13.333 × 7.5 inch), nền lấy từ ảnh brand của hệ thống,
 chữ dùng font **Be Vietnam Pro** giống trang web ungphonhanh.life.
 
 ## File trong thư mục
@@ -10,7 +10,7 @@ chữ dùng font **Be Vietnam Pro** giống trang web ungphonhanh.life.
 | `Ung-Pho-Nhanh-Slide.pptx` | Bản PowerPoint — **mọi chữ đều sửa được** (text box thật, không phải ảnh) |
 | `Ung-Pho-Nhanh-Slide.pdf` | Bản PDF để trình chiếu / gửi Ban Giám khảo (chữ vector, sắc nét khi phóng to) |
 | `fonts/` | 5 file font Be Vietnam Pro (Regular → ExtraBold) |
-| `xem-truoc-24-slide.jpg` | Ảnh xem trước toàn bộ 24 slide |
+| `xem-truoc-23-slide.jpg` | Ảnh xem trước toàn bộ 23 slide |
 
 ## Trước khi mở file .pptx — cài font
 
@@ -21,7 +21,7 @@ Máy chưa có Be Vietnam Pro thì PowerPoint sẽ thay bằng font khác và ch
 
 Mở lại PowerPoint sau khi cài.
 
-## Nội dung 24 slide
+## Nội dung 23 slide
 
 **Phần 1 — Trình (slide 1–14)**
 
@@ -42,22 +42,24 @@ Mở lại PowerPoint sau khi cài.
 | 13 | Quy trình: nhấn bước 6 (khép vòng) |
 | 14 | Dữ liệu & dự báo sau thiên tai |
 
-**Phần 2 — Khôi (slide 15–22)**
+**Phần 2 — Khôi (slide 15–21)** — bám theo `docs/SLIDE-OUTLINE-KHOI.md`
 
-| # | Nội dung | Mục trong script |
+| # | Nội dung | Slide trong outline |
 |---|---|---|
-| 15 | Kho tập trung toàn xã: 1 kho tổng + 17 kho thôn, ví dụ kho thôn Long Châu | 1 và 3 |
-| 16 | "Còn bao nhiêu" chưa phải câu hỏi đúng — hai chiều trạng thái | 1 |
-| 17 | Chỉ số sẵn sàng: 95/100 → nguy cơ cháy → không điều phối được | 2 |
-| 18 | IoT: 9 thiết bị, 9 sự cố, hai quy tắc, hàng chờ ba mốc thời gian | 4 |
-| 19 | Nói thẳng về phần cứng — bản sao số của kho | 5 |
+| 15 | Quản lý kho tập trung — 1 kho tổng + 17 kho thôn, hai chiều trạng thái | 1 |
+| 16 | Chỉ số sẵn sàng — 95/100 → khói → không điều phối được | 2 |
+| 17 | Tồn kho toàn xã — kho tổng gần hết vs Long Châu hơn 1.600 bộ | 3 |
+| 18 | IoT — 9 thiết bị · 9 sự cố, hai quy tắc, 3 mốc thời gian, ví dụ 2h sáng | 4 |
+| 19 | Nói thẳng về phần cứng — bản sao số | 5 |
 | 20 | Trợ lý AI — không được bịa số | 6 |
-| 21 | Biết trước thay vì biết sau — bản tin đầu ngày 12/9 | 7 |
-| 22 | Thư quan tâm Hội Chữ thập đỏ xã Đồng Xuân | 8 |
+| 21 | Thư quan tâm Hội Chữ thập đỏ xã Đồng Xuân | 7 |
 
-**Phần kết (slide 23–24):** giá trị mang lại · cảm ơn và chuyển sang demo (mục 9).
+Theo ghi chú trong outline: **không làm slide riêng cho dự báo 72 giờ / bản tin đầu ngày** —
+nói chèn ở slide 17 nếu dư thời gian.
 
-> **Slide 22 có một khung trống chờ ảnh** — mở PowerPoint, bấm vào khung bên trái,
+**Phần kết (slide 22–23):** giá trị mang lại · cảm ơn và chuyển sang demo (mục 9).
+
+> **Slide 21 có một khung trống chờ ảnh** — mở PowerPoint, bấm vào khung bên trái,
 > chèn ảnh chụp lá thư quan tâm rồi xoá hai dòng chữ hướng dẫn trong khung.
 
 Các slide quy trình (5, 6, 8, 10, 12, 13) dùng chung một sơ đồ 6 bước xếp 2 hàng × 3 cột

@@ -1,6 +1,6 @@
 const { SW, SH, M, C, widthOf, wrap, img, rect, txt, textH } = require('./core');
 
-const TOTAL = 24;
+const TOTAL = 23;
 const BG = 'bg-content.jpg';
 
 // ---------- shared chrome ----------
@@ -376,76 +376,46 @@ timelineSlide([6], 'BƯỚC 6 / 6  ·  KHÉP VÒNG', 'Vật tư hoàn trả xong
   els.push(txt({ x: M + 0.42, y: by + 0.24, w: SW - 2 * M - 0.84, text: 'Dựa trên dữ liệu thực tế của những năm trước, người quản lý lập kế hoạch dự trữ sát với nhu cầu hơn — chuẩn bị trước khi thiên tai đến, thay vì xoay xở khi đã xảy ra.', size: 14.5, weight: 'sb', color: C.white, lh: 1.45 }));
   slides.push({ els, notes: 'Hệ thống lưu lại toàn bộ dữ liệu từng đợt cứu hộ, trở thành nguồn thông tin để phân tích và dự báo nhu cầu vật tư cho những đợt tiếp theo.' });
 }
-// ============ K1. KHO TẬP TRUNG TOÀN XÃ ============
+// ============ K1. QUẢN LÝ KHO TẬP TRUNG ============
 {
-  const { els, bodyTop } = chrome('VẬN HÀNH THƯỜNG NGÀY', 'Khi không có thiên tai, hệ thống vẫn tạo ra giá trị');
-  const y = bodyTop, lw = 6.0, rw = SW - 2 * M - lw - 0.37, rx = M + lw + 0.37, h = 4.3;
+  const { els, bodyTop } = chrome('QUẢN LÝ KHO TẬP TRUNG', 'Không hỏi còn bao nhiêu — hỏi dùng được bao nhiêu');
+  const y = bodyTop, lw = 4.5, rx = M + lw + 0.38, rw = SW - M - rx, h = 3.3;
 
   els.push(...card(M, y, lw, h, C.green));
-  els.push(txt({ x: M + 0.36, y: y + 0.3, w: lw - 0.72, text: 'QUẢN LÝ TẬP TRUNG MỘT NƠI', size: 10.5, weight: 'eb', color: C.green, spacing: 1.8 }));
-  const stats = [['01', 'kho tổng'], ['17', 'kho thôn']];
-  stats.forEach(([n, lb], i) => {
-    const sx = M + 0.36 + i * 2.7;
-    els.push(rect(sx, y + 0.72, 2.4, 1.05, C.white, 0.07, 0.1, { color: C.white, alpha: 0.14, w: 1 }));
-    els.push(txt({ x: sx + 0.24, y: y + 0.84, w: 1.9, text: n, size: 30, weight: 'eb', color: C.greenSoft }));
-    els.push(txt({ x: sx + 1.05, y: y + 1.26, w: 1.2, text: lb, size: 13, weight: 'sb', color: C.text }));
+  els.push(txt({ x: M + 0.34, y: y + 0.3, w: lw - 0.68, text: 'MỘT SỔ KHO DUY NHẤT', size: 10.5, weight: 'eb', color: C.green, spacing: 1.8 }));
+  [['01', 'kho tổng'], ['17', 'kho thôn']].forEach(([n, lb], i) => {
+    const sy = y + 0.72 + i * 0.94;
+    els.push(rect(M + 0.34, sy, lw - 0.68, 0.84, C.white, 0.07, 0.1, { color: C.white, alpha: 0.14, w: 1 }));
+    els.push(txt({ x: M + 0.54, y: sy + 0.14, w: 1.0, text: n, size: 26, weight: 'eb', color: C.greenSoft }));
+    els.push(txt({ x: M + 1.48, y: sy + 0.29, w: lw - 1.9, text: lb, size: 14, weight: 'sb', color: C.text }));
   });
-  els.push(txt({ x: M + 0.36, y: y + 2.06, w: lw - 0.72, text: 'Số lượng vật tư, lịch sử nhập — xuất và thông tin của từng kho đều nằm trên một hệ thống.', size: 13, weight: 'r', color: C.text, lh: 1.45 }));
-  els.push(rect(M + 0.36, y + 2.86, lw - 0.72, 0.01, C.white, 0.16));
-  els.push(txt({ x: M + 0.36, y: y + 3.06, w: lw - 0.72, text: 'Cần kiểm tra một loại vật tư, người quản lý tra thẳng trên hệ thống thay vì gọi điện hỏi từng thôn — mỗi cuộc gọi vài phút, giữa lúc nước đang lên.', size: 13, weight: 'sb', color: C.greenSoft, lh: 1.45 }));
+  els.push(txt({ x: M + 0.34, y: y + 2.66, w: lw - 0.68, text: 'Tồn kho, lịch sử nhập — xuất và thông tin từng kho nằm chung một hệ thống.', size: 12.5, weight: 'r', color: C.text, lh: 1.45 }));
 
-  els.push(...card(rx, y, rw, h, C.amber));
-  els.push(txt({ x: rx + 0.34, y: y + 0.3, w: rw - 0.68, text: 'MỘT SAI LẦM HỆ THỐNG NGĂN ĐƯỢC', size: 10.5, weight: 'eb', color: C.amber, spacing: 1.8 }));
-  els.push(txt({ x: rx + 0.34, y: y + 0.72, w: rw - 0.68, text: 'Nhìn con số ở kho tổng rồi kết luận cả xã hết hàng, đi xin chi viện — trong khi thứ mình cần đang nằm ở thôn bên cạnh.', size: 13, weight: 'r', color: C.text, lh: 1.45 }));
-  const rows = [['Kho tổng', 'còn rất ít bộ sơ cứu', C.red], ['Kho thôn Long Châu', 'hơn 1.600 bộ, cách 4 km', C.green]];
-  rows.forEach(([name, meta, col], i) => {
-    const ry = y + 1.95 + i * 0.9;
-    els.push(rect(rx + 0.34, ry, rw - 0.68, 0.78, C.white, 0.06, 0.1, { color: col, alpha: 0.32, w: 1 }));
-    els.push(txt({ x: rx + 0.52, y: ry + 0.12, w: rw - 1.04, text: name, size: 13, weight: 'b', color: C.white }));
-    els.push(txt({ x: rx + 0.52, y: ry + 0.43, w: rw - 1.04, text: meta, size: 11.5, weight: 'r', color: col }));
-  });
-  els.push(txt({ x: rx + 0.34, y: y + 3.85, w: rw - 0.68, text: 'Xe chạy 4 ki-lô-mét, thay vì gọi xin xã bên.', size: 12.5, weight: 'sb', color: C.greenSoft }));
-
-  slides.push({ els, notes: 'Một xã có một kho tổng và mười bảy kho thôn. Màn hình tồn kho toàn xã ngăn được sai lầm: nhìn kho tổng rồi kết luận cả xã hết hàng, trong khi kho thôn Long Châu còn hơn một nghìn sáu trăm bộ sơ cứu.' });
-}
-
-// ============ K2. TỒN KHO KHẢ DỤNG ============
-{
-  const { els, bodyTop } = chrome('TỒN KHO KHẢ DỤNG', '“Còn bao nhiêu” chưa phải là câu hỏi đúng');
-  const y = bodyTop, lw = 4.6, rx = M + lw + 0.38, rw = SW - M - rx, h = 3.3;
-
-  els.push(...card(M, y, lw, h, C.sky));
-  els.push(txt({ x: M + 0.36, y: y + 0.34, w: lw - 0.72, text: 'CÂU HỎI THẬT SỰ TRONG CỨU HỘ', size: 10.5, weight: 'eb', color: C.sky, spacing: 1.8 }));
-  els.push(txt({ x: M + 0.36, y: y + 0.86, w: lw - 0.72, text: 'Bao nhiêu trong số đó dùng được ngay bây giờ?', size: 21, weight: 'eb', color: C.white, lh: 1.32 }));
-  els.push(txt({ x: M + 0.36, y: y + 2.3, w: lw - 0.72, text: 'Vì vậy mỗi lô hàng mang hai chiều trạng thái tách rời nhau.', size: 12.5, weight: 'r', color: C.muted, lh: 1.4 }));
-
-  const cw = (rw - 0.3) / 2;
-  const dims = [
-    ['TÌNH TRẠNG VẬT LÝ', ['Mới', 'Đã dùng', 'Cần kiểm tra', 'Hỏng'], C.green],
-    ['TRẠNG THÁI LƯU HÀNH', ['Đang trong kho', 'Đang cho mượn', 'Đã xuất'], C.amber],
-  ];
-  dims.forEach(([label, items, col], i) => {
+  const cw = (rw - 0.3) / 2, ch = 2.62;
+  [['TÌNH TRẠNG VẬT LÝ', ['Mới', 'Đã dùng', 'Cần kiểm tra', 'Hỏng'], C.sky],
+   ['TRẠNG THÁI LƯU HÀNH', ['Đang trong kho', 'Đang cho mượn', 'Đã xuất'], C.amber]].forEach(([label, items, col], i) => {
     const x = rx + i * (cw + 0.3);
-    els.push(...card(x, y, cw, h, col));
-    els.push(txt({ x: x + 0.32, y: y + 0.34, w: cw - 0.64, text: label, size: 10.5, weight: 'eb', color: col, spacing: 1.6 }));
+    els.push(...card(x, y, cw, ch, col));
+    els.push(txt({ x: x + 0.32, y: y + 0.3, w: cw - 0.64, text: label, size: 10.5, weight: 'eb', color: col, spacing: 1.6 }));
     items.forEach((it, k) => {
-      const iy = y + 0.82 + k * 0.56;
-      els.push(rect(x + 0.32, iy + 0.09, 0.09, 0.09, col, 0.95, 0.045));
-      els.push(txt({ x: x + 0.58, y: iy, w: cw - 0.9, text: it, size: 13.5, weight: 'sb', color: C.white }));
+      const iy = y + 0.78 + k * 0.46;
+      els.push(rect(x + 0.32, iy + 0.08, 0.09, 0.09, col, 0.95, 0.045));
+      els.push(txt({ x: x + 0.58, y: iy, w: cw - 0.9, text: it, size: 13, weight: 'sb', color: C.white }));
     });
   });
+  els.push(txt({ x: rx, y: y + ch + 0.16, w: rw, text: 'Mỗi lô hàng mang hai chiều trạng thái tách rời nhau.', size: 11.5, weight: 'r', color: C.muted }));
 
-  const by = y + h + 0.3;
-  els.push(rect(M, by, SW - 2 * M, 0.88, C.red, 0.12, 0.1, { color: C.red, alpha: 0.4, w: 1 }));
-  els.push(rect(M, by, 0.055, 0.88, C.red, 0.95, 0.03));
-  els.push(txt({ x: M + 0.4, y: by + 0.18, w: SW - 2 * M - 0.8, text: '30 áo phao còn tốt nhưng đang cho đội xung kích mượn đi diễn tập thì không được tính là khả dụng — đây là chỗ phần mềm kho thông thường hay đếm nhầm.', size: 13, weight: 'sb', color: C.white, lh: 1.4 }));
+  const by = y + h + 0.26;
+  els.push(rect(M, by, SW - 2 * M, 0.78, C.red, 0.12, 0.1, { color: C.red, alpha: 0.42, w: 1 }));
+  els.push(rect(M, by, 0.055, 0.78, C.red, 0.95, 0.03));
+  els.push(txt({ x: M + 0.4, y: by + 0.22, w: SW - 2 * M - 0.8, text: 'Áo phao đang cho mượn  ≠  áo phao khả dụng — đây là chỗ phần mềm kho thông thường hay đếm nhầm.', size: 14.5, weight: 'eb', color: C.white }));
 
-  slides.push({ els, notes: 'Biết còn bao nhiêu là chưa đủ. Câu hỏi thật sự là bao nhiêu trong số đó dùng được ngay bây giờ. Một con số tồn kho đẹp có thể che giấu một kho không xuất được hàng.' });
+  slides.push({ els, notes: 'Một xã có một kho tổng và mười bảy kho thôn. Biết còn bao nhiêu là chưa đủ: ba mươi áo phao còn tốt nhưng đang cho đội xung kích mượn đi diễn tập thì không được tính là khả dụng.' });
 }
 
-// ============ K3. CHỈ SỐ SẴN SÀNG ============
+// ============ K2. CHỈ SỐ SẴN SÀNG ============
 {
-  const { els, bodyTop } = chrome('CHỈ SỐ SẴN SÀNG CỦA KHO', 'Một con số đẹp chưa chắc là kho xuất được hàng');
+  const { els, bodyTop } = chrome('CHỈ SỐ SẴN SÀNG CỦA KHO', 'Một kết luận vận hành, không phải một con số');
   const y = bodyTop, lw = 4.9, rx = M + lw + 0.38, rw = SW - M - rx, h = 4.3;
 
   els.push(...card(M, y, lw, h, C.green));
@@ -456,7 +426,7 @@ timelineSlide([6], 'BƯỚC 6 / 6  ·  KHÉP VÒNG', 'Vật tư hoàn trả xong
     els.push(txt({ x: M + 0.56, y: sy + 0.16, w: 0.7, text: n, size: 24, weight: 'eb', color: C.greenSoft }));
     els.push(txt({ x: M + 1.26, y: sy + 0.3, w: lw - 1.7, text: lb, size: 12.5, weight: 'sb', color: C.text }));
   });
-  els.push(txt({ x: M + 0.36, y: y + 3.0, w: lw - 0.72, text: 'Hệ thống không trả về một con số đơn độc, mà trả về kết luận vận hành kèm lý do và việc phải làm.', size: 13, weight: 'sb', color: C.greenSoft, lh: 1.45 }));
+  els.push(txt({ x: M + 0.36, y: y + 3.0, w: lw - 0.72, text: 'Mỗi điểm bị trừ đều kèm lý do và việc phải làm, thay vì chỉ đưa ra một con số.', size: 13, weight: 'sb', color: C.greenSoft, lh: 1.45 }));
 
   const seq = [
     ['Kho trung tâm: 95 / 100 điểm', 'Nhìn con số thì rất đẹp.', C.green],
@@ -472,14 +442,36 @@ timelineSlide([6], 'BƯỚC 6 / 6  ·  KHÉP VÒNG', 'Vật tư hoàn trả xong
     if (i < 2) els.push({ t: 'tri', x: rx + rw / 2 - 0.11, y: cy + sh + 0.05, w: 0.22, h: 0.18, dir: 'down', fill: C.green, alpha: 0.8 });
   });
 
-  slides.push({ els, notes: 'Chỉ số sẵn sàng chấm theo sáu chiều, tính ở bốn cấp. Khi cảm biến báo nguy cơ cháy, kho đang chín mươi lăm điểm lập tức chuyển sang trạng thái không điều phối được.' });
+  slides.push({ els, notes: 'Chỉ số chấm theo sáu chiều, tính ở bốn cấp: lô, kệ, khu, toàn kho. Khi cảm biến báo nguy cơ cháy, kho đang chín mươi lăm điểm lập tức chuyển sang trạng thái không điều phối được.' });
+}
+
+// ============ K3. TỒN KHO TOÀN XÃ ============
+{
+  const { els, bodyTop } = chrome('TỒN KHO TOÀN XÃ', 'Thiếu ở kho tổng, có thể đang thừa ở thôn bên');
+  const y = bodyTop, gap = 0.62, w = (SW - 2 * M - gap) / 2, h = 2.95;
+
+  const big = (x, label, value, sub, col) => {
+    els.push(...card(x, y, w, h, col));
+    els.push(txt({ x: x + 0.36, y: y + 0.32, w: w - 0.72, text: label, size: 10.5, weight: 'eb', color: col, spacing: 1.8 }));
+    els.push(txt({ x: x + 0.36, y: y + 0.86, w: w - 0.72, text: value, size: 27, weight: 'eb', color: C.white, lh: 1.2 }));
+    els.push(txt({ x: x + 0.36, y: y + 2.1, w: w - 0.72, text: sub, size: 12.5, weight: 'r', color: C.muted, lh: 1.4 }));
+  };
+  big(M, 'KHO TỔNG', 'Gần hết bộ sơ cứu', 'Nhìn riêng con số ở đây rất dễ kết luận cả xã đã hết hàng.', C.red);
+  big(M + w + gap, 'KHO THÔN LONG CHÂU', 'Hơn 1.600 bộ', 'Thứ đang cần vẫn còn nguyên, chỉ cách hiện trường vài ki-lô-mét.', C.green);
+  els.push({ t: 'tri', x: M + w + gap / 2 - 0.11, y: y + h / 2 - 0.14, w: 0.22, h: 0.28, fill: C.greenSoft, alpha: 0.9 });
+
+  const by = y + h + 0.32;
+  els.push(rect(M, by, SW - 2 * M, 0.9, C.green, 0.12, 0.1, { color: C.green, alpha: 0.4, w: 1 }));
+  els.push(rect(M, by, 0.055, 0.9, C.green, 0.95, 0.03));
+  els.push(txt({ x: M + 0.4, y: by + 0.18, w: SW - 2 * M - 0.8, text: 'Màn hình tồn kho toàn xã gộp cả 18 kho vào một bảng: xe chạy 4 ki-lô-mét, thay vì gọi điện xin chi viện xã bên.', size: 14, weight: 'sb', color: C.white, lh: 1.4 }));
+
+  slides.push({ els, notes: 'Hệ thống ngăn một sai lầm đã thấy ngoài đời: người trực nhìn con số ở kho tổng, kết luận cả xã hết hàng rồi đi xin chi viện, trong khi thứ mình cần đang nằm ở thôn bên cạnh. Nếu dư thời gian, nói thêm ở đây về dự báo nhu cầu theo lượng mưa 72 giờ và bản tin đầu ngày.' });
 }
 
 // ============ K4. IoT ============
 {
   const { els, bodyTop } = chrome('CẢM BIẾN IoT TẠI KHO', 'Cảnh báo trước khi mất hàng');
-  const y = bodyTop;
-  const tw = (SW - 2 * M - 0.3) / 2;
+  const y = bodyTop, tw = (SW - 2 * M - 0.3) / 2;
   [['9 loại thiết bị', 'Cân kệ, nhiệt độ, độ ẩm, khói, cảm biến cửa, cổng RFID, camera, nguồn điện…', C.sky],
    ['9 loại sự cố được quét tự động', 'Hệ thống mở hồ sơ sự cố kèm bằng chứng và báo theo thời gian thực.', C.green]].forEach(([hd, bd, col], i) => {
     const x = M + i * (tw + 0.3);
@@ -488,28 +480,33 @@ timelineSlide([6], 'BƯỚC 6 / 6  ·  KHÉP VÒNG', 'Vật tư hoàn trả xong
     els.push(txt({ x: x + 0.32, y: y + 0.52, w: tw - 0.64, text: bd, size: 11.5, weight: 'r', color: C.muted }));
   });
 
-  const ry = y + 1.2, rh = 1.95;
-  [['Nguy cơ cháy đòi hai dấu hiệu cùng lúc', 'Khói vượt 30 ppm VÀ nhiệt độ tăng từ 15 độ trở lên trong cùng một cửa sổ quét. Chỉ có khói thì không kích hoạt.\n\nMột hệ thống báo động giả vài lần sẽ bị người ta tắt đi.', C.orange],
-   ['Sự im lặng cũng là một sự cố', 'Thiết bị bỏ lỡ 3 chu kỳ báo thì hệ thống cảnh báo; bỏ lỡ 10 chu kỳ thì coi như thiết bị đã chết.\n\nIm lặng rất dễ bị hiểu nhầm là “mọi thứ bình thường”.', C.amber]].forEach(([hd, bd, col], i) => {
+  const ry = y + 1.18, rh = 1.85;
+  [['Nguy cơ cháy đòi hai dấu hiệu cùng lúc', 'Khói vượt 30 ppm VÀ nhiệt độ tăng từ 15 độ trở lên trong cùng một cửa sổ quét.\n\nMột hệ thống báo động giả vài lần sẽ bị người ta tắt đi.', C.orange],
+   ['Sự im lặng cũng là một sự cố', 'Bỏ lỡ 3 chu kỳ báo thì cảnh báo; bỏ lỡ 10 chu kỳ thì coi như thiết bị đã chết.\n\nIm lặng rất dễ bị hiểu nhầm là “mọi thứ bình thường”.', C.amber]].forEach(([hd, bd, col], i) => {
     const x = M + i * (tw + 0.3);
     els.push(...card(x, ry, tw, rh, col));
-    els.push(txt({ x: x + 0.32, y: ry + 0.24, w: tw - 0.64, text: hd, size: 15.5, weight: 'b', color: C.white }));
-    els.push(txt({ x: x + 0.32, y: ry + 0.72, w: tw - 0.64, text: bd, size: 12, weight: 'r', color: C.text, lh: 1.45 }));
+    els.push(txt({ x: x + 0.32, y: ry + 0.22, w: tw - 0.64, text: hd, size: 15, weight: 'b', color: C.white }));
+    els.push(txt({ x: x + 0.32, y: ry + 0.66, w: tw - 0.64, text: bd, size: 11.5, weight: 'r', color: C.text, lh: 1.42 }));
   });
 
   const by = ry + rh + 0.26;
-  els.push(rect(M, by, SW - 2 * M, 0.84, C.green, 0.12, 0.1, { color: C.green, alpha: 0.4, w: 1 }));
-  els.push(txt({ x: M + 0.36, y: by + 0.16, w: SW - 2 * M - 0.72, text: 'Mất Internet, thư cảnh báo nằm trong hàng chờ bền vững và gửi lại sau — vẫn ghi đủ ba mốc thời gian: lúc phát hiện · lúc hệ thống nhận · lúc gửi đi, để không ai nhầm cảnh báo cũ là cảnh báo mới.', size: 12.5, weight: 'sb', color: C.white, lh: 1.4 }));
+  [['Thư cảnh báo ghi 3 mốc thời gian', 'Lúc phát hiện · lúc hệ thống nhận · lúc gửi đi — mất mạng thì nằm hàng chờ và gửi lại sau.', C.green],
+   ['2 giờ sáng, độ ẩm lên 88% vì mái dột', 'Hệ thống mở sự cố bảo quản xấu và gửi thư ngay. Sáng ra, thuốc và lương khô vẫn dùng được.', C.sky]].forEach(([hd, bd, col], i) => {
+    const x = M + i * (tw + 0.3);
+    els.push(...card(x, by, tw, 1.0, col));
+    els.push(txt({ x: x + 0.32, y: by + 0.16, w: tw - 0.64, text: hd, size: 13, weight: 'b', color: C.white }));
+    els.push(txt({ x: x + 0.32, y: by + 0.5, w: tw - 0.64, text: bd, size: 11.5, weight: 'r', color: C.muted, lh: 1.3 }));
+  });
 
-  slides.push({ els, notes: 'Hai giờ sáng, độ ẩm kho tăng lên tám mươi tám phần trăm vì mái tôn dột. Hệ thống mở sự cố bảo quản xấu và gửi thư cho người phụ trách. Sáng ra, số thuốc và lương khô ở khu đó vẫn còn dùng được.' });
+  slides.push({ els, notes: 'Hai quy tắc này thể hiện rõ nhất cách nhóm em suy nghĩ: không để báo động giả làm người ta tắt hệ thống, và không coi sự im lặng của thiết bị là mọi thứ bình thường.' });
 }
 
 // ============ K5. NÓI THẲNG VỀ PHẦN CỨNG ============
 {
-  const { els, bodyTop } = chrome('NÓI THẲNG VỀ PHẦN CỨNG', 'Lớp cảm biến hiện tại là một bản sao số của kho');
+  const { els, bodyTop } = chrome('NÓI THẲNG VỀ PHẦN CỨNG', 'Hôm nay: bản sao số. Ngày mai: cảm biến thật.');
   const y = bodyTop, gap = 0.3, w = (SW - 2 * M - 2 * gap) / 3, h = 3.1;
   [['Vì sao làm như vậy', 'Một ứng dụng mô phỏng đủ 9 loại thiết bị, để kiểm thử trọn chuỗi tín hiệu → sự cố → cảnh báo → chỉ số sẵn sàng trước khi bỏ tiền mua thiết bị.', C.sky],
-   ['Đường ống đã sẵn sàng', 'Cảm biến thật và thiết bị mô phỏng đi chung một lối vào. Mỗi cổng thu phát có khóa riêng và chỉ gửi được cho đúng kho của mình.', C.green],
+   ['Chung một đường ống dữ liệu', 'Cảm biến thật và thiết bị mô phỏng đi chung một lối vào. Mỗi cổng thu phát có khóa riêng và chỉ gửi được cho đúng kho của mình.', C.green],
    ['Khi gắn thiết bị thật', 'Phần nghiệp vụ phía sau không phải sửa — chỉ thay nguồn phát tín hiệu, toàn bộ luồng sự cố và cảnh báo giữ nguyên.', C.amber]].forEach(([hd, bd, col], i) => {
     const x = M + i * (w + gap);
     els.push(...card(x, y, w, h, col));
@@ -519,89 +516,58 @@ timelineSlide([6], 'BƯỚC 6 / 6  ·  KHÉP VÒNG', 'Vật tư hoàn trả xong
   const by = y + h + 0.3;
   els.push(rect(M, by, SW - 2 * M, 0.82, C.white, 0.08, 0.1, { color: C.white, alpha: 0.18, w: 1 }));
   els.push(rect(M, by, 0.055, 0.82, C.greenSoft, 0.95, 0.03));
-  els.push(txt({ x: M + 0.4, y: by + 0.25, w: SW - 2 * M - 0.8, text: 'Nhóm em sẽ không tuyên bố tương thích phần cứng trước khi nghiệm thu thiết bị thật.', size: 15, weight: 'eb', color: C.white }));
+  els.push(txt({ x: M + 0.4, y: by + 0.25, w: SW - 2 * M - 0.8, text: 'Không tuyên bố tương thích phần cứng trước khi nghiệm thu thiết bị thật.', size: 15, weight: 'eb', color: C.white }));
 
-  slides.push({ els, notes: 'Đây là lựa chọn kỹ thuật, không phải thiếu sót. Nói bình thản, không hạ giọng: đường ống dữ liệu đã thiết kế cho cả cảm biến thật, khi gắn thiết bị thì phần nghiệp vụ không phải sửa.' });
+  slides.push({ els, notes: 'Đây là lựa chọn kỹ thuật, không phải thiếu sót. Nói bình thản, không hạ giọng.' });
 }
 
 // ============ K6. TRỢ LÝ AI ============
 {
-  const { els, bodyTop } = chrome('TRỢ LÝ AI', 'Hỏi bằng tiếng Việt — nhưng không được bịa số');
-  const y = bodyTop, lw = 4.75, rx = M + lw + 0.38, rw = SW - M - rx, h = 3.2;
+  const { els, bodyTop } = chrome('TRỢ LÝ AI', 'Hỏi bằng tiếng Việt. Nhưng không được bịa số.');
+  const y = bodyTop, lw = 5.0, rx = M + lw + 0.38, rw = SW - M - rx, h = 3.2;
 
   els.push(...card(M, y, lw, h, C.sky));
-  els.push(txt({ x: M + 0.34, y: y + 0.3, w: lw - 0.68, text: 'HỎI BẰNG NGÔN NGỮ TỰ NHIÊN', size: 10.5, weight: 'eb', color: C.sky, spacing: 1.7 }));
-  let cy = y + 0.76;
-  for (const q of ['“Kho nào hiện còn nhiều áo phao nhất?”', '“Đợt thiên tai gần nhất đã dùng bao nhiêu thùng nước?”']) {
-    const t = txt({ x: M + 0.5, y: cy + 0.13, w: lw - 1.0, text: q, size: 12, weight: 'sb', color: C.white, lh: 1.35 });
-    els.push(rect(M + 0.34, cy, lw - 0.68, t.h + 0.26, C.sky, 0.14, 0.1, { color: C.sky, alpha: 0.4, w: 1 }));
-    els.push(t);
-    cy += t.h + 0.42;
-  }
-  els.push(txt({ x: M + 0.34, y: cy + 0.06, w: lw - 0.68, text: 'Khoảng 2 giây là có số, kèm phân bổ theo từng kho — thay vì mở từng báo cáo.', size: 12.5, weight: 'r', color: C.text, lh: 1.45 }));
+  els.push(txt({ x: M + 0.34, y: y + 0.28, w: lw - 0.68, text: 'HỎI BẰNG NGÔN NGỮ TỰ NHIÊN', size: 10.5, weight: 'eb', color: C.sky, spacing: 1.7 }));
+  const q = txt({ x: M + 0.5, y: y + 0.83, w: lw - 1.0, text: '“Kho nào còn nhiều áo phao nhất?”', size: 13, weight: 'sb', color: C.white, lh: 1.35 });
+  els.push(rect(M + 0.34, y + 0.7, lw - 0.68, q.h + 0.26, C.sky, 0.14, 0.1, { color: C.sky, alpha: 0.4, w: 1 }));
+  els.push(q);
+  els.push(txt({ x: M + 0.34, y: y + 1.44, w: lw - 0.68, text: 'Khoảng 2 giây là có số, kèm phân bổ theo từng kho.', size: 12, weight: 'r', color: C.text }));
+  els.push(rect(M + 0.34, y + 1.86, lw - 0.68, 0.01, C.white, 0.16));
+  els.push(txt({ x: M + 0.34, y: y + 2.02, w: lw - 0.68, text: 'KHI CON SỐ KHÔNG KHỚP DỮ LIỆU', size: 10.5, weight: 'eb', color: C.red, spacing: 1.7 }));
+  els.push(rect(M + 0.34, y + 2.42, lw - 0.68, 0.56, C.red, 0.16, 0.1, { color: C.red, alpha: 0.45, w: 1 }));
+  els.push(txt({ x: M + 0.5, y: y + 2.57, w: lw - 1.0, text: '“Chưa thể tạo câu trả lời an toàn.”', size: 13, weight: 'sb', color: C.white }));
 
   const rh = 0.94, gap = 0.19;
-  [['Đối chiếu từng con số', 'Câu trả lời được soi lại với ảnh chụp dữ liệu kho tại thời điểm hỏi; lệch thì chặn, không hiển thị.', C.green],
+  [['Đối chiếu từng con số', 'Câu trả lời được soi lại với dữ liệu kho tại thời điểm hỏi; lệch thì chặn, không hiển thị.', C.green],
    ['Bắt buộc trích nguồn', 'Định mức và quy trình sơ cứu dựa trên Sphere Standards, IFRC, WHO và cơ quan phòng chống thiên tai Việt Nam.', C.amber],
-   ['Chạy tại chỗ', 'Mô hình chạy trên máy đặt tại xã: không gửi dữ liệu ra ngoài, không tính tiền theo lượt gọi.', C.sky]].forEach(([hd, bd, col], i) => {
+   ['Chạy tại chỗ', 'Mô hình chạy trên máy đặt tại xã: không gửi dữ liệu ra ngoài, 0 đồng mỗi lượt gọi.', C.sky]].forEach(([hd, bd, col], i) => {
     const yy = y + i * (rh + gap);
     els.push(...card(rx, yy, rw, rh, col));
     els.push(txt({ x: rx + 0.3, y: yy + 0.16, w: rw - 0.6, text: hd, size: 13.5, weight: 'b', color: C.white }));
     els.push(txt({ x: rx + 0.3, y: yy + 0.48, w: rw - 0.6, text: bd, size: 11.5, weight: 'r', color: C.muted, lh: 1.3 }));
   });
 
-  const by = y + h + 0.3;
+  const by = y + h + 0.28;
   els.push(rect(M, by, SW - 2 * M, 0.82, C.red, 0.12, 0.1, { color: C.red, alpha: 0.42, w: 1 }));
   els.push(rect(M, by, 0.055, 0.82, C.red, 0.95, 0.03));
-  els.push(txt({ x: M + 0.4, y: by + 0.24, w: SW - 2 * M - 0.8, text: 'Trong cứu hộ, một câu trả lời sai nghe rất thuyết phục còn nguy hiểm hơn là không có câu trả lời nào.', size: 15, weight: 'eb', color: C.white }));
+  els.push(txt({ x: M + 0.4, y: by + 0.24, w: SW - 2 * M - 0.8, text: 'Một câu trả lời sai nghe rất thuyết phục còn nguy hiểm hơn là không có câu trả lời nào.', size: 15, weight: 'eb', color: C.white }));
 
-  slides.push({ els, notes: 'Điều nhóm em quan tâm nhất không phải trợ lý trả lời nhanh, mà là trợ lý không được phép đưa ra con số không có trong dữ liệu. Không khớp thì màn hình hiện: chưa thể tạo câu trả lời an toàn từ dữ liệu hiện có.' });
+  slides.push({ els, notes: 'Sau khi mô hình viết xong câu trả lời, hệ thống đối chiếu từng con số với ảnh chụp dữ liệu kho tại thời điểm hỏi. Không khớp thì chặn lại và hiện thông báo chưa thể tạo câu trả lời an toàn từ dữ liệu hiện có.' });
 }
 
-// ============ K7. DỰ BÁO ============
+// ============ K7. THƯ QUAN TÂM ============
 {
-  const { els, bodyTop } = chrome('DỰ BÁO NHU CẦU', 'Biết trước thay vì biết sau');
-  const y = bodyTop, lw = 5.6, rx = M + lw + 0.38, rw = SW - M - rx, h = 3.35;
-
-  els.push(...card(M, y, lw, h, C.sky));
-  els.push(txt({ x: M + 0.34, y: y + 0.3, w: lw - 0.68, text: 'BẢN TIN ĐẦU NGÀY · 12 THÁNG 9', size: 10.5, weight: 'eb', color: C.sky, spacing: 1.7 }));
-  [['Mưa dự báo 72 giờ', '180 mm', C.sky], ['Nhu cầu nước uống', 'gấp đôi', C.amber],
-   ['Kho sẽ thiếu', '~400 chai', C.red], ['Lượng hiện có đủ dùng', '~9 ngày', C.green]].forEach(([lb, val, col], i) => {
-    const ry = y + 0.76 + i * 0.62;
-    els.push(rect(M + 0.34, ry, lw - 0.68, 0.54, C.white, 0.06, 0.09, { color: col, alpha: 0.28, w: 1 }));
-    els.push(txt({ x: M + 0.52, y: ry + 0.15, w: lw - 2.4, text: lb, size: 12.5, weight: 'r', color: C.text }));
-    els.push(txt({ x: M + lw - 2.0, y: ry + 0.12, w: 1.66, text: val, size: 14, weight: 'eb', color: col, align: 'right' }));
-  });
-
-  const rh = 1.5;
-  [['Ghép hai nguồn dữ liệu', 'Lịch sử giao dịch của kho ghép với lượng mưa dự báo 72 giờ theo đúng toạ độ từng kho.', C.green],
-   ['Dự báo thứ sắp cạn, thứ sắp hết hạn', 'Mọi giao dịch đều được ghi lại nên hệ thống tính được tốc độ tiêu hao của từng loại vật tư.', C.amber]].forEach(([hd, bd, col], i) => {
-    const yy = y + i * (rh + 0.35);
-    els.push(...card(rx, yy, rw, rh, col));
-    els.push(txt({ x: rx + 0.32, y: yy + 0.24, w: rw - 0.64, text: hd, size: 14.5, weight: 'b', color: C.white, lh: 1.25 }));
-    els.push(txt({ x: rx + 0.32, y: yy + 0.72, w: rw - 0.64, text: bd, size: 12, weight: 'r', color: C.muted, lh: 1.4 }));
-  });
-
-  const by = y + h + 0.3;
-  els.push(rect(M, by, SW - 2 * M, 0.8, C.green, 0.12, 0.1, { color: C.green, alpha: 0.4, w: 1 }));
-  els.push(txt({ x: M + 0.4, y: by + 0.23, w: SW - 2 * M - 0.8, text: 'Xã nhập hàng trước khi mưa tới — chứ không phải sau khi đã thiếu.', size: 15, weight: 'eb', color: C.white }));
-
-  slides.push({ els, notes: 'Sáng ngày mười hai tháng Chín, bản tin đầu ngày báo mưa một trăm tám mươi mi-li-mét trong ba ngày tới, nhu cầu nước uống dự kiến gấp đôi, kho sẽ thiếu khoảng bốn trăm chai.' });
-}
-
-// ============ K8. THƯ QUAN TÂM ============
-{
-  const { els, bodyTop } = chrome('HỘI CHỮ THẬP ĐỎ XÃ ĐỒNG XUÂN', 'Thư quan tâm: sản phẩm này có một nơi để về');
-  const y = bodyTop, lw = 4.5, rx = M + lw + 0.4, rw = SW - M - rx, h = 3.5;
+  const { els, bodyTop } = chrome('HỘI CHỮ THẬP ĐỎ XÃ ĐỒNG XUÂN', 'Sản phẩm này có một nơi để về');
+  const y = bodyTop, lw = 5.5, rx = M + lw + 0.4, rw = SW - M - rx, h = 4.05;
 
   els.push(rect(M, y, lw, h, C.white, 0.05, 0.12, { color: C.greenSoft, alpha: 0.4, w: 1.4 }));
   els.push(txt({ x: M + 0.4, y: y + h / 2 - 0.42, w: lw - 0.8, text: 'ẢNH CHỤP THƯ QUAN TÂM', size: 12, weight: 'eb', color: C.greenSoft, spacing: 1.8, align: 'center' }));
   els.push(txt({ x: M + 0.4, y: y + h / 2 + 0.02, w: lw - 0.8, text: 'Chèn ảnh lá thư vào khung này trong PowerPoint', size: 11.5, weight: 'r', color: C.dim, align: 'center', lh: 1.4 }));
 
   const items = [
-    ['01', 'Xác nhận đúng thực trạng', 'Quản lý kho vật tư cứu trợ tại xã vẫn làm thủ công bằng sổ sách và bảng tính; bão lũ 2025 phát sinh vật tư hết hạn, hư hỏng, số liệu không khớp giữa các thôn.'],
-    ['02', 'Xác nhận nhu cầu thật', 'Xã có nhu cầu thật với một hệ thống quản lý kho và điều phối vật tư như Ứng Phó Nhanh.'],
-    ['03', 'Đồng ý tạo điều kiện', 'Cho nhóm khảo sát quy trình thật và triển khai thử nghiệm tại xã ngay sau cuộc thi.'],
+    ['01', 'Xác nhận thực trạng', 'Kho còn quản lý bằng sổ và Excel; bão lũ 2025 vật tư hết hạn, hư hỏng, số liệu lệch giữa các thôn.'],
+    ['02', 'Xác nhận nhu cầu thật', 'Xã cần một hệ thống quản lý kho và điều phối vật tư như Ứng Phó Nhanh.'],
+    ['03', 'Đồng ý cho khảo sát và thử nghiệm', 'Tạo điều kiện cho nhóm khảo sát quy trình thật và triển khai thử nghiệm tại xã sau cuộc thi.'],
   ];
   const ih = (h - 2 * 0.2) / 3;
   items.forEach(([num, hd, bd], i) => {
@@ -612,11 +578,7 @@ timelineSlide([6], 'BƯỚC 6 / 6  ·  KHÉP VÒNG', 'Vật tư hoàn trả xong
     els.push(txt({ x: rx + 0.28, y: yy + 0.74, w: rw - 0.56, text: bd, size: 11.5, weight: 'r', color: C.text, lh: 1.35 }));
   });
 
-  const by = y + h + 0.3;
-  els.push(rect(M, by, SW - 2 * M, 0.8, C.green, 0.12, 0.1, { color: C.green, alpha: 0.4, w: 1 }));
-  els.push(txt({ x: M + 0.4, y: by + 0.23, w: SW - 2 * M - 0.8, text: 'Dự án bắt đầu từ quê nhà của chúng em — xã Đồng Xuân, và nay có một nơi để quay về.', size: 15, weight: 'eb', color: C.white }));
-
-  slides.push({ els, notes: 'Đây là đoạn nói chậm nhất. Dự án không bắt đầu từ bài toán trên giấy mà từ xã Đồng Xuân, nơi gia đình thành viên nhóm có người tham gia công tác Hội Chữ thập đỏ xã. Lá thư có nghĩa là sản phẩm này có một nơi để về.' });
+  slides.push({ els, notes: 'Dự án bắt đầu từ quê nhà của chúng em — xã Đồng Xuân. Đoạn này nói chậm nhất, nhìn thẳng xuống ban giám khảo. Nếu thư chưa ký kịp: đổi tiêu đề thành “Đưa sản phẩm về đúng nơi nó sinh ra”, bỏ khung ảnh và giữ ba gạch đầu dòng ở thì tương lai.' });
 }
 
 // ============ 9. GIÁ TRỊ ============
