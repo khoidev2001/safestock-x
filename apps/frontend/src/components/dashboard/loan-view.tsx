@@ -43,8 +43,7 @@ export function LoanView({ warehouseId }: { warehouseId: string }) {
   if (loans.length === 0) {
     return (
       <section className="rounded-md border bg-[var(--surface)] p-10 text-center">
-        <ColorIcon className="mx-auto" name="success" size={30} tone="green" />
-        <p className="mt-3 font-medium">Không có phiếu mượn đang mở</p>
+        <p className="font-medium">Không có phiếu mượn đang mở</p>
         <p className="mt-1 text-sm text-[var(--text-muted)]">
           Vật tư tái sử dụng khi xuất sẽ tạo phiếu mượn tại đây.
         </p>
