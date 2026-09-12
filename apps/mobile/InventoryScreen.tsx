@@ -431,7 +431,10 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
       <View style={local.center}>
         <Text style={local.errorTitle}>Không tải được dữ liệu kho</Text>
         <Text style={local.muted}>{error}</Text>
-        <Pressable style={local.primary} onPress={() => void load({ skipCache: true })}>
+        <Pressable
+          style={[local.primary, local.stackedAction]}
+          onPress={() => void load({ skipCache: true })}
+        >
           <Text style={local.primaryText}>Thử lại</Text>
         </Pressable>
       </View>
@@ -1464,10 +1467,13 @@ function QrScanner({
         ) : !permission.granted ? (
           <View style={local.center}>
             <Text style={local.errorTitle}>Cần quyền camera để quét QR</Text>
-            <Pressable onPress={() => void requestPermission()} style={local.primary}>
+            <Pressable
+              onPress={() => void requestPermission()}
+              style={[local.primary, local.stackedAction]}
+            >
               <Text style={local.primaryText}>Cho phép camera</Text>
             </Pressable>
-            <Pressable onPress={onClose} style={local.secondary}>
+            <Pressable onPress={onClose} style={[local.secondary, local.stackedAction]}>
               <Text style={local.secondaryText}>Đóng</Text>
             </Pressable>
           </View>
@@ -1483,7 +1489,10 @@ function QrScanner({
               <Text style={local.scannerTitle}>Đưa QR vật tư vào khung</Text>
               <View style={local.scanFrame} />
               {scanned ? (
-                <Pressable onPress={() => setScanned(false)} style={local.primary}>
+                <Pressable
+                  onPress={() => setScanned(false)}
+                  style={[local.primary, local.stackedAction]}
+                >
                   <Text style={local.primaryText}>Quét lại</Text>
                 </Pressable>
               ) : null}
@@ -1891,6 +1900,19 @@ const local = StyleSheet.create({
   overrideTitle: { color: c.text, fontSize: 12, fontWeight: "800" },
   overrideNote: { color: c.muted, fontSize: 10, lineHeight: 14, marginTop: 2 },
   modalButtons: { flexDirection: "row", gap: 10, marginTop: 20 },
+  /**
+   * Dùng kèm `primary`/`secondary` khi nút đứng trong một CỘT thay vì hàng ngang.
+   *
+   * `primary` và `secondary` sinh ra cho `modalButtons` — một hàng ngang, `flex: 1`
+   * ở đó nghĩa là "chia đôi bề ngang". Đặt nguyên chúng vào một khối cột cao bằng
+   * màn hình (`center`, `scannerOverlay`) thì `flex: 1` lại chia chiều DỌC: nút
+   * "Cho phép camera" phình cao gần nửa màn hình, chữ trôi ra giữa khối cam.
+   * Trông đúng như giao diện hỏng, dù bấm vẫn chạy.
+   *
+   * `flex: 0` trả nút về đúng chiều cao nội dung; `alignSelf: "stretch"` giữ nó
+   * rộng hết dòng để vẫn dễ bấm; `maxWidth` chặn nút dài quá tay trên máy bảng.
+   */
+  stackedAction: { flex: 0, alignSelf: "stretch", maxWidth: 360, paddingVertical: 12 },
   primary: {
     flex: 1,
     alignItems: "center",

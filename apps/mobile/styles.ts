@@ -221,12 +221,8 @@ export const styles = StyleSheet.create({
     padding: 18,
     marginBottom: 16,
   },
-  /** Số hiệu nhiệm vụ ở đầu thẻ — cùng vai trò "danh tính" như trên thẻ danh sách. */
-  heroMissionNo: { color: c.text, fontSize: 15, fontWeight: "900", marginBottom: 6 },
-  heroTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   /** Việc phải làm theo vai — cùng câu chữ với `stageText` của thẻ danh sách. */
   heroStage: { color: c.text, fontSize: 20, fontWeight: "900", marginTop: 6 },
-  heroDanger: { fontSize: 15, fontWeight: "900", letterSpacing: 1 },
   heroDisaster: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 12 },
   heroIcon: { fontSize: 34 },
   heroDisasterName: { color: c.text, fontSize: 24, fontWeight: "800" },
