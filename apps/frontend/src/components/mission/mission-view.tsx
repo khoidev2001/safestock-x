@@ -1797,6 +1797,20 @@ function RoleActions({
    * dọn là phát hành nó ra rồi mới huỷ — tức là bắt kho nhận một lệnh biết thừa
    * là sai. State machine ở backend vốn đã cho DRAFT → CANCELLED.
    */
+  /**
+   * Vật tư đã đủ để lập kế hoạch chưa.
+   *
+   * Kế hoạch cứu hộ được dựng TRÊN phần phân bổ kho: đi kho nào, lấy bao nhiêu,
+   * mất bao lâu. Lập nó trong lúc khối "Khả năng đáp ứng nhiệm vụ" còn ghi "Chưa
+   * đáp ứng đủ" là dựng một bản kế hoạch trên số hàng không có thật — rồi phần
+   * thiếu được bù xong thì chính bản kế hoạch đó lại sai theo hướng ngược lại.
+   * Đường đi cho chỗ thiếu nằm ngay trên: phân bổ lại, hoặc hỏi mượn xã lân cận.
+   *
+   * Chưa có bản đánh giá nào (nhiệm vụ chưa tính khả năng đáp ứng) thì KHÔNG chặn:
+   * lúc đó không có căn cứ nào để nói là thiếu, chặn chỉ là khoá cứng nút.
+   */
+  const supplyIsReady = (mission.readinessAssessment?.status ?? "READY") === "READY";
+
   const adminCanCancelActive =
     isAdmin &&
     preparedWarehouseCount === 0 &&
@@ -1835,11 +1849,13 @@ function RoleActions({
                 className={actionBtn}
                 style={primaryStyle}
                 onClick={onGenerateActionPlan}
-                disabled={busy || !hasIncidentPoint}
+                disabled={busy || !hasIncidentPoint || !supplyIsReady}
                 title={
-                  hasIncidentPoint
-                    ? undefined
-                    : "Cần xác nhận địa điểm ứng phó trước khi lập kế hoạch"
+                  !hasIncidentPoint
+                    ? "Cần xác nhận địa điểm ứng phó trước khi lập kế hoạch"
+                    : !supplyIsReady
+                      ? "Khả năng đáp ứng đang là “Chưa đáp ứng đủ”. Bù cho đủ phần vật tư còn thiếu — phân bổ lại, hỏi mượn xã lân cận — rồi mới lập kế hoạch."
+                      : undefined
                 }
               >
                 <ColorIcon name="mission" size={18} tone="orange" /> Lập kế hoạch cứu hộ
@@ -1874,6 +1890,20 @@ function RoleActions({
             Cần xác nhận địa điểm ứng phó trước khi lập kế hoạch hoặc gửi nhiệm vụ.
           </p>
         )}
+
+        {/* Nút bị khoá mà không nói vì sao thì người dùng bấm mấy lần rồi báo là
+            trang hỏng. Câu này chỉ thẳng vào khối đang chặn và việc phải làm ở đó. */}
+        {isAdmin &&
+          mission.status === "DRAFT" &&
+          !isReportDraft &&
+          !mission.actionPlan &&
+          hasIncidentPoint &&
+          !supplyIsReady && (
+            <p className="w-full text-sm text-[var(--color-attention)]">
+              Khả năng đáp ứng đang là “Chưa đáp ứng đủ”. Bù cho đủ phần vật tư còn thiếu ở khối
+              điều phối kho hoặc mượn vật tư liên xã, rồi mới lập được kế hoạch cứu hộ.
+            </p>
+          )}
 
         {warehouseCanPrepare && (
           <button className={actionBtn} style={primaryStyle} onClick={onPrepare} disabled={busy}>
