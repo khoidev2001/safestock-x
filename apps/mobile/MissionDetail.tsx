@@ -54,6 +54,7 @@ import {
   type BulkActionKind,
 } from "@safestock/shared-types";
 import { supplyOf, supplyProgress } from "./supplies";
+import { SupplyThumb } from "./SupplyThumb";
 import { confirmAction, notify } from "./dialog";
 import { readOfflineCache, writeOfflineCache } from "./offline-cache";
 import { FIELD_FORCE_ROLE_LABEL } from "./role-labels";
@@ -1180,37 +1181,60 @@ function WarehouseMaterialRequestPanel({
               marginBottom: 10,
             }}
           >
-            <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: c.text, fontSize: 15, fontWeight: "800" }}>
-                  {request.itemName}
-                </Text>
-                <Text style={{ color: c.muted, fontSize: 12, marginTop: 3 }}>{request.sku}</Text>
-              </View>
-              <View style={{ alignItems: "flex-end" }}>
-                <Text style={{ color: c.text, fontSize: 15, fontWeight: "800" }}>
-                  {request.status === "PICKED_UP"
-                    ? (request.pickedUpQuantity ?? 0)
-                    : request.status === "PREPARED"
-                      ? request.preparedQuantity
-                      : request.requestedQuantity}{" "}
-                  {request.unit}
-                </Text>
-                <Text
-                  style={{
-                    color:
-                      request.status === "PICKED_UP"
-                        ? c.green
-                        : request.status === "PREPARED"
-                          ? c.amber
-                          : c.muted,
-                    fontSize: 11,
-                    fontWeight: "800",
-                    marginTop: 3,
-                  }}
-                >
-                  {warehouseRequestStatus(request.status)}
-                </Text>
+            {/* Ảnh món hàng, đúng cỡ ô ảnh của thẻ "Vật tư đã xuất".
+                Người ở kho cầm máy đi giữa các kệ: nhìn đúng cái can nước hay
+                đúng cuộn dây nhanh hơn đọc tên rồi đối chiếu mã. Thiếu ảnh ở ba
+                bước đầu (tiếp nhận · xuất · ký nhận) là thiếu đúng lúc người ta
+                đang phải tìm hàng, còn ảnh chỉ hiện ra khi việc đã xong. */}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <SupplyThumb
+                sku={request.sku}
+                meta={supplyOf(request.sku, request.itemName)}
+                itemName={request.itemName}
+                size={84}
+                iconSize={44}
+                borderRadius={14}
+              />
+              <View
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  gap: 12,
+                }}
+              >
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ color: c.text, fontSize: 15, fontWeight: "800" }}>
+                    {request.itemName}
+                  </Text>
+                  <Text style={{ color: c.muted, fontSize: 12, marginTop: 3 }}>{request.sku}</Text>
+                </View>
+                <View style={{ alignItems: "flex-end", flexShrink: 0 }}>
+                  <Text style={{ color: c.text, fontSize: 15, fontWeight: "800" }}>
+                    {request.status === "PICKED_UP"
+                      ? (request.pickedUpQuantity ?? 0)
+                      : request.status === "PREPARED"
+                        ? request.preparedQuantity
+                        : request.requestedQuantity}{" "}
+                    {request.unit}
+                  </Text>
+                  <Text
+                    style={{
+                      color:
+                        request.status === "PICKED_UP"
+                          ? c.green
+                          : request.status === "PREPARED"
+                            ? c.amber
+                            : c.muted,
+                      fontSize: 11,
+                      fontWeight: "800",
+                      marginTop: 3,
+                    }}
+                  >
+                    {warehouseRequestStatus(request.status)}
+                  </Text>
+                </View>
               </View>
             </View>
 
@@ -1977,18 +2001,14 @@ function PickupStopCard({ stop, order }: { stop: PickupStop; order: number }) {
               key={item.sku}
               style={{ flexDirection: "row", alignItems: "center", gap: 10, minWidth: 0 }}
             >
-              <View
-                style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 8,
-                  backgroundColor: meta.tint,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Text style={{ fontSize: 15 }}>{meta.icon}</Text>
-              </View>
+              <SupplyThumb
+                sku={item.sku}
+                meta={meta}
+                itemName={item.itemName}
+                size={30}
+                iconSize={15}
+                borderRadius={8}
+              />
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={{ color: c.text, fontSize: 13, fontWeight: "700" }} numberOfLines={2}>
                   {item.itemName}
@@ -2147,9 +2167,14 @@ function ExportedSupplyCard({ request }: { request: WarehouseMaterialRequest }) 
 
   return (
     <View style={[styles.supplyCard, { borderLeftColor: prog.color }]}>
-      <View style={[styles.supplyIconBox, { backgroundColor: meta.tint }]}>
-        <Text style={styles.supplyIcon}>{meta.icon}</Text>
-      </View>
+      <SupplyThumb
+        sku={request.sku}
+        meta={meta}
+        itemName={request.itemName}
+        size={84}
+        iconSize={44}
+        borderRadius={14}
+      />
 
       <View style={styles.supplyMain}>
         <View style={styles.supplyTopRow}>
@@ -2522,9 +2547,14 @@ function SupplyCard({ req }: { req: MissionDetail["requirements"][number] }) {
 
   return (
     <View style={[styles.supplyCard, { borderLeftColor: prog.color }]}>
-      <View style={[styles.supplyIconBox, { backgroundColor: meta.tint }]}>
-        <Text style={styles.supplyIcon}>{meta.icon}</Text>
-      </View>
+      <SupplyThumb
+        sku={req.sku}
+        meta={meta}
+        itemName={req.itemName}
+        size={84}
+        iconSize={44}
+        borderRadius={14}
+      />
 
       <View style={styles.supplyMain}>
         <View style={styles.supplyTopRow}>
