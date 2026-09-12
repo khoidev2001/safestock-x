@@ -6,6 +6,7 @@ import { ColorIcon } from "@/components/shared/color-icon";
 import {
   advanceInterCommuneLoan,
   getAvailableItemsForLoan,
+  getBorrowableItems,
   getInterCommuneLoans,
   getPeerCommunes,
   recordManualInterCommuneLoan,
@@ -66,10 +67,21 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
     enabled: manualFormOpen || borrowFormOpen,
     staleTime: 5 * 60_000,
   });
+  // Vật tư ĐANG CÓ trong kho mình — chỉ dùng cho form ghi tay, nơi mình là bên cho
+  // mượn nên phải chọn được lô của mình.
   const availableItems = useQuery({
     queryKey: ["available-items-for-loan"],
     queryFn: getAvailableItemsForLoan,
-    enabled: manualFormOpen || borrowFormOpen,
+    enabled: manualFormOpen,
+    staleTime: 60_000,
+  });
+
+  // Danh mục ĐẦY ĐỦ — dùng cho form đi mượn. Thứ cần mượn chính là thứ mình không
+  // có, nên lọc theo tồn kho của mình là giấu mất đúng những mặt hàng cần nhất.
+  const borrowableItems = useQuery({
+    queryKey: ["borrowable-items"],
+    queryFn: getBorrowableItems,
+    enabled: borrowFormOpen,
     staleTime: 60_000,
   });
 
@@ -135,7 +147,7 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
       if (!Number.isInteger(quantity) || quantity < 1) {
         throw new Error("Số lượng phải là số nguyên dương.");
       }
-      const item = (availableItems.data ?? []).find((m) => m.itemSku === borrowForm.itemName);
+      const item = (borrowableItems.data ?? []).find((m) => m.itemSku === borrowForm.itemName);
       if (!item) throw new Error("Không nhận ra vật tư đã chọn.");
       return requestInterCommuneLoan({
         peerCommuneName: borrowForm.peerCommuneName.trim(),
@@ -265,7 +277,7 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
                 value={borrowForm.itemName}
               >
                 <option value="">— chọn vật tư —</option>
-                {(availableItems.data ?? []).map((item) => (
+                {(borrowableItems.data ?? []).map((item) => (
                   <option key={item.itemSku} value={item.itemSku}>
                     {item.itemName}
                   </option>

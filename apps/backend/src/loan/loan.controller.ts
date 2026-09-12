@@ -65,6 +65,17 @@ export class LoanController {
     return this.interCommune.availableItemsForManualEntry(req.user.userId, req.user.warehouseId);
   }
 
+  /**
+   * Danh mục vật tư để ĐI MƯỢN — toàn bộ, không lọc theo tồn kho của mình.
+   *
+   * Tách khỏi `available-items` vì hai form hỏi hai câu ngược nhau: ghi tay hỏi
+   * "mình có gì để cho mượn", đi mượn hỏi "có thể xin những gì".
+   */
+  @Get("inter-commune/borrowable-items")
+  listBorrowableItems() {
+    return this.interCommune.catalogueForBorrowRequest();
+  }
+
   @Post("inter-commune/manual")
   recordManualInterCommune(
     @Request() req: AuthenticatedRequest,

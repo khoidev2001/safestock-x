@@ -600,6 +600,22 @@ export interface AvailableItem {
 export const getAvailableItemsForLoan = () =>
   apiFetch<AvailableItem[]>("/api/loans/inter-commune/available-items");
 
+/** Một dòng trong danh mục để đi mượn: không kèm tồn kho, vì mượn thứ mình không có. */
+export interface BorrowableItem {
+  itemSku: string;
+  itemName: string;
+  unit: string;
+}
+
+/**
+ * Danh mục vật tư để ĐI MƯỢN — toàn bộ, không lọc theo tồn kho của mình.
+ *
+ * Đừng dùng `getAvailableItemsForLoan` cho form đi mượn: hàm đó chỉ trả thứ mình
+ * ĐANG CÓ, nên nó giấu mất đúng những mặt hàng cần mượn nhất.
+ */
+export const getBorrowableItems = () =>
+  apiFetch<BorrowableItem[]>("/api/loans/inter-commune/borrowable-items");
+
 /**
  * Đi tiếp một bước của khoản mượn liên xã.
  *
