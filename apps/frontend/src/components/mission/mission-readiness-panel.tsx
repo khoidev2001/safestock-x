@@ -1,3 +1,5 @@
+"use client";
+
 import {
   LITERS_PER_WATER_BOTTLE,
   litersFromBottles,
@@ -5,7 +7,18 @@ import {
 } from "@safestock/shared-types";
 import { CollapsiblePanel } from "@/components/shared/collapsible-panel";
 import { ColorIcon } from "@/components/shared/color-icon";
+import { Pagination, usePagination } from "@/components/shared/pagination";
 import type { MissionReadinessAssessment, MissionReadinessStatus } from "@/lib/mission-api";
+
+/**
+ * Số vật tư mỗi trang.
+ *
+ * Khối này chỉ để soi lại đủ hay chưa, mà danh sách đầy đủ hơn hai chục dòng thì
+ * nó chiếm trọn màn hình và đẩy phần hành động xuống dưới. Giữ nguyên thứ tự và
+ * nguyên số dòng của bản đánh giá — chỉ cắt trang, không sắp lại cũng không lọc
+ * bớt dòng "Đủ".
+ */
+const READINESS_ITEMS_PER_PAGE = 10;
 
 /**
  * Vì sao nhiệm vụ này cần tới món đó — tra theo SKU.
@@ -84,6 +97,10 @@ export function MissionReadinessPanel({
   const meta = STATUS_META[assessment.status];
   const shortCount = assessment.items.filter((item) => item.shortage > 0).length;
   const readyCount = assessment.items.length - shortCount;
+  const { page, pageItems, pageSize, setPage, totalPages } = usePagination(
+    assessment.items,
+    READINESS_ITEMS_PER_PAGE,
+  );
 
   return (
     <CollapsiblePanel
@@ -111,7 +128,7 @@ export function MissionReadinessPanel({
       badge={<span className="tabular text-sm font-semibold">{assessment.fulfillment}%</span>}
     >
       <div className="divide-y rounded-md border">
-        {assessment.items.map((item) => (
+        {pageItems.map((item) => (
           <div className="grid grid-cols-[1fr_auto] gap-3 px-4 py-3" key={item.sku}>
             <div className="min-w-0">
               <p className="flex items-center gap-1.5 text-sm font-medium">
@@ -144,6 +161,18 @@ export function MissionReadinessPanel({
           </div>
         ))}
       </div>
+
+      {/* Khối đã có đệm `px-5 py-4`, nên chân trang chỉ cần khoảng cách phía trên
+          — để mặc định `px-5` nữa là nó thụt vào sâu hơn danh sách bên trên. */}
+      <Pagination
+        label="loại vật tư"
+        onPageChange={setPage}
+        padding="pt-3"
+        page={page}
+        pageSize={pageSize}
+        totalItems={assessment.items.length}
+        totalPages={totalPages}
+      />
 
       {/* Một câu chỉ đường, KHÔNG phải một nút. Khối này cố ý không có hành động
           nào; nói ra chỗ có hành động thì người đọc không phải đi tìm. */}
