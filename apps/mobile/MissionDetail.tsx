@@ -1412,10 +1412,9 @@ function MissionHero({
           Thẻ ngoài danh sách thì vẫn giữ số hiệu, vì ở đó không có tiêu đề nào
           nói hộ.
 
-          Mức nguy thì KHÔNG bỏ hẳn, chỉ thôi làm dòng đầu: nó xuống nằm cạnh
-          tên thiên tai dưới dạng nhãn nhỏ. Bỏ hẳn thì mức nguy chỉ còn thể hiện
-          bằng màu nền và viền thẻ — ai phân biệt màu kém sẽ không đọc được gì,
-          và ngoài trời nắng thì màu nhạt cũng khó thấy. */}
+          Mức nguy không còn viết thành chữ ở đây nữa: dòng đầu đã nói việc
+          phải làm, và nhãn "CHƯA NGUY CẤP" đứng cạnh tên thiên tai chỉ làm
+          loãng câu ấy. Mức nguy giữ lại bằng màu nền và viền thẻ. */}
 
       {/* VIỆC PHẢI LÀM, viết theo vai người đang đọc — cùng câu chữ và cùng màu
           nhấn với thẻ ngoài danh sách. */}
@@ -1423,14 +1422,9 @@ function MissionHero({
 
       <View style={styles.heroDisaster}>
         <Text style={styles.heroIcon}>{disaster.icon}</Text>
-        {/* `flexShrink` để tên thiên tai dài nhường chỗ cho nhãn mức nguy, thay
-            vì đẩy nhãn tràn ra ngoài mép thẻ. */}
         <Text style={[styles.heroDisasterName, { flexShrink: 1 }]} numberOfLines={1}>
           {disaster.label}
         </Text>
-        <View style={[styles.heroDangerTag, { borderColor: danger.color }]}>
-          <Text style={[styles.heroDangerTagText, { color: danger.color }]}>{danger.label}</Text>
-        </View>
       </View>
       {place ? <Text style={styles.heroLocation}>📍 {place}</Text> : null}
 

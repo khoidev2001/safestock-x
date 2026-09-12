@@ -226,20 +226,6 @@ export const styles = StyleSheet.create({
   heroDisaster: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 12 },
   heroIcon: { fontSize: 34 },
   heroDisasterName: { color: c.text, fontSize: 24, fontWeight: "800" },
-  /**
-   * Nhãn mức nguy đứng cạnh tên thiên tai.
-   *
-   * Viền chứ không nền đặc: thẻ đã có nền màu theo mức nguy rồi, thêm một mảng
-   * đặc nữa là hai khối màu chồng lên nhau, mà nhãn này chỉ để ĐỌC ĐƯỢC mức nguy
-   * bằng chữ chứ không phải để tranh chú ý với dòng việc phải làm.
-   */
-  heroDangerTag: {
-    borderWidth: 1.5,
-    borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-  },
-  heroDangerTagText: { fontSize: 11, fontWeight: "900", letterSpacing: 0.5 },
   heroLocation: { color: c.muted, fontSize: 14, marginTop: 6 },
 
   heroPeopleRow: { flexDirection: "row", alignItems: "flex-end", gap: 10, marginTop: 16 },
