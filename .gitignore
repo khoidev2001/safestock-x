@@ -63,3 +63,15 @@ prisma/*.db
 # Báo cáo xuất cục bộ; dữ liệu có thể chứa thông tin vận hành và được sinh lại khi cần
 /apps/backend/baocao-*.xlsx
 anh-thuyet-minh/
+
+# ============================================================
+# KHOÁ FIREBASE — KHÔNG BAO GIỜ COMMIT
+# ============================================================
+# google-services.json gắn app Android với dự án Firebase; service account key là
+# khoá ký, ai cầm được nó thì gửi thông báo giả danh hệ thống tới mọi máy đã cài.
+apps/mobile/google-services.json
+**/fcm-service-account*.json
+**/*service-account*.json
+
+# Bản sao Firebase mà Gradle đọc — cùng lý do với file gốc ở apps/mobile.
+apps/mobile/android/app/google-services.json
