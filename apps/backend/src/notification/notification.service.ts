@@ -48,11 +48,28 @@ export interface NotificationTarget {
 /** Gateway is injected at runtime; the service does not depend on Socket.IO. */
 export type NotificationPusher = (target: NotificationTarget, notification: unknown) => void;
 
+/**
+ * Đẩy xuống điện thoại — gắn lúc chạy giống hệt cách gateway gắn `push`.
+ *
+ * Tách hẳn khỏi đường socket vì hai kênh trả lời hai câu hỏi khác nhau: socket lo
+ * "app đang mở thì thấy ngay", còn kênh này lo "máy đang trong túi thì vẫn reo".
+ * Một kênh chết không được kéo kênh kia chết theo.
+ */
+export type DevicePusher = (
+  target: NotificationTarget,
+  notification: { title: string; body: string; kind?: string; missionId?: string | null; missionNo?: number | null },
+) => void;
+
 interface PersistedNotification {
   id: string;
   recipientRole: UserRole;
   organizationId: string | null;
   warehouseId?: string | null;
+  title?: string;
+  body?: string;
+  kind?: NotificationKind;
+  missionId?: string | null;
+  missionNo?: number | null;
 }
 
 interface NotificationPersistence {
@@ -97,6 +114,8 @@ export class NotificationService {
 
   /** Gateway assigns this for realtime delivery; tests can leave it as a no-op. */
   push: NotificationPusher = () => {};
+  /** Mặc định không làm gì: máy chủ chưa cấu hình FCM thì hệ thống vẫn chạy trọn vẹn. */
+  pushToDevices: DevicePusher = () => {};
 
   constructor(private readonly prisma: PrismaService) {
     // Prisma Client is regenerated with the additive organizationId column at
@@ -154,6 +173,27 @@ export class NotificationService {
       );
     } catch {
       this.log.warn("Không đẩy được thông báo realtime; record đã được lưu để client đọc lại.");
+    }
+
+    // Kênh thứ hai, chạy độc lập: máy đang đóng app vẫn phải reo. Lỗi ở đây cũng
+    // chỉ ghi nhật ký — thông báo đã nằm trong cơ sở dữ liệu rồi.
+    try {
+      this.pushToDevices(
+        {
+          organizationId: notification.organizationId,
+          role: notification.recipientRole,
+          warehouseId: notification.warehouseId ?? null,
+        },
+        {
+          title: notification.title ?? "Ứng phó nhanh",
+          body: notification.body ?? "Có thông báo mới",
+          kind: notification.kind,
+          missionId: notification.missionId ?? null,
+          missionNo: notification.missionNo ?? null,
+        },
+      );
+    } catch {
+      this.log.warn("Không đẩy được thông báo xuống điện thoại; app vẫn đọc lại được.");
     }
   }
 

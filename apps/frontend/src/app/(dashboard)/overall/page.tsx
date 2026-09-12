@@ -140,6 +140,7 @@ function OverallContent({ warehouseId }: { warehouseId: string }) {
         <SimulatorPanel
           devices={devicesQuery.data}
           isLoading={devicesQuery.isLoading || timelineQuery.isLoading}
+          showTimeline={false}
           timeline={timelineQuery.data}
         />
       </div>

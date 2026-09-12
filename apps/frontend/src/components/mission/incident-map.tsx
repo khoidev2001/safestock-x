@@ -18,6 +18,7 @@ import type { AdminWarehouse } from "@/lib/warehouse-api";
 import type { DispatchRoute } from "@/lib/mission-api";
 import type { LatLng } from "@/lib/geo";
 import { CommuneBoundaries, useCommuneGeo } from "@/components/dashboard/commune-boundaries";
+import { CommuneOverviewLayer } from "@/components/dashboard/commune-overview-layer";
 import {
   BLANK_TILE,
   CLUSTER_BOUNDS,
@@ -90,6 +91,27 @@ function ResizeOnContainerChange() {
     observer.observe(container);
     return () => observer.disconnect();
   }, [map]);
+  return null;
+}
+
+/**
+ * Từ mức thu nhỏ này trở xuống, bản đồ chuyển sang xem theo XÃ.
+ *
+ * Ở z12 trở ra, mười bảy kho thôn của một xã nằm gọn trong khoảng hai trăm pixel:
+ * các ngôi nhà chồng lên nhau và nhãn tên thôn dính thành một vệt. Con số 13 lấy
+ * từ chính chỗ đó — mức đầu tiên mà các kho tách ra đủ để đọc từng cái.
+ */
+const COMMUNE_VIEW_MAX_ZOOM = 12;
+
+/** Báo mức thu phóng hiện tại ra ngoài để chọn lớp hiển thị cho đúng tầm nhìn. */
+function ZoomWatcher({ onZoom }: { onZoom: (zoom: number) => void }) {
+  const map = useMap();
+  useEffect(() => {
+    onZoom(map.getZoom());
+  }, [map, onZoom]);
+  useMapEvents({
+    zoomend: (event) => onZoom(event.target.getZoom()),
+  });
   return null;
 }
 
@@ -169,6 +191,16 @@ export interface IncidentMapProps {
    * con số họ vừa tự gõ vào.
    */
   pointLabel?: string;
+  /**
+   * Dấu ghim đó ĐANG CHỈ CÁI GÌ — quyết định hình vẽ và có vòng khoanh hay không.
+   *
+   * "incident" là ghim SOS đỏ kèm vòng bán kính 150m. Hai giá trị còn lại dùng khi
+   * quản trị đang đặt vị trí cho một kho: hình phải là ngôi nhà xanh đúng loại kho
+   * đó, giống hệt thứ sẽ hiện ra sau khi lưu. Mượn ghim SOS cho việc này thì người
+   * ghim nhìn thấy một điểm cầu cứu ngay giữa xã, và vòng đỏ 150m quanh nó lại đọc
+   * thành vùng ảnh hưởng — kho thì làm gì có vùng ảnh hưởng.
+   */
+  pointVariant?: "incident" | "central" | "hamlet";
   /**
    * Lớp CSS của khung bản đồ khi KHÔNG toàn màn hình.
    *
@@ -259,6 +291,7 @@ export function IncidentMap({
   keepIncidentFocus = false,
   focusKey = "",
   pointLabel = "Điểm gặp nạn",
+  pointVariant = "incident",
   frameClassName = DEFAULT_FRAME_CLASS,
   className = "space-y-2",
 }: IncidentMapProps) {
@@ -271,9 +304,20 @@ export function IncidentMap({
   // lúc chưa lập phương án nó đã trông như kho đã được chọn đi tiếp tế.
   const idleCentralIcon = useMemo(() => villaIcon(MAP_IDLE_COLOR, 34), []);
   const idleHamletIcon = useMemo(() => houseIcon(MAP_IDLE_COLOR, 26), []);
-  // Điểm gặp nạn: ghim SOS — hình duy nhất trên bản đồ không phải ngôi nhà.
-  const incidentIcon = useMemo(() => sosPinIcon(38), []);
+  // Điểm gặp nạn: ghim SOS — hình duy nhất trên bản đồ không phải ngôi nhà. Còn khi
+  // đang đặt vị trí cho một kho thì xem trước phải là chính ngôi nhà xanh sẽ hiện
+  // ra sau khi lưu, để cái nhìn thấy lúc ghim khớp với cái nhìn thấy lúc xong.
+  const incidentIcon = useMemo(() => {
+    if (pointVariant === "central") return villaIcon(MAP_SUPPLYING_COLOR, 38);
+    if (pointVariant === "hamlet") return houseIcon(MAP_SUPPLYING_COLOR, 32);
+    return sosPinIcon(38);
+  }, [pointVariant]);
+  const isIncidentPoint = pointVariant === "incident";
   const communeGeo = useCommuneGeo();
+  // Khởi tạo bằng mức mở bản đồ (13) chứ không phải 0: đoán thấp hơn thực tế thì
+  // khung đầu tiên vẽ ra lớp xã rồi nháy sang lớp kho ngay sau đó.
+  const [zoom, setZoom] = useState(13);
+  const isCommuneView = zoom <= COMMUNE_VIEW_MAX_ZOOM;
   // Bản đồ trong cột form quá nhỏ để đọc đường sá quanh điểm nạn. Mở rộng ra hết
   // màn hình là cách xem cho rõ mà không phải rời trang và mất phần đang nhập dở.
   const [fullscreen, setFullscreen] = useState(false);
@@ -310,6 +354,22 @@ export function IncidentMap({
       (w) => w.lat != null && w.lng != null && !dispatched.has(w.id),
     );
   }, [baseWarehouses, warehouses]);
+
+  /**
+   * Kho nền thật sự vẽ ra, sau khi lọc theo tầm nhìn.
+   *
+   * Ở tầm nhìn theo xã thì giấu hết, kể cả kho tổng: để lại một ngôi nhà lẻ nằm
+   * giữa mảng màu của xã là trộn hai đơn vị hiển thị vào một khung hình, mắt phải
+   * đọc cùng lúc "vùng" và "điểm". Muốn thấy kho thì phóng to — đó là ranh giới rõ
+   * ràng giữa hai tầm nhìn.
+   *
+   * Kho ĐANG TIẾP TẾ cho phương án thì vẫn giữ: chúng đi kèm tuyến đường, và ẩn
+   * điểm đầu của một tuyến đang vẽ thì tuyến đó hoá ra bắt đầu từ hư không.
+   */
+  const visibleOtherWarehouses = useMemo(
+    () => (isCommuneView ? [] : otherWarehouses),
+    [isCommuneView, otherWarehouses],
+  );
 
   const boundsPoints = useMemo(() => {
     const pts: LatLng[] = warehouses.map((w) => ({ lat: w.lat, lng: w.lng }));
@@ -446,8 +506,16 @@ export function IncidentMap({
             <BoundsForZoom />
             <ResizeOnToggle token={fullscreen} />
             <ResizeOnContainerChange />
-            {/* Ranh giới xã: giống bản đồ kho, để biết điểm vừa ghim thuộc xã nào. */}
-            {communeGeo ? <CommuneBoundaries geo={communeGeo} /> : null}
+            <ZoomWatcher onZoom={setZoom} />
+            {/* Nhìn xa thì mỗi xã một mảng màu có tên; phóng vào thì trở lại đường
+                ranh nét đứt, nhường mặt bản đồ cho các kho. */}
+            {communeGeo ? (
+              isCommuneView ? (
+                <CommuneOverviewLayer geo={communeGeo} />
+              ) : (
+                <CommuneBoundaries geo={communeGeo} />
+              )
+            ) : null}
             <FitBounds
               points={boundsPoints}
               focusPoint={incidentPoint}
@@ -455,8 +523,10 @@ export function IncidentMap({
               focusKey={focusKey}
             />
             {onPickIncident ? <ClickToPin onPick={onPickIncident} /> : null}
-            {/* Kho chưa tham gia phương án — vẫn phải thấy để biết ghim gần kho nào. */}
-            {otherWarehouses.map((w) => (
+            {/* Kho chưa tham gia phương án — vẫn phải thấy để biết ghim gần kho nào.
+                Ở tầm nhìn theo xã chỉ giữ kho tổng: nó là điểm neo của cả xã, còn
+                kho thôn thì nhường chỗ cho nhãn tên xã. */}
+            {visibleOtherWarehouses.map((w) => (
               <Marker
                 key={`base-${w.id}`}
                 position={[w.lat as number, w.lng as number]}
@@ -525,7 +595,7 @@ export function IncidentMap({
                 />
               </Marker>
             ))}
-            {incidentPoint ? (
+            {incidentPoint && isIncidentPoint ? (
               /* interactive={false}: vòng khoanh là hình trang trí, không được nuốt
                cú bấm — nếu không thì bấm vào trong vòng để dời điểm nạn sẽ trượt. */
               <Circle
@@ -580,9 +650,32 @@ export function IncidentMap({
           bắt đầu ở cùng một mép trái thay vì so le nhau. */}
       <div className="space-y-1.5 text-xs text-[var(--text-muted)]">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <LegendGlyph svg={sosPinSvg(20)} label={pointLabel} />
-          <LegendGlyph svg={villaSvg(MAP_IDLE_COLOR, 20)} label="Kho tổng" />
-          <LegendGlyph svg={houseSvg(MAP_IDLE_COLOR, 18)} label="Kho thôn" />
+          <LegendGlyph
+            label={pointLabel}
+            svg={
+              isIncidentPoint
+                ? sosPinSvg(20)
+                : pointVariant === "central"
+                  ? villaSvg(MAP_SUPPLYING_COLOR, 20)
+                  : houseSvg(MAP_SUPPLYING_COLOR, 18)
+            }
+          />
+          {/* Ở tầm nhìn theo xã, bản đồ không vẽ kho nào — chú giải cho những thứ
+              không hiện ra chỉ khiến người đọc đi tìm. Nói thẳng cách lấy chúng về
+              thay vì để họ tưởng bản đồ bị lỗi. */}
+          {isCommuneView ? (
+            <span className="flex items-center gap-1.5">
+              <span aria-hidden className="inline-flex h-5 w-5 shrink-0 items-center justify-center">
+                <span className="inline-block h-3 w-3 rounded-sm bg-[#4f7cff] opacity-70" />
+              </span>
+              Đang xem theo xã — phóng to để hiện các kho
+            </span>
+          ) : (
+            <>
+              <LegendGlyph svg={villaSvg(MAP_IDLE_COLOR, 20)} label="Kho tổng" />
+              <LegendGlyph svg={houseSvg(MAP_IDLE_COLOR, 18)} label="Kho thôn" />
+            </>
+          )}
           {/* Chỉ nói tới màu xanh khi trên bản đồ THẬT SỰ có kho đang tiếp tế —
               chú giải cho một thứ không có mặt chỉ làm người đọc đi tìm. */}
           {warehouses.length > 0 ? (
@@ -594,6 +687,9 @@ export function IncidentMap({
         </div>
         {incidentPoint ? (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            {/* Dòng bán kính chỉ có nghĩa với điểm gặp nạn. Kho không có vùng ảnh
+                hưởng, nên với dấu ghim kho thì hàng này chỉ còn toạ độ. */}
+            {isIncidentPoint ? (
             <span className="flex items-center gap-1.5">
               <span
                 aria-hidden
@@ -612,6 +708,7 @@ export function IncidentMap({
                   "phạm vi ảnh hưởng đã đo", mà hệ thống không hề có số liệu đó. */}
               Bán kính {pointLabel.toLowerCase()} (mốc nhìn, {INCIDENT_ZONE_RADIUS_M}m)
             </span>
+            ) : null}
             <span className="flex items-center gap-1.5">
               {/* Vòng ngắm đỏ, đặt trong cùng ô 20px như mọi hình khác: không có nó
                   thì dòng toạ độ là dòng DUY NHẤT bắt đầu bằng chữ, nhìn như một câu

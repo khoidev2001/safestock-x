@@ -11,8 +11,10 @@ import {
   parseCoordinateInput,
 } from "@/lib/coordinate-input";
 import type { LatLng } from "@/lib/geo";
-import { listAllWarehouses } from "@/lib/warehouse-api";
+import { useAuth } from "@/lib/auth-store";
+import { listAllWarehouses, type AdminWarehouse } from "@/lib/warehouse-api";
 import { CLUSTER_BOUNDS, PROVINCE_BOUNDS } from "./map-tiles";
+import { WarehouseAdminPanel } from "./warehouse-admin-panel";
 
 /**
  * ĐÚNG bản đồ của điều phối cứu hộ, không phải một bản dựng lại cho giống.
@@ -24,8 +26,9 @@ import { CLUSTER_BOUNDS, PROVINCE_BOUNDS } from "./map-tiles";
  * phải học lại bản đồ mỗi lần đổi tab. Dùng chung một component thì mọi cải tiến
  * của bên này mặc nhiên có ở bên kia.
  *
- * Khác biệt duy nhất, và là cố ý: ở đây KHÔNG truyền `onPickIncident` nên bản đồ
- * chỉ để xem — dấu ghim đỏ chỉ đến từ ô nhập toạ độ bên phải.
+ * Khác biệt duy nhất: bấm lên bản đồ chỉ có tác dụng khi quản trị xã đang ghim
+ * toạ độ cho một kho. Ngoài lúc đó, dấu ghim đỏ chỉ đến từ ô nhập toạ độ bên phải
+ * — người xem bản đồ để tra cứu không vô tình dời kho bằng một cú bấm trượt.
  */
 const IncidentMap = dynamic(
   () => import("@/components/mission/incident-map").then((m) => m.IncidentMap),
@@ -63,9 +66,15 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
   // Ngoài cụm 5 xã thì vẫn ghim, nhưng phải nói trước là không phóng to xem gần
   // được — bản đồ sẽ tự dội về vùng có ảnh và người dùng tưởng mình bấm hụt.
   const [warning, setWarning] = useState<string | null>(null);
+  // Kho đang được ghim toạ độ; null = không ai đang ghim, bản đồ trở lại chỉ-đọc.
+  const [pinningId, setPinningId] = useState<string | null>(null);
+  const [draftPoint, setDraftPoint] = useState<LatLng | null>(null);
+  const role = useAuth((state) => state.user?.role);
+  const canManage = role === "ADMIN";
 
   const query = useQuery({ queryKey: ["all-warehouses", warehouseId], queryFn: listAllWarehouses });
   const warehouses = query.data ?? [];
+  const pinningWarehouse = warehouses.find((w) => w.id === pinningId) ?? null;
   const unlocated = warehouses.filter((w) => w.lat == null || w.lng == null);
 
   function submitCoordinate() {
@@ -91,6 +100,24 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
     setPin((current) => ({ point: parsed.point, token: (current?.token ?? 0) + 1 }));
   }
 
+  /** Bắt đầu ghim cho một kho: bản đồ bay tới vị trí cũ nếu có, và nhận cú bấm. */
+  function startPinning(warehouse: AdminWarehouse) {
+    setPinningId(warehouse.id);
+    setDraftPoint(
+      warehouse.lat != null && warehouse.lng != null
+        ? { lat: warehouse.lat, lng: warehouse.lng }
+        : null,
+    );
+    setPin(null);
+    setError(null);
+    setWarning(null);
+  }
+
+  function stopPinning() {
+    setPinningId(null);
+    setDraftPoint(null);
+  }
+
   function clearPin() {
     setPin(null);
     setInput("");
@@ -111,11 +138,27 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
           // kho tổng với kho thôn.
           warehouses={[]}
           baseWarehouses={warehouses}
-          incidentPoint={pin?.point ?? null}
-          // Không truyền onPickIncident: bản đồ kho chỉ để xem.
-          keepIncidentFocus={pin != null}
-          focusKey={pin ? `${formatCoordinate(pin.point)}#${pin.token}` : ""}
-          pointLabel="Vị trí tra cứu"
+          incidentPoint={draftPoint ?? pin?.point ?? null}
+          // Chỉ gắn tay bấm khi đang ghim cho một kho cụ thể.
+          onPickIncident={pinningId ? (point) => setDraftPoint(point) : undefined}
+          keepIncidentFocus={pin != null || draftPoint != null}
+          focusKey={
+            draftPoint
+              ? `pin-${pinningId}`
+              : pin
+                ? `${formatCoordinate(pin.point)}#${pin.token}`
+                : ""
+          }
+          pointLabel={pinningWarehouse ? `Vị trí ${pinningWarehouse.name}` : "Vị trí tra cứu"}
+          // Ghim kho thì xem trước bằng chính ngôi nhà xanh sẽ hiện sau khi lưu,
+          // không mượn ghim SOS đỏ của điểm gặp nạn.
+          pointVariant={
+            pinningWarehouse
+              ? pinningWarehouse.kind === "CENTRAL"
+                ? "central"
+                : "hamlet"
+              : "incident"
+          }
           frameClassName={MAP_FRAME_CLASS}
         />
       </div>
@@ -128,8 +171,7 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
           </div>
           <p className="mt-1 text-xs text-[var(--text-muted)]">
             Chép dòng toạ độ ở nhiệm vụ (ví dụ {EXAMPLE_COORDINATE}) rồi dán vào đây để xem đúng chỗ
-            đó nằm ở đâu giữa các kho. Bản đồ này chỉ để xem, không ghim được bằng cách bấm lên bản
-            đồ.
+            đó nằm ở đâu giữa các kho.
           </p>
           <form
             className="mt-3 flex gap-2"
@@ -179,6 +221,20 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
           )}
         </section>
 
+        {canManage ? (
+          <WarehouseAdminPanel
+            draftPoint={draftPoint}
+            onStartPinning={startPinning}
+            onStopPinning={stopPinning}
+            pinningId={pinningId}
+            warehouses={warehouses}
+          />
+        ) : null}
+
+        {/* Danh sách chỉ-đọc dành cho người không có quyền sửa. Với quản trị xã thì
+            bảng quản lý bên trên đã liệt kê đúng những kho này kèm nút thao tác —
+            hiện thêm một lần nữa chỉ làm cột phải dài gấp đôi. */}
+        {canManage ? null : (
         <section className="rounded-md border bg-[var(--surface)] p-4">
           <div className="flex items-center gap-2 text-sm font-semibold">
             <ColorIcon name="location" size={18} tone="blue" />
@@ -202,6 +258,7 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
             ))}
           </ul>
         </section>
+        )}
 
         {unlocated.length > 0 && (
           <section className="rounded-md border bg-[var(--surface)] p-4">

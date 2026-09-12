@@ -382,7 +382,11 @@ function WarehouseCard({ warehouse, onOpen }: { warehouse: WarehouseStock; onOpe
       type="button"
       onClick={onOpen}
       title={`Xem toàn bộ vật tư tại ${warehouse.warehouseName}`}
-      className="rounded-md border p-3 text-left transition hover:border-[var(--text-muted)]/60 hover:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+      // `flex flex-col` chứ không để mặc định: nội dung trong <button> bị căn
+      // giữa theo chiều dọc, nên thẻ nào ít mã hàng hơn hàng xóm là cả khối chữ
+      // trôi xuống giữa ô — nhìn qua tưởng lỗi hiển thị. Xếp từ trên xuống thì
+      // mọi thẻ bắt đầu cùng một vạch.
+      className="flex flex-col items-stretch rounded-md border p-3 text-left transition hover:border-[var(--text-muted)]/60 hover:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
       style={
         isCentral
           ? { borderColor: "var(--color-accent)", background: "var(--surface-2)" }
@@ -435,7 +439,10 @@ function WarehouseCard({ warehouse, onOpen }: { warehouse: WarehouseStock; onOpe
         </ul>
       )}
 
-      <span className="mt-2 block text-xs font-medium text-[var(--color-accent)]">
+      {/* `mt-auto` ghim dòng này xuống đáy thẻ. Các thẻ trong lưới cao bằng nhau
+          nhưng số mã hàng khác nhau, nên nếu để nó chạy ngay sau danh sách thì
+          mỗi thẻ một độ cao — mắt đọc hàng ngang bị gãy. */}
+      <span className="mt-auto block pt-2 text-xs font-medium text-[var(--color-accent)]">
         Xem tất cả vật tư →
       </span>
     </button>

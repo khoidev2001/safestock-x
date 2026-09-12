@@ -133,6 +133,7 @@ model User {
   emailVerifications          EmailVerification[]
   phoneVerifications          PhoneVerification[]
   sessions                    UserSession[]
+  pushDevices                 PushDevice[]
 }
 
 /// Một lần đăng nhập trên MỘT thiết bị. Web và điện thoại của cùng một người là
@@ -1212,4 +1213,32 @@ model InterCommuneLoan {
   @@index([organizationId, direction, status])
   @@index([organizationId, missionId])
   @@index([peerLoanId])
+}
+
+/// Thiết bị di động đã đăng ký nhận thông báo đẩy.
+///
+/// Một người có thể cầm nhiều máy (điện thoại riêng, máy của tổ), và một máy có
+/// thể được nhiều người đăng nhập lần lượt. Khoá duy nhất đặt trên `token` chứ
+/// không trên người dùng: token do hệ điều hành cấp cho từng lần cài app, nên nó
+/// mới là danh tính thật của cái máy. Người khác đăng nhập trên chính máy đó thì
+/// bản ghi được gán sang người mới, tránh việc lệnh của trưởng thôn cũ vẫn nổ
+/// chuông trên máy đã đổi chủ.
+model PushDevice {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  /// Token do FCM cấp cho lần cài app này.
+  token          String   @unique
+  platform       String   @default("android")
+  /// Nhãn máy để người dùng nhận ra thiết bị của mình khi cần thu hồi.
+  deviceName     String?
+  /// Lần cuối app còn gửi token này lên. Token im lặng quá lâu là máy đã gỡ app.
+  lastSeenAt     DateTime @default(now())
+  /// Số lần FCM trả về "token không còn hợp lệ" liên tiếp — đủ ngưỡng thì xoá.
+  failureCount   Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  @@index([userId])
+  @@index([organizationId])
 }

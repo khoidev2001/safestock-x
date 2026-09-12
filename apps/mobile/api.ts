@@ -280,6 +280,44 @@ export async function logout(token: string): Promise<void> {
 }
 
 /**
+ * Ghi danh máy này để nhận thông báo đẩy.
+ *
+ * Gửi lại mỗi lần mở app chứ không chỉ lần đầu: token do hệ điều hành cấp và nó
+ * đổi khi người dùng xoá dữ liệu app, khôi phục máy hoặc cài lại. Gửi lại là cách
+ * duy nhất để máy chủ biết token cũ đã chết.
+ */
+export async function registerPushDevice(
+  token: string,
+  device: { pushToken: string; platform?: "android" | "ios"; deviceName?: string | null },
+): Promise<void> {
+  const res = await request(apiUrl("/api/push/devices"), {
+    method: "POST",
+    headers: { ...authHeader(token), "Content-Type": "application/json" },
+    body: JSON.stringify({
+      token: device.pushToken,
+      platform: device.platform ?? "android",
+      deviceName: device.deviceName ?? null,
+    }),
+  });
+  if (!res.ok) throw await apiFailure(res, "Không ghi danh được thiết bị nhận thông báo");
+}
+
+/**
+ * Gỡ máy này khỏi danh sách nhận, gọi lúc đăng xuất.
+ *
+ * Không gỡ thì người mượn máy sau vẫn nghe chuông của những lệnh không thuộc về
+ * họ — mà thông báo cứu hộ có ghi số hiệu nhiệm vụ và tên thôn.
+ */
+export async function unregisterPushDevice(token: string, pushToken: string): Promise<void> {
+  const res = await request(apiUrl("/api/push/devices"), {
+    method: "DELETE",
+    headers: { ...authHeader(token), "Content-Type": "application/json" },
+    body: JSON.stringify({ token: pushToken }),
+  });
+  if (!res.ok) throw await apiFailure(res, "Không gỡ được thiết bị khỏi danh sách nhận");
+}
+
+/**
  * Danh sách thông báo của role hiện tại (mới nhất trước).
  *
  * `cursor` là id thông báo cuối cùng đang có trên màn hình; máy chủ trả tiếp từ

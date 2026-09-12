@@ -8,6 +8,19 @@ import type { InventoryBatch } from "@/lib/dashboard-api";
 export type InventoryRowAction =
   "IMPORT" | "EXPORT" | "TRANSFER" | "ADJUST" | "RECONCILE" | "CONDITION" | "BORROW";
 
+/**
+ * Nút thao tác trên từng dòng lô hàng.
+ *
+ * Viền sáng lên khi rê chuột là điều kiện để người dùng biết mình đang nhắm vào
+ * nút nào: tám nút nhỏ xếp sát nhau, không có phản hồi thì bấm nhầm sang "Điều
+ * chỉnh" trong khi định bấm "Kiểm kê" — hai thao tác ghi vào sổ kho khác nhau.
+ */
+const ACTION_BUTTON_CLASS =
+  "w-full rounded border px-2 py-1 text-center text-xs transition-colors " +
+  "hover:border-[var(--color-accent)] hover:bg-[color-mix(in_oklch,var(--color-accent)_10%,transparent)] " +
+  "hover:text-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 " +
+  "focus-visible:ring-[var(--color-accent)] active:translate-y-px";
+
 const actions: { key: InventoryRowAction; label: string }[] = [
   { key: "IMPORT", label: "Nhập thêm" },
   { key: "EXPORT", label: "Xuất" },
@@ -134,10 +147,15 @@ export function InventoryTable({
                       {Math.max(0, batch.quantity - onLoan)}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex max-w-[290px] flex-wrap justify-end gap-1.5">
+                      {/* Lưới cố định 4 cột thay cho flex-wrap: wrap xếp nút theo
+                          bề ngang chữ nên mỗi hàng một số nút khác nhau, lệch
+                          phải, nhìn như rơi vãi. Lưới cho mọi nút cùng bề rộng và
+                          thẳng cột giữa các dòng của bảng. */}
+                      <div className="ml-auto grid w-[304px] max-w-full grid-cols-2 gap-1.5 sm:grid-cols-4">
                         <button
-                          className="rounded border px-2 py-1 text-xs"
+                          className={ACTION_BUTTON_CLASS}
                           onClick={() => onPrint(batch)}
+                          type="button"
                         >
                           In QR
                         </button>
@@ -145,9 +163,10 @@ export function InventoryTable({
                           .filter((action) => allowedActions.includes(action.key))
                           .map((action) => (
                             <button
-                              className="rounded border px-2 py-1 text-xs hover:border-[var(--color-accent)]"
+                              className={ACTION_BUTTON_CLASS}
                               key={action.key}
                               onClick={() => onAction(batch, action.key)}
+                              type="button"
                             >
                               {action.label}
                             </button>

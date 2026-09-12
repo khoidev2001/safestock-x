@@ -70,7 +70,10 @@ export function Pagination({
 
   return (
     <footer
-      className={`flex flex-col gap-3 lg:flex-row lg:items-center pl-0 pr-0 ${
+      // Không hardcode `pl-0 pr-0` ở đây: Tailwind sinh `pl`/`pr` sau `px` nên
+      // chúng đè luôn lớp đệm truyền qua `padding`, và chân trang dính sát hai
+      // mép bảng trong khi mọi hàng bên trên đều thụt vào.
+      className={`flex flex-col gap-3 lg:flex-row lg:items-center ${
         // Không có dòng tóm tắt thì chẳng còn gì để dạt về hai mép — dồn vào giữa
         // thay vì để dãy số trang treo lơ lửng một bên.
         showSummary ? "lg:justify-between" : "justify-center"

@@ -32,3 +32,41 @@ export function clearWarehouseLocation(id: string): Promise<AdminWarehouse> {
     body: JSON.stringify({ lat: null, lng: null }),
   });
 }
+
+export interface WarehouseInput {
+  name: string;
+  location: string | null;
+  kind: "CENTRAL" | "HAMLET";
+  lat: number | null;
+  lng: number | null;
+}
+
+export function createWarehouse(input: WarehouseInput): Promise<AdminWarehouse> {
+  return apiFetch<AdminWarehouse>("/api/admin/warehouses", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateWarehouse(
+  id: string,
+  input: Partial<WarehouseInput>,
+): Promise<AdminWarehouse> {
+  return apiFetch<AdminWarehouse>(`/api/admin/warehouses/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+/**
+ * Xoá kho.
+ *
+ * Máy chủ từ chối khi kho còn lô hàng, tài khoản phụ trách hoặc hồ sơ điều phối,
+ * và câu từ chối nói rõ vướng cái gì — hiện thẳng câu đó cho người dùng thay vì
+ * dịch lại thành "không xoá được".
+ */
+export function deleteWarehouse(id: string): Promise<{ id: string; name: string }> {
+  return apiFetch<{ id: string; name: string }>(`/api/admin/warehouses/${id}`, {
+    method: "DELETE",
+  });
+}

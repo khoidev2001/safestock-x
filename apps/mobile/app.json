@@ -20,7 +20,9 @@
       "package": "vn.ungphonhanh.safestock",
       "versionCode": 6,
       "permissions": [
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.VIBRATE"
       ],
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -28,7 +30,8 @@
         "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT",
         "android.permission.WRITE_EXTERNAL_STORAGE"
-      ]
+      ],
+      "googleServicesFile": "./google-services.json"
     },
     "plugins": [
       "expo-secure-store",
@@ -52,6 +55,13 @@
         "expo-image-picker",
         {
           "photosPermission": "Cho phép Ứng phó nhanh mở thư viện ảnh để gửi ảnh bằng chứng đã giao vật tư."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#2f9e6e",
+          "defaultChannel": "ung-pho-nhanh-nhiem-vu"
         }
       ]
     ],

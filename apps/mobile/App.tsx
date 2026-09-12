@@ -47,6 +47,11 @@ import {
   type WarehouseSection,
 } from "./dashboard-state";
 import { clearStoredSession, loadStoredSession, saveStoredSession } from "./session-store";
+import {
+  configureForegroundBehavior,
+  registerForPush,
+  unregisterForPush,
+} from "./push-registration";
 import { clearOfflineCache } from "./offline-cache";
 import { formatShortTime, kindIcon, parseMissionSummary } from "./disaster";
 import { MissionListScreen } from "./MissionListScreen";
@@ -73,6 +78,13 @@ const STATUS_BAR_HEIGHT = Platform.OS === "android" ? (RNStatusBar.currentHeight
 export default function App() {
   const [session, setSession] = useState<LoginResult | null>(null);
   const [restoringSession, setRestoringSession] = useState(true);
+  /**
+   * Token thông báo đẩy đã ghi danh cho phiên này.
+   *
+   * Giữ lại để lúc đăng xuất gỡ đúng cái máy này khỏi danh sách nhận — không gỡ
+   * thì người mượn máy sau vẫn nghe chuông lệnh của người trước.
+   */
+  const [pushToken, setPushToken] = useState<string | null>(null);
   const refreshToken = session?.refreshToken;
 
   useEffect(() => {
@@ -150,9 +162,31 @@ export default function App() {
     if (stored) await saveStoredSession(stored);
   }
 
+  /**
+   * Ghi danh nhận thông báo mỗi lần có phiên — kể cả phiên khôi phục lúc mở app.
+   *
+   * Gửi lại chứ không chỉ đăng ký lần đầu: token do hệ điều hành cấp và nó đổi khi
+   * người dùng xoá dữ liệu app hoặc khôi phục máy. Thất bại thì im lặng bỏ qua,
+   * người dùng vẫn làm việc bình thường với thông báo trong app.
+   */
+  useEffect(() => {
+    const accessToken = session?.accessToken;
+    if (!accessToken) return;
+    let cancelled = false;
+    configureForegroundBehavior();
+    void registerForPush(accessToken).then((token) => {
+      if (!cancelled) setPushToken(token);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.accessToken]);
+
   async function logout() {
     const userId = session?.user.id;
     const accessToken = session?.accessToken;
+    if (accessToken) await unregisterForPush(accessToken, pushToken);
+    setPushToken(null);
     // Thu hồi phiên phía máy chủ trước (tokenVersion++) để refresh token cũ hết hiệu lực.
     // Best-effort: mất mạng/hết hạn vẫn xoá sạch phiên cục bộ để không kẹt trên thiết bị.
     if (accessToken) {

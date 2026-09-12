@@ -14,6 +14,7 @@ import { IncidentModule } from "./incident/incident.module";
 import { SimulationModule } from "./simulation/simulation.module";
 import { ReadinessModule } from "./readiness/readiness.module";
 import { NotificationModule } from "./notification/notification.module";
+import { PushModule } from "./push/push.module";
 import { InsightsModule } from "./insights/insights.module";
 import { AssistantModule } from "./assistant/assistant.module";
 import { BackupModule } from "./backup/backup.module";
@@ -47,6 +48,7 @@ import { resolveEnvFilePaths } from "./config/env-file-path";
     ReadinessModule,
     SimulationModule,
     NotificationModule,
+    PushModule,
     InsightsModule,
     AssistantModule,
     BackupModule,

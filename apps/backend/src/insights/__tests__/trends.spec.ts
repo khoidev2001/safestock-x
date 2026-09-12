@@ -24,6 +24,17 @@ describe("computeTrends", () => {
     expect(result[0].changePercent).toBeNull();
   });
 
+  it("mặt hàng kỳ này bằng 0 vẫn giữ tên hàng, không rơi về mã kho", () => {
+    const exports: ExportTxnTrend[] = [
+      { sku: "BATT-01", itemName: "Bộ pin", quantity: 25, createdAt: daysAgo(15) },
+    ];
+    const result = computeTrends(exports, 10, NOW);
+    const batt = result.find((r) => r.sku === "BATT-01")!;
+    expect(batt.currentTotal).toBe(0);
+    expect(batt.previousTotal).toBe(25);
+    expect(batt.itemName).toBe("Bộ pin");
+  });
+
   it("bỏ qua giao dịch ngoài 2 kỳ", () => {
     const exports: ExportTxnTrend[] = [
       { sku: "A", itemName: "Item A", quantity: 999, createdAt: daysAgo(100) },
