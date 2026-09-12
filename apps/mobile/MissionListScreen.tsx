@@ -34,8 +34,8 @@ import { c, styles } from "./styles";
  * lên nhiều lần. Danh sách này lấy thẳng từ nhiệm vụ: mỗi việc đúng một dòng, và
  * dòng đó luôn nói trạng thái HIỆN TẠI chứ không phải trạng thái lúc tin được gửi.
  *
- * Thẻ vẽ y hệt thẻ trong hộp Thông báo (`MissionSummaryCard`) — người dùng đã quen
- * mắt với nó, đổi kiểu ở đây là bắt họ học lại từ đầu ở màn thứ hai.
+ * Đây là nơi DUY NHẤT vẽ thẻ nhiệm vụ: hộp Thông báo nay chỉ còn mẩu tin gọn,
+ * nên cùng một việc không còn hiện thành hai kiểu thẻ ở hai tab nữa.
  */
 export function MissionListScreen({
   token,
