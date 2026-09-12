@@ -968,7 +968,7 @@ const shellStyles = StyleSheet.create({
   sectionLabel: { color: c.muted, fontSize: 12, fontWeight: "800" },
   sectionLabelActive: { color: "#FFFFFF" },
   tabBar: {
-    minHeight: 66,
+    minHeight: 56,
     flexDirection: "row",
     borderTopWidth: 1,
     borderTopColor: c.border,
@@ -976,7 +976,11 @@ const shellStyles = StyleSheet.create({
     // trắng, nên thanh trắng viền mảnh dễ trôi lẫn vào cuối trang khi cuộn.
     backgroundColor: c.surfaceAlt,
     paddingHorizontal: 6,
-    paddingVertical: 20,
+    // Đệm dọc 8 chứ không phải 20: cộng cả biểu tượng 28 và nhãn thì thanh cũ
+    // cao tới ~84 điểm, ăn hơn một phần mười màn hình chỉ để chứa năm chữ nhỏ.
+    // Còn ~60 điểm thì vẫn vượt trần 48 điểm cho vùng chạm mà trả lại chỗ cho
+    // nội dung — trên màn 6 inch đó là thêm gần trọn một thẻ hàng.
+    paddingVertical: 8,
   },
   tab: {
     flex: 1,

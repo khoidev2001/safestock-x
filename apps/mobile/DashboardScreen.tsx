@@ -323,9 +323,10 @@ export function DashboardScreen({
     >
       <View style={local.heading}>
         <View style={{ flex: 1 }}>
-          <Text style={local.eyebrow}>
-            {view === "home" ? "TRUNG TÂM VẬN HÀNH" : "MỨC SẴN SÀNG"}
-          </Text>
+          {/* Không có nhãn "TRUNG TÂM VẬN HÀNH" / "MỨC SẴN SÀNG" ở đây: dải chip
+              ngay trên đầu màn đã tô đậm mục đang mở, nên nhãn này chỉ nói lại
+              điều vừa nói mà chiếm mất dòng đầu tiên mắt nhìn tới. Lời chào và
+              tên kho mới là thứ người trực cần thấy ngay. */}
           <Text style={local.title}>
             {view === "home" ? `Chào ${mobileRoleLabel(user.role)}` : snapshot.warehouse.name}
           </Text>

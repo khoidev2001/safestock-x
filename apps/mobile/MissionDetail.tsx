@@ -692,12 +692,23 @@ export function MissionDetailScreen({
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
+      {/* Xếp DỌC: nút quay lại một dòng, tiêu đề dòng dưới.
+          Trước đây ba khối nằm ngang một hàng, mà tiêu đề ở màn này dài ngắn tuỳ
+          số hiệu. Trên máy thật "Chi tiết nhiệm vụ số 1" ăn hết chỗ trống rồi
+          chạm sát vào nút, đọc ra thành một chuỗi dính liền "Quay lạiChi tiết
+          nhiệm vụ số 1" — nút bấm được nhưng nhìn như lỗi. Cho chữ co lại
+          (`numberOfLines`) không cứu được, vì cắt tiêu đề đi thì mất đúng cái số
+          hiệu là thứ người trực cần đọc.
+
+          Tách dòng thì tiêu đề dài bao nhiêu cũng không chạm tới nút, và nút nằm
+          sát mép trên — chỗ ngón cái với tới dễ nhất khi cầm một tay. */}
+      <View style={[styles.header, local.detailHeader]}>
         {/* Mũi tên vector thay cho ký tự "‹": ký tự đó là dấu ngoặc nhọn tiếng
             Pháp, cỡ do phông quyết định nên luôn nhỏ hơn chữ đứng cạnh. */}
         <Pressable
           onPress={onBack}
           accessibilityRole="button"
+          hitSlop={8}
           style={{ flexDirection: "row", alignItems: "center", gap: 2 }}
         >
           <MaterialCommunityIcons name="chevron-left" size={20} color={c.amber} />
@@ -712,7 +723,6 @@ export function MissionDetailScreen({
             ? `Chi tiết nhiệm vụ số ${mission.missionNo}`
             : "Chi tiết nhiệm vụ"}
         </Text>
-        <View style={{ width: 60 }} />
       </View>
 
       {loading ? (
@@ -1372,15 +1382,16 @@ function MissionHero({
 
   return (
     <View style={[styles.hero, { backgroundColor: danger.bg, borderColor: danger.stripe }]}>
-      {/* Danh tính trước tiên, y như thẻ danh sách: số hiệu là thứ người trực đọc
-          cho nhau qua bộ đàm. Bản ghi cũ chưa có số thì lùi về tên thiên tai. */}
-      <Text style={styles.heroMissionNo}>
-        {mission.missionNo != null ? `Nhiệm vụ số ${mission.missionNo}` : disaster.label}
-      </Text>
+      {/* KHÔNG lặp lại số hiệu ở đây: thanh tiêu đề ngay phía trên đã ghi "Chi
+          tiết nhiệm vụ số 2", nên thẻ ghi thêm "Nhiệm vụ số 2" là đọc hai lần
+          cùng một câu, và nó chiếm mất dòng đầu — dòng mắt nhìn tới trước nhất.
+          Thẻ ngoài danh sách thì vẫn giữ số hiệu, vì ở đó không có tiêu đề nào
+          nói hộ.
 
-      <View style={styles.heroTopRow}>
-        <Text style={[styles.heroDanger, { color: danger.color }]}>⚠ {danger.label}</Text>
-      </View>
+          Mức nguy thì KHÔNG bỏ hẳn, chỉ thôi làm dòng đầu: nó xuống nằm cạnh
+          tên thiên tai dưới dạng nhãn nhỏ. Bỏ hẳn thì mức nguy chỉ còn thể hiện
+          bằng màu nền và viền thẻ — ai phân biệt màu kém sẽ không đọc được gì,
+          và ngoài trời nắng thì màu nhạt cũng khó thấy. */}
 
       {/* VIỆC PHẢI LÀM, viết theo vai người đang đọc — cùng câu chữ và cùng màu
           nhấn với thẻ ngoài danh sách. */}
@@ -1388,7 +1399,14 @@ function MissionHero({
 
       <View style={styles.heroDisaster}>
         <Text style={styles.heroIcon}>{disaster.icon}</Text>
-        <Text style={styles.heroDisasterName}>{disaster.label}</Text>
+        {/* `flexShrink` để tên thiên tai dài nhường chỗ cho nhãn mức nguy, thay
+            vì đẩy nhãn tràn ra ngoài mép thẻ. */}
+        <Text style={[styles.heroDisasterName, { flexShrink: 1 }]} numberOfLines={1}>
+          {disaster.label}
+        </Text>
+        <View style={[styles.heroDangerTag, { borderColor: danger.color }]}>
+          <Text style={[styles.heroDangerTagText, { color: danger.color }]}>{danger.label}</Text>
+        </View>
       </View>
       {place ? <Text style={styles.heroLocation}>📍 {place}</Text> : null}
 
@@ -2554,6 +2572,18 @@ function SupplyCard({ req }: { req: MissionDetail["requirements"][number] }) {
 }
 
 const local = StyleSheet.create({
+  detailHeader: {
+    flexDirection: "column",
+    alignItems: "flex-start",
+    justifyContent: "flex-start",
+    gap: 4,
+    // Đệm trên mỏng lại: 24 điểm của `styles.header` là để chừa thanh trạng thái
+    // cho những màn hình mở thẳng lên đầu ứng dụng. Màn chi tiết luôn nằm dưới
+    // thanh vai trò nên chừng ấy chỉ đẩy nút quay lại trôi vào giữa khoảng trống,
+    // xa mép trên đúng cái chỗ ngón cái hay tìm nó.
+    paddingTop: 10,
+    paddingBottom: 12,
+  },
   returnBox: {
     marginTop: 4,
     marginBottom: 12,
