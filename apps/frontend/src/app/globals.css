@@ -753,6 +753,76 @@ button:disabled {
   }
 }
 
+/* Nút trợ lý nhấp nhô rất khẽ, để mắt bắt được nó trong lúc đang đọc chỗ khác mà
+   không biến thành thứ nhảy múa giành sự chú ý. Biên độ 5px và nhịp 2,4 giây là
+   đủ thấy ở khoé mắt, chưa tới mức phải nhìn thẳng vào. Dừng hẳn khi cửa sổ chat
+   đang mở — lúc đó người dùng đã nhìn vào rồi, còn nhúc nhích chỉ gây phiền. */
+.assistant-bob {
+  animation: assistant-bob 2.4s ease-in-out infinite;
+}
+
+@keyframes assistant-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+/* Lời mời trò chuyện trồi lên từ phía nút rồi đứng yên, không trượt ngang: nó
+   mọc ra TỪ nút nên hướng chuyển động phải chỉ về đúng nguồn của nó. */
+.assistant-invite-enter {
+  animation: assistant-invite-enter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes assistant-invite-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/**
+ * Bong bóng thoại thật: thân bo tròn hẳn và một cái đuôi nhọn chỉ xuống nút.
+ *
+ * Một hộp chữ nhật có viền trông như thông báo hệ thống — thứ người dùng học được
+ * là "đọc rồi tắt". Bong bóng có đuôi thì đọc ra ngay là CÓ AI ĐANG NÓI, và đuôi
+ * chỉ đúng vào khuôn mặt đang nói câu đó.
+ *
+ * Đuôi dựng bằng hai tam giác chồng nhau: cái dưới màu viền, cái trên màu nền đẩy
+ * lên 1px — nhờ vậy đuôi có viền liền mạch với thân, không phải một mẩu rời.
+ */
+.assistant-bubble {
+  border-radius: 1.25rem;
+}
+
+.assistant-bubble::before,
+.assistant-bubble::after {
+  content: "";
+  position: absolute;
+  right: 1.35rem;
+  width: 0;
+  height: 0;
+  border-left: 9px solid transparent;
+  border-right: 9px solid transparent;
+}
+
+.assistant-bubble::before {
+  bottom: -10px;
+  border-top: 10px solid var(--border);
+}
+
+.assistant-bubble::after {
+  bottom: -9px;
+  border-top: 10px solid var(--surface);
+}
+
 /* Người đã tắt hiệu ứng trong hệ điều hành thường tắt vì chuyển động làm họ chóng
    mặt hoặc buồn nôn. Giữ nguyên MỌI THÔNG TIN — dấu hiệu, dòng chữ, vạch tiến
    trình vẫn hiện — chỉ bỏ phần nhấp nháy và trượt. */
@@ -766,7 +836,9 @@ button:disabled {
   .login-panel-enter,
   .login-busy-veil,
   .login-success-mark,
-  .login-progress::after {
+  .login-progress::after,
+  .assistant-bob,
+  .assistant-invite-enter {
     animation: none;
   }
 

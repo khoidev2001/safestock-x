@@ -2,6 +2,7 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { ColorIcon } from "@/components/shared/color-icon";
+import { AssistantAvatar, UserAvatar } from "./chat-avatars";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { streamAssistant } from "@/lib/assistant-api";
@@ -257,7 +258,7 @@ function EmptyChat({
 }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 py-6 text-center">
-      <ColorIcon name="assistant" size={compact ? 30 : 34} tone="blue" />
+      <AssistantAvatar size={compact ? 48 : 56} />
       <div>
         <p className="text-sm font-semibold">Trợ lý ứng phó nhanh</p>
         <p className="mt-1 text-xs text-[var(--text-muted)]">
@@ -286,26 +287,25 @@ function ChatBubble({ turn, onDispatch }: { turn: ChatTurn; onDispatch: (text: s
 
   return (
     <div className={`flex gap-2.5 ${isUser ? "flex-row-reverse" : ""}`}>
-      <span
-        aria-hidden="true"
-        className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
-        style={{
-          background: isUser
-            ? "var(--surface)"
-            : isAlert
-              ? "color-mix(in oklch, var(--color-critical) 18%, var(--surface))"
-              : "color-mix(in oklch, var(--color-accent) 16%, var(--surface))",
-          color: isUser ? "var(--text)" : isAlert ? "var(--color-critical)" : "var(--color-accent)",
-        }}
-      >
-        {isUser ? (
-          <ColorIcon name="user" size={17} tone="green" />
-        ) : isAlert ? (
+      {/* Cảnh báo sự cố vẫn giữ hình tam giác đỏ: nó không phải lời trợ lý nói,
+          mà là hệ thống chen vào giữa cuộc hội thoại — đeo mặt trợ lý cho nó thì
+          người đọc tưởng mô hình vừa tự kết luận có sự cố. */}
+      {isUser ? (
+        <UserAvatar className="mt-0.5" size={28} />
+      ) : isAlert ? (
+        <span
+          aria-hidden="true"
+          className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+          style={{
+            background: "color-mix(in oklch, var(--color-critical) 18%, var(--surface))",
+            color: "var(--color-critical)",
+          }}
+        >
           <ColorIcon name="warning" size={17} tone="red" />
-        ) : (
-          <ColorIcon name="assistant" size={17} tone="blue" />
-        )}
-      </span>
+        </span>
+      ) : (
+        <AssistantAvatar className="mt-0.5" size={28} />
+      )}
       <div
         className="max-w-[82%] whitespace-pre-wrap rounded-md px-3 py-2 text-sm leading-relaxed"
         style={{
