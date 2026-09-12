@@ -5,6 +5,7 @@ import { JwtAuthGuard } from "../auth/guards";
 import { PermissionGuard } from "../rbac/permission.guard";
 import { RequirePermission } from "../rbac/permissions.decorator";
 import {
+  AcceptInterCommuneReturnDto,
   AdvanceInterCommuneLoanDto,
   BorrowDto,
   RecordManualInterCommuneLoanDto,
@@ -111,6 +112,27 @@ export class LoanController {
       userId: req.user.userId,
       scopeWarehouseId: req.user.warehouseId,
       ...dto,
+    });
+  }
+
+  /**
+   * Bên cho mượn xác nhận đã nhận lại hàng.
+   *
+   * Tách khỏi `advance`: `advance` đi theo máy trạng thái chung của khoản mượn,
+   * còn bước này không đổi trạng thái — nó chỉ ghi nhận phần hàng đã về tới kho.
+   * Bỏ `quantity` thì nhận hết phần đang chờ.
+   */
+  @Post("inter-commune/:id/accept-return")
+  acceptInterCommuneReturn(
+    @Request() req: AuthenticatedRequest,
+    @Param("id") id: string,
+    @Body() dto: AcceptInterCommuneReturnDto,
+  ) {
+    return this.interCommune.acceptReturn({
+      loanId: id,
+      userId: req.user.userId,
+      scopeWarehouseId: req.user.warehouseId,
+      quantity: dto.quantity,
     });
   }
 

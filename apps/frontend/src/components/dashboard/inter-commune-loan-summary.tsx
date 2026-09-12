@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ColorIcon } from "@/components/shared/color-icon";
 import { TabLink } from "@/components/shared/tab-link";
 import { getInterCommuneLoans, type InterCommuneLoan } from "@/lib/dashboard-api";
-import { isOpen, outstanding, statusLabel } from "./inter-commune-loan-actions";
+import { isLoanOpen, outstanding, statusLabel } from "./inter-commune-loan-actions";
 
 /**
  * Xã mình đang nợ ai, và ai đang nợ xã mình — hiện ngay trên trang Tổng quan.
@@ -33,7 +33,7 @@ export function InterCommuneLoanSummary() {
   });
 
   const loans = query.data ?? [];
-  const openLoans = loans.filter((loan) => isOpen(loan.status));
+  const openLoans = loans.filter((loan) => isLoanOpen(loan));
   const lending = openLoans.filter((loan) => loan.direction === "OUTGOING");
   const borrowing = openLoans.filter((loan) => loan.direction === "INCOMING");
   const closedCount = loans.length - openLoans.length;

@@ -1083,23 +1083,12 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
         `Không thể chuyển khoản mượn từ ${loan.status} sang ${input.status}`,
       );
     }
-    // Xã kia vừa TRẢ hàng thì kho MÌNH phải được cộng lại.
+    // KHÔNG cộng kho ở đây.
     //
-    // Đây là chỗ hàng biến mất. `stockEffect` không với tới đường này: bản ghi bên
-    // cho mượn được cập nhật qua đây, mà hàm này xưa nay chỉ đổi trạng thái rồi
-    // bắn thông báo, không đụng kho một dòng nào. Kết quả đo thật (2026-09-12):
-    // mượn 40 bộ sơ cứu rồi trả đủ, Xuân Thọ 500 -> 460 -> 460, tổng hai kho tụt
-    // từ 2296 xuống 2256. Bốn mươi bộ mất khỏi sổ sau mỗi vòng mượn - trả.
-    //
-    // Chỉ cộng phần TRẢ THÊM lần này: `returnedQuantity` là số cộng dồn, lấy
-    // nguyên nó là cộng lại cả phần đã cộng ở lần trả trước.
-    const daTraTruoc = loan.returnedQuantity ?? 0;
-    const traThem = input.returnedQuantity - daTraTruoc;
-    const laBuocTra = input.status === "RETURNED" || input.status === "PARTIALLY_RETURNED";
-    if (laBuocTra && traThem > 0 && loan.direction === InterCommuneLoanDirection.OUTGOING) {
-      await this.nhanLaiHangTraVe(loan, traThem);
-    }
-
+    // Xã kia mới KHAI là đã đưa trả; hàng còn trên đường. Cộng ngay lúc nhận tin
+    // là ghi vào sổ thứ chưa ai bên này cầm trong tay — đúng cái mà chiều đi đã
+    // tránh bằng bước "xác nhận đã nhận hàng". Chiều về nay cũng có bước tương
+    // ứng: `acceptReturn`, do người của xã cho mượn bấm.
     await this.notifyPeerDecision(loan, input.status);
     const now = new Date();
     return this.prisma.interCommuneLoan.update({
@@ -1115,63 +1104,64 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
   }
 
   /**
-   * Cộng lại kho bên cho mượn khi xã kia báo đã trả hàng.
+   * Bên CHO MƯỢN xác nhận đã nhận lại hàng — chỗ duy nhất cộng kho ở chiều về.
    *
-   * Người thao tác ghi vào sổ là ai: đây là lời báo MÁY-VỚI-MÁY, không có người
-   * nào đang bấm nút ở phía này. Lấy người đã tạo bản ghi nếu có; bản ghi sinh từ
-   * yêu cầu của xã kia thì không có, nên lùi về một quản trị viên của chính đơn vị
-   * ấy. Không để trống: mọi giao dịch kho đều phải truy được về một người, và một
-   * dòng nhập kho vô chủ là dòng không ai đối chiếu được.
+   * Đối xứng với "xác nhận đã nhận hàng" của chiều đi. Giữa lúc bên mượn bấm trả
+   * và lúc bước này chạy, hàng không nằm ở kho nào — đúng thực tế nó đang trên
+   * đường, và đó là lý do không gộp hai mốc làm một.
+   *
+   * Xác nhận TỪNG PHẦN được: bên mượn có thể trả làm nhiều chuyến, và mỗi chuyến
+   * về tới nơi một lúc khác nhau. `returnAcceptedQuantity` đếm phần đã cầm được,
+   * luôn <= `returnedQuantity` là phần bên kia khai đã đưa.
    */
-  private async nhanLaiHangTraVe(
-    loan: {
-      id: string;
-      organizationId: string;
-      warehouseId: string | null;
-      itemSku: string;
-      createdByUserId: string | null;
-    },
-    quantity: number,
-  ) {
-    const nguoiGhi =
-      loan.createdByUserId ??
-      (
-        await this.prisma.user.findFirst({
-          where: { organizationId: loan.organizationId, role: UserRole.ADMIN },
-          orderBy: { createdAt: "asc" },
-          select: { id: true },
-        })
-      )?.id;
-    if (!nguoiGhi) {
-      // Không có ai để ghi thì THÔI, đừng ném lỗi: ném ở đây là chặn luôn việc cập
-      // nhật trạng thái, và khoản mượn kẹt lại còn tệ hơn một dòng kho ghi muộn.
-      this.log.error(
-        `Khoản mượn ${loan.id}: xã kia đã trả ${quantity} nhưng đơn vị không có quản trị viên nào để ghi nhập kho. Phải nhập tay ở tab Vật tư.`,
-      );
-      return;
+  async acceptReturn(input: {
+    loanId: string;
+    userId: string;
+    scopeWarehouseId?: string | null;
+    quantity?: number;
+  }) {
+    const organizationId = await this.orgOf(input.userId);
+    const loan = await this.prisma.interCommuneLoan.findFirst({
+      where: { id: input.loanId, organizationId },
+    });
+    if (!loan) throw new NotFoundException("Không tìm thấy khoản mượn");
+
+    // Chỉ bên CHO MƯỢN mới nhận lại được hàng. Bản ghi chiều kia là của bên đi
+    // mượn, họ không có gì để nhận về.
+    if (loan.direction !== InterCommuneLoanDirection.OUTGOING) {
+      throw new ForbiddenException("Chỉ xã cho mượn mới xác nhận nhận lại hàng được");
     }
 
-    try {
-      const batchId = await this.pickBatchForLoanMove("ADD", {
-        itemSku: loan.itemSku,
-        userId: nguoiGhi,
-        scopeWarehouseId: loan.warehouseId,
-      });
-      await this.moveStock("ADD", {
-        userId: nguoiGhi,
-        batchId,
-        quantity,
-        note: `Mượn liên xã — nhận lại hàng đã cho mượn`,
-        scopeWarehouseId: loan.warehouseId,
-        requestId: `loan-return-${loan.id}-${quantity}-${Date.now()}`,
-      });
-    } catch (error) {
-      // Cùng lý do: việc cập nhật trạng thái phải đi tiếp. Ghi rõ để người trực
-      // còn đối chiếu tay, thay vì để khoản mượn treo giữa chừng.
-      this.log.error(
-        `Khoản mượn ${loan.id}: không nhập lại được ${quantity} ${loan.itemSku} vào kho sau khi xã kia trả: ${describeError(error)}. Phải nhập tay ở tab Vật tư.`,
+    const conChoNhan = loan.returnedQuantity - loan.returnAcceptedQuantity;
+    if (conChoNhan <= 0) {
+      throw new BadRequestException("Không có phần nào đang chờ nhận lại");
+    }
+    const nhanLanNay = input.quantity ?? conChoNhan;
+    this.assertQuantity(nhanLanNay);
+    if (nhanLanNay > conChoNhan) {
+      throw new BadRequestException(
+        `Nhận ${nhanLanNay} là vượt phần đang chờ nhận (${conChoNhan}/${loan.quantity})`,
       );
     }
+
+    const batchId = await this.pickBatchForLoanMove("ADD", {
+      itemSku: loan.itemSku,
+      userId: input.userId,
+      scopeWarehouseId: input.scopeWarehouseId ?? loan.warehouseId,
+    });
+    await this.moveStock("ADD", {
+      userId: input.userId,
+      batchId,
+      quantity: nhanLanNay,
+      note: `Mượn liên xã với ${loan.peerCommuneName} — xác nhận nhận lại hàng`,
+      scopeWarehouseId: input.scopeWarehouseId ?? loan.warehouseId,
+      requestId: `loan-accept-${loan.id}-${loan.returnAcceptedQuantity + nhanLanNay}`,
+    });
+
+    return this.prisma.interCommuneLoan.update({
+      where: { id: loan.id },
+      data: { returnAcceptedQuantity: loan.returnAcceptedQuantity + nhanLanNay },
+    });
   }
 
   /** Báo cho người của xã mình biết bên kia vừa quyết gì. */

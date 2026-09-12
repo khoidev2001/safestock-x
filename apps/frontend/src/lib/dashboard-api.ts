@@ -550,6 +550,13 @@ export interface InterCommuneLoan {
   unit: string;
   quantity: number;
   returnedQuantity: number;
+  /**
+   * Phần bên CHO MƯỢN đã xác nhận cầm lại được.
+   *
+   * Khác `returnedQuantity` — đó là phần bên mượn KHAI đã đưa trả. Chênh giữa hai
+   * số là hàng đang trên đường về, chưa nằm ở kho nào.
+   */
+  returnAcceptedQuantity: number;
   recordedManually: boolean;
   note: string | null;
   rejectReason: string | null;
@@ -584,6 +591,17 @@ export const recordManualInterCommuneLoan = (body: {
   quantity: number;
   note?: string;
 }) => apiFetch("/api/loans/inter-commune/manual", { method: "POST", body: JSON.stringify(body) });
+
+/**
+ * Bên cho mượn xác nhận đã nhận lại hàng — chỗ duy nhất cộng kho ở chiều về.
+ *
+ * Bỏ `quantity` là nhận hết phần đang chờ.
+ */
+export const acceptInterCommuneReturn = (loanId: string, quantity?: number) =>
+  apiFetch(`/api/loans/inter-commune/${loanId}/accept-return`, {
+    method: "POST",
+    body: JSON.stringify(quantity === undefined ? {} : { quantity }),
+  });
 
 /** Tên các xã lân cận đã khai trong sổ đăng ký. */
 export const getPeerCommunes = () => apiFetch<string[]>("/api/loans/inter-commune/peers");

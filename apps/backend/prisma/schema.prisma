@@ -1153,6 +1153,17 @@ model InterCommuneLoan {
   /// lost từ đầu; ghi nhận liên xã kiểu được-ăn-cả-ngã-về-không thì hoặc phải
   /// khai khống là đã trả đủ, hoặc để khoản nợ mở mãi mãi.
   returnedQuantity Int    @default(0)
+
+  /// Số đã được bên CHO MƯỢN xác nhận nhận lại tận tay.
+  ///
+  /// Tách khỏi `returnedQuantity` vì hai con số trả lời hai câu khác nhau:
+  /// `returnedQuantity` là bên mượn KHAI đã đưa trả, cột này là bên cho mượn
+  /// XÁC NHẬN đã cầm được. Giữa hai mốc ấy hàng đang trên đường, không nằm ở kho
+  /// nào — đúng như giữa "đồng ý cho mượn" và "xác nhận đã nhận hàng" ở chiều đi.
+  ///
+  /// Gộp hai số làm một là cộng kho bên cho mượn theo lời khai của bên kia, trong
+  /// khi chưa ai bên này đối chiếu. Chiều đi vốn đã không làm thế.
+  returnAcceptedQuantity Int @default(0)
   unit             String
 
   /// Kho của xã mình chịu trách nhiệm cho khoản này (xuất ra hoặc nhận về).
