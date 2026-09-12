@@ -215,12 +215,31 @@ export function buildMissionMapHtml(data: MissionMapData): string {
       // bản đồ khác — không có đường nào từ cử chỉ của người dùng tới dữ liệu.
     }).setView([${center.lat}, ${center.lng}], 15);
 
+    // detectRetina — vì sao cần trên điện thoại mà web không cần.
+    //
+    // Máy thật (SM-A066B) là 300 dpi, tức mỗi điểm ảnh CSS trải ra ~1,9 điểm ảnh
+    // thật. Ô bản đồ 256px bị kéo giãn gần gấp đôi nên ảnh vệ tinh nhoè hẳn, trong
+    // khi trên màn hình máy tính 1x thì nét. Bật cờ này thì Leaflet xin ô ở mức
+    // zoom sâu hơn MỘT bậc rồi vẽ vào nửa khung — đúng bằng mật độ điểm ảnh thật.
+    //
+    // maxNativeZoom phải HẠ theo, 18 -> 17: detectRetina cộng 1 vào mức zoom
+    // của đường dẫn ô, nên để nguyên 18 là nó đi xin z19. Mà z19 ở vùng này Esri
+    // không có ảnh thật — nó trả HTTP 200 kèm ảnh xám in chữ "Map data not yet
+    // available", và Leaflet dán thẳng chữ đó lên khắp bản đồ. Hạ xuống 17 thì
+    // mức xin cao nhất vẫn là z18, đúng mức sâu nhất còn ảnh thật.
     L.tileLayer(
       'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      { maxZoom: 19, maxNativeZoom: 18 }
+      // maxZoom khai 20 chứ không phải 19: detectRetina tự TRỪ 1 vào maxZoom của
+      // lớp (thấy tận mắt — để 19 thì từ mức 19 trở lên lớp vệ tinh ra ngoài phạm
+      // vi và biến mất hẳn, chỉ còn nền trống với mấy chữ tên đường). Khai 20 để
+      // sau khi bị trừ còn đúng 19, khớp lớp chữ.
+      { maxZoom: 20, maxNativeZoom: 17, detectRetina: true }
     ).addTo(map);
+    // Lớp chữ có sẵn bản @2x, nên chỉ cần chỗ giữ {r} — Leaflet tự thay thành
+    // '@2x' trên màn mật độ cao. KHÔNG bật detectRetina ở đây: bật là vừa cộng
+    // zoom vừa lấy @2x, thành lấy mẫu thừa gấp bốn.
     L.tileLayer(
-      'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png',
+      'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png',
       { maxZoom: 19, maxNativeZoom: 19 }
     ).addTo(map);
 

@@ -10,8 +10,11 @@
  * dùng vẫn gửi được báo cáo bằng lời kể.
  *
  * Zoom thật của ảnh vệ tinh ở Đồng Xuân dừng ở z18 (đo trực tiếp: từ z19 máy chủ
- * Esri trả ảnh xám in "Map data not yet available"). Đặt `maxNativeZoom: 18` để
- * Leaflet phóng to ô z18 — mờ dần nhưng vẫn là ảnh thật, thay vì dán chữ đó lên.
+ * Esri trả ảnh xám in "Map data not yet available"). Vì bật `detectRetina` — máy
+ * thật 300 dpi nên ô 256px bị kéo giãn gần gấp đôi, nhìn nhoè — Leaflet tự cộng 1
+ * vào mức zoom của đường dẫn ô, nên `maxNativeZoom` đặt 17 để mức xin cao nhất
+ * vẫn là z18. Quá đó thì phóng to ô z18: mờ dần nhưng là ảnh thật, thay vì dán
+ * chữ "Map data not yet available" lên khắp bản đồ.
  */
 
 export interface PinnedPoint {
@@ -72,20 +75,45 @@ export function buildPinMapHtml(initial: PinnedPoint | null): string {
     var map = L.map('map', { zoomControl: true, attributionControl: false })
       .setView([${center.lat}, ${center.lng}], initial ? 17 : 14);
 
+    // detectRetina — vì sao cần trên điện thoại mà web không cần.
+    //
+    // Máy thật (SM-A066B) là 300 dpi, tức mỗi điểm ảnh CSS trải ra ~1,9 điểm ảnh
+    // thật. Ô bản đồ 256px bị kéo giãn gần gấp đôi nên ảnh vệ tinh nhoè hẳn, trong
+    // khi trên màn hình máy tính 1x thì nét. Bật cờ này thì Leaflet xin ô ở mức
+    // zoom sâu hơn MỘT bậc rồi vẽ vào nửa khung — đúng bằng mật độ điểm ảnh thật.
+    //
+    // maxNativeZoom phải HẠ theo, 18 -> 17: detectRetina cộng 1 vào mức zoom
+    // của đường dẫn ô, nên để nguyên 18 là nó đi xin z19. Mà z19 ở vùng này Esri
+    // không có ảnh thật — nó trả HTTP 200 kèm ảnh xám in chữ "Map data not yet
+    // available", và Leaflet dán thẳng chữ đó lên khắp bản đồ. Hạ xuống 17 thì
+    // mức xin cao nhất vẫn là z18, đúng mức sâu nhất còn ảnh thật.
     L.tileLayer(
       'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      { maxZoom: 19, maxNativeZoom: 18 }
+      // maxZoom khai 20 chứ không phải 19: detectRetina tự TRỪ 1 vào maxZoom của
+      // lớp (thấy tận mắt — để 19 thì từ mức 19 trở lên lớp vệ tinh ra ngoài phạm
+      // vi và biến mất hẳn, chỉ còn nền trống với mấy chữ tên đường). Khai 20 để
+      // sau khi bị trừ còn đúng 19, khớp lớp chữ.
+      { maxZoom: 20, maxNativeZoom: 17, detectRetina: true }
     ).addTo(map);
+    // Lớp chữ có sẵn bản @2x, nên chỉ cần chỗ giữ {r} — Leaflet tự thay thành
+    // '@2x' trên màn mật độ cao. KHÔNG bật detectRetina ở đây: bật là vừa cộng
+    // zoom vừa lấy @2x, thành lấy mẫu thừa gấp bốn.
     L.tileLayer(
-      'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png',
+      'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png',
       { maxZoom: 19, maxNativeZoom: 19 }
     ).addTo(map);
 
+    // Dấu ghim 14px, không phải 22px.
+    //
+    // Bản đồ nhúng trong màn báo cáo chỉ cao chừng 200px trên điện thoại. Dấu 22px
+    // cộng viền trắng 3px và quầng 2px là gần 32px — chiếm một mảng lớn giữa khung,
+    // che mất chính mái nhà mà người ta đang nhắm để ghim. Đủ to để bấm trúng và
+    // kéo được là được, không cần to hơn.
     var icon = L.divIcon({
       className: '',
-      html: '<div style="width:22px;height:22px;border-radius:50%;background:#d64545;border:3px solid #fff;box-shadow:0 0 0 2px rgba(214,69,69,0.4)"></div>',
-      iconSize: [22, 22],
-      iconAnchor: [11, 11],
+      html: '<div style="width:14px;height:14px;border-radius:50%;background:#d64545;border:2px solid #fff;box-shadow:0 0 0 2px rgba(214,69,69,0.45)"></div>',
+      iconSize: [14, 14],
+      iconAnchor: [7, 7],
     });
     var marker = null;
     var ring = null;
