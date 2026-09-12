@@ -120,12 +120,6 @@ export function AccountScreen({
 
         <PhoneSection token={token} user={user} onProfileChanged={onProfileChanged} />
 
-        <Text style={local.hint}>
-          Ảnh đại diện, họ tên và số điện thoại bạn tự sửa được. Vai trò, xã và kho phụ trách thì
-          không: đó là phạm vi bạn được phép xem và thao tác, do quản trị viên cấp xã đặt — tự đổi
-          xã nghĩa là tự chuyển mình sang kho của xã khác. Tên đăng nhập cũng vậy, đổi nó là đổi
-          cách vào hệ thống. Cần sửa những mục đó thì báo quản trị viên.
-        </Text>
 
         <Pressable
           onPress={() => void askLogout()}
@@ -588,7 +582,6 @@ const local = StyleSheet.create({
   // Giá trị đẩy sang phải và co được, để nhãn bên trái không bị đè khi giá trị dài.
   rowValue: { flex: 1, color: c.text, fontSize: 13, fontWeight: "700", textAlign: "right" },
 
-  hint: { color: c.muted, fontSize: 12, lineHeight: 18, marginTop: 12 },
 
   phoneBox: {
     marginTop: 10,
