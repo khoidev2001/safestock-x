@@ -108,18 +108,23 @@ function Toast({
 
   useEffect(() => {
     if (sticky || isHovered) return;
+    // Hàm cập nhật state PHẢI thuần: React được phép gọi lại nó lúc đang vẽ
+    // (và ở chế độ nghiêm ngặt thì gọi hai lần). Gọi `onDismiss` ngay trong đây
+    // là đổi state của layout cha giữa lúc Toast đang vẽ — đúng cảnh báo
+    // "Cannot update a component while rendering a different component".
+    // Ở đây chỉ trừ đi một giây; việc tắt thẻ để cho effect bên dưới làm.
     const timer = setInterval(() => {
-      setSecondsLeft((seconds) => {
-        if (seconds <= 1) {
-          clearInterval(timer);
-          dismissRef.current?.(item.id);
-          return 0;
-        }
-        return seconds - 1;
-      });
+      setSecondsLeft((seconds) => (seconds <= 0 ? 0 : seconds - 1));
     }, 1000);
     return () => clearInterval(timer);
-  }, [item.id, sticky, isHovered]);
+  }, [sticky, isHovered]);
+
+  // Hết giờ thì mới báo ra ngoài, và báo từ effect — tức là sau khi vẽ xong,
+  // nơi việc đổi state của component khác là hợp lệ.
+  useEffect(() => {
+    if (sticky || secondsLeft > 0) return;
+    dismissRef.current?.(item.id);
+  }, [item.id, sticky, secondsLeft]);
 
   const open = useCallback(() => onOpen?.(item), [item, onOpen]);
 
