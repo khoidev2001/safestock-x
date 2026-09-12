@@ -569,6 +569,13 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
             data={filteredBatches}
             ListHeaderComponent={<View style={local.headerBleed}>{stockHeader}</View>}
             keyboardShouldPersistTaps="handled"
+            // Android mặc định tháo bớt view ra khỏi cây gốc để tiết kiệm bộ nhớ.
+            // Ô tìm nằm trong phần đầu danh sách thì bị tháo theo: bấm vào KHÔNG
+            // nhận tiêu điểm, bàn phím không mở, mà nút bấm cạnh nó vẫn chạy nên
+            // nhìn như ô nhập hỏng riêng. Đã đo trên máy thật: mInputShown=false,
+            // mServedView=null sau mỗi cú chạm. Danh sách này chỉ vài chục lô,
+            // tắt đi không tốn gì.
+            removeClippedSubviews={false}
             keyExtractor={(batch) => batch.id}
             refreshControl={
               <RefreshControl
@@ -598,6 +605,7 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
           data={snapshot.loans}
           ListHeaderComponent={<View style={local.headerBleed}>{screenHeader}</View>}
           keyboardShouldPersistTaps="handled"
+          removeClippedSubviews={false}
           keyExtractor={(loan) => loan.id}
           refreshControl={
             <RefreshControl
