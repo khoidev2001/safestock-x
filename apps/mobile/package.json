@@ -1,6 +1,6 @@
 {
   "name": "@safestock/mobile",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "description": "App Lực lượng hiện trường (Expo) — nhận thông báo điều phối realtime qua WebSocket",
   "main": "index.js",
