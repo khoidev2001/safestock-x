@@ -235,10 +235,13 @@ chạy Metro (bản debug) hoặc khi build release.
 
 ### Bản phát hành
 
-`pnpm --filter @safestock/mobile android:release`, nhưng Gradle hay coi gói JS là
-"đã cũ" và không dựng lại. Muốn chắc, xoá trước:
-`app/build/generated/assets/createBundleReleaseJsAndAssets` và
-`app/build/outputs/apk/release`.
+`pnpm --filter @safestock/mobile android:release`. Gradle hay coi gói JS là "đã
+cũ" và không dựng lại, nên script tự xoá
+`app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle`
+trước mỗi lần build, rồi đọc lại bundle vừa sinh để chắc chắn endpoint là
+`https://ungphonhanh.life` — sai thì build fail chứ không giao APK ra ngoài.
+Endpoint do chính script quyết định, `.env.local` không còn ảnh hưởng tới bản
+release.
 
 ---
 
