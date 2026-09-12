@@ -274,6 +274,13 @@ export function MissionListScreen({
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          // `flexGrow: 0` KHÔNG phải trang trí: ScrollView mặc định là
+          // `flexGrow: 1`, nên hàng nút nằm trong màn hình `flex: 1` sẽ phình ra
+          // chiếm hết chỗ trống theo chiều dọc mỗi khi danh sách bên dưới ngắn.
+          // Cộng với `alignItems` mặc định là `stretch`, mỗi nút cao bằng cả
+          // vùng đó — mà `borderRadius: 999` biến nó thành hình bầu dục to bằng
+          // nửa màn hình, chữ dạt lên mép trên.
+          style={local.chipScroller}
           contentContainerStyle={local.filterRow}
         >
           <FilterChip
@@ -418,7 +425,14 @@ function FilterChip({
 }
 
 const local = StyleSheet.create({
-  filterRow: { paddingHorizontal: 16, paddingTop: 12, gap: 8, flexDirection: "row" },
+  chipScroller: { flexGrow: 0, flexShrink: 0 },
+  filterRow: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    gap: 8,
+    flexDirection: "row",
+    alignItems: "center",
+  },
   chip: {
     borderWidth: 1,
     borderColor: c.border,
