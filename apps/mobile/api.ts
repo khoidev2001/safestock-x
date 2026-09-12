@@ -6,9 +6,14 @@ export interface AuthUser {
   role: string;
   fullName?: string | null;
   phone?: string | null;
+  /** Ảnh đại diện dạng data URI, do máy chủ trả về nguyên văn. */
+  avatarUrl?: string | null;
   warehouseId?: string | null;
   warehouseName?: string | null;
+  /** Tên đơn vị đầy đủ, ví dụ "Hội Chữ thập đỏ xã Đồng Xuân". */
   unitName?: string | null;
+  /** Riêng tên xã, ví dụ "Đồng Xuân". Máy chủ rút sẵn từ `unitName`. */
+  communeName?: string | null;
 }
 
 export interface LoginResult {
@@ -527,14 +532,27 @@ export interface WarehouseMaterialRequest {
 const authHeader = (token: string) => ({ Authorization: `Bearer ${token}` });
 
 /**
- * Sửa hồ sơ của chính mình. Hiện chỉ dùng cho số điện thoại.
+ * Sửa hồ sơ của chính mình.
  *
- * `null` là xoá số. Gửi `null` chứ không gửi chuỗi rỗng: máy chủ phân biệt "bỏ
- * trống" với "không đụng tới", còn chuỗi rỗng rơi vào luật kiểm định dạng và bị
- * từ chối.
+ * `null` là XOÁ, `undefined` là KHÔNG ĐỤNG TỚI — máy chủ phân biệt hai thứ đó,
+ * nên đừng gửi chuỗi rỗng thay cho null: chuỗi rỗng rơi vào luật kiểm định dạng
+ * rồi bị từ chối.
+ *
+ * Chỉ ba trường này người dùng tự sửa được. Vai trò, kho phụ trách và đơn vị là
+ * PHẠM VI QUYỀN chứ không phải thông tin cá nhân — tự đổi đơn vị nghĩa là tự
+ * chuyển mình sang xem kho của xã khác, nên chúng nằm ở phần quản trị. Email
+ * đăng nhập cũng vậy: đó là định danh để vào hệ thống.
  */
+export function updateOwnProfile(
+  token: string,
+  input: { fullName?: string; phone?: string | null; avatarUrl?: string | null },
+): Promise<AuthUser> {
+  return patchAuthorized(token, "/api/auth/me", input);
+}
+
+/** Giữ lại cho các chỗ chỉ đổi số điện thoại. */
 export function updateOwnPhone(token: string, phone: string | null): Promise<AuthUser> {
-  return patchAuthorized(token, "/api/auth/me", { phone });
+  return updateOwnProfile(token, { phone });
 }
 
 /** Chi tiết 1 nhiệm vụ (loại, số người, vật tư cần/cấp/thiếu, trạng thái). */
