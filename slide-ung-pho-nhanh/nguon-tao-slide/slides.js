@@ -690,7 +690,7 @@ timelineSlide([6], 'BƯỚC 6 / 6  ·  KHÉP VÒNG', 'Vật tư hoàn trả xong
   els.push(...photo('thu-quan-tam', M, y));
 
   const items = [
-    ['01', 'Xác nhận thực trạng', 'Kho còn quản lý bằng sổ và Excel; bão lũ 2025 vật tư hết hạn, hư hỏng, số liệu lệch giữa các thôn.'],
+    ['01', 'Xác nhận thực trạng', 'Kho còn quản lý bằng sổ và Excel, bão lũ 2025 vật tư hết hạn, hư hỏng, số liệu lệch giữa các thôn.'],
     ['02', 'Xác nhận nhu cầu thật', 'Xã cần một hệ thống quản lý kho và điều phối vật tư như Ứng Phó Nhanh.'],
     ['03', 'Đồng ý cho khảo sát và thử nghiệm', 'Tạo điều kiện cho nhóm khảo sát quy trình thật và triển khai thử nghiệm tại xã sau cuộc thi.'],
   ];
