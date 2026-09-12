@@ -93,9 +93,12 @@ export class MissionController {
   }
 
   /**
-   * Trưởng thôn (mobile) gửi báo cáo tình huống từ hiện trường → tạo DRAFT "hộp thư"
+   * Người ở hiện trường (mobile) gửi báo cáo tình huống → tạo DRAFT "hộp thư"
    * (lưu mô tả thô, CHƯA phân tích) → báo ADMIN. Admin mở tin trên web sẽ tự điền +
    * tự phân tích AI (nhu cầu vật tư, tình huống, địa điểm). Trả { missionId }.
+   *
+   * Cả trưởng thôn lẫn đội cứu hộ đều đi qua đường này, nên vai của người gửi phải
+   * đi kèm xuống service: thẻ thông báo của điều phối gọi đúng tên lực lượng đã báo.
    */
   @RequirePermission(Permission.INCIDENT_REPORT_SUBMIT)
   @Post("report")
@@ -117,6 +120,7 @@ export class MissionController {
       warehouseId,
       description: dto.description,
       userId: req.user.userId,
+      reporterRole: req.user.role,
       requestId: dto.requestId,
       incidentPoint,
       audio: dto.audioBase64

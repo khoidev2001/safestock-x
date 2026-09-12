@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
-import { CloseGlyph } from "./close-glyph";
 import { ColorIcon } from "./color-icon";
 
 export interface AiProgressDialogProps {
@@ -13,15 +12,6 @@ export interface AiProgressDialogProps {
   steps: string[];
   /** Ước lượng thời gian, lấy từ số đo thật chứ không phải phỏng đoán. */
   estimate?: string;
-  /**
-   * Có thì hộp thoại hiện nút đóng để BỎ NGANG lượt đang chạy.
-   *
-   * Cần thiết vì lượt gọi mô hình có thể treo: mạng rớt giữa chừng, mô hình
-   * không trả lời, hoặc đơn giản là lâu hơn mức người dùng chờ được. Không có
-   * đường thoát thì màn hình khoá cứng và cách duy nhất là tải lại cả trang —
-   * lúc đó mất luôn phần đang gõ dở ở form.
-   */
-  onCancel?: () => void;
 }
 
 /**
@@ -34,27 +24,18 @@ export interface AiProgressDialogProps {
  * Cố ý KHÔNG có thanh phần trăm: hệ thống không biết mô hình đang ở đâu trong câu
  * trả lời, nên mọi con số phần trăm đều là bịa. Đồng hồ giây là số thật, và nó
  * cũng đủ để người xem biết máy vẫn đang chạy.
+ *
+ * Cũng cố ý KHÔNG có nút đóng và không nghe phím Escape. Hộp thoại tắt đúng một
+ * cách: lượt chạy kết thúc. Trước đây có dấu X để bỏ ngang, nhưng nó mở ra một
+ * khoảng chết — lượt gọi đã trả kết quả xong mà hộp thoại còn trên màn hình thêm
+ * một nhịp vẽ, bấm X đúng lúc đó là cắt phía máy khách SAU khi máy chủ đã ghi:
+ * màn hình về trạng thái "chưa chạy gì" trong khi dữ liệu đã đổi. Đó chính là lỗi
+ * người dùng gặp. Lượt gọi vẫn bị cắt khi cần — chỗ bấm lại tự huỷ lượt cũ trước
+ * khi mở lượt mới.
  */
-export function AiProgressDialog({
-  open,
-  title,
-  steps,
-  estimate,
-  onCancel,
-}: AiProgressDialogProps) {
+export function AiProgressDialog({ open, title, steps, estimate }: AiProgressDialogProps) {
   const [seconds, setSeconds] = useState(0);
   useBodyScrollLock(open);
-
-  // Escape cũng bỏ ngang. Người dùng thử phím này trước khi đi tìm nút, và ở một
-  // hộp thoại phủ kín màn hình thì không có phản hồi nào nghĩa là "máy treo".
-  useEffect(() => {
-    if (!open || !onCancel) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onCancel();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onCancel]);
 
   useEffect(() => {
     if (!open) {
@@ -79,18 +60,7 @@ export function AiProgressDialog({
       className="fixed inset-0 z-[1200] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-[2px]"
     >
       <div className="relative w-full max-w-md rounded-lg border bg-[var(--surface)] p-6 shadow-xl">
-        {onCancel ? (
-          <button
-            type="button"
-            onClick={onCancel}
-            aria-label="Dừng và bỏ lượt đang chạy"
-            title="Dừng lượt này. Phần dữ liệu đang xem sẽ được tải lại theo trạng thái thật."
-            className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-md border text-[var(--text-muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
-          >
-            <CloseGlyph />
-          </button>
-        ) : null}
-        <div className="flex items-center gap-3 pr-10">
+        <div className="flex items-center gap-3">
           <ColorIcon className="animate-spin" name="loading" size={24} tone="amber" />
           <div className="min-w-0">
             <p className="font-semibold">{title}</p>

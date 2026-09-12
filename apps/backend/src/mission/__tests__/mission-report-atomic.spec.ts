@@ -1,5 +1,6 @@
 import { Logger } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
+import { UserRole } from "@safestock/shared-types";
 import { NotificationService } from "../../notification/notification.service";
 import { MissionService } from "../mission.service";
 
@@ -81,6 +82,48 @@ describe("MissionService.createReportDraft atomicity", () => {
     expect(state.notifications.pushPersisted).toHaveBeenCalledWith({
       id: "notification-1",
       recipientRole: "ADMIN",
+    });
+  });
+
+  /**
+   * Đội cứu hộ cũng gửi báo cáo qua đúng đường này. Tiêu đề ghi chết "từ trưởng
+   * thôn" làm điều phối gọi nhầm người để hỏi lại hiện trường.
+   */
+  it("ghi tiêu đề thông báo theo đúng vai người gửi", async () => {
+    const rescue = makeService();
+    await rescue.service.createReportDraft({
+      warehouseId: "warehouse-1",
+      description,
+      userId: "reporter-rescue",
+      reporterRole: UserRole.RESCUE,
+      requestId: "request-rescue",
+    });
+    expect(rescue.notificationCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ title: "Báo cáo mới từ đội cứu hộ" }),
+    });
+
+    const warehouse = makeService();
+    await warehouse.service.createReportDraft({
+      warehouseId: "warehouse-1",
+      description,
+      userId: "reporter-warehouse",
+      reporterRole: UserRole.WAREHOUSE,
+      requestId: "request-warehouse",
+    });
+    expect(warehouse.notificationCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ title: "Báo cáo mới từ trưởng thôn" }),
+    });
+
+    // Không biết vai thì không gán bừa cho lực lượng nào.
+    const unknown = makeService();
+    await unknown.service.createReportDraft({
+      warehouseId: "warehouse-1",
+      description,
+      userId: "reporter-unknown",
+      requestId: "request-unknown",
+    });
+    expect(unknown.notificationCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ title: "Báo cáo mới từ hiện trường" }),
     });
   });
 

@@ -37,8 +37,7 @@ function OverallContent({ warehouseId }: { warehouseId: string }) {
 
   // Ngoài shell thì không có khối chờ nào — rơi về chuyển trang thường thay vì
   // bỏ hẳn cú bấm.
-  const goToTab = (path: string) =>
-    transition ? transition.goToTab(path) : router.push(path);
+  const goToTab = (path: string) => (transition ? transition.goToTab(path) : router.push(path));
 
   const treeQuery = useQuery({
     queryKey: ["warehouse-tree", warehouseId],
@@ -135,15 +134,16 @@ function OverallContent({ warehouseId }: { warehouseId: string }) {
         readiness={readinessQuery.data}
       />
 
-      <div className="grid gap-4 xl:grid-cols-[1fr_420px]">
-        <WarehouseMap isLoading={treeQuery.isLoading} tree={treeQuery.data} />
-        <SimulatorPanel
-          devices={devicesQuery.data}
-          isLoading={devicesQuery.isLoading || timelineQuery.isLoading}
-          showTimeline={false}
-          timeline={timelineQuery.data}
-        />
-      </div>
+      {/* Xếp dọc, mỗi khối trọn bề ngang. Cột phải 420px ép ảnh bố trí ba khu
+          xuống cỡ tem thư, đọc mã kệ trên ảnh phải nheo mắt; còn cột cảm biến
+          hẹp thì 14 ô thiết bị xuống thành bảy hàng, dài hơn cả sơ đồ. */}
+      <WarehouseMap isLoading={treeQuery.isLoading} tree={treeQuery.data} />
+      <SimulatorPanel
+        devices={devicesQuery.data}
+        isLoading={devicesQuery.isLoading || timelineQuery.isLoading}
+        showTimeline={false}
+        timeline={timelineQuery.data}
+      />
     </>
   );
 }

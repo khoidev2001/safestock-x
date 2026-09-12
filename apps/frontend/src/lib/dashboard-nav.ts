@@ -143,12 +143,12 @@ export const navItems: NavItem[] = [
   },
   {
     path: "/simulator",
-    label: "Cảm biến thử nghiệm",
+    label: "Cảm biến",
     icon: "simulator",
     tone: "orange",
     group: "Quản trị",
     requiredPermission: Permission.SIMULATION_VIEW,
-    title: "Cảm biến thử nghiệm",
+    title: "Cảm biến",
     subtitle: "Theo dõi dữ liệu mô phỏng trước khi kết nối thiết bị thực tế.",
   },
   {

@@ -55,7 +55,11 @@ Expo mở tab trình duyệt (thường `http://localhost:8081`). API release ph
 
 ## Build APK release Android
 
-Trước khi build, đặt `EXPO_PUBLIC_API_BASE_URL=https://ungphonhanh.life` trong `apps/mobile/.env.local`. APK release chỉ dùng HTTPS và mang CA nội bộ dành riêng cho domain này để kết nối được khi split-DNS LAN đang hoạt động. Khóa release chỉ tạo một lần; script không được dùng để thay khóa giữa các bản cập nhật:
+Không cần đụng tới `.env.local`: script `android:release` tự nhúng `https://ungphonhanh.life` vào bundle và cắt hẳn đường đọc `.env*` của Metro, nên file dev trỏ về `localhost` cũng không lọt vào APK được. Build xong script đọc lại bundle để kiểm chứng endpoint và dừng nếu sai — bản 0.5.2 từng ra lò với `http://localhost:3110` vì lúc đó endpoint còn phụ thuộc `.env.local`, và trên điện thoại thật thì `localhost` là chính cái điện thoại nên mọi lời gọi đều "Network request failed".
+
+Muốn build vào máy chủ khác (ví dụ staging), đặt `EXPO_PUBLIC_API_BASE_URL` thành một URL `https` ngay trong môi trường chạy lệnh; script sẽ cảnh báo rõ là bản này không trỏ vào máy chủ thật. URL `http` bị từ chối vì manifest đặt `usesCleartextTraffic="false"`.
+
+APK release chỉ dùng HTTPS và mang CA nội bộ dành riêng cho domain này để kết nối được khi split-DNS LAN đang hoạt động. Khóa release chỉ tạo một lần; script không được dùng để thay khóa giữa các bản cập nhật:
 
 ```powershell
 # Chỉ chạy một lần nếu chưa có release keystore

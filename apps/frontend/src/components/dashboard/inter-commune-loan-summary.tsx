@@ -3,8 +3,19 @@
 import { useQuery } from "@tanstack/react-query";
 import { ColorIcon } from "@/components/shared/color-icon";
 import { TabLink } from "@/components/shared/tab-link";
+import { Pagination, usePagination } from "@/components/shared/pagination";
 import { getInterCommuneLoans, type InterCommuneLoan } from "@/lib/dashboard-api";
 import { isLoanOpen, outstanding, statusLabel } from "./inter-commune-loan-actions";
+
+/**
+ * Số khoản mỗi trang của một cột.
+ *
+ * Đây là khối tóm tắt trên trang Tổng quan, không phải sổ đầy đủ: một xã mượn
+ * hàng chục khoản thì danh sách dài hơn cả phần tồn kho phía trên, và mọi khối
+ * sau nó bị đẩy xuống khỏi màn hình. Năm dòng đủ thấy việc đang gấp, ai cần đọc
+ * hết thì có đường dẫn sang sổ Mượn — trả.
+ */
+const LOANS_PER_PAGE = 5;
 
 /**
  * Xã mình đang nợ ai, và ai đang nợ xã mình — hiện ngay trên trang Tổng quan.
@@ -115,6 +126,11 @@ function LoanColumn({
   title: string;
   tone: string;
 }) {
+  /* Mỗi cột đếm trang riêng: hai chiều dài ngắn khác nhau, dùng chung một số
+     trang thì cột ngắn hết dòng trong khi cột dài vẫn còn, mà người đọc lại
+     tưởng mình đã xem hết cả hai bên. */
+  const { page, pageItems, pageSize, setPage, totalPages } = usePagination(loans, LOANS_PER_PAGE);
+
   return (
     <div>
       <div className="flex items-baseline gap-2">
@@ -128,7 +144,7 @@ function LoanColumn({
         <p className="mt-2 text-sm text-[var(--text-muted)]">{emptyText}</p>
       ) : (
         <ul className="mt-2 divide-y">
-          {loans.map((loan) => {
+          {pageItems.map((loan) => {
             const remaining = outstanding(loan.quantity, loan.returnedQuantity);
             return (
               <li className="py-2.5" key={loan.id}>
@@ -165,6 +181,20 @@ function LoanColumn({
           })}
         </ul>
       )}
+
+      {/* Tổng số khoản đã nằm cạnh tiêu đề cột, nên bỏ dòng "Hiển thị 1-5 trên
+          16" — nó chỉ lặp lại con số ấy trong một cột vốn đã hẹp. `Pagination`
+          tự ẩn khi chỉ có một trang. */}
+      <Pagination
+        label="khoản"
+        onPageChange={setPage}
+        padding="pt-3"
+        page={page}
+        pageSize={pageSize}
+        showSummary={false}
+        totalItems={loans.length}
+        totalPages={totalPages}
+      />
     </div>
   );
 }
