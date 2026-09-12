@@ -24,6 +24,7 @@ import {
   assertBatchInScope,
   assertWarehouseInScope,
 } from "./warehouse-scope";
+import { EXPORTABLE_STATUSES } from "./exportable-batch";
 
 export type ReceiveBatchInput = {
   itemId?: string;
@@ -55,10 +56,7 @@ export type ReceiveBatchInput = {
  * Hết hạn thật, hư hỏng, chờ kiểm tra, kệ khoá đều đã có chốt riêng ngay bên dưới
  * nên bỏ trạng thái này ra khỏi danh sách cấm không hề nới lỏng an toàn kho.
  */
-const EXPORTABLE_STATUSES: ReadonlySet<ItemStatus> = new Set([
-  ItemStatus.AVAILABLE,
-  ItemStatus.EXPIRING_SOON,
-]);
+
 
 @Injectable()
 export class InventoryService {
