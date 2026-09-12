@@ -9,6 +9,14 @@ interface SimulatorPanelProps {
   devices: VirtualDevice[] | undefined;
   timeline: SensorTimelineEvent[] | undefined;
   isLoading: boolean;
+  /**
+   * Dòng thời gian "Diễn biến gần đây".
+   *
+   * Tắt được vì trang tổng quan đọc theo chiều "kho đang thế nào ngay lúc này":
+   * năm dòng ghi nhận nồng độ khói cách nhau vài phút là nhật ký thiết bị, thuộc
+   * về trang mô phỏng cảm biến — ở đây nó chỉ đẩy bản đồ và các khối khác xuống.
+   */
+  showTimeline?: boolean;
 }
 
 const deviceTypeLabels: Record<string, string> = {
@@ -78,7 +86,12 @@ function formatEventDetail(event: SensorTimelineEvent): string {
   return `${event.value}${event.unit ? ` ${event.unit}` : ""} · ${deviceType}`;
 }
 
-export function SimulatorPanel({ devices, timeline, isLoading }: SimulatorPanelProps) {
+export function SimulatorPanel({
+  devices,
+  timeline,
+  isLoading,
+  showTimeline = true,
+}: SimulatorPanelProps) {
   if (isLoading) {
     return <div className="h-[360px] animate-pulse rounded-md border bg-[var(--surface)]" />;
   }
@@ -151,6 +164,7 @@ export function SimulatorPanel({ devices, timeline, isLoading }: SimulatorPanelP
         ))}
       </div>
 
+      {showTimeline ? (
       <div className="mt-5 border-t pt-4">
         <h3 className="text-xs font-semibold text-[var(--text-muted)]">Diễn biến gần đây</h3>
         {(timeline?.length ?? 0) === 0 ? (
@@ -190,6 +204,7 @@ export function SimulatorPanel({ devices, timeline, isLoading }: SimulatorPanelP
           </ol>
         )}
       </div>
+      ) : null}
     </CollapsiblePanel>
   );
 }
