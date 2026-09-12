@@ -89,6 +89,7 @@ function makeService() {
   };
   const persistence = {
     saveAnalysisSnapshot: jest.fn().mockResolvedValue({ id: "snapshot-1" }),
+    listAnalysisSnapshots: jest.fn().mockResolvedValue([]),
   };
   return {
     missions,
@@ -303,5 +304,61 @@ describe("CoordinationAnalysisService", () => {
       // Tiếng Việt không dấu là dấu hiệu chuỗi bị viết vội; bắt tại đây.
       expect(line).toMatch(/[ăâđêôơưáàảãạấầẩẫậéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/iu);
     }
+  });
+
+  describe("tính lại sau khi ADMIN sửa vật tư", () => {
+    it("dùng lại phần AI đã bóc ở bản trước, không gọi lại AI", async () => {
+      /*
+        Bảng "Điều phối nội xã" nằm trong ảnh chụp phân tích bất biến, nên sửa vật
+        tư xong nó vẫn kể phân bổ của bộ số cũ trong khi khối khả năng đáp ứng ngay
+        bên dưới đã đổi. Chụp lại là cách chữa — nhưng chụp lại KHÔNG được kéo theo
+        một lượt gọi LLM: lời kể có đổi đâu, và lượt gọi ấy vừa tốn hai chục giây
+        vừa có thể trả về một bộ dữ kiện hơi khác cho cùng một câu chuyện.
+      */
+      const { service, ai, snapshots, persistence } = makeService();
+      const storedExtraction = aiExtraction();
+      persistence.listAnalysisSnapshots.mockResolvedValue([
+        {
+          id: "snapshot-1",
+          kind: "BASELINE",
+          input: { extraction: storedExtraction },
+          provenance: { extractionSource: "AI_SERVICE" },
+        },
+      ]);
+
+      await service.recomputeAfterRequirementChange("mission-1", "admin-1", null);
+
+      expect(ai.analyzeSituation).not.toHaveBeenCalled();
+      expect(snapshots.compute).toHaveBeenCalledWith("mission-1", storedExtraction, {});
+      expect(persistence.saveAnalysisSnapshot).toHaveBeenCalledWith(
+        "mission-1",
+        "admin-1",
+        null,
+        expect.objectContaining({ kind: "BASELINE" }),
+      );
+    });
+
+    it("chưa từng có bản tham mưu thì không tự lập một bản sau lưng người dùng", async () => {
+      const { service, snapshots, persistence } = makeService();
+      persistence.listAnalysisSnapshots.mockResolvedValue([]);
+
+      const result = await service.recomputeAfterRequirementChange("mission-1", "admin-1", null);
+
+      expect(result).toBeNull();
+      expect(snapshots.compute).not.toHaveBeenCalled();
+      expect(persistence.saveAnalysisSnapshot).not.toHaveBeenCalled();
+    });
+
+    it("chụp lại hỏng thì KHÔNG làm hỏng lượt sửa vật tư đã ghi xong", async () => {
+      // Vật tư đã đổi thật trong nhiệm vụ trước khi hàm này chạy. Ném lỗi ra ngoài
+      // là báo "không cập nhật được" cho một việc đã xong — và người dùng sẽ sửa
+      // thêm một lần nữa lên bộ số đã sửa.
+      const { service, persistence } = makeService();
+      persistence.listAnalysisSnapshots.mockRejectedValue(new Error("mất kết nối"));
+
+      await expect(
+        service.tryRecomputeAfterRequirementChange("mission-1", "admin-1", null),
+      ).resolves.toBeUndefined();
+    });
   });
 });

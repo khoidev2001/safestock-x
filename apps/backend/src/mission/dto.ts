@@ -356,3 +356,35 @@ export class ChangeRequirementDto {
   @Max(1_000_000)
   quantity?: number;
 }
+
+/**
+ * Một dòng vật tư kho đếm lại khi đội cứu hộ mang đồ về.
+ *
+ * `returnedQuantity` cho phép bằng 0: "đội chưa mang về cái nào" là một câu trả
+ * lời hợp lệ và cần ghi lại, khác hẳn với việc bỏ trống dòng đó.
+ */
+export class SupplyReturnItemDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  sku!: string;
+
+  @IsInt()
+  @Min(0)
+  @Max(1_000_000)
+  returnedQuantity!: number;
+}
+
+/**
+ * Kho xác nhận hoàn trả vật tư.
+ *
+ * Không gửi `items` nghĩa là "về đủ hết" — giữ nguyên đường một nút bấm đã có.
+ * Gửi `items` là kho đếm từng dòng, và nhiệm vụ chỉ khép sổ khi không còn thiếu.
+ */
+export class SupplyReturnDto {
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @ArrayMaxSize(200)
+  @Type(() => SupplyReturnItemDto)
+  items?: SupplyReturnItemDto[];
+}

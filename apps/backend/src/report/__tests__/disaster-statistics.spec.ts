@@ -184,4 +184,72 @@ describe("DisasterStatisticsService", () => {
     expect(names).toContain("Nước uống");
     expect(names).toContain("Thiết bị cứu sinh");
   });
+
+  it("gộp các nhiệm vụ của cùng một cơn bão thành MỘT đợt", async () => {
+    /*
+      Đây là điều báo cáo sinh ra để trả lời: "bão vừa rồi xã tiêu hết bao nhiêu".
+      Trước đây mỗi nhiệm vụ là một "đợt", nên ba nhiệm vụ của cùng một cơn bão
+      hiện thành ba đợt và không dòng nào nói được tổng của cơn bão đó.
+    */
+    const state = makeService([
+      makeMission({
+        id: "mission-1",
+        missionNo: 12,
+        createdAt: new Date("2026-09-01T00:00:00.000Z"),
+        warehouseRequests: [makeRequest({ preparedQuantity: 100, pickedUpQuantity: 100 })],
+      }),
+      makeMission({
+        id: "mission-2",
+        missionNo: 13,
+        createdAt: new Date("2026-09-04T00:00:00.000Z"),
+        warehouseRequests: [makeRequest({ preparedQuantity: 60, pickedUpQuantity: 60 })],
+      }),
+      makeMission({
+        id: "mission-3",
+        missionNo: 14,
+        createdAt: new Date("2026-09-09T00:00:00.000Z"),
+        warehouseRequests: [makeRequest({ preparedQuantity: 40, pickedUpQuantity: 40 })],
+      }),
+    ]);
+
+    const result = await state.service.getStatistics("actor-1");
+
+    expect(result.events).toHaveLength(1);
+    const [episode] = result.events;
+    expect(episode.missionCount).toBe(3);
+    expect(episode.totals.issued).toBe(200);
+    // Cùng một mã hàng ở ba nhiệm vụ phải nhập vào MỘT dòng của đợt, không phải ba.
+    const water = episode.categories.find((category) => category.categoryName === "Nước uống");
+    expect(water?.items).toHaveLength(1);
+    expect(water?.items[0].issued).toBe(200);
+    // Mở đợt ra vẫn lần ngược được về từng nhiệm vụ, mới nhất trước.
+    expect(episode.missions.map((mission) => mission.missionNo)).toEqual([14, 13, 12]);
+  });
+
+  it("hai cơn bão cách nhau hơn bảy ngày là hai đợt riêng", async () => {
+    const state = makeService([
+      makeMission({
+        id: "mission-1",
+        missionNo: 12,
+        createdAt: new Date("2026-09-01T00:00:00.000Z"),
+        warehouseRequests: [makeRequest({ preparedQuantity: 100, pickedUpQuantity: 100 })],
+      }),
+      makeMission({
+        id: "mission-2",
+        missionNo: 20,
+        createdAt: new Date("2026-09-20T00:00:00.000Z"),
+        warehouseRequests: [makeRequest({ preparedQuantity: 30, pickedUpQuantity: 30 })],
+      }),
+    ]);
+
+    const result = await state.service.getStatistics("actor-1");
+
+    expect(result.events).toHaveLength(2);
+    // Đợt mới nhất đứng đầu.
+    expect(result.events[0].missions[0].missionNo).toBe(20);
+    expect(result.events[0].totals.issued).toBe(30);
+    expect(result.events[1].totals.issued).toBe(100);
+    // Tổng toàn bộ vẫn là tổng của mọi đợt.
+    expect(result.totals.issued).toBe(130);
+  });
 });

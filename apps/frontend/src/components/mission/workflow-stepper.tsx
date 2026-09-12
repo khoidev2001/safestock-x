@@ -52,14 +52,25 @@ const OFF_FLOW: Partial<Record<MissionStatus, { label: string; tone: string }>> 
 export function WorkflowStepper({
   status,
   warehouseRequests,
+  hasReturnableSupplies,
 }: {
   status: MissionStatus;
   /** Phiếu vật tư của nhiệm vụ — mốc "kho xong" đọc theo chữ ký nhận của đội. */
   warehouseRequests?: { status: string }[] | null;
+  /** Có vật tư tái sử dụng nào đang nằm ngoài kho không; `false` là không cần trả. */
+  hasReturnableSupplies?: boolean;
 }) {
   const done = completedStepIndex(status, warehouseRequests);
   const active = activeStepIndex(status, warehouseRequests);
   const offFlow = OFF_FLOW[status];
+  /**
+   * Nhiệm vụ chỉ phát đồ tiêu hao: giao xong là hết, không ai phải mang gì về.
+   *
+   * Bước cuối vẫn phải có người ký để khép sổ, nên nó CHƯA xong — nhưng dán
+   * "Đang chờ" lên đây là báo điều phối đi đòi một khoản nợ không tồn tại, và
+   * người trực sẽ gọi kho hỏi về mấy cái áo phao chưa bao giờ rời kệ.
+   */
+  const nothingToReturn = status === "COMPLETED" && hasReturnableSupplies === false;
 
   if (offFlow) {
     return (
@@ -108,9 +119,15 @@ export function WorkflowStepper({
               </div>
               <div>
                 <p className="text-xs font-medium leading-tight">{step.label}</p>
-                {isActive && !isDone && (
-                  <p className="text-[10px] text-[var(--color-attention)]">Đang chờ</p>
-                )}
+                {isActive &&
+                  !isDone &&
+                  (step.key === "returned" && nothingToReturn ? (
+                    // Màu chữ phụ, KHÔNG phải màu cảnh báo: đây là một lời trấn
+                    // an ("không có việc gì"), không phải một việc đang treo.
+                    <p className="text-[10px] text-[var(--text-muted)]">Không cần trả</p>
+                  ) : (
+                    <p className="text-[10px] text-[var(--color-attention)]">Đang chờ</p>
+                  ))}
               </div>
             </div>
             {i < STEPS.length - 1 && (

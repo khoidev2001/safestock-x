@@ -36,11 +36,16 @@ export interface RouteArrow {
  * Chọn theo cỡ màn hình điện thoại ở mức phóng thường dùng (z15–z17 cho một xã):
  * thưa hơn thì có tuyến ngắn không được mũi tên nào, dày hơn thì đoạn đường cong
  * biến thành một dãy mũi tên đè lên nhau thành vệt đặc.
+ *
+ * Để RỘNG hơn hẳn bản trước (320 m): mũi tên nay là một gạch thẳng có đầu nhọn
+ * chứ không còn là hình tam giác nhỏ, nên nó chiếm dài gấp đôi trên màn hình. Giữ
+ * nguyên khoảng cũ thì ở khúc cua các gạch nối đuôi nhau thành một vệt liền và
+ * không còn đọc ra được đâu là mũi tên, đâu là tuyến.
  */
-const ARROW_SPACING_METERS = 320;
+const ARROW_SPACING_METERS = 650;
 
 /** Không rải quá số này trên MỘT tuyến — tuyến liên xã dài chục km sẽ đầy mũi tên. */
-const MAX_ARROWS_PER_ROUTE = 12;
+const MAX_ARROWS_PER_ROUTE = 8;
 
 /**
  * Tuyến ngắn hơn ngần này thì KHÔNG vẽ mũi tên nào.
@@ -143,15 +148,35 @@ export function routeArrows(
 /**
  * Hình mũi tên đặt trên tuyến — MỘT nguồn cho cả web lẫn điện thoại.
  *
- * Có viền trắng vì tuyến chạy trên ảnh vệ tinh: mũi tên xanh trơn biến mất khi
- * đi qua mái tôn sáng hay mặt nước, đúng những chỗ khó nhìn nhất.
+ * Là một GẠCH THẲNG có đầu nhọn, không phải một hình tam giác trơn. Tam giác nhỏ
+ * nằm giữa tuyến đọc ra thành một dấu ghim hay một mảnh vụn của lớp bản đồ: nó
+ * không có phần thân để mắt bắt được cái trục, nên muốn biết nó chỉ đâu thì phải
+ * nhìn kỹ từng cái một. Gạch có thân thì hướng đọc được từ xa, và nó nằm gọn dọc
+ * tim đường thay vì đè ngang qua.
+ *
+ * Vẽ hai lớp chồng nhau: lớp trắng dày bên dưới, lớp màu mảnh hơn bên trên. Tuyến
+ * chạy trên ảnh vệ tinh nên một nét xanh trơn biến mất khi đi qua mái tôn sáng hay
+ * mặt nước — đúng những chỗ khó nhìn nhất.
+ *
+ * Hình vẽ trong hệ toạ độ 24×24 và chĩa LÊN TRÊN, rồi cả khối xoay theo phương vị;
+ * nhờ vậy `bearing` dùng thẳng được cho `rotate()` mà không phải quy đổi.
  */
 export function routeArrowSvg(bearing: number, size = 16, color = "#1d4ed8"): string {
+  // Thân chạy gần hết chiều cao khung, đầu nhọn mở 90° ở đỉnh. Vẽ liền một nét
+  // (thân → cạnh trái đầu → đỉnh → cạnh phải đầu) để hai lớp luôn khớp nhau.
+  //
+  // Đuôi dừng ở 20.6 chứ không sát mép 24: nét vẽ có đầu bo tròn và lớp viền
+  // trắng dày 6.4, nên nửa bề dày (3.2) còn thò ra quá đuôi. Chạm mép khung là bị
+  // chính khung SVG cắt phẳng, và cái đuôi bo tròn biến thành một vết cắt ngang.
+  const shaft = "M12 20.6 L12 5.4";
+  const head = "M6.1 11 L12 4.2 L17.9 11";
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" ` +
     `style="transform: rotate(${bearing.toFixed(1)}deg); display: block;">` +
-    `<path d="M12 3.2 19.4 18.2 12 14.4 4.6 18.2z" fill="${color}" stroke="#ffffff" ` +
-    `stroke-width="1.7" stroke-linejoin="round"/>` +
+    `<path d="${shaft} ${head}" fill="none" stroke="#ffffff" stroke-width="6.4" ` +
+    `stroke-linecap="round" stroke-linejoin="round"/>` +
+    `<path d="${shaft} ${head}" fill="none" stroke="${color}" stroke-width="3.4" ` +
+    `stroke-linecap="round" stroke-linejoin="round"/>` +
     `</svg>`
   );
 }

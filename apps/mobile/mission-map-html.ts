@@ -50,6 +50,14 @@ export interface MissionMapData {
  * cầm máy.
  */
 const ROUTE_COLOR = "#2563eb";
+/**
+ * Cỡ khung mũi tên chỉ hướng, pixel — dùng chung cho lúc vẽ SVG và lúc đặt marker.
+ *
+ * To hơn bản trước (17px): hình nay là một GẠCH có đầu nhọn chứ không còn là tam
+ * giác trơn, phần thân chiếm gần hết chiều cao khung nên khung nhỏ thì cái gạch
+ * lại co về đúng một vệt như cũ.
+ */
+const ARROW_ICON_SIZE = 26;
 
 /**
  * Kho vẽ MỘT màu, không phân biệt kho tổng với kho thôn bằng màu.
@@ -103,7 +111,10 @@ export function buildMissionMapHtml(data: MissionMapData): string {
   const arrowsByWarehouse = data.warehouses.map((warehouse) =>
     routeArrows(
       (warehouse.routeCoordinates ?? []).map(([lng, lat]) => [lat, lng] as [number, number]),
-    ).map((arrow) => ({ ...arrow, svg: routeArrowSvg(arrow.bearing, 17, ROUTE_COLOR) })),
+    ).map((arrow) => ({
+      ...arrow,
+      svg: routeArrowSvg(arrow.bearing, ARROW_ICON_SIZE, ROUTE_COLOR),
+    })),
   );
   return `<!DOCTYPE html>
 <html>
@@ -230,7 +241,7 @@ export function buildMissionMapHtml(data: MissionMapData): string {
       var arrows = ARROWS[i] || [];
       for (var a = 0; a < arrows.length; a++) {
         L.marker([arrows[a].lat, arrows[a].lng], {
-          icon: L.divIcon({ className: '', html: arrows[a].svg, iconSize: [17, 17], iconAnchor: [8.5, 8.5] }),
+          icon: L.divIcon({ className: '', html: arrows[a].svg, iconSize: [${ARROW_ICON_SIZE}, ${ARROW_ICON_SIZE}], iconAnchor: [${ARROW_ICON_SIZE / 2}, ${ARROW_ICON_SIZE / 2}] }),
           interactive: false,
           keyboard: false,
         }).addTo(map);

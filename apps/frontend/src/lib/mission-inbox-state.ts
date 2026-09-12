@@ -31,6 +31,15 @@ export interface MissionInboxItem {
    * mưu, nên nhiều nhiệm vụ có nhu cầu mà chưa hề tham mưu.
    */
   hasCoordinationAnalysis?: boolean;
+  /**
+   * Có vật tư tái sử dụng nào đang nằm ngoài kho không — backend tính từ phần đội
+   * đã ký nhận mang đi.
+   *
+   * `false` là KHÔNG CẦN TRẢ: nhiệm vụ chỉ phát đồ tiêu hao. Để trống nghĩa là
+   * bên gọi chưa có thông tin, và nhãn phải đọc theo cách thận trọng — nói "không
+   * cần trả" khi thật ra chưa biết là xoá một khoản nợ có thể đang tồn tại.
+   */
+  hasReturnableSupplies?: boolean;
   /** Chỉ cần biết CÓ hay KHÔNG; hình dạng kế hoạch là việc của màn hình chi tiết. */
   actionPlan?: unknown;
 }
@@ -97,10 +106,27 @@ export function missionStageLabel(mission: MissionInboxItem): string {
   // ai phải làm gì nữa. `COMPLETED` chỉ được đặt ở đúng một chỗ — bước hiện trường
   // xác nhận đã giao (mission.service.ts `confirmDelivery`) — nên đọc thẳng ra
   // "đã hoàn thành" là đúng, không cần dò thêm dấu vết nào.
-  // Hoàn trả là mốc SAU khi giao xong, nên xét trước — nếu không thì nhiệm vụ đã
-  // khép sổ vẫn đọc ra "Đã hoàn thành" và bước cuối không bao giờ hiện ra ở đâu.
-  if (mission.status === "RETURNED") return "Đã hoàn trả vật tư";
-  if (mission.status === "COMPLETED") return "Đã hoàn thành";
+  //
+  // RETURNED xét TRƯỚC vì nó là mốc sau: xét ngược lại thì nhiệm vụ đã khép sổ
+  // vẫn rơi vào nhánh COMPLETED và bước cuối không bao giờ hiện ra ở đâu.
+  //
+  // Cả hai mốc cuối đều là "đã hoàn thành" — khác nhau ở chỗ hàng đã về hay chưa,
+  // nên phần đó nằm trong ngoặc chứ không thay luôn cả câu. Trước đây RETURNED
+  // đọc ra "Đã hoàn trả vật tư", một câu không hề nói nhiệm vụ đã giao xong; còn
+  // COMPLETED chỉ có "Đã hoàn thành", không ai biết còn mấy cái áo phao ngoài kia.
+  if (mission.status === "RETURNED" || mission.status === "COMPLETED") {
+    // "Không cần trả" xét TRƯỚC cả RETURNED. Nhiệm vụ chỉ phát mì tôm mà đọc ra
+    // "đã trả vật tư" là ghi vào sổ một lượt thu hồi chưa từng xảy ra — đúng lỗi
+    // đã gặp: kho bấm xác nhận cho xong, và nhiệm vụ khai đã nhận lại một thứ
+    // không ai mang đi.
+    //
+    // Chỉ nói "không cần trả" khi backend đã khẳng định là KHÔNG. Cờ để trống là
+    // chưa biết, mà đoán bừa ở đây là xoá sổ một khoản nợ có thể đang tồn tại.
+    if (mission.hasReturnableSupplies === false) return "Đã hoàn thành (không cần trả vật tư)";
+    return mission.status === "RETURNED"
+      ? "Đã hoàn thành (đã trả vật tư)"
+      : "Đã hoàn thành (chưa hoàn vật tư)";
+  }
 
   // Còn nháp: đọc dấu vết, muộn nhất thắng.
   if (!missionIsPublished(mission)) {

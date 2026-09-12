@@ -62,6 +62,7 @@ import {
   isValidReportPeriod,
 } from "../monthly-report-state";
 import { mobileRoleLabel } from "../role-labels";
+import { PAGE_SIZE, appendPage, hasMoreAfter, nextCursor } from "../paged-list-state";
 
 const session = {
   accessToken: "access-token",
@@ -968,4 +969,39 @@ test("nhiệm vụ vừa xem được ghim lên đầu, trên cả việc cần 
     sortMissionsForFieldForce(missions, { pinnedMissionId: "khong-ton-tai" }).map((m) => m.id),
     ["a", "b", "c"],
   );
+});
+
+test("trang sau nối vào cuối danh sách và không nhân đôi dòng đã có", () => {
+  /*
+    Trùng dòng là chuyện BÌNH THƯỜNG của cuộn vô tận, không phải lỗi: giữa lúc
+    người dùng cuộn, một thông báo mới về qua socket và chen lên đầu, nên trang
+    sau xin từ con trỏ cũ trả lại một dòng đã nằm sẵn trên màn hình.
+  */
+  const current = [{ id: "a" }, { id: "b" }];
+  assert.deepEqual(
+    appendPage(current, [{ id: "b" }, { id: "c" }]).map((item) => item.id),
+    ["a", "b", "c"],
+  );
+  // Bản ĐANG CÓ thắng: nó có thể vừa được socket cập nhật nội dung.
+  const merged = appendPage([{ id: "a", title: "đã sửa" }], [{ id: "a", title: "bản cũ" }]);
+  assert.deepEqual(merged, [{ id: "a", title: "đã sửa" }]);
+  // Trang rỗng không làm mất gì.
+  assert.deepEqual(appendPage(current, []), current);
+});
+
+test("còn trang sau hay không suy ra từ số dòng nhận được", () => {
+  assert.equal(hasMoreAfter(new Array(PAGE_SIZE).fill({ id: "x" })), true);
+  assert.equal(hasMoreAfter(new Array(PAGE_SIZE - 1).fill({ id: "x" })), false);
+  assert.equal(hasMoreAfter([]), false);
+  // Cỡ trang truyền tay cũng phải được tôn trọng.
+  assert.equal(hasMoreAfter([{ id: "x" }], 1), true);
+});
+
+test("con trỏ là dòng CUỐI của danh sách đã ghép, không phải của trang vừa tải", () => {
+  /*
+    Lấy từ danh sách đã ghép thì con trỏ vẫn nhích tiếp ngay cả khi cả trang vừa
+    rồi toàn dòng trùng và bị bỏ hết. Đứng yên là xin lại đúng trang ấy mãi mãi.
+  */
+  assert.equal(nextCursor([{ id: "a" }, { id: "b" }]), "b");
+  assert.equal(nextCursor([]), null);
 });

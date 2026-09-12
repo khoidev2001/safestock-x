@@ -125,6 +125,17 @@ export interface Mission {
    * "mới khai số liệu" với "đã lập tham mưu".
    */
   hasCoordinationAnalysis?: boolean;
+  /**
+   * Nhiệm vụ có vật tư tái sử dụng nào đang nằm ngoài kho không.
+   *
+   * `false` nghĩa là KHÔNG CẦN TRẢ — nhiệm vụ chỉ phát đồ tiêu hao, phát xong là
+   * xong. Khác hẳn với "có hàng phải trả mà chưa trả", nên giao diện không được
+   * gộp hai thứ này vào cùng một bước "đang chờ".
+   *
+   * Chỉ có nghĩa từ lúc đội đã ký nhận mang hàng đi; trước đó chưa có gì ở ngoài
+   * kho nên backend trả `false` cho cả nhiệm vụ chưa xuất hàng.
+   */
+  hasReturnableSupplies?: boolean;
   fulfillment: number;
   // Mô tả thô của trưởng thôn (mobile) khi mission là "hộp thư" báo cáo — web tự điền + phân tích.
   reportText?: string | null;

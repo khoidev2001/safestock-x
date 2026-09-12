@@ -25,17 +25,34 @@ export interface CreateNotification {
   locationName?: string | null;
 }
 
+/**
+ * Trần số dòng một lượt xin — chặn `?limit=100000` biến một cú cuộn thành một
+ * lượt quét cả bảng.
+ */
+const MAX_NOTIFICATION_PAGE_SIZE = 100;
+
+/**
+ * Đích của một lượt đẩy realtime.
+ *
+ * `warehouseId` là ĐỊA CHỈ chứ không phải chú thích: có nó thì chỉ kho đó nhận
+ * được, bỏ trống thì cả vai trong xã cùng nhận. Trước đây đích chỉ có tổ chức và
+ * vai, nên lệnh "kho thôn Long Châu chuẩn bị vật tư" nổ chuông ở cả kho Đồng Xuân
+ * lẫn kho Tân Bình — ba kho cùng tưởng tới lượt mình.
+ */
+export interface NotificationTarget {
+  organizationId: string;
+  role: UserRole;
+  warehouseId: string | null;
+}
+
 /** Gateway is injected at runtime; the service does not depend on Socket.IO. */
-export type NotificationPusher = (
-  organizationId: string,
-  role: UserRole,
-  notification: unknown,
-) => void;
+export type NotificationPusher = (target: NotificationTarget, notification: unknown) => void;
 
 interface PersistedNotification {
   id: string;
   recipientRole: UserRole;
   organizationId: string | null;
+  warehouseId?: string | null;
 }
 
 interface NotificationPersistence {
@@ -52,8 +69,8 @@ interface NotificationPersistence {
   user: {
     findUnique(args: {
       where: { id: string };
-      select: { organizationId: true };
-    }): Promise<{ organizationId: string } | null>;
+      select: { organizationId: true; warehouseId?: true };
+    }): Promise<{ organizationId: string; warehouseId?: string | null } | null>;
   };
   warehouse: {
     findUnique(args: {
@@ -127,7 +144,14 @@ export class NotificationService {
       return;
     }
     try {
-      this.push(notification.organizationId, notification.recipientRole, notification);
+      this.push(
+        {
+          organizationId: notification.organizationId,
+          role: notification.recipientRole,
+          warehouseId: notification.warehouseId ?? null,
+        },
+        notification,
+      );
     } catch {
       this.log.warn("Không đẩy được thông báo realtime; record đã được lưu để client đọc lại.");
     }
@@ -139,21 +163,60 @@ export class NotificationService {
     return notification;
   }
 
-  /** Latest notifications of exactly one organization and role. */
-  async list(actorId: string, role: UserRole, onlyUnread = false) {
-    const organizationId = await this.actorOrganizationId(actorId);
+  /**
+   * Latest notifications of exactly one organization and role.
+   *
+   * Cuộn vô tận trên điện thoại: `cursor` là id của bản ghi CUỐI trang trước, và
+   * `limit` là số dòng xin về cho một lượt. Không truyền gì thì hành xử y như
+   * trước (50 dòng mới nhất) — bản web đọc chung đường này và nó không phân trang.
+   *
+   * Kết quả vẫn là một MẢNG chứ không phải phong bì `{ items, nextCursor }`: nơi
+   * gọi biết còn trang sau hay không bằng việc trang vừa nhận có đủ `limit` dòng
+   * hay không. Đổi hình dạng trả về thì mọi màn hình đang đọc đường này phải sửa
+   * theo cùng lúc, đổi lấy một con số suy ra được.
+   *
+   * Sắp xếp thêm `id` sau `createdAt`: hai thông báo sinh ra trong cùng một mili
+   * giây (một sự kiện gửi cho nhiều vai) thì thứ tự giữa chúng là tuỳ máy chủ, và
+   * con trỏ đặt vào giữa cặp đó sẽ nhảy cóc hoặc lặp một dòng ở trang sau.
+   */
+  async list(
+    actorId: string,
+    role: UserRole,
+    onlyUnread = false,
+    page: { limit?: number; cursor?: string } = {},
+  ) {
+    const { organizationId, warehouseId } = await this.actorScope(actorId);
+    const requested = Number.isFinite(page.limit) ? Math.trunc(page.limit as number) : 50;
+    const limit = Math.min(Math.max(requested, 1), MAX_NOTIFICATION_PAGE_SIZE);
+    const cursor = page.cursor?.trim();
     return this.db.notification.findMany({
-      where: { organizationId, recipientRole: role, ...(onlyUnread ? { read: false } : {}) },
-      orderBy: { createdAt: "desc" },
-      take: 50,
+      where: {
+        organizationId,
+        recipientRole: role,
+        ...this.warehouseVisibility(warehouseId),
+        ...(onlyUnread ? { read: false } : {}),
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      take: limit,
     });
   }
 
-  /** Not-found is intentional: it avoids confirming another organization's ID. */
+  /**
+   * Not-found is intentional: it avoids confirming another organization's ID.
+   *
+   * Cùng lý do với việc lọc theo kho: thông báo của kho khác phải "không tồn tại"
+   * với người này, kể cả khi họ đoán đúng id.
+   */
   async markRead(actorId: string, role: UserRole, id: string) {
-    const organizationId = await this.actorOrganizationId(actorId);
+    const { organizationId, warehouseId } = await this.actorScope(actorId);
     const updated = await this.db.notification.updateMany({
-      where: { id, organizationId, recipientRole: role },
+      where: {
+        id,
+        organizationId,
+        recipientRole: role,
+        ...this.warehouseVisibility(warehouseId),
+      },
       data: { read: true },
     });
     if (updated.count !== 1) throw new NotFoundException("Không tìm thấy thông báo");
@@ -173,28 +236,72 @@ export class NotificationService {
    * chức khác lọt vào cũng chỉ được đếm là 0, không đọc và không sửa gì.
    */
   async markManyRead(actorId: string, role: UserRole, ids: string[]) {
-    const organizationId = await this.actorOrganizationId(actorId);
+    const { organizationId, warehouseId } = await this.actorScope(actorId);
     return this.db.notification.updateMany({
-      where: { id: { in: ids }, organizationId, recipientRole: role, read: false },
+      where: {
+        id: { in: ids },
+        organizationId,
+        recipientRole: role,
+        read: false,
+        ...this.warehouseVisibility(warehouseId),
+      },
       data: { read: true },
     });
   }
 
+  /**
+   * Xoá sạch số chưa đọc — chỉ trong phần người này THẬT SỰ nhìn thấy.
+   *
+   * Cờ `read` nằm trên chính bản ghi thông báo, dùng chung cho cả vai. Không lọc
+   * theo kho ở đây thì kho Đồng Xuân bấm "đọc hết" là xoá luôn dấu chưa đọc trên
+   * lệnh gửi riêng cho kho Long Châu — và kho Long Châu mở app lên thấy một hộp
+   * thông báo sạch trơn trong khi họ đang nợ một chuyến xuất hàng.
+   */
   async markAllRead(actorId: string, role: UserRole) {
-    const organizationId = await this.actorOrganizationId(actorId);
+    const { organizationId, warehouseId } = await this.actorScope(actorId);
     return this.db.notification.updateMany({
-      where: { organizationId, recipientRole: role, read: false },
+      where: {
+        organizationId,
+        recipientRole: role,
+        read: false,
+        ...this.warehouseVisibility(warehouseId),
+      },
       data: { read: true },
     });
   }
 
-  private async actorOrganizationId(actorId: string): Promise<string> {
+  /**
+   * Phạm vi đọc thông báo của một tài khoản: tổ chức, và kho nếu có.
+   *
+   * Đọc từ BẢN GHI NGƯỜI DÙNG chứ không nhận từ tầng gọi. Phạm vi là thứ quyết
+   * định ai thấy được gì, nên nó không được phép là một tham số mà một chỗ gọi
+   * nào đó quên truyền — quên ở đây nghĩa là mở lại đúng lỗ rò vừa vá.
+   */
+  private async actorScope(
+    actorId: string,
+  ): Promise<{ organizationId: string; warehouseId: string | null }> {
     const actor = await this.db.user.findUnique({
       where: { id: actorId },
-      select: { organizationId: true },
+      select: { organizationId: true, warehouseId: true },
     });
     if (!actor) throw new NotFoundException("Không tìm thấy người dùng");
-    return actor.organizationId;
+    return { organizationId: actor.organizationId, warehouseId: actor.warehouseId ?? null };
+  }
+
+  /**
+   * Điều kiện lọc theo kho, dùng chung cho mọi lượt đọc và mọi lượt đánh dấu.
+   *
+   * Tài khoản gắn với MỘT kho (trưởng thôn) chỉ thấy thông báo không ghi kho —
+   * tin chung của cả xã — và thông báo ghi đúng kho mình. Tài khoản không gắn kho
+   * (điều phối, đội cứu hộ) thấy hết như cũ.
+   *
+   * Vì sao thông báo không ghi kho vẫn hiện cho tất cả: phần lớn thông báo cũ
+   * không có trường này, và chúng là tin chung thật (nhiệm vụ bị huỷ, đội đã rút).
+   * Lọc bỏ luôn thì vá một lỗ rò bằng cách bịt mất tai của mọi người.
+   */
+  private warehouseVisibility(warehouseId: string | null) {
+    if (!warehouseId) return {};
+    return { OR: [{ warehouseId: null }, { warehouseId }] };
   }
 
   /**

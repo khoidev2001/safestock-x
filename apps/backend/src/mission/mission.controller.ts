@@ -32,6 +32,7 @@ import {
   PlanFromReportDto,
   ReviewWarehouseRequestDto,
   SubmitReportDto,
+  SupplyReturnDto,
   TranscribeDto,
   WarehouseRequestDiscrepancyDto,
   WarehouseRequestNoteDto,
@@ -212,14 +213,27 @@ export class MissionController {
     );
   }
 
-  /** Danh sách nhiệm vụ, lọc theo trạng thái (vd ?status=DEFERRED,REJECTED). */
+  /**
+   * Danh sách nhiệm vụ, lọc theo trạng thái (vd ?status=DEFERRED,REJECTED).
+   *
+   * `cursor` + `limit` cho lối cuộn vô tận của điện thoại; bỏ trống thì vẫn là 100
+   * nhiệm vụ mới nhất như trước.
+   */
   @RequirePermission(Permission.MISSION_VIEW)
   @Get()
-  list(@Request() req: AuthenticatedRequest, @Query("status") status?: string) {
+  list(
+    @Request() req: AuthenticatedRequest,
+    @Query("status") status?: string,
+    @Query("limit") limit?: string,
+    @Query("cursor") cursor?: string,
+  ) {
     const statuses = status
       ? (status.split(",").filter((s) => s in MissionStatus) as MissionStatus[])
       : undefined;
-    return this.missions.listMissions(statuses, req.user.userId, req.user.warehouseId);
+    return this.missions.listMissions(statuses, req.user.userId, req.user.warehouseId, {
+      limit: limit ? Number.parseInt(limit, 10) : undefined,
+      cursor: cursor || undefined,
+    });
   }
 
   /**
@@ -389,10 +403,23 @@ export class MissionController {
     return this.missions.listRequirementOptions(id, req.user.userId, req.user.warehouseId);
   }
 
-  /** ADMIN thêm / sửa / xoá một dòng vật tư rồi nhận lại nhiệm vụ đã tính lại. */
+  /**
+   * ADMIN thêm / sửa / xoá một dòng vật tư rồi nhận lại nhiệm vụ đã tính lại.
+   *
+   * Bản tham mưu được chụp LẠI ngay sau đó. Nhu cầu và phân bổ kho có mặt ở hai
+   * nơi trên cùng một trang: bảng "Khả năng đáp ứng" đọc thẳng từ nhiệm vụ nên nó
+   * đổi ngay, còn bảng "Điều phối nội xã" nằm trong ảnh chụp phân tích bất biến.
+   * Không chụp lại thì hai bảng cạnh nhau nói hai điều khác nhau, và bảng nói sai
+   * lại chính là bảng ghi kho nào phải đi lấy những gì.
+   *
+   * Đứng ở tầng controller chứ không trong `MissionService`: dịch vụ phân tích
+   * vốn đã phụ thuộc vào `MissionService`, gọi ngược lại từ trong đó là đóng một
+   * vòng phụ thuộc. Controller là chỗ ghép hai việc lại mà không bên nào phải
+   * biết bên kia.
+   */
   @RequirePermission(Permission.MISSION_CREATE)
   @Post(":id/requirements")
-  changeRequirement(
+  async changeRequirement(
     @Request() req: AuthenticatedRequest,
     @Param("id") id: string,
     @Body(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
@@ -402,7 +429,18 @@ export class MissionController {
       dto.op === "remove"
         ? ({ op: "remove", sku: dto.sku } as const)
         : ({ op: dto.op, sku: dto.sku, quantity: dto.quantity as number } as const);
-    return this.missions.changeRequirement(id, change, req.user.userId, req.user.warehouseId);
+    const mission = await this.missions.changeRequirement(
+      id,
+      change,
+      req.user.userId,
+      req.user.warehouseId,
+    );
+    await this.coordinationAnalysis.tryRecomputeAfterRequirementChange(
+      id,
+      req.user.userId,
+      req.user.warehouseId,
+    );
+    return mission;
   }
 
   /**
@@ -413,8 +451,20 @@ export class MissionController {
    */
   @RequirePermission(Permission.MISSION_CREATE)
   @Post(":id/recalculate-supply")
-  recalculateSupply(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
-    return this.missions.recalculateSupply(id, req.user.userId, req.user.warehouseId);
+  async recalculateSupply(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    const mission = await this.missions.recalculateSupply(
+      id,
+      req.user.userId,
+      req.user.warehouseId,
+    );
+    // Cùng lý do với lượt sửa vật tư: phân bổ kho vừa đổi, nên bảng điều phối
+    // trong bản tham mưu phải được chụp lại theo.
+    await this.coordinationAnalysis.tryRecomputeAfterRequirementChange(
+      id,
+      req.user.userId,
+      req.user.warehouseId,
+    );
+    return mission;
   }
 
   /** Snapshot phân tích AI để ADMIN đối chiếu nguồn và phiên bản đã dùng. */
@@ -574,10 +624,29 @@ export class MissionController {
    * nơi mới là người ký được vào bước này. Service chốt thêm một lần theo vai và
    * theo việc kho đó có tham gia nhiệm vụ hay không.
    */
+  /**
+   * Những dòng vật tư kho phải đếm lại — chỉ hàng tái sử dụng đội đã mang đi.
+   *
+   * Đứng riêng khỏi chi tiết nhiệm vụ vì nó phải tra danh mục để biết mã nào là
+   * hàng tái sử dụng, và màn hình chỉ hỏi tới nó đúng lúc kho ngồi đếm hàng về.
+   */
+  @RequirePermission(Permission.MISSION_VIEW)
+  @Get(":id/returnable-supplies")
+  returnableSupplies(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
+    return this.missions.listReturnableSupplies(id, req.user.userId, req.user.warehouseId);
+  }
+
   @RequirePermission(Permission.MISSION_FULFILL)
   @Post(":id/supplies-returned")
-  markSuppliesReturned(@Request() req: AuthenticatedRequest, @Param("id") id: string) {
-    return this.missions.markReturnedByWarehouse(id, req.user.userId, req.user.warehouseId);
+  markSuppliesReturned(
+    @Request() req: AuthenticatedRequest,
+    @Param("id") id: string,
+    @Body(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
+    dto: SupplyReturnDto,
+  ) {
+    return this.missions.markReturnedByWarehouse(id, req.user.userId, req.user.warehouseId, {
+      items: dto.items,
+    });
   }
 
   /**

@@ -777,7 +777,14 @@ function RouteLine({ color, points }: { color: string; points: RoutePoint[] }) {
   );
 }
 
-const ARROW_ICON_SIZE = 17;
+/**
+ * Cỡ khung mũi tên, pixel.
+ *
+ * To hơn bản trước (17px) vì hình nay là một GẠCH có đầu nhọn chứ không còn là
+ * tam giác trơn: phần thân chiếm gần hết chiều cao khung, nên ở 17px cái gạch chỉ
+ * còn hơn chục pixel và lại đọc ra thành một vệt nhỏ như cũ.
+ */
+const ARROW_ICON_SIZE = 26;
 function arrowIcon(bearing: number, color: string): L.DivIcon {
   return L.divIcon({
     html: routeArrowSvg(bearing, ARROW_ICON_SIZE, color),

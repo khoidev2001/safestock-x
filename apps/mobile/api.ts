@@ -274,13 +274,36 @@ export async function logout(token: string): Promise<void> {
   if (!res.ok) throw await apiFailure(res, "Đăng xuất phía máy chủ thất bại");
 }
 
-/** Danh sách thông báo của role hiện tại (mới nhất trước). */
-export async function fetchNotifications(token: string): Promise<Notification[]> {
-  const res = await request(apiUrl("/api/notifications"), {
+/**
+ * Danh sách thông báo của role hiện tại (mới nhất trước).
+ *
+ * `cursor` là id thông báo cuối cùng đang có trên màn hình; máy chủ trả tiếp từ
+ * sau nó. Không truyền gì thì nhận trang đầu.
+ */
+export async function fetchNotifications(
+  token: string,
+  page: { limit?: number; cursor?: string | null } = {},
+): Promise<Notification[]> {
+  const res = await request(apiUrl(`/api/notifications${pageQuery(page)}`), {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error("Không tải được danh sách thông báo");
   return res.json();
+}
+
+/**
+ * Phần `?limit=&cursor=` của một đường dẫn có phân trang.
+ *
+ * Một hàm dùng chung cho mọi danh sách cuộn được: ghép tay ở từng chỗ gọi là chỗ
+ * để quên mã hoá con trỏ, mà con trỏ là id do máy chủ sinh ra chứ không phải thứ
+ * do mình đặt tên.
+ */
+function pageQuery(page: { limit?: number; cursor?: string | null }): string {
+  const params = new URLSearchParams();
+  if (page.limit != null) params.set("limit", String(page.limit));
+  if (page.cursor) params.set("cursor", page.cursor);
+  const query = params.toString();
+  return query ? `?${query}` : "";
 }
 
 /** Giọng nói (WAV 16kHz base64) → text tiếng Việt bằng PhoWhisper local (proxy AI). */
@@ -420,6 +443,14 @@ export interface MissionDetail {
   incidentLng?: number | null;
   requirements: MissionRequirement[];
   warehouseRequests?: WarehouseMaterialRequest[];
+  /**
+   * Có vật tư tái sử dụng nào đang nằm ngoài kho không.
+   *
+   * `false` là KHÔNG CẦN TRẢ — nhiệm vụ chỉ phát đồ tiêu hao, phát xong là xong.
+   * Để trống là máy chủ cũ chưa trả cờ này; lúc đó phải hỏi như cũ chứ không được
+   * tự kết luận là không cần trả.
+   */
+  hasReturnableSupplies?: boolean;
   /** Ảnh bằng chứng đã gửi kèm lúc báo hoàn thành — chỉ phần mô tả, không có bytes. */
   deliveryPhotos?: MissionDeliveryPhoto[];
 }
@@ -522,8 +553,13 @@ export async function fetchMission(token: string, id: string): Promise<MissionDe
  * trôi đi là mất luôn đường vào. Lực lượng hiện trường phải có chỗ để hỏi "tôi
  * đang có lệnh nào?".
  */
-export async function fetchMissions(token: string): Promise<MissionDetail[]> {
-  const res = await request(apiUrl("/api/missions"), { headers: authHeader(token) });
+export async function fetchMissions(
+  token: string,
+  page: { limit?: number; cursor?: string | null } = {},
+): Promise<MissionDetail[]> {
+  const res = await request(apiUrl(`/api/missions${pageQuery(page)}`), {
+    headers: authHeader(token),
+  });
   if (!res.ok) throw await apiFailure(res, "Không tải được danh sách nhiệm vụ");
   return res.json();
 }
@@ -547,6 +583,57 @@ export async function completeMission(
     note,
     photos: photos && photos.length > 0 ? photos : undefined,
   });
+}
+
+/**
+ * KHO xác nhận đã nhận lại vật tư — bước CUỐI, đóng hẳn nhiệm vụ.
+ *
+ * Giao xong chưa phải là xong: phao cứu sinh, đèn pin, loa cầm tay là hàng tái
+ * sử dụng, phải quay về kho rồi mới khép sổ được. Người ký là người ĐẾM LẠI hàng
+ * khi nó về tới nơi, nên máy chủ chỉ nhận tài khoản kho có tham gia nhiệm vụ.
+ */
+export function markSuppliesReturned(
+  token: string,
+  missionId: string,
+  /**
+   * Số đã nhận lại của từng dòng. Bỏ trống nghĩa là "về đủ hết" — đường một nút
+   * bấm; có danh sách là kho đếm từng dòng và nhiệm vụ chỉ khép khi không còn
+   * dòng nào thiếu.
+   */
+  items?: { sku: string; returnedQuantity: number }[],
+): Promise<MissionDetail & { outstandingReturns?: ReturnableSupply[] }> {
+  return postAuthorized(
+    token,
+    `/api/missions/${missionId}/supplies-returned`,
+    items ? { items } : {},
+  );
+}
+
+/** Một dòng vật tư tái sử dụng kho phải đếm lại khi đội mang đồ về. */
+export interface ReturnableSupply {
+  sku: string;
+  itemName: string;
+  unit: string;
+  warehouseId: string;
+  warehouseName: string;
+  /** Số đội đã ký nhận mang đi — trần của số có thể trả về. */
+  handedOverQuantity: number;
+  /** `null` = kho chưa đếm dòng này, khác hẳn "đã đếm và về 0". */
+  returnedQuantity: number | null;
+  outstandingQuantity: number;
+}
+
+/** Danh sách vật tư phải thu hồi của nhiệm vụ, theo phạm vi kho đang đăng nhập. */
+export async function fetchReturnableSupplies(
+  token: string,
+  missionId: string,
+): Promise<ReturnableSupply[]> {
+  const res = await request(apiUrl(`/api/missions/${missionId}/returnable-supplies`), {
+    headers: authHeader(token),
+  });
+  if (!res.ok) throw await apiFailure(res, "Không tải được danh sách vật tư phải thu hồi");
+  const data: { items?: ReturnableSupply[] } = await res.json();
+  return data.items ?? [];
 }
 
 /**

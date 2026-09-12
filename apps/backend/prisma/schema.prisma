@@ -877,6 +877,17 @@ model MissionWarehouseRequest {
   pickedUpByUserId      String?
   pickedUpBy            User?                         @relation("MissionWarehouseRequestPickedUpBy", fields: [pickedUpByUserId], references: [id], onDelete: SetNull)
   pickedUpAt            DateTime?
+  /// Số vật tư TÁI SỬ DỤNG đã quay về kho sau khi đội cứu hộ xong việc.
+  ///
+  /// Để rỗng nghĩa là kho chưa đếm lại dòng này — khác hẳn với "đã đếm và về 0".
+  /// Cùng lý do với `pickedUpQuantity`: gộp hai trạng thái đó vào số 0 là bịa ra
+  /// một khoản mất mát chưa ai xác nhận.
+  ///
+  /// Phần chênh giữa số này và `pickedUpQuantity` là hàng còn ở ngoài. Nhiệm vụ
+  /// chỉ khép sổ (RETURNED) khi mọi dòng tái sử dụng đã về đủ; trả thiếu thì con
+  /// số vẫn được ghi lại ngay để không ai phải nhớ trong đầu tới chuyến sau.
+  returnedQuantity      Int?
+  returnedAt            DateTime?
   createdAt             DateTime                      @default(now())
   updatedAt             DateTime                      @updatedAt
 

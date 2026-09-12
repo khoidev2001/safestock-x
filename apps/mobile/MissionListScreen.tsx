@@ -1,6 +1,8 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
+  FlatList,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -20,6 +22,7 @@ import {
   type MissionWorkStage,
 } from "./mission-state";
 import { readOfflineCache, writeOfflineCache } from "./offline-cache";
+import { PAGE_SIZE, appendPage, hasMoreAfter, nextCursor } from "./paged-list-state";
 import { c, styles } from "./styles";
 
 /**
@@ -48,7 +51,26 @@ export function MissionListScreen({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cacheStoredAt, setCacheStoredAt] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  /** Lượt tải thêm gần nhất hỏng — khác hẳn "đã xem hết", nên nói khác nhau. */
+  const [moreError, setMoreError] = useState(false);
   const [query, setQuery] = useState("");
+  /**
+   * Có lượt tải thêm đang bay không, đọc được NGAY chứ không đợi lượt vẽ sau.
+   *
+   * `FlatList` bắn `onEndReached` nhiều lần trong cùng một nhịp cuộn; chốt bằng
+   * state thì các lượt đầu cùng thấy "chưa tải" và cùng xin một trang.
+   */
+  const loadingMoreRef = useRef(false);
+  /**
+   * Bản danh sách mới nhất để hàm tải thêm lấy con trỏ.
+   *
+   * Đọc thẳng `missions` trong một hàm được `useCallback` giữ lại là đọc bản chụp
+   * cũ — con trỏ đứng mãi ở cuối trang đầu và mọi lượt cuộn xin lại trang hai.
+   */
+  const missionsRef = useRef<MissionDetail[]>([]);
+  missionsRef.current = missions;
   /** Mốc đang lọc; `null` là xem tất cả. */
   const [stageFilter, setStageFilter] = useState<MissionWorkStage | null>(null);
   /**
@@ -96,8 +118,10 @@ export function MissionListScreen({
     }
 
     try {
-      const live = await fetchMissions(token);
+      const live = await fetchMissions(token, { limit: PAGE_SIZE });
       setMissions(live);
+      setHasMore(hasMoreAfter(live));
+      setMoreError(false);
       setCacheStoredAt(null);
       setError(null);
       await writeOfflineCache(user.id, "missions", live);
@@ -118,6 +142,34 @@ export function MissionListScreen({
   useEffect(() => {
     void load();
   }, [load]);
+
+  /**
+   * Tải thêm một trang nhiệm vụ cũ hơn.
+   *
+   * Hỏng thì không dựng chữ lỗi lên đầu màn hình — phần đang đọc vẫn đúng và vẫn
+   * dùng được, còn một dải lỗi ở đầu trang nói như thể cả danh sách vừa hỏng.
+   * Nhưng cũng không im lặng: chân trang phải nói "chưa tải thêm được" thay vì
+   * "đã xem hết", vì hai câu đó dẫn tới hai hành động khác hẳn nhau.
+   */
+  const loadMore = useCallback(async () => {
+    if (loadingMoreRef.current) return;
+    const cursor = nextCursor(missionsRef.current);
+    if (!cursor) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      const page = await fetchMissions(token, { limit: PAGE_SIZE, cursor });
+      setMissions((current) => appendPage(current, page));
+      setHasMore(hasMoreAfter(page));
+      setMoreError(false);
+    } catch {
+      setHasMore(false);
+      setMoreError(true);
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [token]);
 
   /*
     Xếp lúc VẼ, không phải lúc tải.
@@ -255,7 +307,9 @@ export function MissionListScreen({
       ) : null}
       {error ? <Text style={local.error}>{error}</Text> : null}
 
-      <ScrollView
+      <FlatList
+        data={shown}
+        keyExtractor={(mission) => mission.id}
         contentContainerStyle={local.list}
         refreshControl={
           <RefreshControl
@@ -266,23 +320,55 @@ export function MissionListScreen({
             }}
           />
         }
-      >
-        {!loading && missions.length === 0 ? (
-          <Text style={local.empty}>Chưa có nhiệm vụ nào.</Text>
-        ) : null}
-        {/* Lọc xong không còn gì thì nói rõ là do TỪ KHOÁ, đừng dùng chung câu
-            "chưa có nhiệm vụ nào" — hai tình huống ấy đòi hai hành động khác hẳn. */}
-        {!loading && missions.length > 0 && shown.length === 0 ? (
-          <Text style={local.empty}>
-            {query.trim().length > 0
-              ? `Không có nhiệm vụ nào mang số “${query.trim()}”${activeStageLabel ? ` ở mốc “${activeStageLabel}”` : ""}.`
-              : `Không có nhiệm vụ nào ở mốc “${activeStageLabel ?? ""}”.`}
-          </Text>
-        ) : null}
+        /* Cuộn tới đâu tải tới đó. Sau một đợt thiên tai, danh sách dài hàng trăm
+           dòng; tải hết một lượt là người trực ngồi chờ màn hình trắng trước khi
+           thấy việc đang phải làm — mà việc đó nằm ở ngay dòng đầu.
 
-        {shown.map((mission) => (
+           Ngưỡng 0.6: xin trang sau khi còn hơn nửa màn hình nữa mới tới đáy, để
+           hàng kịp về trước lúc cuộn tới nơi. */
+        onEndReached={() => {
+          if (hasMore || moreError) void loadMore();
+        }}
+        onEndReachedThreshold={0.6}
+        ListEmptyComponent={
+          loading ? null : (
+            <>
+              {missions.length === 0 ? (
+                <Text style={local.empty}>Chưa có nhiệm vụ nào.</Text>
+              ) : (
+                /* Lọc xong không còn gì thì nói rõ là do TỪ KHOÁ, đừng dùng chung
+                   câu "chưa có nhiệm vụ nào" — hai tình huống ấy đòi hai hành động
+                   khác hẳn. */
+                <Text style={local.empty}>
+                  {query.trim().length > 0
+                    ? `Không có nhiệm vụ nào mang số “${query.trim()}”${activeStageLabel ? ` ở mốc “${activeStageLabel}”` : ""}${hasMore ? " trong phần đã tải" : ""}.`
+                    : `Không có nhiệm vụ nào ở mốc “${activeStageLabel ?? ""}”${hasMore ? " trong phần đã tải" : ""}.`}
+                </Text>
+              )}
+            </>
+          )
+        }
+        ListFooterComponent={
+          loadingMore ? (
+            <View style={local.footer}>
+              <ActivityIndicator color={c.primary} />
+            </View>
+          ) : moreError ? (
+            /* Tải thêm hỏng KHÁC HẲN đã xem hết: nhiệm vụ cũ hơn vẫn còn đó, và
+               người trực cần biết để thử lại chứ không kết luận là hết việc. */
+            <Pressable onPress={() => void loadMore()} accessibilityRole="button">
+              <Text style={local.listRetry}>
+                Chưa tải thêm được nhiệm vụ cũ hơn. Chạm để thử lại.
+              </Text>
+            </Pressable>
+          ) : hasMore ? null : missions.length > PAGE_SIZE ? (
+            /* Chỉ nói "hết" sau khi đã cuộn qua ít nhất một trang: dưới một danh
+               sách năm dòng thì câu này là chữ thừa. */
+            <Text style={local.listEnd}>Đã xem hết danh sách nhiệm vụ.</Text>
+          ) : null
+        }
+        renderItem={({ item: mission }) => (
           <MissionSummaryCard
-            key={mission.id}
             missionNo={mission.missionNo}
             incidentType={mission.incidentType}
             affectedPeople={mission.affectedPeople}
@@ -291,12 +377,15 @@ export function MissionListScreen({
             role={user.role}
             // Chặng tính theo VAI: đội cứu hộ đọc chặng chung, trưởng thôn chỉ đọc
             // phiếu của chính kho mình — xem `missionStageForViewer`.
-            stage={stageByMission.get(mission.id) ?? missionStageForViewer(mission, user.role, user.warehouseId)}
+            stage={
+              stageByMission.get(mission.id) ??
+              missionStageForViewer(mission, user.role, user.warehouseId)
+            }
             justViewed={mission.id === lastViewedId}
             onPress={() => openMission(mission.id)}
           />
-        ))}
-      </ScrollView>
+        )}
+      />
     </View>
   );
 }
@@ -355,4 +444,7 @@ const local = StyleSheet.create({
   offlineText: { color: c.text, fontSize: 13, marginTop: 2 },
   error: { color: c.red, fontSize: 13, paddingHorizontal: 16, paddingTop: 12 },
   empty: { color: c.muted, fontSize: 14, textAlign: "center", paddingVertical: 32 },
+  footer: { paddingVertical: 16, alignItems: "center" },
+  listEnd: { color: c.muted, fontSize: 12, textAlign: "center", paddingVertical: 16 },
+  listRetry: { color: c.amber, fontSize: 12, textAlign: "center", paddingVertical: 16 },
 });
