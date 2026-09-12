@@ -295,7 +295,7 @@ export function MonthlyReportScreen({ token, user }: { token: string; user: Auth
             <TextInput
               multiline
               onChangeText={setRejectNote}
-              placeholder="Nêu rõ SKU hoặc số liệu cần kiểm tra lại"
+              placeholder="Nêu rõ mã vật tư hoặc số liệu cần kiểm tra lại"
               placeholderTextColor={c.muted}
               style={screenStyles.input}
               value={rejectNote}

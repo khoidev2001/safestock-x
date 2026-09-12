@@ -441,11 +441,28 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
     );
   }
 
-  return (
-    <View style={local.screen}>
+  /**
+   * Phần đầu màn CUỘN THEO danh sách, không đứng yên.
+   *
+   * Trước đây chỉ danh sách vật tư cuộn được, còn tên kho, dải Tồn kho/Mượn·trả,
+   * ô tìm và hai nút thao tác thì đóng đinh trên đầu. Trên màn 6 inch chỗ ấy ăn
+   * gần nửa chiều cao, nên phần thật sự phải đọc — các lô hàng — chỉ còn một khe
+   * hẹp để cuộn. Băng "Ngoại tuyến · chỉ đọc" hiện lên là khe ấy càng hẹp thêm.
+   *
+   * Đưa cả khối vào `ListHeaderComponent` thì nó cuộn khuất đi khi người dùng
+   * xuống sâu, và trở lại khi cuộn lên — đúng cách mọi ứng dụng khác hành xử.
+   *
+   * Truyền vào dưới dạng PHẦN TỬ JSX chứ không phải hàm component: truyền hàm là
+   * mỗi lần vẽ lại React thấy một kiểu component mới và gắn lại từ đầu, ô tìm sẽ
+   * mất tiêu điểm ngay sau ký tự đầu tiên.
+   */
+  const screenHeader = (
+    <>
       <View style={local.header}>
         <View style={{ flex: 1 }}>
-          <Text style={local.eyebrow}>NGHIỆP VỤ KHO MOBILE</Text>
+          {/* Không có nhãn "NGHIỆP VỤ KHO MOBILE" ở đây: nó nói về bản thân phần
+              mềm chứ không nói gì về kho đang mở, mà đây là dòng đầu tiên mắt
+              nhìn tới. Tên kho mới là thứ người trực cần thấy ngay. */}
           <Text style={local.title}>{snapshot.warehouse.name}</Text>
           <Text style={local.subtitle}>
             {snapshot.batches.length} lô · {snapshot.loans.length} phiếu đang mở
@@ -486,10 +503,15 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
           onPress={() => setSection("loans")}
         />
       </View>
+    </>
+  );
 
-      {section === "stock" ? (
-        <>
-          <View style={local.searchRow}>
+  // Ô tìm và hai nút thao tác chỉ thuộc về mục Tồn kho, nên nằm ở phần đầu của
+  // riêng danh sách ấy — mục Mượn·trả không có gì để tìm bằng mã lô.
+  const stockHeader = (
+    <>
+      {screenHeader}
+      <View style={local.searchRow}>
             <TextInput
               value={query}
               onChangeText={(value) => {
@@ -498,10 +520,10 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
               }}
               autoCapitalize="characters"
               autoCorrect={false}
-              placeholder="Nhập SKU, tên, mã lô hoặc vị trí"
+              placeholder="Nhập mã vật tư, tên, mã lô hoặc vị trí"
               placeholderTextColor={c.muted}
               style={local.searchInput}
-              accessibilityLabel="Tìm vật tư bằng SKU hoặc tên"
+              accessibilityLabel="Tìm vật tư bằng mã hoặc tên"
             />
             <Pressable
               disabled={offline || query.trim().length < 2 || semanticLoading}
@@ -519,27 +541,34 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
               <Text style={local.scanText}>QR</Text>
             </Pressable>
           </View>
-          {canPerformInventoryAction(user.role, "bulk-export") ? (
-            <>
-              <Pressable
-                disabled={offline}
-                onPress={() => setReceivingOpen(true)}
-                style={[local.bulkButton, offline && local.disabled]}
-              >
-                <Text style={local.bulkText}>Tiếp nhận lô mới</Text>
-              </Pressable>
-              <Pressable
-                disabled={offline}
-                onPress={() => setBulkOpen(true)}
-                style={[local.bulkButton, offline && local.disabled]}
-              >
-                <Text style={local.bulkText}>Xuất nhiều lô khẩn cấp</Text>
-              </Pressable>
-            </>
-          ) : null}
+      {canPerformInventoryAction(user.role, "bulk-export") ? (
+        <>
+          <Pressable
+            disabled={offline}
+            onPress={() => setReceivingOpen(true)}
+            style={[local.bulkButton, offline && local.disabled]}
+          >
+            <Text style={local.bulkText}>Tiếp nhận lô mới</Text>
+          </Pressable>
+          <Pressable
+            disabled={offline}
+            onPress={() => setBulkOpen(true)}
+            style={[local.bulkButton, offline && local.disabled]}
+          >
+            <Text style={local.bulkText}>Xuất nhiều lô khẩn cấp</Text>
+          </Pressable>
+        </>
+      ) : null}
+    </>
+  );
 
+  return (
+    <View style={local.screen}>
+      {section === "stock" ? (
           <FlatList
             data={filteredBatches}
+            ListHeaderComponent={<View style={local.headerBleed}>{stockHeader}</View>}
+            keyboardShouldPersistTaps="handled"
             keyExtractor={(batch) => batch.id}
             refreshControl={
               <RefreshControl
@@ -564,10 +593,11 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
               />
             )}
           />
-        </>
       ) : (
         <FlatList
           data={snapshot.loans}
+          ListHeaderComponent={<View style={local.headerBleed}>{screenHeader}</View>}
+          keyboardShouldPersistTaps="handled"
           keyExtractor={(loan) => loan.id}
           refreshControl={
             <RefreshControl
@@ -633,7 +663,9 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
           setQuery(batchCode ?? sku);
           setSemanticSkus(null);
           setScannerOpen(false);
-          setSuccess(batchCode ? `Đã quét SKU ${sku} · lô ${batchCode}` : `Đã quét SKU ${sku}`);
+          setSuccess(
+            batchCode ? `Đã quét mã ${sku} · lô ${batchCode}` : `Đã quét mã ${sku}`,
+          );
         }}
         onError={setError}
       />
@@ -701,8 +733,11 @@ function BatchCard({
     <View style={local.card}>
       <View style={local.cardHead}>
         <View style={{ flex: 1 }}>
-          <Text style={local.sku}>{batch.item.sku}</Text>
+          {/* TÊN trước, MÃ sau: người trực tìm hàng trên kệ bằng tên món, còn mã
+              chỉ dùng khi đối chiếu sổ hay quét QR. Để mã lên đầu là bắt mắt
+              đọc một chuỗi vô nghĩa trước rồi mới tới thứ mình đang tìm. */}
           <Text style={local.itemName}>{batch.item.name}</Text>
+          <Text style={local.sku}>{batch.item.sku}</Text>
         </View>
         <Text style={local.quantity}>
           {batch.quantity}{" "}
@@ -772,8 +807,8 @@ function LoanCard({
   const outstanding = loan.quantity - loan.returnedOk - loan.returnedDamaged - loan.lost;
   return (
     <View style={local.card}>
-      <Text style={local.sku}>{loan.batch.item.sku}</Text>
       <Text style={local.itemName}>{loan.batch.item.name}</Text>
+      <Text style={local.sku}>{loan.batch.item.sku}</Text>
       <View style={local.loanFacts}>
         <Text style={local.meta}>Mượn {loan.quantity}</Text>
         <Text style={local.meta}>Đã hoàn {loan.quantity - outstanding}</Text>
@@ -1155,7 +1190,7 @@ function ReceiveBatchModal({
       return;
     }
     if (mode === "new" && [sku, name, categoryName, unit].some((value) => !value.trim())) {
-      setError("Vật tư mới cần SKU, tên, danh mục và đơn vị.");
+      setError("Vật tư mới cần mã vật tư, tên, danh mục và đơn vị.");
       return;
     }
     if (expiryDate && !/^\d{4}-\d{2}-\d{2}$/.test(expiryDate)) {
@@ -1227,7 +1262,7 @@ function ReceiveBatchModal({
             </>
           ) : (
             <>
-              <MobileTextField label="SKU" onChange={setSku} value={sku} />
+              <MobileTextField label="Mã vật tư" onChange={setSku} value={sku} />
               <MobileTextField label="Tên vật tư" onChange={setName} value={name} />
               <MobileTextField label="Danh mục" onChange={setCategoryName} value={categoryName} />
               <MobileTextField label="Đơn vị tính" onChange={setUnit} value={unit} />
@@ -1451,7 +1486,7 @@ function QrScanner({
     const code = parseScannedInventoryCode(result.data);
     if (!code) {
       setScanned(true);
-      onError("QR không chứa SKU hợp lệ.");
+      onError("QR không chứa mã vật tư hợp lệ.");
       return;
     }
     setScanned(true);
@@ -1786,6 +1821,16 @@ const local = StyleSheet.create({
   },
   bulkText: { color: c.amber, fontSize: 12, fontWeight: "800" },
   listContent: { padding: 16, paddingTop: 4, paddingBottom: 110 },
+  /**
+   * Kéo phần đầu trang ra sát mép, bù lại phần đệm 16 của `listContent`.
+   *
+   * Mọi khối trong phần đầu (tên kho, băng ngoại tuyến, dải mục, ô tìm, hai nút)
+   * đều đã tự mang lề ngang 16 từ hồi chúng còn nằm ngoài danh sách. Nay chúng
+   * nằm trong, phần đệm của danh sách cộng thêm 16 nữa thành 32 — chữ thụt vào
+   * hẳn so với các thẻ hàng bên dưới. Lề âm ở đây rẻ hơn là đi sửa lề của sáu
+   * khối rồi phải sửa ngược lại nếu bố cục đổi.
+   */
+  headerBleed: { marginHorizontal: -16 },
   empty: {
     marginTop: 28,
     padding: 20,
@@ -1803,7 +1848,7 @@ const local = StyleSheet.create({
   },
   cardHead: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   sku: { color: c.amber, fontSize: 11, fontWeight: "900", letterSpacing: 0.6 },
-  itemName: { color: c.text, fontSize: 15, fontWeight: "800", marginTop: 3 },
+  itemName: { color: c.text, fontSize: 17, fontWeight: "800", marginBottom: 2 },
   quantity: { color: c.text, fontSize: 24, fontWeight: "900" },
   unit: { color: c.muted, fontSize: 10, fontWeight: "600" },
   metaRow: {
