@@ -19,6 +19,7 @@ import {
 } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { InventoryService } from "../inventory/inventory.service";
+import { exportableBatchWhere } from "../inventory/exportable-batch";
 import { NotificationService } from "../notification/notification.service";
 import { findPeer, parseCommunePeers } from "./commune-peer-registry";
 import { stockMarksFromLoans } from "./loan-stock-marks";
@@ -561,6 +562,35 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
   }
 
   /**
+   * Danh mục vật tư để ĐI MƯỢN xã khác.
+   *
+   * Khác hẳn `availableItemsForManualEntry`, và đây là chỗ từng dùng nhầm: hàm kia
+   * trả vật tư ĐANG CÓ TRONG KHO MÌNH, đúng cho form ghi tay — ở đó mình là bên
+   * cho mượn nên phải chọn lô của mình. Nhưng khi ĐI MƯỢN thì ngược lại: thứ cần
+   * mượn chính là thứ mình KHÔNG có. Dùng lại hàm kia là giấu mất đúng những mặt
+   * hàng người ta cần nhất.
+   *
+   * Đã xảy ra thật: form chỉ hiện 17 mã trong khi danh mục có 26; chín mã vắng mặt
+   * đúng là chín mã Đồng Xuân tồn 0 — phao cứu sinh, viên khử khuẩn, mì tôm, áo
+   * mưa, loa cầm tay.
+   *
+   * Không lọc theo tồn kho của xã bên kia được: hai xã hai cơ sở dữ liệu tách rời,
+   * bên này không đọc được kho bên kia. Họ đủ hay không thì trả lời bằng cách bấm
+   * "Từ chối" — đó là việc của họ, không phải việc đoán trước của giao diện.
+   */
+  async catalogueForBorrowRequest() {
+    const items = await this.prisma.item.findMany({
+      select: { sku: true, name: true, category: { select: { unit: true } } },
+      orderBy: { name: "asc" },
+    });
+    return items.map((item) => ({
+      itemSku: item.sku,
+      itemName: item.name,
+      unit: item.category.unit,
+    }));
+  }
+
+  /**
    * Vật tư đang có trong kho, kèm lô sẽ dùng nếu chọn mặt hàng đó.
    *
    * Giao diện cho người dùng chọn TÊN vật tư, không bắt chép mã lô. Mã lô là thứ
@@ -630,20 +660,55 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
     if (!sku) throw new BadRequestException("Cần chọn vật tư hoặc nhập mã lô");
 
     const organizationId = await this.orgOf(input.userId);
+    const trongKho = input.scopeWarehouseId
+      ? { zone: { warehouseId: input.scopeWarehouseId } }
+      : { zone: { warehouse: { organizationId } } };
+
+    // Lọc ĐÚNG những lô mà chốt xuất kho sẽ chấp nhận, ngay ở đây.
+    //
+    // Đã xảy ra thật: câu lệnh cũ chỉ lọc `circulation` và `quantity` rồi lấy lô
+    // hạn gần nhất, nên nó chọn trúng lô MAINTENANCE đã hết hạn từ 23/07 và
+    // InventoryService từ chối. Khoản mượn kẹt vĩnh viễn ở ACTIVE: không trả
+    // được, mà giao diện thì không hỏi mã lô nên người dùng không chọn lô khác
+    // được.
+    //
+    // Dùng `exportableBatchWhere` chứ không chép tay danh sách điều kiện: chốt kia
+    // kiểm BỐN thứ (trạng thái, tình trạng vật lý, kệ khoá, hạn dùng). Bản vá đầu
+    // tiên chỉ chép một thứ và lần chạy sau vấp ngay chốt hạn dùng.
     const batch = await this.prisma.itemBatch.findFirst({
       where: {
         item: { sku },
         circulation: "IN_STOCK",
         quantity: { gt: 0 },
-        shelf: input.scopeWarehouseId
-          ? { zone: { warehouseId: input.scopeWarehouseId } }
-          : { zone: { warehouse: { organizationId } } },
+        // Gộp bằng `AND` chứ KHÔNG trải bằng `...`: `exportableBatchWhere` cũng có
+        // khoá `shelf` (kệ không bị khoá), trải ra là nó đè mất `shelf: trongKho`
+        // và câu lệnh lặng lẽ lấy lô của kho bất kỳ, kể cả của xã khác.
+        AND: [{ shelf: trongKho }, exportableBatchWhere()],
       },
       orderBy: [{ expiryDate: "asc" }, { createdAt: "asc" }],
       select: { id: true },
     });
-    if (!batch) throw new BadRequestException(`Kho không còn lô nào của vật tư ${sku}`);
-    return batch.id;
+    if (batch) return batch.id;
+
+    // Phân biệt "không có gì" với "có nhưng không xuất được": hai tình huống này
+    // cần hai việc làm khác hẳn nhau, mà một câu chung thì người trực không biết
+    // nên đi nhập hàng hay đi sửa trạng thái lô.
+    const coNhungKhongXuatDuoc = await this.prisma.itemBatch.count({
+      where: {
+        item: { sku },
+        circulation: "IN_STOCK",
+        quantity: { gt: 0 },
+        shelf: trongKho,
+      },
+    });
+    if (coNhungKhongXuatDuoc > 0) {
+      throw new BadRequestException(
+        `Kho có ${sku} nhưng không lô nào xuất được: hoặc đã hết hạn, hoặc hỏng, ` +
+          "hoặc đang bảo trì / chờ kiểm tra, hoặc nằm trên kệ đang bị khoá. " +
+          "Vào tab Vật tư xử lý rồi ghi nhận lại.",
+      );
+    }
+    throw new BadRequestException(`Kho không còn lô nào của vật tư ${sku}`);
   }
 
   /**
@@ -666,15 +731,44 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
     if (effect === "DEDUCT") return this.pickBatchForSku(input);
 
     const organizationId = await this.orgOf(input.userId);
-    const scope = input.scopeWarehouseId
-      ? { zone: { warehouseId: input.scopeWarehouseId } }
+
+    // Hàng mượn về phải vào ĐÚNG kho của người đứng ra mượn.
+    //
+    // Người trực kho có `scopeWarehouseId`, nên họ luôn đúng. Nhưng quản trị xã
+    // thì không gắn với kho nào, và bản cũ lùi thẳng về "cả tổ chức" rồi xếp theo
+    // `quantity: desc` — tức là hàng chui vào kho thôn nào đang giữ nhiều mặt hàng
+    // ấy nhất. Đã xảy ra thật: quản trị xã Đồng Xuân mượn 40 bộ sơ cứu, hàng rơi
+    // vào kho thôn Long Châu vì lô ở đó có 1.725 bộ.
+    //
+    // Không ai đi tìm hàng ở kho thôn khi chính mình vừa mượn cho xã. Nên khi
+    // không biết kho cụ thể thì nhắm vào KHO TRUNG TÂM của xã.
+    const khoTrungTam = input.scopeWarehouseId
+      ? null
+      : await this.prisma.warehouse.findFirst({
+          where: { organizationId, kind: "CENTRAL" },
+          orderBy: { createdAt: "asc" },
+          select: { id: true },
+        });
+    const khoNhan = input.scopeWarehouseId ?? khoTrungTam?.id ?? null;
+    const scope = khoNhan
+      ? { zone: { warehouseId: khoNhan } }
       : { zone: { warehouse: { organizationId } } };
-    const batch = await this.prisma.itemBatch.findFirst({
-      where: { item: { sku: input.itemSku }, circulation: "IN_STOCK", shelf: scope },
-      // Lô còn hàng đứng trước lô đã hết, rồi tới hạn gần nhất.
-      orderBy: [{ quantity: "desc" }, { expiryDate: "asc" }, { createdAt: "asc" }],
-      select: { id: true },
-    });
+
+    const timLo = (trongKho: Prisma.ShelfWhereInput) =>
+      this.prisma.itemBatch.findFirst({
+        where: { item: { sku: input.itemSku }, circulation: "IN_STOCK", shelf: trongKho },
+        // Lô còn hàng đứng trước lô đã hết, rồi tới hạn gần nhất.
+        orderBy: [{ quantity: "desc" }, { expiryDate: "asc" }, { createdAt: "asc" }],
+        select: { id: true },
+      });
+
+    // Kho trung tâm chưa từng có mặt hàng này thì không còn chỗ nhập, và chặn ở
+    // đây là chặn oan. Lùi ra cả tổ chức như cũ, chứ đừng bắt người ta tạo lô mới
+    // giữa lúc đang nhận hàng.
+    let batch = await timLo(scope);
+    if (!batch && khoNhan) {
+      batch = await timLo({ zone: { warehouse: { organizationId } } });
+    }
     if (!batch) {
       throw new BadRequestException(
         `Kho chưa có lô nào của vật tư ${input.itemSku} để nhận hàng vào. Tạo lô ở tab Vật tư rồi ghi nhận lại.`,
@@ -703,10 +797,27 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
     // WATER-01-B3". Nhưng đường nhận mã lô vẫn giữ: có lúc người ta cần chỉ đúng
     // một lô cụ thể (lô sắp hỏng, lô vừa nhận về), và bỏ đường đó là lấy mất khả
     // năng ấy chỉ để cho gọn chữ ký hàm.
-    const batchId = input.batchId?.trim() || (await this.pickBatchForSku(input));
+    // Chọn lô THEO CHIỀU, không mặc định chiều trừ.
+    //
+    // Ghi tay chiều "đi mượn" có hiệu ứng CỘNG — hàng đã vào kho mình. Bản cũ vẫn
+    // gọi bộ chọn của chiều TRỪ, tức đòi kho phải đang còn hàng mới ghi được. Mà
+    // ghi tay đi mượn là lúc kho vừa cạn đúng mặt hàng ấy nên mới phải mượn.
+    const hieuUngKho = manualEntryStockEffect(input.direction);
+    // Chiều TRỪ tự kiểm mã rỗng trong `pickBatchForSku`, chiều CỘNG thì không —
+    // để lọt mã rỗng xuống đó là truy vấn khớp rỗng rồi báo một câu khó hiểu.
+    if (!input.batchId?.trim() && !input.itemSku?.trim()) {
+      throw new BadRequestException("Cần chọn vật tư hoặc nhập mã lô");
+    }
+    const batchId =
+      input.batchId?.trim() ||
+      (await this.pickBatchForLoanMove(hieuUngKho === "ADD" ? "ADD" : "DEDUCT", {
+        itemSku: input.itemSku ?? "",
+        userId: input.userId,
+        scopeWarehouseId: input.scopeWarehouseId,
+      }));
     const batch = await this.batchInfo(batchId);
 
-    const effect = manualEntryStockEffect(input.direction);
+    const effect = hieuUngKho;
     const requestId = `loan-manual-${batchId}-${Date.now()}`;
     await this.moveStock(effect, {
       userId: input.userId,
@@ -789,7 +900,16 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
     let movingQuantity = loan.quantity;
     if (input.to === "RETURNED" || input.to === "PARTIALLY_RETURNED") {
       movingQuantity = input.quantity ?? loan.quantity - loan.returnedQuantity;
-      const result = statusAfterReturn(loan.quantity, loan.returnedQuantity, movingQuantity);
+      // `statusAfterReturn` cố ý không phụ thuộc NestJS — nó là hàm thuần để test
+      // được — nên nó ném `Error` trần. Không bắt lại ở đây thì NestJS gói thành
+      // 500 "Internal server error", và câu báo đã viết sẵn ("Trả 25 là vượt phần
+      // còn nợ 10/40") bị nuốt mất đúng lúc người dùng cần đọc nó nhất.
+      let result: ReturnType<typeof statusAfterReturn>;
+      try {
+        result = statusAfterReturn(loan.quantity, loan.returnedQuantity, movingQuantity);
+      } catch (error) {
+        throw new BadRequestException(describeError(error));
+      }
       status = result.status;
       returnedQuantity = result.totalReturned;
     }
@@ -963,6 +1083,12 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
         `Không thể chuyển khoản mượn từ ${loan.status} sang ${input.status}`,
       );
     }
+    // KHÔNG cộng kho ở đây.
+    //
+    // Xã kia mới KHAI là đã đưa trả; hàng còn trên đường. Cộng ngay lúc nhận tin
+    // là ghi vào sổ thứ chưa ai bên này cầm trong tay — đúng cái mà chiều đi đã
+    // tránh bằng bước "xác nhận đã nhận hàng". Chiều về nay cũng có bước tương
+    // ứng: `acceptReturn`, do người của xã cho mượn bấm.
     await this.notifyPeerDecision(loan, input.status);
     const now = new Date();
     return this.prisma.interCommuneLoan.update({
@@ -974,6 +1100,67 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
         receivedAt: input.status === "ACTIVE" ? now : loan.receivedAt,
         returnedAt: input.status === "RETURNED" ? now : loan.returnedAt,
       },
+    });
+  }
+
+  /**
+   * Bên CHO MƯỢN xác nhận đã nhận lại hàng — chỗ duy nhất cộng kho ở chiều về.
+   *
+   * Đối xứng với "xác nhận đã nhận hàng" của chiều đi. Giữa lúc bên mượn bấm trả
+   * và lúc bước này chạy, hàng không nằm ở kho nào — đúng thực tế nó đang trên
+   * đường, và đó là lý do không gộp hai mốc làm một.
+   *
+   * Xác nhận TỪNG PHẦN được: bên mượn có thể trả làm nhiều chuyến, và mỗi chuyến
+   * về tới nơi một lúc khác nhau. `returnAcceptedQuantity` đếm phần đã cầm được,
+   * luôn <= `returnedQuantity` là phần bên kia khai đã đưa.
+   */
+  async acceptReturn(input: {
+    loanId: string;
+    userId: string;
+    scopeWarehouseId?: string | null;
+    quantity?: number;
+  }) {
+    const organizationId = await this.orgOf(input.userId);
+    const loan = await this.prisma.interCommuneLoan.findFirst({
+      where: { id: input.loanId, organizationId },
+    });
+    if (!loan) throw new NotFoundException("Không tìm thấy khoản mượn");
+
+    // Chỉ bên CHO MƯỢN mới nhận lại được hàng. Bản ghi chiều kia là của bên đi
+    // mượn, họ không có gì để nhận về.
+    if (loan.direction !== InterCommuneLoanDirection.OUTGOING) {
+      throw new ForbiddenException("Chỉ xã cho mượn mới xác nhận nhận lại hàng được");
+    }
+
+    const conChoNhan = loan.returnedQuantity - loan.returnAcceptedQuantity;
+    if (conChoNhan <= 0) {
+      throw new BadRequestException("Không có phần nào đang chờ nhận lại");
+    }
+    const nhanLanNay = input.quantity ?? conChoNhan;
+    this.assertQuantity(nhanLanNay);
+    if (nhanLanNay > conChoNhan) {
+      throw new BadRequestException(
+        `Nhận ${nhanLanNay} là vượt phần đang chờ nhận (${conChoNhan}/${loan.quantity})`,
+      );
+    }
+
+    const batchId = await this.pickBatchForLoanMove("ADD", {
+      itemSku: loan.itemSku,
+      userId: input.userId,
+      scopeWarehouseId: input.scopeWarehouseId ?? loan.warehouseId,
+    });
+    await this.moveStock("ADD", {
+      userId: input.userId,
+      batchId,
+      quantity: nhanLanNay,
+      note: `Mượn liên xã với ${loan.peerCommuneName} — xác nhận nhận lại hàng`,
+      scopeWarehouseId: input.scopeWarehouseId ?? loan.warehouseId,
+      requestId: `loan-accept-${loan.id}-${loan.returnAcceptedQuantity + nhanLanNay}`,
+    });
+
+    return this.prisma.interCommuneLoan.update({
+      where: { id: loan.id },
+      data: { returnAcceptedQuantity: loan.returnAcceptedQuantity + nhanLanNay },
     });
   }
 

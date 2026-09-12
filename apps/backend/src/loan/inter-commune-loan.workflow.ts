@@ -110,7 +110,17 @@ export function stockEffect(
   transition: InterCommuneTransition,
 ): "DEDUCT" | "ADD" | "NONE" {
   // Hiệu ứng khai báo trong bảng là của BÊN THỰC HIỆN bước đó. Xã còn lại chỉ ghi
-  // nhận trạng thái, kho không đổi.
+  // nhận trạng thái, kho không đổi Ở ĐÂY.
+  //
+  // Riêng bước TRẢ, kho bên cho mượn PHẢI được cộng lại — nhưng không phải ở hàm
+  // này. Bản ghi bên cho mượn không bao giờ đi qua `advance()`: bảng trạng thái
+  // chốt mọi bước trả là `by: "BORROWER"`, nên `advance()` chặn bên cho mượn ngay
+  // từ kiểm quyền. Đường duy nhất cập nhật bản ghi ấy là `syncStatusFromPeer`, và
+  // phần cộng lại kho nằm ở đó.
+  //
+  // Đừng cộng thêm ở đây cho "chắc". Đã thử và gỡ ra: hai đường cùng cộng cho một
+  // lần trả là kho tự sinh ra hàng, mà sai kiểu ấy khó thấy hơn hẳn sai kiểu mất
+  // hàng — số chỉ phình lên chứ không có ai kêu thiếu.
   return actorOf(direction) === transition.by ? transition.stock : "NONE";
 }
 

@@ -112,7 +112,30 @@ export function statusLabel(status: InterCommuneStatus): string {
   );
 }
 
-/** Khoản còn phải theo dõi, tách khỏi khoản đã đóng sổ. */
+/** Khoản còn phải theo dõi, xét THEO TRẠNG THÁI. Xem `isLoanOpen` trước khi dùng. */
 export function isOpen(status: InterCommuneStatus): boolean {
   return ["REQUESTED", "APPROVED", "ACTIVE", "PARTIALLY_RETURNED"].includes(status);
+}
+
+/**
+ * Khoản còn phải theo dõi, xét trên CẢ khoản mượn chứ không chỉ trạng thái.
+ *
+ * Vì sao không dùng mỗi `isOpen(status)`: trạng thái nói bên MƯỢN đã trả tới đâu.
+ * Bên mượn trả nốt là trạng thái thành RETURNED ngay, nhưng bên CHO MƯỢN có thể
+ * chưa xác nhận cầm được — hàng vẫn đang trên đường.
+ *
+ * Đã xảy ra thật khi chạy thử: trả nốt 25 xong, khoản rơi vào mục "đã đóng sổ",
+ * nút "Xác nhận đã nhận lại" biến mất, và 25 bộ mắc kẹt vĩnh viễn — kho bên cho
+ * mượn đứng ở 475 thay vì 500.
+ */
+export function isLoanOpen(loan: {
+  status: InterCommuneStatus;
+  direction: InterCommuneDirection;
+  returnedQuantity: number;
+  returnAcceptedQuantity: number;
+}): boolean {
+  if (isOpen(loan.status)) return true;
+  return (
+    loan.direction === "OUTGOING" && loan.returnAcceptedQuantity < loan.returnedQuantity
+  );
 }

@@ -5,7 +5,9 @@ import { useState } from "react";
 import { ColorIcon } from "@/components/shared/color-icon";
 import {
   advanceInterCommuneLoan,
+  acceptInterCommuneReturn,
   getAvailableItemsForLoan,
+  getBorrowableItems,
   getInterCommuneLoans,
   getPeerCommunes,
   recordManualInterCommuneLoan,
@@ -13,7 +15,7 @@ import {
   type InterCommuneLoan,
 } from "@/lib/dashboard-api";
 import {
-  isOpen,
+  isLoanOpen,
   loanActions,
   outstanding,
   statusLabel,
@@ -66,10 +68,21 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
     enabled: manualFormOpen || borrowFormOpen,
     staleTime: 5 * 60_000,
   });
+  // Vật tư ĐANG CÓ trong kho mình — chỉ dùng cho form ghi tay, nơi mình là bên cho
+  // mượn nên phải chọn được lô của mình.
   const availableItems = useQuery({
     queryKey: ["available-items-for-loan"],
     queryFn: getAvailableItemsForLoan,
-    enabled: manualFormOpen || borrowFormOpen,
+    enabled: manualFormOpen,
+    staleTime: 60_000,
+  });
+
+  // Danh mục ĐẦY ĐỦ — dùng cho form đi mượn. Thứ cần mượn chính là thứ mình không
+  // có, nên lọc theo tồn kho của mình là giấu mất đúng những mặt hàng cần nhất.
+  const borrowableItems = useQuery({
+    queryKey: ["borrowable-items"],
+    queryFn: getBorrowableItems,
+    enabled: borrowFormOpen,
     staleTime: 60_000,
   });
 
@@ -135,7 +148,7 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
       if (!Number.isInteger(quantity) || quantity < 1) {
         throw new Error("Số lượng phải là số nguyên dương.");
       }
-      const item = (availableItems.data ?? []).find((m) => m.itemSku === borrowForm.itemName);
+      const item = (borrowableItems.data ?? []).find((m) => m.itemSku === borrowForm.itemName);
       if (!item) throw new Error("Không nhận ra vật tư đã chọn.");
       return requestInterCommuneLoan({
         peerCommuneName: borrowForm.peerCommuneName.trim(),
@@ -177,9 +190,23 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
     onError: (e) => setError(e instanceof Error ? e.message : "Không cập nhật được khoản mượn"),
   });
 
+  /**
+   * Bên cho mượn xác nhận đã nhận lại hàng.
+   *
+   * Tách khỏi `advance` vì bước này KHÔNG đổi trạng thái khoản mượn — trạng thái
+   * nói bên mượn đã trả tới đâu, còn đây nói hàng đã về tới kho tới đâu.
+   */
+  const acceptReturn = useMutation({
+    mutationFn: (loan: InterCommuneLoan) =>
+      acceptInterCommuneReturn(loan.id, Number(quantity[loan.id]) || undefined),
+    onMutate: () => setError(null),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["inter-commune-loans"] }),
+    onError: (e) => setError(e instanceof Error ? e.message : "Không ghi nhận được hàng nhận lại"),
+  });
+
   const loans = query.data ?? [];
-  const openLoans = loans.filter((l) => isOpen(l.status));
-  const closedLoans = loans.filter((l) => !isOpen(l.status));
+  const openLoans = loans.filter((l) => isLoanOpen(l));
+  const closedLoans = loans.filter((l) => !isLoanOpen(l));
 
   return (
     <section className="app-panel p-5">
@@ -265,7 +292,7 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
                 value={borrowForm.itemName}
               >
                 <option value="">— chọn vật tư —</option>
-                {(availableItems.data ?? []).map((item) => (
+                {(borrowableItems.data ?? []).map((item) => (
                   <option key={item.itemSku} value={item.itemSku}>
                     {item.itemName}
                   </option>
@@ -467,9 +494,13 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
                   key={loan.id}
                   loan={loan}
                   quantity={quantity[loan.id] ?? ""}
-                  busy={advance.isPending && advance.variables?.loan.id === loan.id}
+                  busy={
+                    (advance.isPending && advance.variables?.loan.id === loan.id) ||
+                    (acceptReturn.isPending && acceptReturn.variables?.id === loan.id)
+                  }
                   onQuantity={(v) => setQuantity((c) => ({ ...c, [loan.id]: v }))}
                   onAction={(action) => advance.mutate({ loan, action })}
+                  onAcceptReturn={() => acceptReturn.mutate(loan)}
                 />
               ))}
             </ul>
@@ -510,16 +541,24 @@ function LoanRow({
   busy,
   onQuantity,
   onAction,
+  onAcceptReturn,
 }: {
   loan: InterCommuneLoan;
   quantity: string;
   busy: boolean;
   onQuantity: (value: string) => void;
   onAction: (action: LoanAction) => void;
+  onAcceptReturn: () => void;
 }) {
   const actions = loanActions(loan.direction, loan.status, loan.recordedManually);
   const outstandingQuantity = outstanding(loan.quantity, loan.returnedQuantity);
   const isLender = loan.direction === "OUTGOING";
+  // Hàng bên kia đã báo trả mà mình chưa xác nhận cầm được. Chỉ bên CHO MƯỢN mới
+  // có việc này, và bản ghi ghi tay thì không: người giữ nó làm thay cả hai vai
+  // nên đã cộng kho ngay ở bước ghi nhận.
+  const dangTrenDuongVe = isLender && !loan.recordedManually
+    ? loan.returnedQuantity - loan.returnAcceptedQuantity
+    : 0;
 
   return (
     <li className="rounded-md border p-4">
@@ -552,6 +591,34 @@ function LoanRow({
           </p>
         </div>
       </div>
+
+      {dangTrenDuongVe > 0 ? (
+        <div className="mt-3 flex flex-wrap items-end gap-2 border-t pt-3">
+          <label className="text-xs">
+            <span className="block text-[var(--text-muted)]">Số nhận lại lần này</span>
+            <input
+              className="mt-1 w-32 rounded-md border px-2 py-1.5 text-sm"
+              inputMode="numeric"
+              onChange={(e) => onQuantity(e.target.value)}
+              placeholder={String(dangTrenDuongVe)}
+              value={quantity}
+            />
+          </label>
+          <button
+            className="rounded-md border px-3 py-2 text-sm font-semibold disabled:opacity-50"
+            disabled={busy}
+            onClick={onAcceptReturn}
+            style={{ background: "var(--color-accent)", color: "#fff", borderColor: "transparent" }}
+            type="button"
+          >
+            {busy ? "Đang xử lý…" : "Xác nhận đã nhận lại"}
+          </button>
+          <p className="w-full text-xs text-[var(--text-muted)]">
+            {loan.peerCommuneName} báo đã trả {dangTrenDuongVe} {loan.unit} nhưng chưa ai bên mình
+            xác nhận cầm được. Bấm khi hàng đã về tới kho — bước này mới cộng kho thật.
+          </p>
+        </div>
+      ) : null}
 
       {actions.length > 0 ? (
         <div className="mt-3 flex flex-wrap items-end gap-2 border-t pt-3">

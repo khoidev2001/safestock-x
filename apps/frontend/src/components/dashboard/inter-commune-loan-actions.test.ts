@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { isOpen, loanActions, outstanding, statusLabel } from "./inter-commune-loan-actions";
+import { isLoanOpen, isOpen, loanActions, outstanding, statusLabel } from "./inter-commune-loan-actions";
 
 const actionsFor = (d: "OUTGOING" | "INCOMING", s: Parameters<typeof loanActions>[1], m = false) =>
   loanActions(d, s, m).map((a) => a.to);
@@ -66,6 +66,21 @@ test("mở và đóng phân biệt rõ", () => {
   assert.equal(isOpen("PARTIALLY_RETURNED"), true);
   assert.equal(isOpen("RETURNED"), false);
   assert.equal(isOpen("CANCELLED"), false);
+});
+
+test("khoản đã trả xong nhưng bên cho mượn chưa xác nhận thì VẪN đang mở", () => {
+  // Trạng thái nói bên MƯỢN đã trả tới đâu; hàng còn trên đường thì bên cho mượn
+  // vẫn phải thấy khoản này, nếu không nút xác nhận biến mất và hàng mắc kẹt.
+  const daTraChuaNhan = {
+    status: "RETURNED" as const,
+    direction: "OUTGOING" as const,
+    returnedQuantity: 40,
+    returnAcceptedQuantity: 15,
+  };
+  assert.equal(isLoanOpen(daTraChuaNhan), true);
+  assert.equal(isLoanOpen({ ...daTraChuaNhan, returnAcceptedQuantity: 40 }), false);
+  // Bên đi mượn thì trả xong là xong, không có gì để nhận lại.
+  assert.equal(isLoanOpen({ ...daTraChuaNhan, direction: "INCOMING" }), false);
 });
 
 test("mọi trạng thái đều có nhãn tiếng Việt, không lọt mã hằng ra màn hình", () => {

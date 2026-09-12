@@ -121,6 +121,21 @@ export class RecordManualInterCommuneLoanDto {
   note?: string;
 }
 
+/**
+ * Bên cho mượn xác nhận đã nhận lại hàng.
+ *
+ * Không có `to`: bước này KHÔNG đổi trạng thái khoản mượn. Trạng thái nói bên
+ * mượn đã trả tới đâu; cột `returnAcceptedQuantity` nói hàng đã về tới kho tới
+ * đâu. Hai con số ấy tách nhau đúng khoảng thời gian hàng đang trên đường.
+ */
+export class AcceptInterCommuneReturnDto {
+  /** Số nhận lại lần này. Bỏ trống là nhận hết phần đang chờ. */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  quantity?: number;
+}
+
 /** Chuyển trạng thái một khoản mượn liên xã. */
 export class AdvanceInterCommuneLoanDto {
   @IsIn(["APPROVED", "REJECTED", "CANCELLED", "ACTIVE", "PARTIALLY_RETURNED", "RETURNED"])

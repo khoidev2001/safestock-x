@@ -550,6 +550,13 @@ export interface InterCommuneLoan {
   unit: string;
   quantity: number;
   returnedQuantity: number;
+  /**
+   * Phần bên CHO MƯỢN đã xác nhận cầm lại được.
+   *
+   * Khác `returnedQuantity` — đó là phần bên mượn KHAI đã đưa trả. Chênh giữa hai
+   * số là hàng đang trên đường về, chưa nằm ở kho nào.
+   */
+  returnAcceptedQuantity: number;
   recordedManually: boolean;
   note: string | null;
   rejectReason: string | null;
@@ -585,6 +592,17 @@ export const recordManualInterCommuneLoan = (body: {
   note?: string;
 }) => apiFetch("/api/loans/inter-commune/manual", { method: "POST", body: JSON.stringify(body) });
 
+/**
+ * Bên cho mượn xác nhận đã nhận lại hàng — chỗ duy nhất cộng kho ở chiều về.
+ *
+ * Bỏ `quantity` là nhận hết phần đang chờ.
+ */
+export const acceptInterCommuneReturn = (loanId: string, quantity?: number) =>
+  apiFetch(`/api/loans/inter-commune/${loanId}/accept-return`, {
+    method: "POST",
+    body: JSON.stringify(quantity === undefined ? {} : { quantity }),
+  });
+
 /** Tên các xã lân cận đã khai trong sổ đăng ký. */
 export const getPeerCommunes = () => apiFetch<string[]>("/api/loans/inter-commune/peers");
 
@@ -599,6 +617,22 @@ export interface AvailableItem {
 /** Vật tư đang có trong kho, để chọn theo TÊN thay vì phải chép mã lô. */
 export const getAvailableItemsForLoan = () =>
   apiFetch<AvailableItem[]>("/api/loans/inter-commune/available-items");
+
+/** Một dòng trong danh mục để đi mượn: không kèm tồn kho, vì mượn thứ mình không có. */
+export interface BorrowableItem {
+  itemSku: string;
+  itemName: string;
+  unit: string;
+}
+
+/**
+ * Danh mục vật tư để ĐI MƯỢN — toàn bộ, không lọc theo tồn kho của mình.
+ *
+ * Đừng dùng `getAvailableItemsForLoan` cho form đi mượn: hàm đó chỉ trả thứ mình
+ * ĐANG CÓ, nên nó giấu mất đúng những mặt hàng cần mượn nhất.
+ */
+export const getBorrowableItems = () =>
+  apiFetch<BorrowableItem[]>("/api/loans/inter-commune/borrowable-items");
 
 /**
  * Đi tiếp một bước của khoản mượn liên xã.

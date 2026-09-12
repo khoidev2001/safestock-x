@@ -71,12 +71,20 @@ describe("máy trạng thái mượn liên xã", () => {
       expect(stockEffect("OUTGOING", step)).toBe("NONE");
     });
 
-    it("ghi nhận đã trả: TRỪ kho bên mượn", () => {
-      const step = findTransition("ACTIVE", "RETURNED")!;
+    // Bên cho mượn KHÔNG được cộng ở hàm này — bản ghi của họ không đi qua
+    // `advance()` bao giờ, vì mọi bước trả đều `by: "BORROWER"`. Phần cộng lại kho
+    // họ nằm trong `syncStatusFromPeer`. Cộng cả hai nơi là kho tự sinh ra hàng.
+    it.each([
+      ["ACTIVE", "RETURNED"],
+      ["ACTIVE", "PARTIALLY_RETURNED"],
+      ["PARTIALLY_RETURNED", "RETURNED"],
+    ] as const)("bước trả %s -> %s: TRỪ kho bên mượn", (tu, den) => {
+      const step = findTransition(tu, den)!;
 
       expect(stockEffect("INCOMING", step)).toBe("DEDUCT");
       expect(stockEffect("OUTGOING", step)).toBe("NONE");
     });
+
 
     it("thu hồi khi bên kia không nhận: hoàn lại kho bên cho mượn", () => {
       const step = findTransition("APPROVED", "CANCELLED")!;
@@ -112,9 +120,13 @@ describe("máy trạng thái mượn liên xã", () => {
     });
 
     it("tổng số hàng ra vào của một vòng mượn–trả trọn vẹn bằng không", () => {
-      // Cho mượn → nhận → trả: kho bên cho mượn trừ 1 lần, kho bên mượn cộng rồi
-      // trừ. Kết thúc, cả hai kho phải về đúng như trước — trừ đúng phần hàng
-      // đang nằm ở bên cho mượn chờ nhận lại.
+      // Chỉ tính phần `advance()` làm. Bên mượn hoà; bên cho mượn ở đây là -1 vì
+      // phần cộng lại của họ do `syncStatusFromPeer` làm, không phải hàm này.
+      //
+      // ĐỪNG đọc -1 này thành "vòng mượn trả làm mất hàng". Đã từng đúng như thế:
+      // `syncStatusFromPeer` xưa chỉ đổi trạng thái, nên tổng hai kho tụt từ 2296
+      // xuống 2256 sau một vòng mượn 40 rồi trả đủ. Nay nó cộng lại, và phép thử
+      // chốt việc đó nằm ở `inter-commune-loan.service` chứ không ở đây.
       const cycle = [
         findTransition("REQUESTED", "APPROVED")!,
         findTransition("APPROVED", "ACTIVE")!,
@@ -127,7 +139,7 @@ describe("máy trạng thái mượn liên xã", () => {
         }, 0);
 
       expect(netEffect("INCOMING")).toBe(0); // bên mượn: cộng rồi trừ → hoà
-      expect(netEffect("OUTGOING")).toBe(-1); // bên cho mượn: đã đưa đi, chờ nhận lại
+      expect(netEffect("OUTGOING")).toBe(-1); // phần cộng lại nằm ở syncStatusFromPeer
     });
   });
 
