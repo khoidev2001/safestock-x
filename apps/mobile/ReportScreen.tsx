@@ -48,6 +48,15 @@ export function ReportScreen({ token, user }: { token: string; user: AuthUser })
   } | null>(null);
   const [attachStatus, setAttachStatus] = useState<"idle" | "recording">("idle");
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  /**
+   * Số giây đã chờ nhận dạng.
+   *
+   * Lần gọi đầu sau khi PhoWhisper nguội mất 25-30 giây; những lần sau dưới 5.
+   * Chỉ hiện đúng chữ "Đang nhận dạng…" đứng im suốt nửa phút thì người dùng
+   * tưởng hỏng và bỏ đi — đã gặp thật khi thử trên máy. Đếm giây để cái chờ có
+   * hình hài, và nói trước rằng lần đầu lâu.
+   */
+  const [transcribeSeconds, setTranscribeSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
@@ -118,6 +127,15 @@ export function ReportScreen({ token, user }: { token: string; user: AuthUser })
     setDescription((prev) => (prev.trim() ? `${prev.trim()} ${clean}` : clean));
   }
 
+  useEffect(() => {
+    if (micStatus !== "transcribing") {
+      setTranscribeSeconds(0);
+      return;
+    }
+    const bat = setInterval(() => setTranscribeSeconds((n) => n + 1), 1000);
+    return () => clearInterval(bat);
+  }, [micStatus]);
+
   async function finishRecording(recording = recordingRef.current) {
     if (!recording || recordingRef.current !== recording) return;
     recordingRef.current = null;
@@ -132,8 +150,16 @@ export function ReportScreen({ token, user }: { token: string; user: AuthUser })
       const { text } = await transcribe(token, base64);
       if (text.trim()) appendText(text);
       else setVoiceError("Chưa nghe rõ nội dung. Vui lòng nói lại hoặc gõ tay.");
-    } catch {
-      setVoiceError("Nhận dạng giọng nói chưa sẵn sàng — vui lòng gõ tay.");
+    } catch (error) {
+      // Nói ra lỗi thật, đừng nuốt. Câu chung chung "chưa sẵn sàng" khiến mọi
+      // nguyên nhân — mất mạng, hết hạn phiên, model chưa nạp — trông giống hệt
+      // nhau, và người trực không biết nên chờ hay nên gõ tay.
+      const chiTiet = error instanceof Error ? error.message.trim() : "";
+      setVoiceError(
+        chiTiet
+          ? `Không nhận dạng được: ${chiTiet}. Vui lòng thử lại hoặc gõ tay.`
+          : "Nhận dạng giọng nói chưa sẵn sàng — vui lòng gõ tay.",
+      );
     } finally {
       setMicStatus("idle");
     }
@@ -295,7 +321,7 @@ export function ReportScreen({ token, user }: { token: string; user: AuthUser })
     micStatus === "recording"
       ? "■ Dừng và nhận dạng"
       : micStatus === "transcribing"
-        ? "Đang nhận dạng…"
+        ? `Đang nhận dạng… ${transcribeSeconds}s`
         : "🎤 Chuyển giọng nói thành văn bản";
 
   return (
@@ -360,7 +386,12 @@ export function ReportScreen({ token, user }: { token: string; user: AuthUser })
             <Text style={styles.micHint}>
               {micStatus === "recording"
                 ? "Đang ghi… nói rõ rồi bấm dừng (tối đa 60 giây)."
-                : "Bấm để ghi âm, hệ thống tự chuyển thành chữ bằng PhoWhisper."}
+                : micStatus === "transcribing"
+                  ? // Lần đầu sau khi model nguội mất 25-30 giây, những lần sau
+                    // dưới 5. Nói trước thì người ta chờ; không nói thì họ tưởng
+                    // hỏng và bỏ đi ngay trước lúc chữ hiện ra.
+                    "Lần đầu trong buổi có thể mất 20–30 giây. Những lần sau vài giây."
+                  : "Bấm để ghi âm, hệ thống tự chuyển thành chữ bằng PhoWhisper."}
             </Text>
 
             {/* Nút THỨ HAI, việc khác hẳn nút trên: nút trên đổi tiếng nói thành
