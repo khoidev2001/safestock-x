@@ -13,7 +13,7 @@ pnpm desktop:dev
 
 Đăng nhập `admin` / `admin123@`, địa chỉ máy chủ `localhost:3110`.
 
-Thử đăng nhập `staff@` → vào được, xem được thiết bị, nhưng **gửi số liệu trả 403**.
+Thử đăng nhập `dongxuan` → vào được, xem được thiết bị, nhưng **gửi số liệu trả 403**.
 Đây là hành vi đúng, không phải lỗi.
 
 ## Test 1 — Chuông kêu theo ngưỡng
@@ -74,19 +74,19 @@ Người vừa ngồi vào ca trực không cần bị dội chuông cho chuyệ
 | Gửi lại đúng gói tin đã gửi | **chỉ ghi một lô**, không tạo sự cố trùng |
 | Chưa từng tải ngưỡng về máy lần nào | ứng dụng ghi rõ trong nhật ký là chưa đánh giá được tại chỗ |
 | Tắt cờ mô phỏng rồi gửi | **403** |
-| `staff@` bấm gửi | **403** |
+| `dongxuan` bấm gửi | **403** |
 | Tắt chuông khi mất mạng | chuông tắt tại chỗ, xác nhận vào hàng chờ |
 
 ## Tắt chuông cho sự cố do phần cứng gây ra
 
-Người trực kho (`staff@`) **phải tắt được** chuông kể cả khi sự cố do cảm biến thật
+Người trực kho (`dongxuan`) **phải tắt được** chuông kể cả khi sự cố do cảm biến thật
 kích hoạt, và kể cả khi cờ mô phỏng đang tắt.
 
 Kiểm chứng bằng lệnh:
 
 ```bash
 API=http://localhost:3110/api
-STAFF=<mã đăng nhập của staff@>
+STAFF=<mã đăng nhập của dongxuan>
 
 curl -s -H 'Content-Type: application/json' -H "Authorization: Bearer $STAFF" \
   -d '{"warehouseId":"<mã kho>","incidentIds":["<mã sự cố>"],"acknowledgementKey":"ack-1","acknowledgedAt":"2026-08-01T00:00:00.000Z"}' \

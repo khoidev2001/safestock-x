@@ -27,7 +27,7 @@ tư**, chia thành **1 ở kho trung tâm** và **4 ở kho thôn Long Châu**.
 Vật tư được phân bổ theo **kho gần điểm sự cố**, nên một nhiệm vụ thường trải trên
 nhiều kho. Nghĩa là bước sau **cần hơn một tài khoản kho** mới hoàn tất được.
 
-Nếu chỉ đăng nhập `staff@` (kho trung tâm), nhiệm vụ sẽ đứng mãi ở *Chờ kho chuẩn bị*
+Nếu chỉ đăng nhập `dongxuan` (kho trung tâm), nhiệm vụ sẽ đứng mãi ở *Chờ kho chuẩn bị*
 và không bao giờ tới *Sẵn sàng* — lúc đó không diễn được bước giao hàng.
 
 Xem nhiệm vụ cần những kho nào bằng cách mở chi tiết trên web, phần tiến độ kho ghi

@@ -5,11 +5,11 @@
 | Vai | Tài khoản mẫu | Mật khẩu | Làm gì |
 |---|---|---|---|
 | Quản trị xã | `admin` | `admin123@` | Lập và duyệt phương án, quản lý tài khoản, xem nhật ký |
-| Phụ trách kho | `staff` | `staff123` | Giữ kho, chuẩn bị vật tư, kiêm báo tình huống của thôn |
-| Lực lượng hiện trường | `rescue` | `rescue123` | Nhận lệnh, đi giao, báo kết quả, báo tình huống |
+| Phụ trách kho | `dongxuan` | `dongxuan123` | Giữ kho, chuẩn bị vật tư, kiêm báo tình huống của thôn |
+| Lực lượng hiện trường | `cuuhodongxuan` | `cuuho123` | Nhận lệnh, đi giao, báo kết quả, báo tình huống |
 
 Mọi tài khoản đều đăng nhập bằng **tên đăng nhập trần**, không phải địa chỉ email —
-`admin`, `staff`, `longchau`, không kèm hậu tố tên miền.
+`admin`, `dongxuan`, `longchau`, không kèm hậu tố tên miền.
 
 Vai "trưởng thôn" riêng đã bị bỏ: người giữ kho thôn kiêm luôn việc báo tình huống
 của thôn mình. Tách hai tài khoản chỉ thêm việc đăng nhập chứ không thêm quyền kiểm
@@ -51,7 +51,7 @@ thực tế rồi gửi yêu cầu; việc đối chiếu tồn và quyết đ�
 
 ## Test 3 — Gõ thẳng địa chỉ không vào được
 
-Đăng nhập `staff@`, gõ thẳng `http://localhost:3200/users` lên thanh địa chỉ.
+Đăng nhập `dongxuan`, gõ thẳng `http://localhost:3200/users` lên thanh địa chỉ.
 
 **Kỳ vọng:** bị đẩy sang trang khác, không hiện danh sách tài khoản. Ẩn mục trên
 thanh điều hướng là chưa đủ — người biết địa chỉ vẫn gõ được, nên máy chủ phải chặn.
@@ -61,7 +61,7 @@ thanh điều hướng là chưa đủ — người biết địa chỉ vẫn g�
 ```bash
 API=http://localhost:3110/api
 TOKEN=$(curl -s -H 'Content-Type: application/json' \
-  -d '{"email":"rescue","password":"rescue123"}' \
+  -d '{"email":"cuuhodongxuan","password":"cuuho123"}' \
   $API/auth/login | grep -o '"accessToken":"[^"]*' | cut -d'"' -f4)
 
 curl -s -o /dev/null -w "danh sach tai khoan: %{http_code}\n" -H "Authorization: Bearer $TOKEN" $API/admin/users

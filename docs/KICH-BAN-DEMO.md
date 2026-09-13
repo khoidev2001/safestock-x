@@ -29,10 +29,10 @@ Ba mức thời lượng:
 |               | Màn hình            | Tài khoản                        | Mật khẩu        | Vai                         |
 | ------------- | --------------------- | ---------------------------------- | ----------------- | --------------------------- |
 | **M1**  | Chrome thường       | `superadmindongxuan`                          | `admin123`     | Quản trị xã Đồng Xuân |
-| **M2**  | Chrome ẩn danh       | `staff`         | `staff123`      | Phụ trách kho trung tâm  |
+| **M2**  | Chrome ẩn danh       | `dongxuan`      | `dongxuan123`   | Phụ trách kho trung tâm  |
 | **M3**  | BrowserOS             | `admin.xuantho` | `admin123`     | Quản trị xã Xuân Thọ   |
-| **Đ1** | Điện thoại ảo S23 | `rescue`        | `rescue123`     | Đội hiện trường        |
-| **Đ2** | Điện thoại thật   | `longchau`      | `truongthon123` | Trưởng thôn Long Châu   |
+| **Đ1** | Điện thoại ảo S23 | `cuuhodongxuan` | `cuuho123`      | Đội hiện trường        |
+| **Đ2** | Điện thoại thật   | `longchau`      | `longchau123`   | Trưởng thôn Long Châu   |
 
 Tài khoản quản trị là **`superadmindongxuan`** trần, không phải email.
 
@@ -211,7 +211,7 @@ Sau lệnh này: 0 nhiệm vụ, 0 sự cố, 0 thông báo, tồn kho về đú
 
 | BẤM                                            | ĐỌC                                                                              |
 | ----------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Đăng nhập M2 bằng`staff@`                 | *"Đây là màn hình người phụ trách kho."*                                |
+| Đăng nhập M2 bằng`dongxuan`                 | *"Đây là màn hình người phụ trách kho."*                                |
 | Vào tab**Vật tư**                      | —                                                                                 |
 | Bấm**Tiếp nhận lô mới**              | *"Nhập hàng: chọn vật tư, mã lô, số lượng, hạn dùng, vị trí kệ."* |
 | Điền và xác nhận                           | —                                                                                 |
@@ -262,7 +262,7 @@ Sau lệnh này: 0 nhiệm vụ, 0 sự cố, 0 thông báo, tồn kho về đú
 
 | BẤM                                  | ĐỌC                                                                               |
 | ------------------------------------- | ----------------------------------------------------------------------------------- |
-| Mở app, đã đăng nhập`rescue@` | *"Đội hiện trường làm việc trên điện thoại, không ngồi máy tính."* |
+| Mở app, đã đăng nhập`cuuhodongxuan` | *"Đội hiện trường làm việc trên điện thoại, không ngồi máy tính."* |
 | Tab**Lệnh**, mở nhiệm vụ    | *"Kèm địa điểm, số người, danh sách vật tư, và lấy ở kho nào."*    |
 
 ## 5.2 Ký nhận — làm sai trước
