@@ -124,6 +124,25 @@ export type MissionListFilter = "all" | "needs-action" | "published";
 const MAX_PAGE_SIZE = 100;
 
 /**
+ * Tiêu đề thẻ thông báo cho một báo cáo hiện trường, theo VAI của người gửi.
+ *
+ * Không phải chỉ trưởng thôn mới báo cáo: đội cứu hộ ngoài thực địa cũng gửi tình
+ * huống mới thấy được, và cả hai đi qua đúng một đường. Trước đây tiêu đề ghi chết
+ * "từ trưởng thôn", nên một tin của đội cứu hộ hiện lên hộp thư của điều phối dưới
+ * tên một người không hề gửi nó — điều phối gọi nhầm người để hỏi lại hiện trường.
+ *
+ * Không rõ vai (dữ liệu cũ, hoặc lượt tạo không kèm người gửi) thì nói "từ hiện
+ * trường": đúng cho mọi vai, và không gán bừa cho ai.
+ */
+const REPORT_NOTIFICATION_TITLE: Readonly<Record<UserRole, string>> = {
+  [UserRole.WAREHOUSE]: "Báo cáo mới từ trưởng thôn",
+  [UserRole.RESCUE]: `Báo cáo mới từ ${FIELD_FORCE_ROLE_LABEL.toLowerCase()}`,
+  [UserRole.ADMIN]: "Báo cáo mới từ cán bộ điều phối",
+};
+
+const FALLBACK_REPORT_NOTIFICATION_TITLE = "Báo cáo mới từ hiện trường";
+
+/**
  * Trạng thái nào là "đang chờ chính vai này xử lý".
  *
  * Bản sao ở backend của `missionNeedsAction` phía web, cho phần lọc được ở tầng
@@ -398,6 +417,8 @@ export class MissionService {
     /** Có thể trống khi người báo chỉ gửi file ghi âm. */
     description?: string;
     userId?: string;
+    /** Vai của người gửi — quyết định thẻ thông báo ghi tên lực lượng nào. */
+    reporterRole?: UserRole;
     requestId?: string;
     incidentPoint?: LatLng;
     audio?: { base64: string; mimeType: string; durationMs?: number };
@@ -481,7 +502,9 @@ export class MissionService {
           data: {
             recipientRole: UserRole.ADMIN,
             kind: NotificationKind.INCIDENT_REPORTED,
-            title: "Báo cáo mới từ trưởng thôn",
+            title: input.reporterRole
+              ? REPORT_NOTIFICATION_TITLE[input.reporterRole]
+              : FALLBACK_REPORT_NOTIFICATION_TITLE,
             body: excerpt,
             missionId: mission.id,
             // Số hiệu phải truyền tay ở mọi lệnh tạo nằm TRONG transaction: chúng

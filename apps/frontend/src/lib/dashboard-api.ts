@@ -561,6 +561,17 @@ export interface InterCommuneLoan {
   note: string | null;
   rejectReason: string | null;
   requestedAt: string;
+  /**
+   * Lúc bên kia quyết — ĐỒNG Ý hoặc TỪ CHỐI đều ghi vào đây.
+   *
+   * Một trường cho cả hai nước đi, nên phải đọc kèm `status` mới biết mốc này là
+   * duyệt hay từ chối. Đọc trơ một mình nó là đọc sai một nửa số trường hợp.
+   */
+  decidedAt: string | null;
+  /** Lúc hàng rời kho bên cho mượn — mốc khoản mượn chuyển sang ACTIVE. */
+  receivedAt: string | null;
+  /** Lúc trả XONG toàn bộ. Trả một phần chưa ghi vào đây. */
+  returnedAt: string | null;
 }
 
 export function getInterCommuneLoans(): Promise<InterCommuneLoan[]> {

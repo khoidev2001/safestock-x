@@ -7,42 +7,6 @@
     "node": ">=20",
     "pnpm": ">=10"
   },
-  "pnpm": {
-    "packageExtensions": {
-      "@react-native-community/netinfo@11.4.1": {
-        "peerDependencies": {
-          "react": "*"
-        }
-      }
-    },
-    "overrides": {
-      "@expo/cli>glob": "10.5.0",
-      "@expo/cli>tar": "7.5.22",
-      "@expo/config>glob": "10.5.0",
-      "@expo/config-plugins>glob": "10.5.0",
-      "@expo/metro-config>glob": "10.5.0",
-      "@expo/metro-config>postcss": "8.5.23",
-      "@expo/plist>@xmldom/xmldom": "0.8.13",
-      "@nestjs/config>lodash": "4.18.1",
-      "ajv>fast-uri": "3.1.4",
-      "cacache@18.0.4>tar": "7.5.22",
-      "brace-expansion": "file:./packages/brace-expansion-compat",
-      "next>postcss": "8.5.23",
-      "next>sharp": "0.35.3",
-      "qs": "6.15.2",
-      "uuid": "11.1.1"
-    },
-    "onlyBuiltDependencies": [
-      "@nestjs/core",
-      "@prisma/client",
-      "@prisma/engines",
-      "prisma",
-      "@tailwindcss/oxide",
-      "sharp",
-      "electron",
-      "esbuild"
-    ]
-  },
   "scripts": {
     "infra:up": "docker compose --env-file .env -f infrastructure/docker-compose.yml up -d",
     "infra:down": "docker compose --env-file .env -f infrastructure/docker-compose.yml down",

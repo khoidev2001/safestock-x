@@ -75,3 +75,7 @@ apps/mobile/google-services.json
 
 # Bản sao Firebase mà Gradle đọc — cùng lý do với file gốc ở apps/mobile.
 apps/mobile/android/app/google-services.json
+
+# Tệp khoá tạm của Word/PowerPoint/Excel — sinh ra khi file đang mở và biến mất
+# khi đóng. Không phải nội dung, mà cứ hiện trong `git status` như thứ bỏ sót.
+~$*

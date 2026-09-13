@@ -18,8 +18,6 @@ import { useNetInfo } from "@react-native-community/netinfo";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import {
   ApiError,
-  fetchMissions,
-  fetchWarehouseMaterialRequests,
   login,
   logout as revokeServerSession,
   refreshSession,
@@ -38,7 +36,6 @@ import { NotificationToasts } from "./NotificationToasts";
 import { useNotificationFeed, type NotificationFeed } from "./use-notification-feed";
 import { filterNotificationsByMissionNo } from "./notification-feed-state";
 import { PAGE_SIZE } from "./paged-list-state";
-import { missionWorkStage, type MissionWorkStage } from "./mission-state";
 import {
   initialTabForRole,
   tabsForRole,
@@ -53,9 +50,8 @@ import {
   unregisterForPush,
 } from "./push-registration";
 import { clearOfflineCache } from "./offline-cache";
-import { formatShortTime, kindIcon, parseMissionSummary } from "./disaster";
+import { formatShortTime, kindIcon } from "./disaster";
 import { MissionListScreen } from "./MissionListScreen";
-import { MissionSummaryCard } from "./MissionSummaryCard";
 import { mobileRoleLabel } from "./role-labels";
 
 const brandLogo = require("./assets/brand/ung-pho-nhanh-logo.png");
@@ -351,7 +347,6 @@ function MobileRoleShell({
           />
         ) : (
           <NotificationsScreen
-            token={token}
             user={user}
             feed={feed}
             onOpenMission={setMissionFromList}
@@ -578,12 +573,10 @@ function LoginScreen({ onLogin }: { onLogin: (result: LoginResult) => Promise<vo
  * lại không mất kết nối và không phải tải lại từ đầu.
  */
 function NotificationsScreen({
-  token,
   user,
   feed,
   onOpenMission,
 }: {
-  token: string;
   user: AuthUser;
   feed: NotificationFeed;
   onOpenMission: (missionId: string) => void;
@@ -591,7 +584,6 @@ function NotificationsScreen({
   const { items, loading, error, cacheStoredAt, connected, newIds } = feed;
   const netInfo = useNetInfo();
   const [missionQuery, setMissionQuery] = useState("");
-  const stages = useMissionStages(token, user.role, items[0]?.id ?? null);
   const shown = filterNotificationsByMissionNo(items, missionQuery);
   const searching = shown.length !== items.length || missionQuery.trim().length > 0;
 
@@ -716,11 +708,9 @@ function NotificationsScreen({
           keyExtractor={(n) => n.id}
           contentContainerStyle={{ padding: 16 }}
           renderItem={({ item }) => (
-            <Card
+            <InfoCard
               item={item}
               isNew={newIds.has(item.id)}
-              role={user.role}
-              stage={item.missionId ? stages[item.missionId] : undefined}
               onPress={item.missionId ? () => onOpenMission(item.missionId!) : undefined}
             />
           )}
@@ -772,104 +762,14 @@ function NotificationsScreen({
 }
 
 /**
- * Thẻ thông báo. Nếu gắn nhiệm vụ (có missionId + parse được số người) → thẻ nổi bật
- * làm rõ 3 tín hiệu: loại thiên tai · mức nguy hiểm · số người gặp nạn.
- * Ngược lại → thẻ thông tin gọn (sự cố kho, readiness…).
+ * HỘP THÔNG BÁO CHỈ CÒN THẺ THÔNG BÁO.
+ *
+ * Trước đây thông báo gắn nhiệm vụ được vẽ lại thành thẻ nhiệm vụ lớn — đúng
+ * cái thẻ mà tab Nhiệm vụ đang hiển thị. Người trực phải đọc cùng một việc ở hai
+ * chỗ, mà hai chỗ ấy còn lệch nhau: tab Nhiệm vụ nói việc đang phải làm, hộp
+ * thông báo nói lại lúc việc được giao. Ở đây chỉ còn `InfoCard` — mẩu tin gọn,
+ * ai cần làm việc thì chạm để mở nhiệm vụ hoặc sang thẳng tab Nhiệm vụ.
  */
-function Card({
-  item,
-  isNew,
-  role,
-  stage,
-  onPress,
-}: {
-  item: Notification;
-  isNew: boolean;
-  role: string;
-  stage?: MissionWorkStage;
-  onPress?: () => void;
-}) {
-  const summary = item.missionId ? parseMissionSummary(item.body) : null;
-  if (onPress && summary) {
-    return (
-      <MissionCard
-        item={item}
-        summary={summary}
-        isNew={isNew}
-        role={role}
-        stage={stage}
-        onPress={onPress}
-      />
-    );
-  }
-  return <InfoCard item={item} isNew={isNew} onPress={onPress} />;
-}
-
-/**
- * Nhiệm vụ nào đang nằm ở mốc nào, tra theo id.
- *
- * Thông báo là một mẩu tin của quá khứ: nó ghi lại lúc kho được giao việc, chứ
- * không biết mười phút sau kho đã xuất hàng. Thẻ muốn nói đúng việc còn phải làm
- * thì phải hỏi lại trạng thái HIỆN TẠI.
- *
- * Mỗi vai hỏi một đường vì mỗi vai chỉ được thấy phần của mình: đội cứu hộ đọc
- * danh sách nhiệm vụ của đội, kho thôn đọc phiếu vật tư của chính kho mình.
- *
- * Tải lại khi có thông báo mới nhất khác đi — một mẩu tin mới về gần như luôn
- * đồng nghĩa có thứ gì đó vừa đổi trạng thái.
- */
-function useMissionStages(
-  token: string,
-  role: string,
-  newestNotificationId: string | null,
-): Record<string, MissionWorkStage> {
-  const [stages, setStages] = useState<Record<string, MissionWorkStage>>({});
-
-  useEffect(() => {
-    let cancelled = false;
-    async function loadStages() {
-      try {
-        if (role === "RESCUE") {
-          const missions = await fetchMissions(token);
-          if (cancelled) return;
-          setStages(
-            Object.fromEntries(
-              missions.map((mission) => [
-                mission.id,
-                missionWorkStage(mission.status, mission.warehouseRequests),
-              ]),
-            ),
-          );
-          return;
-        }
-        const requests = await fetchWarehouseMaterialRequests(token);
-        if (cancelled) return;
-        const byMission = new Map<string, { status: string }[]>();
-        for (const request of requests) {
-          const list = byMission.get(request.missionId) ?? [];
-          list.push({ status: request.status });
-          byMission.set(request.missionId, list);
-        }
-        setStages(
-          Object.fromEntries(
-            [...byMission].map(([missionId, list]) => [missionId, missionWorkStage("", list)]),
-          ),
-        );
-      } catch {
-        // Không lấy được thì thẻ vẫn đọc được, chỉ thiếu dòng trạng thái. Đây là
-        // thông tin phụ của màn hình thông báo — báo lỗi ở đây chỉ tổ che mất
-        // chính những thông báo người dùng vào để đọc.
-      }
-    }
-    void loadStages();
-    return () => {
-      cancelled = true;
-    };
-  }, [token, role, newestNotificationId]);
-
-  return stages;
-}
-
 function formatCacheTime(value: string): string {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
@@ -878,42 +778,6 @@ function formatCacheTime(value: string): string {
         hour: "2-digit",
         minute: "2-digit",
       });
-}
-
-/**
- * Thẻ nhiệm vụ trong hộp thông báo.
- *
- * Chỉ còn là lớp chuyển đổi: rút số hiệu, loại thiên tai và số người ra khỏi bản
- * ghi thông báo rồi đưa cho thẻ dùng chung vẽ. Phần hình hài nằm ở
- * `MissionSummaryCard`, để tab Nhiệm vụ và hộp Thông báo không bao giờ lệch nhau.
- */
-function MissionCard({
-  item,
-  summary,
-  isNew,
-  role,
-  stage,
-  onPress,
-}: {
-  item: Notification;
-  summary: { type?: string; people: number };
-  isNew: boolean;
-  role: string;
-  stage?: MissionWorkStage;
-  onPress: () => void;
-}) {
-  return (
-    <MissionSummaryCard
-      missionNo={item.missionNo}
-      incidentType={summary.type ?? ""}
-      affectedPeople={summary.people}
-      createdAt={item.createdAt}
-      isNew={isNew}
-      role={role}
-      stage={stage}
-      onPress={onPress}
-    />
-  );
 }
 
 /** Thẻ thông tin gọn — thông báo không gắn nhiệm vụ. */

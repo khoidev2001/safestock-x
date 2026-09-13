@@ -1,6 +1,6 @@
 const { SW, SH, M, C, widthOf, wrap, img, rect, txt, textH } = require('./core');
 
-const TOTAL = 23;
+const TOTAL = 26;
 const BG = 'bg-content.jpg';
 
 // ---------- shared chrome ----------
@@ -53,13 +53,53 @@ function numberBadge(x, y, d, n, color) {
     txt({ x, y: y + d / 2 - 0.13, w: d, text: n, size: 15, weight: 'eb', color, align: 'center' }),
   ];
 }
+// ---------- ảnh thực tế ----------
+// Thả ảnh vào thư mục anh/ theo đúng tên slot bên dưới rồi chạy `node prep-anh.js`
+// để cắt về đúng tỷ lệ khung. Chưa có ảnh thì slide vẫn dựng được, chỉ hiện khung chờ.
+const fs = require('fs');
+const path = require('path');
+
+const PHOTOS = require('./anh-config');
+const CUT_DIR = 'anh/da-cat';
+const hasPhoto = (slot) => fs.existsSync(path.join(__dirname, CUT_DIR, slot + '.jpg'));
+
+// Chú thích ảnh nằm NGOÀI khung, ngay dưới mép dưới của ảnh — để không che
+// watermark/nguồn của toà soạn ở góc ảnh.
+const CAP_SIZE = 10.5, CAP_GAP = 0.1;
+const capBlock = (slot, x, y, caption) => {
+  const { w, h } = PHOTOS[slot];
+  return txt({ x, y: y + h + CAP_GAP, w, text: caption, size: CAP_SIZE, weight: 'm', color: C.muted, lh: 1.35 });
+};
+// Tổng chiều cao khung ảnh kể cả dòng chú thích bên dưới.
+function photoH(slot, caption) {
+  const { w, h } = PHOTOS[slot];
+  return caption ? h + CAP_GAP + capBlock(slot, 0, 0, caption).h : h;
+}
+
+// Khung ảnh: có ảnh thì ghép ảnh, chưa có thì vẽ khung chờ cùng kích thước.
+function photo(slot, x, y, caption, accent = C.greenSoft) {
+  const { w, h, label } = PHOTOS[slot];
+  const out = hasPhoto(slot)
+    ? [
+        img(CUT_DIR + '/' + slot + '.jpg', x, y, w, h),
+        rect(x, y, w, h, C.white, 0, 0.12, { color: C.white, alpha: 0.18, w: 1 }),
+      ]
+    : [
+        rect(x, y, w, h, C.white, 0.05, 0.12, { color: accent, alpha: 0.4, w: 1.4 }),
+        txt({ x: x + 0.3, y: y + h / 2 - 0.44, w: w - 0.6, text: label, size: 11, weight: 'eb', color: accent, spacing: 1.6, align: 'center' }),
+        txt({ x: x + 0.3, y: y + h / 2 - 0.04, w: w - 0.6, text: 'Chưa có ảnh — thả file ' + slot + '.jpg vào thư mục anh/ rồi chạy lại script, hoặc chèn thẳng trong PowerPoint.', size: 10.5, weight: 'r', color: C.dim, align: 'center', lh: 1.4 }),
+      ];
+  if (caption) out.push(capBlock(slot, x, y, caption));
+  return out;
+}
+
 const slides = [];
 // ---------- quy trình 6 bước: timeline dựng dần qua nhiều slide ----------
 const STEPS = [
   ['Ghi nhận tình huống', 'Trưởng thôn báo cáo và ghim điểm gặp nạn lên bản đồ.'],
   ['AI phân tích và con người điều phối', 'AI đọc mô tả bằng lời thành số liệu và đề xuất vật tư, người điều phối sẽ chốt phương án.'],
   ['Chọn kho tiếp tế gần điểm gặp nạn nhất', 'Hệ thống cân nhắc vị trí, tồn kho và khả năng đáp ứng của từng kho.'],
-  ['Xác nhận & thông báo', 'Kho nhận lệnh chuẩn bị, xuất vật tư; đội cứu hộ nhận nhiệm vụ cùng lúc.'],
+  ['Xác nhận & thông báo', 'Kho phụ trách nhận lệnh chuẩn bị, xuất vật tư; đội cứu hộ nhận nhiệm vụ cùng lúc.'],
   ['Đội cứu hộ xác nhận hoàn thành', 'Báo cáo kết quả nhiệm vụ kèm hình ảnh tại hiện trường.'],
   ['Kho xác nhận hoàn trả vật tư', 'Đối chiếu vật tư đã cấp phát và phần thu hồi, khép lại nhiệm vụ.'],
 ];
@@ -117,14 +157,13 @@ function timelineSlide(hot, eyebrowNote, title, notes) {
     img('scrim-left.png', 0, 0, SW, SH),
     img('scrim-bottom.png', 0, 0, SW, SH),
     rect(0, 0, SW, SH, C.ink, 0.22),
-    rect(M, 0.66, 1.86, 1.24, C.white, 0.96, 0.14),
-    img('logo-sm.png', M + 0.17, 0.85, 1.52, 0.9),
+    img('mark-sm.png', 1.53, 0.84, 1.54, 1.54),
     txt({ x: M, y: 2.82, w: 9, text: 'ỨNG PHÓ NHANH', size: 62, weight: 'eb', color: C.white, lh: 1.08 }),
     rect(M, 4.12, 1.45, 0.075, C.green, 1, 0.037),
     txt({ x: M, y: 4.42, w: 7.6, text: 'Giải pháp cứu hộ, cứu nạn và hậu cần thông minh', size: 21, weight: 'm', color: '#E8F1FA', lh: 1.3 }),
   ];
   let px = M;
-  for (const [t, col] of [['Kết nối thông tin', C.greenSoft], ['Hỗ trợ ra quyết định', C.amber], ['Điều phối nguồn lực', C.sky]]) {
+  for (const [t, col] of [['Điều phối nguồn lực', C.greenSoft], ['Hỗ trợ ra quyết định', C.amber], ['Quản lý kho thông minh', C.sky]]) {
     const p = pill(px, 5.28, t, col);
     els.push(...p.els); px += p.w + 0.18;
   }
@@ -133,26 +172,87 @@ function timelineSlide(hot, eyebrowNote, title, notes) {
 }
 // ============ 2. BỐI CẢNH ============
 {
-  const { els, bodyTop } = chrome('BỐI CẢNH', 'Chúng em lớn lên cùng những mùa bão lũ');
-  const y = bodyTop;
+  const { els, bodyTop } = chrome('BỐI CẢNH', 'Lớn lên cùng những mùa bão lũ');
+  const y = bodyTop, pw = 5.3;
+  const cap = 'Cả khu dân cư chìm trong nước lũ, nhìn từ trên cao.';
+  const ph = photoH('boi-canh', cap);
+  els.push(...photo('boi-canh', M, y, cap, C.sky));
+
+  const rx = M + pw + 0.38, rw = SW - M - rx, ih = (ph - 2 * 0.18) / 3;
   const items = [
-    ['🌊', 'Điều chúng em tận mắt chứng kiến', 'Nhà dân bị ngập, tuyến đường bị chia cắt, nhiều khu vực bị cô lập hoàn toàn.', C.sky],
-    ['🚨', 'Những người ở tuyến đầu', 'Lực lượng cứu hộ làm việc liên tục ngày đêm để đưa người dân đến nơi an toàn.', C.orange],
-    ['🛡️', 'Trải nghiệm thực chiến', 'Thành viên nhóm là chiến sĩ Công an nhân dân, trực tiếp tham gia cứu hộ trong đợt bão lũ lịch sử 2025.', C.green],
+    ['Điều chúng em tận mắt chứng kiến', 'Nhà dân bị ngập, tuyến đường bị chia cắt, nhiều khu vực bị cô lập hoàn toàn.', C.sky],
+    ['Những người ở tuyến đầu', 'Lực lượng cứu hộ làm việc liên tục ngày đêm để đưa người dân đến nơi an toàn.', C.orange],
+    ['Trải nghiệm thực chiến', 'Thành viên nhóm là chiến sĩ Công an nhân dân, trực tiếp tham gia cứu hộ đợt bão lũ năm 2025.', C.green],
   ];
-  const w = (SW - 2 * M - 2 * 0.3) / 3, h = 2.45;
-  items.forEach(([ic, head, body, col], i) => {
-    const x = M + i * (w + 0.3);
-    els.push(...card(x, y, w, h, col));
-    els.push(txt({ x: x + 0.34, y: y + 0.3, w: w - 0.6, text: head, size: 15, weight: 'b', color: C.white, lh: 1.25 }));
-    els.push(txt({ x: x + 0.34, y: y + 1.12, w: w - 0.6, text: body, size: 12.5, weight: 'r', color: C.text, lh: 1.45 }));
+  const tw = rw - 0.64, hGap = 0.1;
+  items.forEach(([head, body, col], i) => {
+    const cy = y + i * (ih + 0.18);
+    els.push(...card(rx, cy, rw, ih, col));
+    // căn khối chữ vào giữa thẻ theo chiều dọc để không bị dồn lên sát mép trên
+    const hh = textH(head, 14, 'b', tw, 1.25), bh = textH(body, 11.5, 'r', tw, 1.4);
+    const ty = cy + (ih - (hh + hGap + bh)) / 2;
+    els.push(txt({ x: rx + 0.32, y: ty, w: tw, text: head, size: 14, weight: 'b', color: C.white, lh: 1.25 }));
+    els.push(txt({ x: rx + 0.32, y: ty + hh + hGap, w: tw, text: body, size: 11.5, weight: 'r', color: C.text, lh: 1.4 }));
   });
-  const qy = y + h + 0.45;
-  els.push(rect(M, qy, SW - 2 * M, 1.2, C.green, 0.12, 0.12, { color: C.green, alpha: 0.45, w: 1 }));
-  els.push(rect(M, qy, 0.06, 1.2, C.green, 1, 0.03));
-  els.push(txt({ x: M + 0.42, y: qy + 0.3, w: SW - 2 * M - 0.8, text: 'Chúng em trăn trở: liệu công nghệ và AI có thể giảm bớt gánh nặng cho những người đang trực tiếp điều phối cứu hộ? Đó là lý do Ứng Phó Nhanh ra đời.', size: 17, weight: 'sb', color: C.white, lh: 1.4 }));
+
+  const qy = y + ph + 0.26;
+  els.push(rect(M, qy, SW - 2 * M, 0.9, C.green, 0.12, 0.12, { color: C.green, alpha: 0.45, w: 1 }));
+  els.push(rect(M, qy, 0.06, 0.9, C.green, 1, 0.03));
+  els.push(txt({ x: M + 0.42, y: qy + 0.16, w: SW - 2 * M - 0.8, text: 'Chúng em trăn trở: liệu công nghệ và AI có thể giảm bớt gánh nặng cho những người đang trực tiếp điều phối cứu hộ? Đó là lý do Ứng Phó Nhanh ra đời.', size: 15.5, weight: 'sb', color: C.white, lh: 1.4 }));
   slides.push({ els, notes: 'Chúng em sinh ra và lớn lên tại vùng đất năm nào cũng chịu ảnh hưởng của bão lũ. Trong nhóm có thành viên là chiến sĩ Công an nhân dân, đã trực tiếp tham gia cứu hộ trong đợt bão lũ lịch sử năm 2025.' });
 }
+// ============ 2B. THIỆT HẠI 2025 ============
+{
+  const { els, bodyTop } = chrome('ĐỢT MƯA LŨ THÁNG 11/2025', 'Sông Ba và sông Kỳ Lộ vượt đỉnh lũ lịch sử', {
+    sub: 'Mưa phổ biến 400–600 mm, có nơi trên 800 mm — đợt thiên tai trực tiếp thúc đẩy nhóm em bắt tay vào làm dự án này.',
+    subW: 11.3,
+  });
+  const y = bodyTop, gap = 0.3, n = 4;
+  const w = (SW - 2 * M - (n - 1) * gap) / n, h = 2.1;
+  const stats = [
+    ['19', 'người chết', 'Cùng 6 người mất tích, tính đến ngày 20/11/2025.', C.red],
+    ['85.700+', 'lượt nhà bị ngập', 'Nước lên nhanh, nhiều khu dân cư ngập sâu nhiều ngày.', C.sky],
+    ['12.800+', 'hộ bị cô lập', 'Đường bị chia cắt, vật tư cứu trợ không vào được bằng đường bộ.', C.orange],
+    ['40', 'xã, phường', 'Phải công bố tình huống khẩn cấp về thiên tai, trong đó có xã Đồng Xuân.', C.amber],
+  ];
+  stats.forEach(([num, unit, body, col], i) => {
+    const x = M + i * (w + gap);
+    els.push(...card(x, y, w, h, col));
+    els.push(txt({ x: x + 0.32, y: y + 0.26, w: w - 0.64, text: num, size: 34, weight: 'eb', color: col, lh: 1.1 }));
+    els.push(txt({ x: x + 0.32, y: y + 0.92, w: w - 0.64, text: unit, size: 14, weight: 'eb', color: C.white }));
+    els.push(txt({ x: x + 0.32, y: y + 1.36, w: w - 0.64, text: body, size: 11.5, weight: 'r', color: C.muted, lh: 1.4 }));
+  });
+
+  const by = y + h + 0.3;
+  els.push(rect(M, by, SW - 2 * M, 0.94, C.red, 0.12, 0.12, { color: C.red, alpha: 0.45, w: 1 }));
+  els.push(rect(M, by, 0.06, 0.94, C.red, 1, 0.03));
+  els.push(txt({ x: M + 0.42, y: by + 0.17, w: 3.15, text: '9.730 tỷ đồng', size: 30, weight: 'eb', color: C.red, lh: 1.1 }));
+  els.push(txt({ x: M + 3.72, y: by + 0.21, w: SW - 2 * M - 4.12, text: 'Tổng thiệt hại thiên tai của tỉnh trong năm 2025. Mỗi con số ở đây là một lần vật tư phải đến đúng nơi, đúng lúc.', size: 14.5, weight: 'sb', color: C.white, lh: 1.4 }));
+  els.push(txt({ x: M, y: by + 1.04, w: SW - 2 * M, text: 'Nguồn: báo cáo thiệt hại của tỉnh Đắk Lắk (địa bàn Phú Yên cũ sau sáp nhập), số liệu tính đến ngày 20/11/2025.', size: 9.5, weight: 'r', color: C.dim }));
+
+  slides.push({ els, notes: 'Năm 2025 là dấu mốc trực tiếp thúc đẩy nhóm em bắt tay vào làm. Đợt mưa lũ giữa tháng 11, mưa phổ biến bốn trăm đến sáu trăm mi-li-mét, có nơi trên tám trăm. Lũ trên sông Ba và sông Kỳ Lộ vượt các đỉnh lũ lịch sử. Tính đến ngày hai mươi tháng mười một, toàn tỉnh có mười chín người chết, sáu người mất tích, hơn tám mươi lăm nghìn bảy trăm lượt nhà bị ngập, hơn mười hai nghìn tám trăm hộ bị cô lập. Bốn mươi xã phường phải công bố tình huống khẩn cấp, trong đó có xã Đồng Xuân quê em. Tổng thiệt hại vượt chín nghìn bảy trăm ba mươi tỷ đồng. Đoạn này nói chậm, để con số tự nói.' });
+}
+
+// ============ 2C. HIỆN TRƯỜNG QUA ẢNH ============
+{
+  const { els, bodyTop } = chrome('HIỆN TRƯỜNG THÁNG 11/2025', 'Những gì chúng em nhìn thấy tận mắt', {
+    sub: 'Đằng sau mỗi con số ở slide trước là những ngày nước ngập tới mái nhà, đường bị cắt và vật tư không kịp tới nơi cần.',
+    subW: 11.2,
+  });
+  const y = bodyTop, gap = 0.3, pw = 3.72;
+  const caps = [
+    'Nước ngập gần tới mái, người dân phải trèo lên nóc nhà chờ cứu hộ.',
+    'Lực lượng cứu hộ đưa người già và trẻ nhỏ ra khỏi vùng ngập.',
+    'Vật tư cứu trợ được đưa tới từng nhà bằng xuồng.',
+  ];
+  const cols = [C.sky, C.orange, C.green];
+  caps.forEach((cap, i) => els.push(...photo('hien-truong-' + (i + 1), M + i * (pw + gap), y, cap, cols[i])));
+
+  const by = y + Math.max(...caps.map((c, i) => photoH('hien-truong-' + (i + 1), c))) + 0.24;
+  els.push(txt({ x: M, y: by, w: SW - 2 * M, text: 'Nguồn ảnh: Báo Thanh Niên, Báo Dân Trí — đợt mưa lũ tháng 11/2025.', size: 11, weight: 'r', color: C.dim }));
+  slides.push({ els, notes: 'Đây là hiện trường thật ở quê chúng em trong đợt lũ tháng mười một. Nói ngắn, để ảnh tự kể. Nếu chưa kịp có ảnh thì bỏ hẳn slide này thay vì để khung trống.' });
+}
+
 // ============ 3. VẤN ĐỀ ============
 {
   const { els, bodyTop } = chrome('VẤN ĐỀ', 'Bài toán trong những giờ khẩn cấp');
@@ -376,6 +476,33 @@ timelineSlide([6], 'BƯỚC 6 / 6  ·  KHÉP VÒNG', 'Vật tư hoàn trả xong
   els.push(txt({ x: M + 0.42, y: by + 0.24, w: SW - 2 * M - 0.84, text: 'Dựa trên dữ liệu thực tế của những năm trước, người quản lý lập kế hoạch dự trữ sát với nhu cầu hơn — chuẩn bị trước khi thiên tai đến, thay vì xoay xở khi đã xảy ra.', size: 14.5, weight: 'sb', color: C.white, lh: 1.45 }));
   slides.push({ els, notes: 'Hệ thống lưu lại toàn bộ dữ liệu từng đợt cứu hộ, trở thành nguồn thông tin để phân tích và dự báo nhu cầu vật tư cho những đợt tiếp theo.' });
 }
+// ============ K0. MỞ ĐẦU PHẦN KHO ============
+{
+  const { els, bodyTop } = chrome('PHẦN KHO  ·  TỔNG QUAN', 'Điều phối chỉ đúng khi số liệu kho là thật', {
+    sub: 'Toàn bộ luồng ở trên đứng trên một giả định: hệ thống biết chính xác mỗi kho đang có gì và dùng được bao nhiêu. Sáu phần tiếp theo nói về cách chúng em giữ cho con số đó đáng tin.',
+    subW: 11.4,
+  });
+  const gap = 0.3, rowGap = 0.26;
+  const w = (SW - 2 * M - 2 * gap) / 3, h = 1.44;
+  const topics = [
+    ['01', 'Quản lý kho tập trung', '18 kho chung một sổ, mỗi lô hàng mang hai chiều trạng thái tách rời.', C.green],
+    ['02', 'Chỉ số sẵn sàng', 'Chấm theo 6 chiều ở 4 cấp, mỗi điểm trừ kèm lý do và việc phải làm.', C.sky],
+    ['03', 'Tồn kho toàn xã', 'Gộp cả xã vào một bảng để không xin chi viện khi hàng còn ở thôn bên.', C.amber],
+    ['04', 'Cảm biến IoT', 'Theo dõi môi trường kho, lọc báo động giả và không bỏ qua thiết bị im lặng.', C.orange],
+    ['05', 'Nói thẳng về phần cứng', 'Phần nào đã chạy thật, phần nào còn là bản sao số đang mô phỏng.', C.red],
+    ['06', 'Trợ lý AI hỏi đáp kho', 'Mọi con số trong câu trả lời đều đối chiếu lại với dữ liệu kho.', C.greenSoft],
+  ];
+  topics.forEach(([n, head, body, col], i) => {
+    const x = M + (i % 3) * (w + gap);
+    const y = bodyTop + Math.floor(i / 3) * (h + rowGap);
+    els.push(...card(x, y, w, h, col));
+    els.push(txt({ x: x + 0.3, y: y + 0.26, w: 0.6, text: n, size: 13, weight: 'eb', color: col, spacing: 0.6 }));
+    els.push(txt({ x: x + 0.9, y: y + 0.24, w: w - 1.2, text: head, size: 14.5, weight: 'eb', color: C.white }));
+    els.push(txt({ x: x + 0.3, y: y + 0.72, w: w - 0.6, text: body, size: 11.5, weight: 'r', color: C.muted, lh: 1.4 }));
+  });
+  slides.push({ els, notes: 'Phần vừa rồi là luồng điều phối. Sáu slide tiếp theo đi vào phần kho — nơi giữ cho số liệu mà luồng điều phối dựa vào luôn đúng: cách quản lý vật tư, chấm điểm sẵn sàng của kho, nhìn tồn kho toàn xã, cảm biến IoT, lựa chọn phần cứng và trợ lý AI hỏi đáp.' });
+}
+
 // ============ K1. QUẢN LÝ KHO TẬP TRUNG ============
 {
   const { els, bodyTop } = chrome('QUẢN LÝ KHO TẬP TRUNG', 'Không hỏi còn bao nhiêu — hỏi dùng được bao nhiêu');
@@ -558,14 +685,12 @@ timelineSlide([6], 'BƯỚC 6 / 6  ·  KHÉP VÒNG', 'Vật tư hoàn trả xong
 // ============ K7. THƯ QUAN TÂM ============
 {
   const { els, bodyTop } = chrome('HỘI CHỮ THẬP ĐỎ XÃ ĐỒNG XUÂN', 'Sản phẩm này có một nơi để về');
-  const y = bodyTop, lw = 5.5, rx = M + lw + 0.4, rw = SW - M - rx, h = 4.05;
+  const y = bodyTop, lw = 3.2, rx = M + lw + 0.44, rw = SW - M - rx, h = 4.05;
 
-  els.push(rect(M, y, lw, h, C.white, 0.05, 0.12, { color: C.greenSoft, alpha: 0.4, w: 1.4 }));
-  els.push(txt({ x: M + 0.4, y: y + h / 2 - 0.42, w: lw - 0.8, text: 'ẢNH CHỤP THƯ QUAN TÂM', size: 12, weight: 'eb', color: C.greenSoft, spacing: 1.8, align: 'center' }));
-  els.push(txt({ x: M + 0.4, y: y + h / 2 + 0.02, w: lw - 0.8, text: 'Chèn ảnh lá thư vào khung này trong PowerPoint', size: 11.5, weight: 'r', color: C.dim, align: 'center', lh: 1.4 }));
+  els.push(...photo('thu-quan-tam', M, y));
 
   const items = [
-    ['01', 'Xác nhận thực trạng', 'Kho còn quản lý bằng sổ và Excel; bão lũ 2025 vật tư hết hạn, hư hỏng, số liệu lệch giữa các thôn.'],
+    ['01', 'Xác nhận thực trạng', 'Kho còn quản lý bằng sổ và Excel, bão lũ 2025 vật tư hết hạn, hư hỏng, số liệu lệch giữa các thôn.'],
     ['02', 'Xác nhận nhu cầu thật', 'Xã cần một hệ thống quản lý kho và điều phối vật tư như Ứng Phó Nhanh.'],
     ['03', 'Đồng ý cho khảo sát và thử nghiệm', 'Tạo điều kiện cho nhóm khảo sát quy trình thật và triển khai thử nghiệm tại xã sau cuộc thi.'],
   ];

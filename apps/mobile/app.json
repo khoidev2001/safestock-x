@@ -2,7 +2,7 @@
   "expo": {
     "name": "Ứng phó nhanh",
     "slug": "safestock-mobile",
-    "version": "0.5.1",
+    "version": "0.5.2",
     "scheme": "safestock",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "vn.ungphonhanh.safestock",
-      "versionCode": 6,
+      "versionCode": 7,
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.POST_NOTIFICATIONS",
