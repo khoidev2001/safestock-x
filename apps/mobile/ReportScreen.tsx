@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { ErrorLine } from "./error-banner";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import {
   fetchOwnReport,
@@ -448,7 +449,7 @@ export function ReportScreen({ token, user }: { token: string; user: AuthUser })
 
         <IncidentPinMap point={pinnedPoint} onChange={setPinnedPoint} disabled={sending} />
 
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        <ErrorLine error={error} />
 
         <Pressable
           style={[styles.button, sending && { opacity: 0.6 }]}

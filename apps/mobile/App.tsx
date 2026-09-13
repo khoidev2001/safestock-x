@@ -33,6 +33,7 @@ import { InventoryScreen } from "./InventoryScreen";
 import { MonthlyReportScreen } from "./MonthlyReportScreen";
 import { c, styles } from "./styles";
 import { NotificationToasts } from "./NotificationToasts";
+import { ErrorBanner, ErrorLine } from "./error-banner";
 import { useNotificationFeed, type NotificationFeed } from "./use-notification-feed";
 import { filterNotificationsByMissionNo } from "./notification-feed-state";
 import { PAGE_SIZE } from "./paged-list-state";
@@ -408,6 +409,9 @@ function MobileRoleShell({
         onDismiss={feed.dismiss}
         onOpen={openFromToast}
       />
+      {/* Đặt SAU cùng để dải lỗi nằm trên mọi thứ khác. Gắn đúng một lần ở đây,
+          các màn chỉ việc gọi `showError(...)`. */}
+      <ErrorBanner />
     </View>
   );
 }
@@ -550,7 +554,7 @@ function LoginScreen({ onLogin }: { onLogin: (result: LoginResult) => Promise<vo
           aria-label="Mật khẩu"
         />
 
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        <ErrorLine error={error} />
 
         <Pressable
           style={[styles.button, busy && { opacity: 0.6 }]}

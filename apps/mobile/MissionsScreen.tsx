@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { ErrorLine } from "./error-banner";
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { notify } from "./dialog";
 import { disasterOf } from "./disaster";
@@ -148,7 +149,7 @@ export function MissionsScreen({
           </Text>
         </View>
       ) : null}
-      {error ? <Text style={local.error}>{error}</Text> : null}
+      <ErrorLine error={error} />
 
       <ScrollView
         contentContainerStyle={local.list}

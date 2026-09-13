@@ -1,4 +1,5 @@
 import { useNetInfo } from "@react-native-community/netinfo";
+import { ErrorLine } from "./error-banner";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -274,7 +275,7 @@ export function DashboardScreen({
         <Text style={local.chooserHint}>
           Readiness, cảnh báo, dự báo và bản tin AI chỉ lấy dữ liệu của kho đã chọn.
         </Text>
-        {error ? <Text style={local.inlineError}>{error}</Text> : null}
+        <ErrorLine error={error} />
         <View style={local.chooserList}>
           {warehouseOptions.map((warehouse) => (
             <Pressable

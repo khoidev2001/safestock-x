@@ -1,4 +1,5 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { ErrorLine } from "./error-banner";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -312,7 +313,7 @@ export function MissionListScreen({
           <Text style={local.offlineText}>Đang xem bản lưu lần cuối tải được.</Text>
         </View>
       ) : null}
-      {error ? <Text style={local.error}>{error}</Text> : null}
+      <ErrorLine error={error} />
 
       <FlatList
         data={shown}

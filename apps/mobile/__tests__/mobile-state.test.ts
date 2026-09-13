@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { foldVietnamese } from "../vietnamese-text";
+import {
+  ERROR_BANNER_VISIBLE_MS,
+  isBannerExpired,
+  nextErrorBanner,
+} from "../error-banner-state";
 import { MAX_RECORDING_MS, selectRecordingBackend } from "../audio-platform-state";
 import { parseOfflineEnvelope, serializeOfflineEnvelope } from "../offline-cache-state";
 import {
@@ -1034,4 +1039,41 @@ test("chuỗi không dấu và mã vật tư giữ nguyên, chỉ hạ chữ th�
   assert.equal(foldVietnamese("WATER-01"), "water-01");
   assert.equal(foldVietnamese("CANVAS-01-LONG-CHAU"), "canvas-01-long-chau");
   assert.equal(foldVietnamese(""), "");
+});
+
+/*
+  Dải báo lỗi trượt lên từ đáy.
+
+  Ba luật đáng khoá, vì cả ba đều sinh ra từ chuyện thật ngoài hiện trường: mất
+  sóng thì mọi lời gọi hỏng gần như cùng lúc.
+*/
+test("lỗi mới thay thế lỗi đang hiện, không xếp chồng", () => {
+  const dau = nextErrorBanner(null, "Mất kết nối", 1000);
+  const sau = nextErrorBanner(dau, "Hết phiên đăng nhập", 2000);
+  assert.equal(sau?.message, "Hết phiên đăng nhập");
+  assert.notEqual(sau?.key, dau?.key);
+});
+
+test("cùng một câu lặp lại thì GIỮ NGUYÊN dải, không làm mới bộ đếm", () => {
+  /*
+    Lỗi làm mới nền lặp mỗi 15 giây. Sinh dải mới mỗi lần là bộ đếm 6 giây không
+    bao giờ chạy hết, và dải đỏ nằm lại vĩnh viễn trên màn hình.
+  */
+  const dau = nextErrorBanner(null, "Mất kết nối", 1000);
+  const lai = nextErrorBanner(dau, "Mất kết nối", 9999);
+  assert.equal(lai, dau);
+});
+
+test("chuỗi rỗng không làm hiện dải trống", () => {
+  assert.equal(nextErrorBanner(null, "", 1000), null);
+  assert.equal(nextErrorBanner(null, "   ", 1000), null);
+  const dang = nextErrorBanner(null, "Mất kết nối", 1000);
+  assert.equal(nextErrorBanner(dang, "", 2000), dang);
+});
+
+test("dải tắt sau đúng thời gian đã định", () => {
+  const dai = nextErrorBanner(null, "Mất kết nối", 1000);
+  assert.ok(dai);
+  assert.equal(isBannerExpired(dai, 1000, 1000 + ERROR_BANNER_VISIBLE_MS - 1), false);
+  assert.equal(isBannerExpired(dai, 1000, 1000 + ERROR_BANNER_VISIBLE_MS), true);
 });

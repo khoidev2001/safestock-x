@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { ErrorLine } from "./error-banner";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import {
   Pressable,
@@ -317,7 +318,7 @@ export function MonthlyReportScreen({ token, user }: { token: string; user: Auth
         ) : selected.note ? (
           <Text style={screenStyles.note}>Ghi chú xử lý: {selected.note}</Text>
         ) : null}
-        {error ? <Text style={screenStyles.error}>{error}</Text> : null}
+        <ErrorLine error={error} />
       </ScrollView>
     );
   }
@@ -452,7 +453,7 @@ export function MonthlyReportScreen({ token, user }: { token: string; user: Auth
         </View>
       ) : null}
 
-      {error ? <Text style={screenStyles.error}>{error}</Text> : null}
+      <ErrorLine error={error} />
       {!loading && reports.length === 0 ? (
         <Text style={screenStyles.empty}>Chưa có báo cáo tháng nào.</Text>
       ) : null}
