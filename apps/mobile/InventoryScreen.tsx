@@ -1,5 +1,5 @@
 import { useNetInfo } from "@react-native-community/netinfo";
-import { ErrorBanner, ErrorLine } from "./error-banner";
+import { ErrorBanner, ErrorLine, useErrorState } from "./error-banner";
 import {
   CameraView as ExpoCameraView,
   useCameraPermissions,
@@ -669,7 +669,7 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
         </View>
         {/* Biểu mẫu là cửa sổ riêng đè lên app: dải lỗi của app nằm bên dưới
             và bị che. Dải gắn ở đây mở sau nên nhận lỗi thay. */}
-        <ErrorBanner bottom={24} />
+        <ErrorBanner placement="top" />
       </Modal>
 
       <QrScanner
@@ -867,7 +867,7 @@ function BatchActionModal({
     "NEEDS_CHECK",
   );
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useErrorState();
   const [requestId] = useState(() => createMutationRequestId("inventory"));
   const [destinationTrees, setDestinationTrees] = useState<WarehouseTree[] | null>(
     action === "transfer" ? null : [tree],
@@ -957,7 +957,13 @@ function BatchActionModal({
   return (
     <Modal transparent animationType="slide" onRequestClose={onClose}>
       <View style={local.modalBackdrop}>
-        <ScrollView style={local.modal} contentContainerStyle={local.modalContent}>
+        <ScrollView
+          style={local.modal}
+          contentContainerStyle={local.modalContent}
+          // Bàn phím đang mở thì chạm lần đầu vào "Xác nhận" chỉ để ẩn bàn phím,
+          // phải bấm lần hai mới gửi — người dùng đọc thành "bấm không ăn".
+          keyboardShouldPersistTaps="handled"
+        >
           <Text style={local.modalEyebrow}>{actionLabel(action)}</Text>
           <Text style={local.modalTitle}>{batch.item.name}</Text>
           <Text style={local.modalMeta}>
@@ -1051,7 +1057,7 @@ function BatchActionModal({
                 onChangeText={setMissionId}
                 autoCapitalize="none"
                 style={local.modalInput}
-                placeholder="Mission ID"
+                placeholder="Mã nhiệm vụ (nếu mượn cho một nhiệm vụ)"
                 placeholderTextColor={c.muted}
               />
             </>
@@ -1085,7 +1091,7 @@ function BatchActionModal({
       </View>
       {/* Biểu mẫu là cửa sổ riêng đè lên app: dải lỗi của app nằm bên dưới
           và bị che. Dải gắn ở đây mở sau nên nhận lỗi thay. */}
-      <ErrorBanner bottom={24} />
+      <ErrorBanner placement="top" />
     </Modal>
   );
 }
@@ -1106,7 +1112,7 @@ function ReturnLoanModal({
   const [damaged, setDamaged] = useState("0");
   const [lost, setLost] = useState("0");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useErrorState();
   const [requestId] = useState(() => createMutationRequestId("loan-return"));
 
   const submit = async () => {
@@ -1159,7 +1165,7 @@ function ReturnLoanModal({
       </View>
       {/* Biểu mẫu là cửa sổ riêng đè lên app: dải lỗi của app nằm bên dưới
           và bị che. Dải gắn ở đây mở sau nên nhận lỗi thay. */}
-      <ErrorBanner bottom={24} />
+      <ErrorBanner placement="top" />
     </Modal>
   );
 }
@@ -1189,7 +1195,7 @@ function ReceiveBatchModal({
   const [unit, setUnit] = useState("");
   const [consumable, setConsumable] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useErrorState();
   const [requestId] = useState(() => createMutationRequestId("receive"));
   const shelves = tree.zones.flatMap((zone) => zone.shelves.map((shelf) => ({ ...shelf, zone })));
 
@@ -1199,7 +1205,7 @@ function ReceiveBatchModal({
       .catch((loadError) =>
         setError(loadError instanceof Error ? loadError.message : "Không tải được danh mục vật tư"),
       );
-  }, [token]);
+  }, [setError, token]);
 
   const submit = async () => {
     const amount = Number(quantity);
@@ -1242,7 +1248,7 @@ function ReceiveBatchModal({
         note: note.trim() || undefined,
         requestId,
       });
-      await onSuccess(`Đã tiếp nhận lô ${batchCode.trim()} và tạo payload QR.`);
+      await onSuccess(`Đã tiếp nhận lô ${batchCode.trim()} và tạo nhãn QR.`);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Không tiếp nhận được lô mới");
     } finally {
@@ -1253,11 +1259,17 @@ function ReceiveBatchModal({
   return (
     <Modal transparent animationType="slide" onRequestClose={onClose}>
       <View style={local.modalBackdrop}>
-        <ScrollView style={local.modal} contentContainerStyle={local.modalContent}>
+        <ScrollView
+          style={local.modal}
+          contentContainerStyle={local.modalContent}
+          // Bàn phím đang mở thì chạm lần đầu vào "Xác nhận" chỉ để ẩn bàn phím,
+          // phải bấm lần hai mới gửi — người dùng đọc thành "bấm không ăn".
+          keyboardShouldPersistTaps="handled"
+        >
           <Text style={local.modalEyebrow}>TIẾP NHẬN LÔ MỚI</Text>
           <Text style={local.modalTitle}>Nhập vật tư vào kho</Text>
           <Text style={local.modalMeta}>
-            Tạo lô, ledger nhập và payload nhãn QR trong một giao dịch.
+            Tạo lô mới, ghi phiếu nhập và sinh nhãn QR để dán lên thùng.
           </Text>
           <View style={local.optionWrap}>
             <Option
@@ -1342,7 +1354,7 @@ function ReceiveBatchModal({
       </View>
       {/* Biểu mẫu là cửa sổ riêng đè lên app: dải lỗi của app nằm bên dưới
           và bị che. Dải gắn ở đây mở sau nên nhận lỗi thay. */}
-      <ErrorBanner bottom={24} />
+      <ErrorBanner placement="top" />
     </Modal>
   );
 }
@@ -1385,7 +1397,7 @@ function BulkExportModal({
   const [selected, setSelected] = useState<Record<string, number>>({});
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useErrorState();
   const [requestId] = useState(() => createMutationRequestId("bulk-export"));
   const chosen = Object.entries(selected)
     .filter(([, quantity]) => quantity > 0)
@@ -1486,7 +1498,7 @@ function BulkExportModal({
       </View>
       {/* Biểu mẫu là cửa sổ riêng đè lên app: dải lỗi của app nằm bên dưới
           và bị che. Dải gắn ở đây mở sau nên nhận lỗi thay. */}
-      <ErrorBanner bottom={24} />
+      <ErrorBanner placement="top" />
     </Modal>
   );
 }
@@ -1568,7 +1580,7 @@ function QrScanner({
       </View>
       {/* Biểu mẫu là cửa sổ riêng đè lên app: dải lỗi của app nằm bên dưới
           và bị che. Dải gắn ở đây mở sau nên nhận lỗi thay. */}
-      <ErrorBanner bottom={24} />
+      <ErrorBanner placement="top" />
     </Modal>
   );
 }

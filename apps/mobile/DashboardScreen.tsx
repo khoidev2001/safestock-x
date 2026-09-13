@@ -510,7 +510,7 @@ function HomeDashboard({ snapshot }: { snapshot: DashboardSnapshot }) {
             <View style={{ flex: 1 }}>
               <Text style={local.rowTitle}>{incident.title}</Text>
               <Text style={local.rowMeta}>
-                {incident.kind} · {incident.severity} · {formatDateTime(incident.detectedAt)}
+                {incident.kind} · {SEVERITY_LABEL[incident.severity] ?? incident.severity} · {formatDateTime(incident.detectedAt)}
               </Text>
             </View>
           </View>
@@ -680,12 +680,20 @@ function severityColor(severity: IncidentSummary["severity"]): string {
   return "#38bdf8";
 }
 
+const SEVERITY_LABEL: Record<IncidentSummary["severity"], string> = {
+  CRITICAL: "nghiêm trọng",
+  HIGH: "cao",
+  MEDIUM: "trung bình",
+  LOW: "thấp",
+};
+
 function highestSeverity(incidents: IncidentSummary[]): string {
   const order: IncidentSummary["severity"][] = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
-  return (
-    order.find((severity) => incidents.some((incident) => incident.severity === severity)) ??
-    "không có"
+  const highest = order.find((severity) =>
+    incidents.some((incident) => incident.severity === severity),
   );
+  // Dịch ra chữ: trước đây in thẳng mã "MEDIUM" dưới ô Cảnh báo mở.
+  return highest ? SEVERITY_LABEL[highest] : "không có";
 }
 
 const local = StyleSheet.create({

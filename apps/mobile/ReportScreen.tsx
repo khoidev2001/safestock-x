@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ErrorLine } from "./error-banner";
+import { ErrorLine, useErrorState } from "./error-banner";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import {
   fetchOwnReport,
@@ -48,7 +48,7 @@ export function ReportScreen({ token, user }: { token: string; user: AuthUser })
     durationMs: number;
   } | null>(null);
   const [attachStatus, setAttachStatus] = useState<"idle" | "recording">("idle");
-  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [voiceError, setVoiceError] = useErrorState();
   /**
    * Số giây đã chờ nhận dạng.
    *
@@ -58,7 +58,7 @@ export function ReportScreen({ token, user }: { token: string; user: AuthUser })
    * hình hài, và nói trước rằng lần đầu lâu.
    */
   const [transcribeSeconds, setTranscribeSeconds] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useErrorState();
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [history, setHistory] = useState<OwnReportSummary[]>([]);

@@ -9,7 +9,7 @@
  * Nằm trên thanh tab (`bottom: 76`) chứ không sát đáy: đè lên thanh tab thì đúng
  * lúc báo lỗi lại chặn mất đường thoát sang màn khác.
  */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import {
@@ -55,12 +55,43 @@ export function ErrorLine({ error }: { error: string | null | undefined }) {
   return null;
 }
 
+/**
+ * Trạng thái lỗi cho BIỂU MẪU người dùng bấm gửi — mỗi lần đặt lỗi là mỗi lần hiện.
+ *
+ * `useState` thường không đủ ở đây: bấm "Xác nhận" hai lần với cùng dữ liệu sai
+ * thì hai lần ra cùng một câu, React thấy giá trị không đổi nên không vẽ lại, và
+ * `ErrorLine` không phát lại. Dải đầu đã tự tắt sau 6 giây, nên lần bấm thứ hai
+ * không có phản hồi nào — người dùng đọc thành "nút hỏng".
+ *
+ * CHỈ dùng cho lỗi do người dùng vừa bấm. Màn tải nền (danh sách, dashboard) làm
+ * mới mỗi 15 giây vẫn dùng `ErrorLine`: cho lỗi trùng hiện lại ở đó là lúc mất
+ * sóng dải đỏ bật lên liên tục.
+ */
+export function useErrorState(): [string | null, (message: string | null) => void] {
+  const [error, setErrorState] = useState<string | null>(null);
+  const setError = useCallback((message: string | null) => {
+    setErrorState(message);
+    if (message) showError(message);
+  }, []);
+  return [error, setError];
+}
+
 /** Dải lỗi. Gắn một lần, đặt SAU nội dung để nó nằm trên cùng. */
 /**
  * `bottom`: khoảng cách tới đáy. Mặc định chừa chỗ cho thanh tab; trong một biểu
  * mẫu toàn màn hình không có thanh tab thì hạ thấp xuống sát đáy.
  */
-export function ErrorBanner({ bottom = 76 }: { bottom?: number } = {}) {
+export function ErrorBanner({
+  bottom = 76,
+  placement = "bottom",
+}: {
+  bottom?: number;
+  /**
+   * Trong biểu mẫu thì đặt `"top"`: nút xác nhận của biểu mẫu nằm ở ĐÁY, và dải
+   * lỗi ở đáy đè đúng lên nó — người dùng muốn bấm lại thì bấm trúng dải.
+   */
+  placement?: "top" | "bottom";
+} = {}) {
   const [banner, setBanner] = useState<ErrorBannerData | null>(null);
   const enter = useRef(new Animated.Value(0)).current;
 
@@ -91,11 +122,11 @@ export function ErrorBanner({ bottom = 76 }: { bottom?: number } = {}) {
     <Animated.View
       style={[
         local.wrap,
-        { bottom },
+        placement === "top" ? { top: 12 } : { bottom },
         {
           opacity: enter,
           transform: [
-            { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [80, 0] }) },
+            { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [placement === "top" ? -80 : 80, 0] }) },
           ],
         },
       ]}
@@ -126,8 +157,6 @@ const local = StyleSheet.create({
     position: "absolute",
     left: 12,
     right: 12,
-    // Trên thanh tab: đè lên nó thì lúc báo lỗi lại chặn mất đường sang màn khác.
-    bottom: 76,
   },
   banner: {
     flexDirection: "row",

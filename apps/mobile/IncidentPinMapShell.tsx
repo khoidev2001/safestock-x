@@ -319,7 +319,7 @@ export function IncidentPinMapShell({
         </View>
         {/* Biểu mẫu là cửa sổ riêng đè lên app: dải lỗi của app nằm bên dưới
             và bị che. Dải gắn ở đây mở sau nên nhận lỗi thay. */}
-        <ErrorBanner bottom={24} />
+        <ErrorBanner placement="top" />
       </Modal>
 
       {failed ? (

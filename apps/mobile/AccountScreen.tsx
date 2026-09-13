@@ -12,7 +12,7 @@ import {
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { updateOwnPhone, updateOwnProfile, type AuthUser } from "./api";
 import { pickAvatarImage } from "./avatar-image";
-import { ErrorLine } from "./error-banner";
+import { ErrorLine, useErrorState } from "./error-banner";
 import { confirmAction } from "./dialog";
 import { mobileRoleLabel } from "./role-labels";
 import { c, styles } from "./styles";
@@ -165,7 +165,7 @@ function AvatarPicker({
   onProfileChanged: (user: AuthUser) => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useErrorState();
   const savedAvatar = user.avatarUrl?.trim() || null;
   const displayName = user.fullName?.trim() || user.email;
 
@@ -263,7 +263,7 @@ function NameSection({
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useErrorState();
   const [notice, setNotice] = useState<string | null>(null);
   const typed = name.trim();
   const valid = typed.length >= NAME_MIN_LENGTH && typed.length <= NAME_MAX_LENGTH;
@@ -386,7 +386,7 @@ function PhoneSection({
   const [editing, setEditing] = useState(false);
   const [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useErrorState();
   const [notice, setNotice] = useState<string | null>(null);
   const typed = phone.trim();
   const valid = PHONE_PATTERN.test(typed);
