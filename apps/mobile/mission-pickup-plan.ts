@@ -85,7 +85,7 @@ export function pickupStopStateLabel(stop: PickupStop): {
   tone: "done" | "ready" | "waiting";
 } {
   if (stop.totalCount > 0 && stop.pickedUpCount === stop.totalCount) {
-    return { label: "Đã xuất kho đủ", tone: "done" };
+    return { label: "Vật tư đã được lấy", tone: "done" };
   }
   if (stop.readyCount === 0) return { label: "Kho đang chuẩn bị", tone: "waiting" };
   if (stop.readyCount === stop.totalCount)

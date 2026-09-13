@@ -730,7 +730,10 @@ test("kho đã xuất đủ thì báo đã xuất kho, xuất một phần thì 
       }),
     ],
   )[0];
-  assert.deepEqual(pickupStopStateLabel(fullyPicked), { label: "Đã xuất kho đủ", tone: "done" });
+  assert.deepEqual(pickupStopStateLabel(fullyPicked), {
+    label: "Vật tư đã được lấy",
+    tone: "done",
+  });
 
   const onlyOnePrepared = buildPickupPlan(
     [centralRoute],
