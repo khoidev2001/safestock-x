@@ -789,7 +789,6 @@ export class MissionService {
     };
   }
 
-
   /**
    * Vật tư ADMIN có thể THÊM vào bản tham mưu của một nhiệm vụ.
    *
@@ -819,7 +818,20 @@ export class MissionService {
     // Danh mục vật tư của chính đơn vị này. Lọc theo tồn kho thật ở bước sau —
     // ở đây chỉ cần tên và đơn vị để hiện cho người chọn.
     const items = await this.prisma.item.findMany({
-      where: { batches: { some: { shelf: { zone: { warehouse: { organizationId: warehouse.organizationId, communeId: warehouse.communeId } } } } } },
+      where: {
+        batches: {
+          some: {
+            shelf: {
+              zone: {
+                warehouse: {
+                  organizationId: warehouse.organizationId,
+                  communeId: warehouse.communeId,
+                },
+              },
+            },
+          },
+        },
+      },
       // Đơn vị đếm nằm ở NHÓM vật tư, không nằm trên chính vật tư: cả nhóm
       // "nước đóng chai" đếm theo chai, không có chuyện hai mã trong cùng nhóm
       // đếm khác nhau.
@@ -1579,8 +1591,7 @@ export class MissionService {
     // trên chính nhiệm vụ và các lô vật tư của nó.
     const stored = await this.storeDeliveryPhotos(id, userId, decoded.photos);
 
-    const restockItems =
-      outcome === DeliveryOutcome.FAILED ? collectRestockBatches(mission) : [];
+    const restockItems = outcome === DeliveryOutcome.FAILED ? collectRestockBatches(mission) : [];
 
     const updated = await this.prisma
       .$transaction(async (tx) => {
@@ -1634,7 +1645,8 @@ export class MissionService {
         : outcome === DeliveryOutcome.PARTIAL
           ? " Cần đối soát và nhập lại phần chưa giao khi nhận hàng về."
           : "";
-    const photoNote = decoded.photos.length > 0 ? ` Kèm ${decoded.photos.length} ảnh bằng chứng.` : "";
+    const photoNote =
+      decoded.photos.length > 0 ? ` Kèm ${decoded.photos.length} ảnh bằng chứng.` : "";
     for (const role of [UserRole.ADMIN, UserRole.WAREHOUSE]) {
       await this.notifications.create({
         recipientRole: role,
@@ -2034,11 +2046,7 @@ export class MissionService {
    * Đi qua `getMission` trước để dùng lại NGUYÊN bộ kiểm tra phạm vi ở đó: chép
    * ra một bản kiểm tra thứ hai là chỗ để lọt báo cáo của xã khác.
    */
-  async getReportAudio(
-    missionId: string,
-    actorUserId?: string,
-    scopeWarehouseId?: string | null,
-  ) {
+  async getReportAudio(missionId: string, actorUserId?: string, scopeWarehouseId?: string | null) {
     await this.getMission(missionId, actorUserId, scopeWarehouseId);
     const audio = await this.prisma.missionReportAudio.findUnique({ where: { missionId } });
     if (!audio) throw new NotFoundException("Báo cáo này không có bản ghi âm");
@@ -3307,7 +3315,10 @@ function collectMissionBatches(
  */
 function collectRestockBatches(mission: {
   requirements: { allocations: Prisma.JsonValue }[];
-  warehouseRequests: { status: MissionWarehouseRequestStatus; preparedAllocations: Prisma.JsonValue }[];
+  warehouseRequests: {
+    status: MissionWarehouseRequestStatus;
+    preparedAllocations: Prisma.JsonValue;
+  }[];
 }): { batchId: string; quantity: number }[] {
   if (mission.warehouseRequests.length === 0) return collectMissionBatches(mission.requirements);
   return mission.warehouseRequests
