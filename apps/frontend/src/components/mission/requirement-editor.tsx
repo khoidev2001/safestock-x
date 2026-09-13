@@ -200,10 +200,14 @@ export function RequirementEditor({
           <table className="min-w-full text-left text-sm">
             <thead className="bg-[var(--surface-2)] text-xs text-[var(--text-muted)]">
               <tr>
-                <th className="px-3 py-2 font-medium">Vật tư</th>
-                <th className="px-3 py-2 text-right font-medium">Nhu cầu</th>
-                <th className="px-3 py-2 text-right font-medium">Kho đáp ứng</th>
-                {editable ? <th className="px-3 py-2 text-right font-medium">Thao tác</th> : null}
+                <th className="px-2 py-2 sm:px-3 font-medium">Vật tư</th>
+                <th className="px-2 py-2 sm:px-3 text-right font-medium">Nhu cầu</th>
+                <th className="px-2 py-2 sm:px-3 text-right font-medium">Kho đáp ứng</th>
+                {editable ? (
+                  <th className="hidden px-2 py-2 sm:px-3 text-right font-medium sm:table-cell">
+                    Thao tác
+                  </th>
+                ) : null}
               </tr>
             </thead>
             <tbody>
@@ -217,12 +221,71 @@ export function RequirementEditor({
                     className="border-t"
                     style={{ background: SUPPLY_GROUP_STYLES[chunk.group].tint }}
                   >
-                    <th className="px-3 py-2" colSpan={editable ? 4 : 3} scope="colgroup">
+                    <th className="px-2 py-2 sm:px-3" colSpan={editable ? 4 : 3} scope="colgroup">
                       <SupplyGroupHeading group={chunk.group} label={chunk.label} />
                     </th>
                   </tr>
                   {chunk.items.map((requirement) => {
                     const editing = editingSku === requirement.sku;
+                    const rowActions = editing ? (
+                      <div className="flex flex-wrap gap-1.5 sm:justify-end">
+                        <RowButton
+                          disabled={busy || !editingQuantity || Number(editingQuantity) < 1}
+                          onClick={() => {
+                            const next = Number(editingQuantity);
+                            if (!Number.isInteger(next) || next < 1) {
+                              setError("Số lượng phải là số nguyên dương.");
+                              return;
+                            }
+                            if (next === requirement.required) {
+                              setEditingSku(null);
+                              return;
+                            }
+                            setPending({
+                              kind: "update",
+                              sku: requirement.sku,
+                              itemName: requirement.itemName,
+                              from: requirement.required,
+                              to: next,
+                              unit: requirement.unit,
+                            });
+                          }}
+                          tone="accent"
+                        >
+                          Lưu
+                        </RowButton>
+                        <RowButton disabled={busy} onClick={() => setEditingSku(null)}>
+                          Huỷ
+                        </RowButton>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5 sm:justify-end">
+                        <RowButton
+                          disabled={busy}
+                          onClick={() => {
+                            setError(null);
+                            setEditingSku(requirement.sku);
+                            setEditingQuantity(String(requirement.required));
+                          }}
+                        >
+                          Sửa
+                        </RowButton>
+                        <RowButton
+                          disabled={busy}
+                          onClick={() => {
+                            setError(null);
+                            setPending({
+                              kind: "remove",
+                              sku: requirement.sku,
+                              itemName: requirement.itemName,
+                            });
+                          }}
+                          tone="critical"
+                        >
+                          Xoá
+                        </RowButton>
+                      </div>
+                    );
                     return (
                       <tr
                         className={`border-t align-top ${
@@ -231,12 +294,17 @@ export function RequirementEditor({
                         key={requirement.sku}
                       >
                         <td
-                          className="py-2 pl-4 pr-3 font-medium"
+                          className="py-2 pl-3 pr-2 font-medium sm:pl-4 sm:pr-3"
                           style={supplyGroupStripe(chunk.group)}
                         >
                           {requirement.itemName}
+                          {/* Điện thoại: nút Sửa/Xoá nằm ngay dưới tên vật tư thay vì
+                              một cột riêng. Thêm cột thứ tư thì bảng không vừa
+                              màn hình, và cột "Kho đáp ứng" — con số người sửa cần
+                              nhìn — bị đẩy khuất ra ngoài mép phải. */}
+                          {editable ? <div className="mt-2 sm:hidden">{rowActions}</div> : null}
                         </td>
-                        <td className="px-3 py-2 text-right">
+                        <td className="px-2 py-2 sm:px-3 text-right">
                           {editing ? (
                             <input
                               aria-label={`Số lượng ${requirement.itemName}`}
@@ -259,7 +327,7 @@ export function RequirementEditor({
                         {/* Số kho đáp ứng được nằm NGAY CẠNH ô nhập: người sửa đang
                         cân đúng hai con số này với nhau, tách chúng sang hai khối
                         là bắt họ nhớ một con số trong lúc gõ con số kia. */}
-                        <td className="px-3 py-2 text-right">
+                        <td className="px-2 py-2 sm:px-3 text-right">
                           <span
                             className="tabular whitespace-nowrap"
                             style={{
@@ -281,66 +349,8 @@ export function RequirementEditor({
                           /* Sát mép phải của bảng: hai cột số bên trái đã căn phải,
                          để cột nút căn trái thì giữa bảng hở một khoảng trắng
                          chạy dọc và mắt phải nhảy qua nó ở mỗi dòng. */
-                          <td className="px-3 py-2 text-right">
-                            {editing ? (
-                              <div className="flex flex-wrap justify-end gap-1.5">
-                                <RowButton
-                                  disabled={busy || !editingQuantity || Number(editingQuantity) < 1}
-                                  onClick={() => {
-                                    const next = Number(editingQuantity);
-                                    if (!Number.isInteger(next) || next < 1) {
-                                      setError("Số lượng phải là số nguyên dương.");
-                                      return;
-                                    }
-                                    if (next === requirement.required) {
-                                      setEditingSku(null);
-                                      return;
-                                    }
-                                    setPending({
-                                      kind: "update",
-                                      sku: requirement.sku,
-                                      itemName: requirement.itemName,
-                                      from: requirement.required,
-                                      to: next,
-                                      unit: requirement.unit,
-                                    });
-                                  }}
-                                  tone="accent"
-                                >
-                                  Lưu
-                                </RowButton>
-                                <RowButton disabled={busy} onClick={() => setEditingSku(null)}>
-                                  Huỷ
-                                </RowButton>
-                              </div>
-                            ) : (
-                              <div className="flex flex-wrap justify-end gap-1.5">
-                                <RowButton
-                                  disabled={busy}
-                                  onClick={() => {
-                                    setError(null);
-                                    setEditingSku(requirement.sku);
-                                    setEditingQuantity(String(requirement.required));
-                                  }}
-                                >
-                                  Sửa
-                                </RowButton>
-                                <RowButton
-                                  disabled={busy}
-                                  onClick={() => {
-                                    setError(null);
-                                    setPending({
-                                      kind: "remove",
-                                      sku: requirement.sku,
-                                      itemName: requirement.itemName,
-                                    });
-                                  }}
-                                  tone="critical"
-                                >
-                                  Xoá
-                                </RowButton>
-                              </div>
-                            )}
+                          <td className="hidden px-2 py-2 sm:px-3 text-right sm:table-cell">
+                            {rowActions}
                           </td>
                         ) : null}
                       </tr>

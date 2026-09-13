@@ -134,7 +134,10 @@ export function NotificationBell({
               lớp control của Leaflet, và chỗ sửa đúng nằm ở khung bản đồ
               (`isolate` trong incident-map), không phải ở đây. */}
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-30 mt-2 w-80 overflow-hidden rounded-md border bg-[var(--surface)] shadow-2xl">
+          {/* Điện thoại: bám hai mép màn hình thay vì neo vào chuông. Neo phải
+              vào chuông thì hộp rộng 320px chìa sang trái sát tận mép kính, lệch
+              hẳn một bên và cắt mất lề. */}
+          <div className="fixed inset-x-3 top-[4.25rem] z-30 overflow-hidden rounded-md border bg-[var(--surface)] shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-80">
             <div className="flex items-center justify-between gap-2 border-b px-4 py-2.5">
               <span className="text-sm font-semibold">Thông báo</span>
               {unread > 0 ? (

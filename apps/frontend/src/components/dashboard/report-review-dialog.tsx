@@ -59,14 +59,14 @@ export function ReportReviewDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/60 p-4"
+      className="fixed inset-0 z-50 grid grid-cols-1 place-items-center overflow-y-auto bg-black/60 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="report-review-title"
     >
-      <section className="my-8 w-full max-w-5xl rounded-lg border bg-[var(--surface)] p-5 shadow-2xl">
+      <section className="my-4 w-full max-w-5xl rounded-lg border bg-[var(--surface)] p-4 shadow-2xl sm:my-8 sm:p-5">
         <header className="flex items-start justify-between gap-4">
-          <div>
+          <div className="min-w-0">
             <p className="text-xs font-semibold text-[var(--color-accent)]">BÁO CÁO KIỂM KÊ</p>
             <h2 className="mt-1 text-xl font-semibold" id="report-review-title">
               Xem trước số liệu trước khi xử lý
@@ -100,7 +100,7 @@ export function ReportReviewDialog({
           </div>
         ) : (
           <>
-            <div className="mt-5 grid gap-2 rounded-md bg-[var(--surface-2)] p-4 text-sm sm:grid-cols-3">
+            <div className="mt-5 grid grid-cols-1 gap-2 rounded-md bg-[var(--surface-2)] p-4 text-sm sm:grid-cols-3">
               <p>
                 <b>Kho:</b> {report.data.warehouse?.name ?? report.data.warehouseId}
               </p>

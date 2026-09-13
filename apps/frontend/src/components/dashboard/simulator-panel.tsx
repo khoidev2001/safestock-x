@@ -133,14 +133,16 @@ export function SimulatorPanel({
 
   return (
     <CollapsiblePanel
-      className="rounded-md border bg-[var(--surface)] p-5"
+      className="rounded-md border bg-[var(--surface)] p-4 sm:p-5"
       icon={<ColorIcon name="simulator" size={20} tone="amber" />}
       title="Dữ liệu cảm biến"
       subtitle={`Số liệu thử nghiệm gần nhất · ${environmentDevices.length} thiết bị`}
     >
       {/* auto-fill: 19 thiết bị phải vừa cột hẹp lẫn màn rộng mà không cần đoán
-          breakpoint. Ô nào chưa có số đo thì làm mờ, để mắt bắt ngay cái đã có. */}
-      <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(150px,1fr))]">
+          breakpoint. Ô nào chưa có số đo thì làm mờ, để mắt bắt ngay cái đã có.
+          Ô tối thiểu 136px để điện thoại 375px vẫn xếp được hai cột — 150px chỉ
+          vừa một, và mười chín ô chồng dọc là mười chín lần vuốt. */}
+      <div className="grid gap-2 sm:gap-3 [grid-template-columns:repeat(auto-fill,minmax(136px,1fr))] sm:[grid-template-columns:repeat(auto-fill,minmax(150px,1fr))]">
         {environmentDevices.map((device) => (
           <div
             key={device.id}

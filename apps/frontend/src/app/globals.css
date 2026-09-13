@@ -276,6 +276,27 @@ button:disabled {
   visibility: visible;
   transform: translateY(0);
 }
+/* Điện thoại: bong bóng thành một dải bám đáy màn hình, trải giữa hai lề.
+
+   Neo mép trái vào dấu hỏi chỉ đúng khi bên phải còn chỗ. Trên màn 375px dấu hỏi
+   hay nằm giữa dòng, bong bóng chìa ra ngoài mép phải — và dù đang ẩn
+   (`visibility: hidden`) nó vẫn tính vào bề rộng trang, nên cả trang cuộn ngang
+   được một khoảng trống. Vị trí cố định thì không bao giờ tràn, không cộng vào bề
+   rộng trang, và chạm vào dấu hỏi ở đâu cũng đọc được đủ câu. */
+@media (max-width: 639.98px) {
+  .why-tip-bubble {
+    position: fixed;
+    top: auto;
+    right: 1rem;
+    bottom: 1rem;
+    left: 1rem;
+    z-index: 60;
+    width: auto;
+    max-width: none;
+    font-size: 13px;
+    box-shadow: 0 8px 28px oklch(0.25 0.02 245 / 0.22);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .why-tip-bubble {
     transition: none;

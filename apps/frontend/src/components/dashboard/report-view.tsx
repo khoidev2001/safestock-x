@@ -112,7 +112,9 @@ function UploadCard({ warehouseId }: { warehouseId: string }) {
         cập nhật sau khi xã phê duyệt.
       </p>
 
-      <div className="mt-4 flex flex-wrap items-end gap-3">
+      {/* Điện thoại xếp dọc từng ô: ô chọn tệp có bề rộng tối thiểu của trình duyệt,
+          nên dồn chung một hàng với ô chọn tháng thì nó thò ra ngoài khung. */}
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">
             Kỳ báo cáo
@@ -121,10 +123,10 @@ function UploadCard({ warehouseId }: { warehouseId: string }) {
             type="month"
             value={period}
             onChange={(e) => setPeriod(e.target.value)}
-            className="rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+            className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm sm:w-auto"
           />
         </label>
-        <label className="block flex-1">
+        <label className="block min-w-0 sm:flex-1">
           <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">
             Tệp Excel (.xlsx)
           </span>
@@ -133,14 +135,14 @@ function UploadCard({ warehouseId }: { warehouseId: string }) {
             type="file"
             accept=".xlsx"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="block w-full text-sm text-[var(--text-muted)] file:mr-3 file:rounded-md file:border-0 file:bg-[var(--surface-2)] file:px-3 file:py-2 file:text-sm file:font-medium"
+            className="block w-full min-w-0 text-sm text-[var(--text-muted)] file:mr-3 file:rounded-md file:border-0 file:bg-[var(--surface-2)] file:px-3 file:py-2 file:text-sm file:font-medium"
           />
         </label>
         <button
           type="button"
           onClick={() => upload.mutate()}
           disabled={!file || upload.isPending}
-          className="inline-flex items-center gap-2 rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-fg)] transition hover:brightness-95 active:translate-y-px disabled:opacity-60"
+          className="inline-flex items-center justify-center gap-2 rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-fg)] transition hover:brightness-95 active:translate-y-px disabled:opacity-60"
         >
           <ColorIcon name="upload" size={18} tone="blue" />
           {upload.isPending ? "Đang gửi…" : "Gửi báo cáo"}
@@ -239,9 +241,12 @@ function ReportRow({
         : "Chờ duyệt";
 
   return (
-    <li className="flex items-center justify-between gap-3 py-3">
+    // Điện thoại: tên kho một hàng, trạng thái và nút xuống hàng dưới. Chung một
+    // hàng thì nhãn và nút ăn hết chỗ, tên kho chỉ còn "Kho th…" — mà đó là thứ
+    // duy nhất phân biệt báo cáo này với báo cáo kia.
+    <li className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
       <div className="min-w-0">
-        <p className="truncate text-sm font-medium">
+        <p className="text-sm font-medium sm:truncate">
           {report.warehouse?.name ?? report.warehouseId} · kỳ {report.period}
         </p>
         <p className="text-xs text-[var(--text-muted)]">

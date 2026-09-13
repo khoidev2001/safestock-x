@@ -271,7 +271,13 @@ export function WarehouseRequestPanel({
               const returnState = returnStateOf(warehouse.warehouseId);
               return (
                 <span
-                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold"
+                  // `flex-wrap` + từng mẩu `whitespace-nowrap`: thẻ hẹp hơn nội dung
+                  // thì cả mẩu "0/5 đã xuất" xuống dòng trong thẻ. Không có hai lớp
+                  // này, mỗi mẩu tự co lại và bẻ chữ từng tiếng — thẻ thành cột chữ
+                  // dựng đứng bo tròn như quả bóng. Bo góc vừa phải ở màn hẹp vì
+                  // thẻ hai dòng mà bo `rounded-full` thì hai đầu phình thành hình
+                  // viên thuốc méo.
+                  className="inline-flex max-w-full cursor-pointer flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-2xl border px-2.5 py-1 text-xs font-semibold sm:rounded-full"
                   key={warehouse.warehouseId}
                   /* Thẻ nằm TRONG nút gập/mở của khối, nên không dùng <button> lồng
                    nhau được — HTML không cho, và một cú bấm sẽ vừa chọn kho vừa
@@ -332,17 +338,21 @@ export function WarehouseRequestPanel({
                   <span aria-hidden="true">
                     {warehouse.done ? "✓" : warehouse.awaitingPickup ? "→" : "•"}
                   </span>
-                  {warehouse.name}
-                  <span className="font-mono font-normal">
+                  <span className="min-w-0">{warehouse.name}</span>
+                  <span className="whitespace-nowrap font-mono font-normal">
                     {/* Hiện số ĐỘI ĐÃ KÝ khi kho xuất xong — đó mới là việc còn lại. */}
                     {warehouse.awaitingPickup || warehouse.done
                       ? `${warehouse.pickedUp}/${warehouse.total} đã lấy`
                       : `${warehouse.prepared}/${warehouse.total} đã xuất`}
                   </span>
-                  {returnState === "returned" && <span>· đã hoàn trả vật tư</span>}
-                  {returnState === "pending" && <span>· chưa hoàn trả vật tư</span>}
+                  {returnState === "returned" && (
+                    <span className="whitespace-nowrap">· đã hoàn trả vật tư</span>
+                  )}
+                  {returnState === "pending" && (
+                    <span className="whitespace-nowrap">· chưa hoàn trả vật tư</span>
+                  )}
                   {returnState === "none" && (
-                    <span className="font-normal">· không cần hoàn trả</span>
+                    <span className="whitespace-nowrap font-normal">· không cần hoàn trả</span>
                   )}
                   <span className="sr-only">
                     {warehouse.done
@@ -549,7 +559,7 @@ export function WarehouseRequestPanel({
                   {isOwnWarehouse && request.status === "PREPARED" ? (
                     <div className="mt-3 space-y-2 rounded-md border p-3">
                       <p className="text-xs font-semibold">Người đi lấy ký nhận</p>
-                      <div className="grid gap-2 sm:grid-cols-[140px_1fr]">
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[140px_1fr]">
                         <div>
                           <label
                             className="block text-xs font-medium"
@@ -608,7 +618,7 @@ export function WarehouseRequestPanel({
                   ) : null}
 
                   {role === "ADMIN" && request.status !== "PREPARED" && request.warehouseNote ? (
-                    <div className="mt-3 grid gap-2 sm:grid-cols-[140px_1fr_auto]">
+                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[140px_1fr_auto]">
                       <label className="sr-only" htmlFor={`request-quantity-${request.id}`}>
                         Số lượng duyệt lại
                       </label>

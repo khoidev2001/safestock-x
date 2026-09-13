@@ -43,7 +43,7 @@ export function StocktakeView({ warehouseId }: { warehouseId: string }) {
 
   return (
     <section className="rounded-md border bg-[var(--surface)]">
-      <div className="border-b px-5 py-4">
+      <div className="border-b px-4 py-4 sm:px-5">
         <div className="flex items-center gap-2 font-semibold">
           <ColorIcon name="stocktake" size={20} tone="green" /> Kiểm kê thực tế
         </div>
@@ -97,47 +97,58 @@ function StocktakeRow({ batch, warehouseId }: { batch: InventoryBatch; warehouse
   });
 
   return (
-    <div className="flex flex-wrap items-center gap-3 px-5 py-3">
-      <div className="min-w-0 flex-1">
+    /* Điện thoại: tên lô chiếm trọn hàng trên, ô nhập và nút xuống hàng dưới.
+       Dồn cả năm phần vào một hàng như màn rộng thì cột tên chỉ còn vài chục
+       pixel — tên vật tư bị cắt còn "M…" và mã lô dựng đứng từng chữ. */
+    <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 sm:px-5">
+      <div className="min-w-0 sm:flex-1">
         <p className="truncate text-sm font-medium">{batch.item.name}</p>
         <p className="text-xs text-[var(--text-muted)]">
           Lô {batch.batchCode} · kệ{" "}
           {batch.shelf ? `${batch.shelf.zone.code}-${batch.shelf.code}` : "chưa xếp"}
         </p>
       </div>
-      <div className="text-right">
-        <p className="text-xs text-[var(--text-muted)]">Hệ thống</p>
-        <p className="tabular text-sm font-semibold">{batch.quantity}</p>
+      <div className="flex items-center gap-3">
+        <div className="shrink-0 sm:text-right">
+          <p className="text-xs text-[var(--text-muted)]">Hệ thống</p>
+          <p className="tabular text-sm font-semibold">{batch.quantity}</p>
+        </div>
+        <input
+          type="number"
+          min={0}
+          placeholder="Thực tế"
+          aria-label={`Số đếm thực tế của lô ${batch.batchCode}`}
+          value={counted}
+          onChange={(e) => setCounted(e.target.value)}
+          className="tabular w-full min-w-0 flex-1 rounded-md border bg-[var(--surface)] px-3 py-2 text-sm sm:w-28 sm:flex-none"
+        />
+        {/* Chưa có chênh lệch thì ô này rỗng — ở điện thoại bỏ hẳn nó đi để trả
+            chỗ cho ô nhập, thay vì giữ một khoảng trống vô hình. */}
+        <div className="shrink-0 text-right empty:hidden sm:w-20 sm:empty:block">
+          {diff !== null && diff !== 0 && (
+            <span
+              className="tabular text-sm font-semibold"
+              style={{ color: "var(--color-critical)" }}
+            >
+              {diff > 0 ? "+" : ""}
+              {diff}
+            </span>
+          )}
+        </div>
+        <button
+          onClick={() => mutate.mutate()}
+          disabled={!isValid || diff === 0 || mutate.isPending}
+          className="shrink-0 self-stretch whitespace-nowrap rounded-md px-3 py-2 text-xs font-semibold text-[var(--color-accent-fg)] transition active:translate-y-px disabled:opacity-40"
+          style={{ background: "var(--color-accent)" }}
+        >
+          Cập nhật
+        </button>
       </div>
-      <input
-        type="number"
-        min={0}
-        placeholder="Thực tế"
-        value={counted}
-        onChange={(e) => setCounted(e.target.value)}
-        className="tabular w-24 rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
-      />
-      <div className="w-20 text-right">
-        {diff !== null && diff !== 0 && (
-          <span
-            className="tabular text-sm font-semibold"
-            style={{ color: "var(--color-critical)" }}
-          >
-            {diff > 0 ? "+" : ""}
-            {diff}
-          </span>
-        )}
-      </div>
-      <button
-        onClick={() => mutate.mutate()}
-        disabled={!isValid || diff === 0 || mutate.isPending}
-        className="rounded-md px-3 py-2 text-xs font-semibold text-[var(--color-accent-fg)] transition active:translate-y-px disabled:opacity-40"
-        style={{ background: "var(--color-accent)" }}
-      >
-        Cập nhật
-      </button>
       {mutate.isError ? (
-        <p className="basis-full text-right text-xs text-[var(--color-critical)]" role="alert">
+        <p
+          className="text-xs text-[var(--color-critical)] sm:basis-full sm:text-right"
+          role="alert"
+        >
           {mutate.error instanceof Error
             ? mutate.error.message
             : "Không cập nhật được kết quả kiểm kê."}

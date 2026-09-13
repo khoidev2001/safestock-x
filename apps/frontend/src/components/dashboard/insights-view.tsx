@@ -73,17 +73,17 @@ export function InsightsView({ warehouseId }: { warehouseId: string }) {
     <div className="space-y-4">
       {data.weatherAlert?.alert && <WeatherBanner rainMm={data.weatherAlert.totalRainMm} />}
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <DailyBriefingCard warehouseId={warehouseId} />
         <WeatherDemandCard data={data} />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <ForecastCard forecast={data.forecast} />
         <ExpiryCard data={data} />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <RebalanceCard data={data} />
         <MonthlyReportCard warehouseId={warehouseId} />
       </div>
@@ -100,7 +100,7 @@ function DailyBriefingCard({ warehouseId }: { warehouseId: string }) {
 
   return (
     <Panel tone={SECTION_TONE.briefing}>
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <Header
           icon={<ColorIcon name="magic" size={20} tone="amber" />}
           tone={SECTION_TONE.briefing}
@@ -242,8 +242,11 @@ function BriefingAnalyzing() {
 function WeatherHorizons({ horizons }: { horizons: WeatherAlert["horizons"] }) {
   if (!horizons || horizons.length === 0) return null;
   return (
+    // Ô không ngắt dòng: "24 giờ tới" bẻ thành ba dòng và "12 km/h" tách số khỏi
+    // đơn vị thì cả bảng cao gấp ba mà không đọc nhanh được. Hẹp quá thì bảng
+    // cuộn ngang trong khung của nó.
     <div className="overflow-x-auto rounded-md border">
-      <table className="min-w-full text-left text-sm">
+      <table className="min-w-full whitespace-nowrap text-left text-sm">
         <thead className="bg-[var(--surface-2)] text-xs text-[var(--text-muted)]">
           <tr>
             <th className="px-3 py-2 font-medium">Mốc</th>
@@ -552,10 +555,13 @@ function RebalanceCard({ data }: { data: WarehouseInsights }) {
               key={`${r.sku}-${i}`}
               className="rounded-md border bg-[var(--surface-2)] px-3 py-2.5"
             >
-              <div className="flex items-center gap-2 text-sm">
-                <span className="truncate font-medium">{r.fromWarehouseName}</span>
+              {/* Hai tên kho dài ("Kho cứu trợ trung tâm Đồng Xuân") không vừa một
+                  hàng điện thoại: cắt cụt thì mất đúng tên kho NHẬN. Cho xuống
+                  dòng, mũi tên đi theo tên kho nguồn. */}
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+                <span className="min-w-0 font-medium">{r.fromWarehouseName}</span>
                 <ColorIcon name="arrowRight" size={16} tone="blue" />
-                <span className="truncate font-medium">{r.toWarehouseName}</span>
+                <span className="min-w-0 font-medium">{r.toWarehouseName}</span>
               </div>
               <p className="mt-1 text-xs text-[var(--text-muted)]">
                 Chuyển <b className="tabular text-[var(--text)]">{r.suggestedQty}</b> {r.itemName}
@@ -575,7 +581,7 @@ function MonthlyReportCard({ warehouseId }: { warehouseId: string }) {
 
   return (
     <Panel tone={SECTION_TONE.monthly}>
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <Header
           icon={<ColorIcon name="report" size={20} tone="green" />}
           tone={SECTION_TONE.monthly}
@@ -674,7 +680,7 @@ function rank(f: ForecastItem): number {
 function Panel({ children, tone }: { children: React.ReactNode; tone?: string }) {
   return (
     <section
-      className="rounded-md border p-5"
+      className="rounded-md border p-4 md:p-5"
       style={
         tone
           ? {
@@ -709,11 +715,11 @@ function Empty({ text }: { text: string }) {
 function InsightsSkeleton() {
   return (
     <div className="space-y-4" aria-busy="true">
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <div className="h-[340px] animate-pulse rounded-md border bg-[var(--surface)]" />
         <div className="h-[340px] animate-pulse rounded-md border bg-[var(--surface)]" />
       </div>
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <div className="h-[240px] animate-pulse rounded-md border bg-[var(--surface)]" />
         <div className="h-[240px] animate-pulse rounded-md border bg-[var(--surface)]" />
       </div>

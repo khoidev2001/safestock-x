@@ -93,7 +93,7 @@ export function InventoryReceivingDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/60 p-4"
+      className="fixed inset-0 z-50 grid grid-cols-1 place-items-center overflow-y-auto bg-black/60 p-4"
       role="dialog"
       aria-modal="true"
     >
@@ -129,7 +129,7 @@ export function InventoryReceivingDialog({
           ))}
         </div>
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
           {mode === "EXISTING" ? (
             <Field label="Vật tư">
               <select

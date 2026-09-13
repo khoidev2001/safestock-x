@@ -167,7 +167,10 @@ export function MissionInbox({
   const error = inboxQuery.error;
 
   return (
-    <section className="app-panel w-full p-4 md:p-5" aria-labelledby="mission-inbox-title">
+    <section
+      className="app-panel @container w-full p-4 md:p-5"
+      aria-labelledby="mission-inbox-title"
+    >
       {/* Bố cục ba tầng, trên xuống: tiêu đề chiếm trọn chiều ngang · hàng nút lọc
           riêng một hàng · sắp xếp (trái) và tìm kiếm (phải) chung một hàng. Lọc
           đứng riêng vì số nút đã lên bốn; chen cùng hàng với ô chọn thì nút cuối
@@ -219,8 +222,12 @@ export function MissionInbox({
         </div>
       </div>
 
-      <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
+      {/* Xuống dòng TỰ NHIÊN khi hết chỗ, không chờ một mốc bề ngang màn hình.
+          Khung này rộng hẹp theo cả cột chức năng bên trái (mở hay thu), nên mốc
+          `sm` cũ bẻ hai cụm ra một hàng ngay ở màn 768px — lúc đó ô sắp xếp
+          không co được nữa và đè thẳng lên ô chọn trường tìm kiếm. */}
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+        <div className="flex w-full items-center gap-2 sm:w-auto">
           <label className="shrink-0 text-sm text-[var(--text-muted)]" htmlFor="mission-sort">
             Sắp xếp
           </label>
@@ -228,7 +235,7 @@ export function MissionInbox({
             id="mission-sort"
             value={sort}
             onChange={(event) => setSort(event.target.value as MissionInboxSort)}
-            className="select-field rounded-md border bg-[var(--surface)] py-2 pl-3 text-sm"
+            className="select-field min-w-0 flex-1 rounded-md border bg-[var(--surface)] py-2 pl-3 text-sm sm:flex-none"
           >
             {SORT_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -241,7 +248,7 @@ export function MissionInbox({
         {/* Chọn trường trước, gõ sau — nằm cạnh nhau vì đọc thành một câu: "tìm
             theo SỐ THỨ TỰ: 98". Tách ra hai chỗ thì người dùng gõ xong mới phát
             hiện mình đang tìm nhầm trường. */}
-        <div className="flex w-full gap-2 sm:max-w-md">
+        <div className="flex w-full gap-2 sm:w-auto sm:min-w-[20rem] sm:max-w-md sm:flex-1">
           <label htmlFor="mission-search-field" className="sr-only">
             Tìm theo trường nào
           </label>
@@ -284,7 +291,7 @@ export function MissionInbox({
       <div className="mt-10">
         {isLoading ? (
           <div
-            className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+            className="grid grid-cols-1 gap-4 @xl:grid-cols-2 @4xl:grid-cols-3"
             aria-label="Đang tải nhiệm vụ"
             aria-busy="true"
           >
@@ -340,7 +347,7 @@ export function MissionInbox({
 
              Trang này chỉ có mỗi hộp nhiệm vụ nên không còn khối nào bên dưới bị
              danh sách dài đẩy khỏi màn hình. */
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 @xl:grid-cols-2 @4xl:grid-cols-3">
             {missions.map((mission) => {
               const selected = mission.id === selectedMissionId;
               const needsAction = missionNeedsAction(mission, role, warehouseId);
@@ -366,17 +373,21 @@ export function MissionInbox({
                       {mission.missionNo != null && (
                         <p className="font-semibold">Nhiệm vụ số {mission.missionNo}</p>
                       )}
-                      {/* Loại tình huống gộp vào cuối dòng địa điểm: hai dòng riêng
-                          làm thẻ cao thêm mà phần trên chỉ mang đúng một từ.
-
-                          Không có dòng địa điểm thì bỏ luôn cặp ngoặc — ghép máy
-                          móc sẽ ra " (Lũ lụt)" thừa một dấu cách đầu dòng. */}
-                      <p className="mt-0.5 line-clamp-1 text-sm text-[var(--text-muted)]">
-                        {locationLabel ? `${locationLabel} (${incidentLabel})` : incidentLabel}
-                      </p>
                     </div>
                     <MissionCardBadge mission={mission} needsAction={needsAction} />
                   </div>
+                  {/* Loại tình huống gộp vào cuối dòng địa điểm: hai dòng riêng
+                      làm thẻ cao thêm mà phần trên chỉ mang đúng một từ.
+
+                      Không có dòng địa điểm thì bỏ luôn cặp ngoặc — ghép máy
+                      móc sẽ ra " (Lũ lụt)" thừa một dấu cách đầu dòng.
+
+                      Nằm NGOÀI hàng tiêu đề, trải hết bề ngang thẻ: đứng cạnh huy
+                      hiệu thì thẻ hẹp chỉ còn chừa vài chữ, tên thôn bị cắt còn
+                      "Long Châ…" — đúng phần người trực cần đọc. */}
+                  <p className="mt-0.5 line-clamp-2 text-sm text-[var(--text-muted)]">
+                    {locationLabel ? `${locationLabel} (${incidentLabel})` : incidentLabel}
+                  </p>
                   <div className="mt-4 text-xs">
                     <p className="font-medium">{missionStageLabel(mission)}</p>
                     {/* Số người và thời gian đứng CÙNG một hàng, không phải một cột

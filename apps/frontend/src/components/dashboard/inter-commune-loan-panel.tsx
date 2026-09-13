@@ -307,7 +307,7 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
             Kho mình CHƯA đổi gì — chưa ai đồng ý thì chưa có hàng nào rời chỗ.
           </p>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="block text-xs font-medium" htmlFor="xin-muon-xa">
                 Hỏi mượn xã
@@ -417,7 +417,7 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
             vẫn cộng trừ thật, nên phải ghi đúng lô và đúng số.
           </p>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="block text-xs font-medium" htmlFor="ghi-tay-chieu">
                 Chiều
@@ -686,7 +686,9 @@ function LoanRow({
             </p>
           ) : null}
         </div>
-        <div className="text-right">
+        {/* Rớt xuống dòng ở màn hẹp thì hai con số đứng thành một hàng canh trái;
+            canh phải lúc đó làm số lượng lơ lửng giữa thẻ, không thẳng với chữ nào. */}
+        <div className="flex items-baseline gap-2 sm:block sm:text-right">
           <p className="font-mono text-sm font-semibold">
             {outstandingQuantity} {loan.unit}
           </p>
@@ -696,7 +698,7 @@ function LoanRow({
         </div>
       </div>
 
-      <dl className="mt-3 grid gap-x-6 gap-y-1 border-t pt-3 text-xs sm:grid-cols-2">
+      <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-1 border-t pt-3 text-xs sm:grid-cols-2">
         {milestones.map((milestone) => (
           <div className="flex flex-wrap items-baseline gap-x-2" key={milestone.label}>
             <dt className="text-[var(--text-muted)]">{milestone.label}:</dt>

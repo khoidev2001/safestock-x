@@ -35,14 +35,21 @@ const IncidentMap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="h-[calc(100dvh-190px)] min-h-[520px] animate-pulse rounded-md border bg-[var(--surface)]" />
+      <div className="h-[62dvh] min-h-[360px] animate-pulse rounded-md border bg-[var(--surface)] md:h-[calc(100dvh-190px)] md:min-h-[520px]" />
     ),
   },
 );
 
-/** Trang này không có form nào đứng cạnh, nên bản đồ lấy gần hết chiều cao màn hình. */
+/**
+ * Trang này không có form nào đứng cạnh, nên bản đồ lấy gần hết chiều cao màn hình.
+ *
+ * Trừ điện thoại: ở đó ô tra toạ độ và danh sách kho nằm DƯỚI bản đồ, mà vuốt
+ * lên bản đồ thì Leaflet kéo bản đồ chứ không cuộn trang. Bản đồ cao kín màn
+ * hình là không còn chỗ nào để đặt ngón tay mà cuộn xuống — nên chừa lại một
+ * phần ba màn hình.
+ */
 const MAP_FRAME_CLASS =
-  "relative isolate h-[calc(100dvh-190px)] min-h-[520px] w-full overflow-hidden rounded-md border";
+  "relative isolate h-[62dvh] min-h-[360px] w-full overflow-hidden rounded-md border md:h-[calc(100dvh-190px)] md:min-h-[520px]";
 
 const EXAMPLE_COORDINATE = "13.353243, 109.082512";
 
@@ -128,7 +135,7 @@ export function MapView({ warehouseId }: { warehouseId: string }) {
   return (
     // Panel chức năng chia theo tỉ lệ chứ không cố định 320px: thu thanh điều hướng
     // là chỗ trống chảy sang đây, chứ không dồn hết cho bản đồ.
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,2.2fr)_minmax(320px,1fr)]">
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2.2fr)_minmax(320px,1fr)]">
       {/* Dính dưới header khi cuộn — danh sách kho bên phải dài hơn một màn hình,
           không có cái này thì vừa dò danh sách vừa nhìn bản đồ phải cuộn liên tục. */}
       <div className="xl:sticky xl:top-20 xl:self-start">

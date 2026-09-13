@@ -1311,7 +1311,7 @@ export function MissionView({
 
               Đường kẻ đổi chiều theo cách xếp: dọc khi hai cột nằm cạnh nhau, ngang
               khi màn hình hẹp và chúng chồng lên nhau. */}
-          <div className="mt-5 grid gap-6 lg:grid-cols-2 lg:gap-0">
+          <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-2 lg:gap-0">
             <div className="min-w-0 lg:pr-7">
               <h3 className="flex items-center gap-2 text-sm font-semibold">
                 <ColorIcon name="users" size={17} tone="blue" />
@@ -2761,7 +2761,7 @@ function IncidentFormTable({
                 đúng ô, và trình đọc màn hình đọc được ô này đang hỏi cái gì. */}
             <th
               scope="row"
-              className="w-1/2 bg-[var(--surface-2)] text-left font-medium text-[var(--text-muted)]"
+              className="w-[42%] bg-[var(--surface-2)] text-left font-medium text-[var(--text-muted)] sm:w-1/2"
             >
               <label className="block cursor-pointer px-3 py-2" htmlFor={row.id}>
                 {row.label}
@@ -2830,7 +2830,7 @@ function IncidentSummaryTable({
             <tr key={row.label}>
               <th
                 scope="row"
-                className="w-1/2 bg-[var(--surface-2)] px-3 py-2 text-left font-medium text-[var(--text-muted)]"
+                className="w-[42%] bg-[var(--surface-2)] px-3 py-2 text-left font-medium text-[var(--text-muted)] sm:w-1/2"
               >
                 {row.label}
               </th>

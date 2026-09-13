@@ -87,7 +87,7 @@ function ContactList({ contacts }: { contacts: PublicCommuneContact[] }) {
     <ul className="divide-y" role="list">
       {contacts.map((contact) => (
         <li
-          className="grid gap-4 px-5 py-5 md:grid-cols-[minmax(0,1fr)_minmax(260px,auto)] md:items-center md:px-6"
+          className="grid grid-cols-1 gap-4 px-5 py-5 md:grid-cols-[minmax(0,1fr)_minmax(260px,auto)] md:items-center md:px-6"
           key={contact.communeName}
         >
           <div>
@@ -156,7 +156,7 @@ function ContactsLoading() {
     <div aria-busy="true" aria-label="Đang tải danh sách liên hệ" className="divide-y">
       {[0, 1, 2, 3].map((item) => (
         <div
-          className="grid animate-pulse gap-3 px-5 py-5 md:grid-cols-[1fr_260px] md:px-6"
+          className="grid grid-cols-1 animate-pulse gap-3 px-5 py-5 md:grid-cols-[1fr_260px] md:px-6"
           key={item}
         >
           <div className="h-6 max-w-56 rounded bg-[var(--surface-3)]" />

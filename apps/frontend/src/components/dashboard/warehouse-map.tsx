@@ -48,7 +48,7 @@ export function WarehouseMap({ tree, isLoading }: WarehouseMapProps) {
         </span>
       }
     >
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {tree.zones.map((zone) => {
           const guide = getZoneGuide(zone.name);
           return (
@@ -226,7 +226,7 @@ function ZonePlan({
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-[var(--text-muted)]">{shelfGuide.position}</p>
-                <dl className="mt-2 grid gap-1.5">
+                <dl className="mt-2 grid grid-cols-1 gap-1.5">
                   {shelfGuide.contents.map((row) => (
                     <div key={row.level}>
                       <dt className="text-xs font-semibold">{row.level}</dt>

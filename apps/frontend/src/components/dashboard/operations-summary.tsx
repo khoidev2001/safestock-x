@@ -59,7 +59,7 @@ export function OperationsSummary({
 
   return (
     <section className="space-y-3">
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <LowStockPanel batches={batches} warehouseId={warehouseId} />
         <OpenIncidentsPanel incidents={incidents} />
       </div>

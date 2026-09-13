@@ -34,10 +34,10 @@ export function SemanticInventoryTools({ warehouseId }: { warehouseId: string })
   };
 
   return (
-    <section className="rounded-md border bg-[var(--surface)] p-5">
+    <section className="rounded-md border bg-[var(--surface)] p-4 sm:p-5">
       <div className="flex items-center gap-2">
         <ColorIcon name="magic" size={20} tone="amber" />
-        <div>
+        <div className="min-w-0">
           <h2 className="text-sm font-semibold">Tìm và chuẩn hóa vật tư bằng embedding local</h2>
           <p className="text-xs text-[var(--text-muted)]">
             Tìm theo công dụng, không cần nhớ đúng tên hay mã SKU.
@@ -45,7 +45,7 @@ export function SemanticInventoryTools({ warehouseId }: { warehouseId: string })
         </div>
       </div>
 
-      <div className={`mt-4 grid gap-4 ${canNormalize ? "lg:grid-cols-2" : ""}`}>
+      <div className={`mt-4 grid grid-cols-1 gap-4 ${canNormalize ? "lg:grid-cols-2" : ""}`}>
         <ToolForm
           button="Tìm ngữ nghĩa"
           onSubmit={submitSearch}
@@ -89,7 +89,7 @@ function ToolForm({
 }) {
   return (
     <div className="rounded-md bg-[var(--surface-2)] p-3">
-      <form className="flex gap-2" onSubmit={onSubmit}>
+      <form className="flex flex-col gap-2 sm:flex-row" onSubmit={onSubmit}>
         <input
           className="min-w-0 flex-1 rounded-md border bg-[var(--surface)] px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]"
           onChange={(event) => onValue(event.target.value)}
@@ -97,7 +97,7 @@ function ToolForm({
           value={value}
         />
         <button
-          className="rounded-md bg-[var(--color-accent)] px-3 py-2 text-sm font-semibold text-[var(--color-accent-fg)] disabled:opacity-50"
+          className="shrink-0 whitespace-nowrap rounded-md bg-[var(--color-accent)] px-3 py-2 text-sm font-semibold text-[var(--color-accent-fg)] disabled:opacity-50"
           disabled={value.trim().length < 2}
           type="submit"
         >

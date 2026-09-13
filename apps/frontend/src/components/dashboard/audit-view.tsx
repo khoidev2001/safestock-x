@@ -95,12 +95,18 @@ export function AuditView() {
 
 function AuditRow({ log }: { log: AuditLog }) {
   return (
-    <div className="flex items-start gap-3 px-5 py-3">
+    <div className="flex items-start gap-3 px-4 py-3 sm:px-5">
       <div
         className="mt-1 h-2 w-2 shrink-0 rounded-full"
         style={{ background: "var(--color-accent)" }}
       />
       <div className="min-w-0 flex-1">
+        {/* Điện thoại: giờ lên đầu dòng. Để ở cột phải thì cụm "14:06 13/09/2026"
+            chiếm gần nửa bề ngang, mã bản ghi và tên người thực hiện bị cắt còn vài
+            chữ — mà đó là hai thứ người đối chiếu cần đọc đủ. */}
+        <p className="tabular text-xs text-[var(--text-muted)] sm:hidden">
+          {formatTimeAndDate(log.createdAt)}
+        </p>
         <p className="text-sm">
           {/* Bỏ `capitalize`: nhãn giờ là câu tiếng Việt viết sẵn, ép hoa đầu mỗi
               từ sẽ ra "Xuất Vật Tư Khỏi Kho" — kiểu viết hoa của tiếng Anh. */}
@@ -118,7 +124,7 @@ function AuditRow({ log }: { log: AuditLog }) {
       {/* `Intl` với "vi-VN" trả về "15:31 6/9/26" trên máy này và một kiểu khác trên
           máy kia — xem ghi chú ở `date-format`. Dòng nhật ký là thứ được chép vào
           biên bản đối chiếu, nên ngày tháng phải giống hệt nhau ở mọi máy. */}
-      <p className="shrink-0 text-xs tabular text-[var(--text-muted)]">
+      <p className="hidden shrink-0 text-xs tabular text-[var(--text-muted)] sm:block">
         {formatTimeAndDate(log.createdAt)}
       </p>
     </div>
@@ -159,7 +165,11 @@ function AuditMetadata({ metadata }: { metadata: unknown }) {
         </span>
       ) : null}
       {quantity !== null ? <span>Số lượng: {quantity}</span> : null}
-      {reason ? <span className="basis-full">Lý do: {auditReasonLabel(reason)}</span> : null}
+      {reason ? (
+        <span className="basis-full [overflow-wrap:anywhere]">
+          Lý do: {auditReasonLabel(reason)}
+        </span>
+      ) : null}
     </div>
   );
 }

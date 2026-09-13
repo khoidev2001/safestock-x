@@ -50,7 +50,7 @@ export function InventoryBulkExportDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/60 p-4"
+      className="fixed inset-0 z-50 grid grid-cols-1 place-items-center overflow-y-auto bg-black/60 p-4"
       role="dialog"
       aria-modal="true"
     >
