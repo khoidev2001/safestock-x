@@ -230,6 +230,58 @@ describe("kho xác nhận hoàn trả vật tư", () => {
     });
   });
 
+  it("hai kho tiếp tế: kho A bấm 'trả đủ' KHÔNG ký thay cho kho B", async () => {
+    /*
+      Lỗi đã xảy ra thật. Nhánh "trả đủ" ghi đủ cho MỌI dòng của nhiệm vụ, không
+      lọc theo kho — trong khi nhánh khai từng dòng đã lọc từ đầu. Kho A bấm một
+      cái là:
+        - dòng của kho B cũng thành "đã trả đủ",
+        - `outstandingReturns` không còn thấy gì thiếu nên nhiệm vụ khép sổ,
+        - màn hình kho B hiện "đã nhận lại vật tư" trong khi họ chưa đếm món nào.
+      Hàng của kho B biến mất khỏi mọi danh sách phải đòi.
+    */
+    const cuaA = requestRow({ id: "request-a", warehouseId: "warehouse-a" });
+    const cuaB = requestRow({ id: "request-b", warehouseId: "warehouse-b" });
+    const state = makeService([cuaA, cuaB]);
+    state.missionWarehouseRequest.findMany
+      // lượt 1: ghi nhận số trả
+      .mockResolvedValueOnce([cuaA, cuaB])
+      // lượt 2: đếm phần còn thiếu — dòng của B vẫn chưa trả
+      .mockResolvedValueOnce([
+        requestRow({ id: "request-a", warehouseId: "warehouse-a", returnedQuantity: 10 }),
+        requestRow({ id: "request-b", warehouseId: "warehouse-b", returnedQuantity: null }),
+      ]);
+
+    await state.service.markReturnedByWarehouse(MISSION_ID, "user-1", "warehouse-a");
+
+    // Chỉ dòng của kho A được ghi.
+    expect(state.missionWarehouseRequest.update).toHaveBeenCalledTimes(1);
+    expect(state.missionWarehouseRequest.update).toHaveBeenCalledWith({
+      where: { id: "request-a" },
+      data: expect.objectContaining({ returnedQuantity: 10 }),
+    });
+    // Và nhiệm vụ CHƯA khép sổ, vì kho B còn nợ.
+    expect(state.prisma.mission.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("tài khoản không gắn kho vẫn ký được cả nhiệm vụ", async () => {
+    // Kho tổng và quản trị xã không có `warehouseId`; chặn họ thì nhiệm vụ treo.
+    const cuaA = requestRow({ id: "request-a", warehouseId: "warehouse-a" });
+    const cuaB = requestRow({ id: "request-b", warehouseId: "warehouse-b" });
+    const state = makeService([cuaA, cuaB]);
+    state.missionWarehouseRequest.findMany
+      .mockResolvedValueOnce([cuaA, cuaB])
+      .mockResolvedValueOnce([
+        requestRow({ id: "request-a", returnedQuantity: 10 }),
+        requestRow({ id: "request-b", returnedQuantity: 10 }),
+      ]);
+
+    await state.service.markReturnedByWarehouse(MISSION_ID, "user-1", null);
+
+    expect(state.missionWarehouseRequest.update).toHaveBeenCalledTimes(2);
+    expect(state.prisma.mission.updateMany).toHaveBeenCalled();
+  });
+
   it("kho không khai hộ được dòng của kho khác", async () => {
     const state = makeService([requestRow({ warehouseId: "warehouse-b" })]);
 

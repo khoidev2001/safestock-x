@@ -12,6 +12,7 @@ import {
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { updateOwnPhone, updateOwnProfile, type AuthUser } from "./api";
 import { pickAvatarImage } from "./avatar-image";
+import { ErrorLine } from "./error-banner";
 import { confirmAction } from "./dialog";
 import { mobileRoleLabel } from "./role-labels";
 import { c, styles } from "./styles";
@@ -120,6 +121,14 @@ export function AccountScreen({
 
         <PhoneSection token={token} user={user} onProfileChanged={onProfileChanged} />
 
+        {/* Miếng đẩy: nội dung ngắn thì nó nở ra, dồn nút đăng xuất xuống đáy.
+            Nội dung dài thì nó co về 0 — và lúc ấy `marginTop` cố định của nút
+            mới là thứ giữ khoảng cách. Trước đây nút chỉ có `marginTop: "auto"`,
+            nên khi màn hình vừa đủ một trang thì khoảng cách ấy biến mất và nút
+            đăng xuất dính ngay dưới nút thêm số điện thoại. */}
+        <View style={{ flexGrow: 1 }} />
+        <View style={local.logoutDivider} />
+
 
         <Pressable
           onPress={() => void askLogout()}
@@ -223,7 +232,7 @@ function AvatarPicker({
           <MaterialCommunityIcons name="camera" size={12} color="#FFFFFF" />
         </View>
       </Pressable>
-      {error ? <Text style={local.avatarError}>{error}</Text> : null}
+      <ErrorLine error={error} />
     </View>
   );
 }
@@ -345,7 +354,7 @@ function NameSection({
           </View>
         </View>
       )}
-      {error ? <Text style={local.phoneError}>{error}</Text> : null}
+      <ErrorLine error={error} />
       {notice ? <Text style={local.phoneNotice}>{notice}</Text> : null}
     </View>
   );
@@ -492,7 +501,7 @@ function PhoneSection({
         </View>
       )}
 
-      {error ? <Text style={local.phoneError}>{error}</Text> : null}
+      <ErrorLine error={error} />
       {notice ? <Text style={local.phoneNotice}>{notice}</Text> : null}
     </View>
   );
@@ -557,7 +566,6 @@ const local = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarError: { color: c.red, fontSize: 11, fontWeight: "700", marginTop: 6, maxWidth: 140 },
   name: { color: c.text, fontSize: 20, fontWeight: "800" },
   role: { color: c.muted, fontSize: 13, fontWeight: "700", marginTop: 3 },
 
@@ -625,12 +633,26 @@ const local = StyleSheet.create({
     borderColor: c.border,
   },
   phoneGhostText: { color: c.text, fontSize: 14, fontWeight: "700" },
-  phoneError: { color: c.red, fontSize: 13, fontWeight: "700", marginTop: 10 },
   phoneNotice: { color: c.green, fontSize: 13, fontWeight: "700", marginTop: 10 },
   disabled: { opacity: 0.6 },
 
+  /**
+   * Vạch ngăn trước nút đăng xuất.
+   *
+   * Đăng xuất là việc KHÔNG QUAY LẠI ĐƯỢC: nó xoá dữ liệu ngoại tuyến và cắt
+   * thông báo điều phối. Nó không được nằm sát ngay dưới một nút vô hại như
+   * "Thêm số điện thoại" — ngón cái đang quen bấm chỗ đó, mà ngoài hiện trường
+   * thì bấm nhầm rồi mất sóng là không đăng nhập lại được.
+   */
+  logoutDivider: {
+    height: 1,
+    backgroundColor: c.border,
+    marginTop: 24,
+  },
   logout: {
-    marginTop: "auto",
+    // 20 chứ không phải "auto": xem miếng đẩy ở trên, "auto" co về 0 khi nội dung
+    // vừa kín một trang và khi ấy không còn gì tách hai nút ra.
+    marginTop: 20,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",

@@ -148,35 +148,36 @@ export function routeArrows(
 /**
  * Hình mũi tên đặt trên tuyến — MỘT nguồn cho cả web lẫn điện thoại.
  *
- * Là một GẠCH THẲNG có đầu nhọn, không phải một hình tam giác trơn. Tam giác nhỏ
- * nằm giữa tuyến đọc ra thành một dấu ghim hay một mảnh vụn của lớp bản đồ: nó
- * không có phần thân để mắt bắt được cái trục, nên muốn biết nó chỉ đâu thì phải
- * nhìn kỹ từng cái một. Gạch có thân thì hướng đọc được từ xa, và nó nằm gọn dọc
- * tim đường thay vì đè ngang qua.
+ * Mũi tên ĐẶC, nền trắng, nằm LỌT LÒNG trong nét màu của tuyến.
  *
- * Vẽ hai lớp chồng nhau: lớp trắng dày bên dưới, lớp màu mảnh hơn bên trên. Tuyến
- * chạy trên ảnh vệ tinh nên một nét xanh trơn biến mất khi đi qua mái tôn sáng hay
- * mặt nước — đúng những chỗ khó nhìn nhất.
+ * Bản trước vẽ bằng nét kẻ: một gạch có đầu nhọn, thân màu 3.4 kèm quầng trắng
+ * 6.4, khung 26px. Quy ra màn hình thì đầu nhọn rộng 12,8px và quầng trắng 6,9px,
+ * trong khi thân tuyến chỉ dày 7px — mũi tên tràn ra hai bên đường và cái quầng
+ * trắng biến nó thành một cục rời, đọc ra như dấu ghim rơi trên tuyến chứ không
+ * như chiều đi của chính tuyến ấy.
+ *
+ * Nay: hình đặc tô trắng, bề ngang 9 đơn vị trên khung 24, cộng viền 1 đơn vị là
+ * 10 — ở cỡ khung 16px thành 6,7px, vừa lọt trong nét 7px và còn chừa mỗi bên một
+ * vệt màu. Viền lấy chính màu tuyến nên ở chỗ mũi tên đè lên mép trắng của tuyến
+ * nó vẫn tách ra được.
+ *
+ * Dài 20 đơn vị (13,3px) — dài hơn rộng gấp đôi, để hướng đọc được từ xa mà không
+ * phải nới bề ngang.
  *
  * Hình vẽ trong hệ toạ độ 24×24 và chĩa LÊN TRÊN, rồi cả khối xoay theo phương vị;
  * nhờ vậy `bearing` dùng thẳng được cho `rotate()` mà không phải quy đổi.
  */
 export function routeArrowSvg(bearing: number, size = 16, color = "#1d4ed8"): string {
-  // Thân chạy gần hết chiều cao khung, đầu nhọn mở 90° ở đỉnh. Vẽ liền một nét
-  // (thân → cạnh trái đầu → đỉnh → cạnh phải đầu) để hai lớp luôn khớp nhau.
-  //
-  // Đuôi dừng ở 20.6 chứ không sát mép 24: nét vẽ có đầu bo tròn và lớp viền
-  // trắng dày 6.4, nên nửa bề dày (3.2) còn thò ra quá đuôi. Chạm mép khung là bị
-  // chính khung SVG cắt phẳng, và cái đuôi bo tròn biến thành một vết cắt ngang.
-  const shaft = "M12 20.6 L12 5.4";
-  const head = "M6.1 11 L12 4.2 L17.9 11";
+  // Đỉnh → cạnh phải đầu → vai phải → đuôi phải → đuôi trái → vai trái → cạnh trái đầu.
+  // Một đa giác khép kín, không phải nét kẻ: nét kẻ có bề dày riêng cộng thêm vào
+  // bề ngang, mà bề ngang mới là thứ phải giữ dưới 7px.
+  const arrow = "12 2 16.5 10 13.9 10 13.9 22 10.1 22 10.1 10 7.5 10";
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" ` +
     `style="transform: rotate(${bearing.toFixed(1)}deg); display: block;">` +
-    `<path d="${shaft} ${head}" fill="none" stroke="#ffffff" stroke-width="6.4" ` +
-    `stroke-linecap="round" stroke-linejoin="round"/>` +
-    `<path d="${shaft} ${head}" fill="none" stroke="${color}" stroke-width="3.4" ` +
-    `stroke-linecap="round" stroke-linejoin="round"/>` +
+    `<polygon points="${arrow}" fill="#ffffff" stroke="${color}" stroke-width="1" ` +
+    `stroke-linejoin="round"/>` +
     `</svg>`
   );
 }
+

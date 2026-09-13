@@ -71,18 +71,6 @@ export function MissionSummaryCard({
           <Text numberOfLines={1} style={styles.disasterName}>
             {missionNo != null ? `Nhiệm vụ số ${missionNo}` : disaster.label}
           </Text>
-          {isNew ? (
-            <View style={styles.newBadge}>
-              <Text style={styles.newBadgeText}>MỚI</Text>
-            </View>
-          ) : null}
-          {/* Nói rõ VÌ SAO thẻ này nằm trên cùng. Không có nhãn thì người trực
-              thấy danh sách tự đảo chỗ và nghi số liệu sai. */}
-          {justViewed && !isNew ? (
-            <View style={styles.viewedBadge}>
-              <Text style={styles.viewedBadgeText}>VỪA XEM</Text>
-            </View>
-          ) : null}
           {/* Góc phải là SỐ NGƯỜI GẶP NẠN, nền đỏ — con số quyết định điều mấy xe,
               mấy người. Không xếp hạng mức nguy: nhiệm vụ nào cũng phải làm. */}
           <View style={styles.peopleBadge}>
@@ -90,15 +78,38 @@ export function MissionSummaryCard({
           </View>
         </View>
 
+        {/* HUY HIỆU XUỐNG HÀNG RIÊNG, không chen vào hàng tiêu đề.
+            Ở bề ngang 360dp, hàng trên đã kín: biểu tượng, "Nhiệm vụ số 25" và
+            "100 người gặp nạn" cộng lại vừa đúng. Nhét thêm "VỪA XEM" vào đó thì
+            thứ bị bóp là tiêu đề — nó có `flex: 1` nên co lại thành "Nhiệm v…",
+            tức là mất đúng con số mà người trực đọc để gọi cho nhau qua điện
+            thoại. Số người gặp nạn thì không co được vì nền đỏ bọc sát chữ.
+
+            Chỉ tốn thêm một hàng ở những thẻ CÓ huy hiệu; thẻ thường không đổi. */}
+        {isNew || justViewed ? (
+          <View style={styles.badgeRow}>
+            {isNew ? (
+              <View style={styles.newBadge}>
+                <Text style={styles.newBadgeText}>MỚI</Text>
+              </View>
+            ) : (
+              /* Nói rõ VÌ SAO thẻ này nằm trên cùng. Không có nhãn thì người trực
+                 thấy danh sách tự đảo chỗ và nghi số liệu sai. */
+              <View style={styles.viewedBadge}>
+                <Text style={styles.viewedBadgeText}>VỪA XEM</Text>
+              </View>
+            )}
+          </View>
+        ) : null}
+
         {/* Dòng giữa là VIỆC PHẢI LÀM, viết theo vai của chính người đang đọc.
             Chưa tra được chặng thì lùi về tên thiên tai, đừng để trống một dòng
             rồi người đọc ngồi chờ nó hiện ra. */}
-        {/* Mức nguy viết thành CHỮ, không chỉ là sọc màu bên trái.
-            Màn chi tiết mở ra là thấy ngay dòng "CHƯA NGUY CẤP" to đùng; ở đây
-            chỉ có một vệt màu nên hai màn hình nói hai chuyện khác nhau về cùng
-            một nhiệm vụ. Ai phân biệt màu kém thì vệt màu còn không nói gì cả. */}
-        <Text style={[styles.cardDanger, { color: danger.color }]}>⚠ {danger.label}</Text>
-
+        {/* KHÔNG in mức nguy thành chữ ở đây. Thẻ đã nói hai con số quyết định
+            được việc — số người gặp nạn ở góc phải, và chặng đang chờ ai làm gì
+            ở dòng dưới. Thêm một dòng "CỨU NGAY" nữa chỉ là xếp hạng nhiệm vụ,
+            trong khi cái nào cũng phải đi. Mức nguy vẫn còn ở vệt màu bên trái
+            và ở màn chi tiết. */}
         <View style={styles.stageRow}>
           <Text
             style={[styles.stageText, stageNeedsAction && { color: c.amber }]}

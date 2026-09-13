@@ -33,6 +33,7 @@ import { InventoryScreen } from "./InventoryScreen";
 import { MonthlyReportScreen } from "./MonthlyReportScreen";
 import { c, styles } from "./styles";
 import { NotificationToasts } from "./NotificationToasts";
+import { ErrorBanner, ErrorLine } from "./error-banner";
 import { useNotificationFeed, type NotificationFeed } from "./use-notification-feed";
 import { filterNotificationsByMissionNo } from "./notification-feed-state";
 import { PAGE_SIZE } from "./paged-list-state";
@@ -408,6 +409,9 @@ function MobileRoleShell({
         onDismiss={feed.dismiss}
         onOpen={openFromToast}
       />
+      {/* Đặt SAU cùng để dải lỗi nằm trên mọi thứ khác. Gắn đúng một lần ở đây,
+          các màn chỉ việc gọi `showError(...)`. */}
+      <ErrorBanner />
     </View>
   );
 }
@@ -550,7 +554,7 @@ function LoginScreen({ onLogin }: { onLogin: (result: LoginResult) => Promise<vo
           aria-label="Mật khẩu"
         />
 
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        <ErrorLine error={error} />
 
         <Pressable
           style={[styles.button, busy && { opacity: 0.6 }]}
@@ -659,11 +663,9 @@ function NotificationsScreen({
           </Text>
         </View>
       ) : null}
-      {error && items.length > 0 ? (
-        <View style={{ paddingHorizontal: 16, paddingTop: 10 }}>
-          <Text style={{ color: c.amber, fontSize: 12 }}>{error}</Text>
-        </View>
-      ) : null}
+      {/* Còn dữ liệu cũ trên màn thì lượt tải hỏng chỉ là chuyện thoáng qua —
+          đẩy xuống dải ở đáy, đừng chèn một dòng chữ vào giữa danh sách. */}
+      {items.length > 0 ? <ErrorLine error={error} /> : null}
 
       {loading ? (
         <View style={{ padding: 16 }}>

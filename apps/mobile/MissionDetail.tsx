@@ -15,6 +15,7 @@ import {
   type CameraViewProps,
 } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
+import { ErrorLine } from "./error-banner";
 import {
   ActivityIndicator,
   Image,
@@ -66,6 +67,7 @@ import {
   missionStageLabel,
   missionStageNeedsAction,
   ownWarehouseStage,
+  ownWarehouseWaitingLabel,
   warehousePickupStates,
 } from "./mission-state";
 import {
@@ -664,6 +666,12 @@ export function MissionDetailScreen({
    * là bắt đội ngồi chờ trong khi hàng ở kho thôn đã nằm sẵn trên kệ từ sáng.
    */
   const warehousesToVisit = pickupStates.filter((state) => state.ready && !state.pickedUp);
+  /** Câu thay cho "Chờ kho chuẩn bị" khi phần của kho mình đã xong. */
+  const ownWaitingLabel = ownWarehouseWaitingLabel(
+    mission?.status ?? "",
+    warehouseId,
+    pickupStates,
+  );
   const allWarehousesReady = pickupStates.length > 0 && pickupStates.every((state) => state.ready);
 
   /**
@@ -763,7 +771,7 @@ export function MissionDetailScreen({
           {/* Lỗi nằm NGOÀI khối gấp: nó nói về lượt tải vừa rồi, không phải về
               nội dung nhiệm vụ, nên gấp mất là người dùng ngồi nhìn dữ liệu cũ
               mà không biết lượt làm mới đã hỏng. */}
-          {error ? <Text style={[styles.errorText, { marginBottom: 12 }]}>{error}</Text> : null}
+          <ErrorLine error={error} />
 
           {completed ? (
             <>
@@ -970,7 +978,13 @@ export function MissionDetailScreen({
                       ? allWarehousesReady
                         ? "Tất cả các kho đã chuẩn bị xong — hãy đến lấy"
                         : `${warehousesToVisit.map((state) => state.name).join(", ")} đã chuẩn bị xong — hãy đến lấy`
-                      : (STATUS_LABEL[mission.status] ?? mission.status)}
+                      : /* Người trực KHO đọc câu này. "Chờ kho chuẩn bị" nói về cả
+                           nhiệm vụ, nên kho nào xong phần mình rồi vẫn thấy y hệt
+                           lúc chưa làm gì — họ hiểu thành máy chưa ghi nhận, rồi
+                           bấm lại, rồi gọi lên xã hỏi. Xem `ownWarehouseWaitingLabel`. */
+                        (ownWaitingLabel ??
+                        STATUS_LABEL[mission.status] ??
+                        mission.status)}
                   </Text>
                 </View>
                 <Text style={[styles.emptyText, { marginTop: 10, textAlign: "left" }]}>
@@ -2780,18 +2794,27 @@ const local = StyleSheet.create({
     marginBottom: 8,
   },
   photoTitle: { color: c.text, fontSize: 13, fontWeight: "700" },
-  photoActions: { flexDirection: "row", gap: 8 },
+  // `flexWrap` để hai nút xuống dòng thay vì tràn ra ngoài mép thẻ: nhãn dài ngắn
+  // tuỳ trạng thái ("Chụp ảnh" đổi thành "Đã đủ"), mà màn hẹp thì một hàng không
+  // chứa nổi cả hai nút kèm biểu tượng.
+  photoActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   photoAdd: {
     flexDirection: "row",
     alignItems: "center",
+    // Căn giữa theo chiều ngang nữa: thiếu nó thì khi nút bị co lại, biểu tượng và
+    // chữ dồn về mép trái, lệch hẳn so với nút bên cạnh.
+    justifyContent: "center",
+    // Co lại được thay vì đẩy nút kia ra khỏi màn hình.
+    flexShrink: 1,
     gap: 6,
     borderWidth: 1,
     borderColor: c.primary,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,
+    minHeight: 36,
   },
-  photoAddText: { color: c.primary, fontSize: 13, fontWeight: "700" },
+  photoAddText: { color: c.primary, fontSize: 13, fontWeight: "700", textAlign: "center" },
   photoStrip: { marginBottom: 4 },
   thumbWrap: { marginRight: 8 },
   thumb: { width: 72, height: 72, borderRadius: 8, backgroundColor: c.surfaceAlt },

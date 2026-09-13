@@ -35,6 +35,44 @@ import {
  * Khoản đã đóng gập lại sẵn: chúng chỉ dùng để đối chiếu, không phải việc phải
  * làm. Để lẫn với khoản đang mở thì việc cần làm bị trôi xuống dưới.
  */
+/**
+ * Nút mở một biểu mẫu của sổ mượn.
+ *
+ * Ba trạng thái, mỗi trạng thái nói đúng một điều:
+ *   - thường: trắng, viền xám — chưa mở gì cả, hai nút ngang hàng nhau;
+ *   - rê chuột: viền và chữ đổi màu nhấn — cho biết bấm được, chưa phải đã chọn;
+ *   - đang mở: nền màu đặc — biểu mẫu của chính nút này đang bày ra.
+ *
+ * Màu đặc là thứ đắt nhất trên một màn hình điều phối, nên chỉ tiêu nó cho một sự
+ * thật: có cái gì đó đang mở. Dùng nó làm trang trí thì lần sau người dùng không
+ * còn tin vào màu nữa.
+ */
+function LoanFormButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`rounded-md border px-3 py-2 text-xs font-semibold transition ${
+        active
+          ? "border-[var(--color-accent)] text-white"
+          : "bg-[var(--surface)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+      }`}
+      style={active ? { background: "var(--color-accent)" } : undefined}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) {
   const queryClient = useQueryClient();
   const [quantity, setQuantity] = useState<Record<string, string>>({});
@@ -223,28 +261,33 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
         Mỗi xã giữ sổ riêng. Khoản ghi tay là khoản đã thoả thuận qua điện thoại lúc mất mạng.
       </p>
 
+      {/* Hai nút NGANG HÀNG nhau, cùng trắng khi chưa mở gì.
+          Trước đây nút đầu tô xanh đặc còn nút sau viền trắng, nên trông như một
+          cặp tab đang chọn cái thứ nhất — trong khi chẳng có gì đang được chọn
+          cả: cả hai chỉ mở hai biểu mẫu khác nhau. Người dùng đọc màu đặc thành
+          "đây là chế độ đang bật" rồi ngần ngại bấm cái kia.
+
+          Xanh đặc để dành cho lúc biểu mẫu tương ứng ĐANG mở, tức lúc màu ấy nói
+          đúng một điều có thật. */}
       <div className="mt-3 flex flex-wrap gap-2">
-        <button
-          className="rounded-md px-3 py-2 text-xs font-semibold text-white"
+        <LoanFormButton
+          active={borrowFormOpen}
           onClick={() => {
             setError(null);
             setBorrowFormOpen(true);
           }}
-          style={{ background: "var(--color-accent)" }}
-          type="button"
         >
           Gửi yêu cầu mượn xã khác
-        </button>
-        <button
-          className="rounded-md border px-3 py-2 text-xs font-semibold"
+        </LoanFormButton>
+        <LoanFormButton
+          active={manualFormOpen}
           onClick={() => {
             setError(null);
             setManualFormOpen(true);
           }}
-          type="button"
         >
           Ghi tay khoản đã thoả thuận qua điện thoại
-        </button>
+        </LoanFormButton>
       </div>
 
       <FormDialog

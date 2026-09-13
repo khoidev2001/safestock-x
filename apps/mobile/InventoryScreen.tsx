@@ -1,4 +1,5 @@
 import { useNetInfo } from "@react-native-community/netinfo";
+import { ErrorLine } from "./error-banner";
 import {
   CameraView as ExpoCameraView,
   useCameraPermissions,
@@ -370,7 +371,7 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
         <Text style={local.chooserHint}>
           Mọi số liệu, phiếu mượn và thao tác sau đó chỉ áp dụng cho kho đã chọn.
         </Text>
-        {error ? <Text style={local.error}>{error}</Text> : null}
+        <ErrorLine error={error} />
 
         <TextInput
           accessibilityLabel="Tìm kho theo tên"
@@ -496,7 +497,7 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
           <Text style={local.offlineText}>Mọi thao tác nhập/xuất/chuyển/hoàn đều đã khóa.</Text>
         </View>
       ) : null}
-      {error ? <Text style={local.error}>{error}</Text> : null}
+      <ErrorLine error={error} />
       {success ? <Text style={local.success}>{success}</Text> : null}
 
       <View style={local.segment}>
@@ -1064,7 +1065,7 @@ function BatchActionModal({
             placeholder="Mô tả nguồn, tình trạng hoặc lý do"
             placeholderTextColor={c.muted}
           />
-          {error ? <Text style={local.error}>{error}</Text> : null}
+          <ErrorLine error={error} />
           <View style={local.modalButtons}>
             <Pressable disabled={busy} onPress={onClose} style={local.secondary}>
               <Text style={local.secondaryText}>Hủy</Text>
@@ -1135,7 +1136,7 @@ function ReturnLoanModal({
           <ReturnField label="Tốt / sử dụng được" value={ok} onChange={setOk} />
           <ReturnField label="Hỏng / cần kiểm tra" value={damaged} onChange={setDamaged} />
           <ReturnField label="Mất" value={lost} onChange={setLost} />
-          {error ? <Text style={local.error}>{error}</Text> : null}
+          <ErrorLine error={error} />
           <View style={local.modalButtons}>
             <Pressable disabled={busy} onPress={onClose} style={local.secondary}>
               <Text style={local.secondaryText}>Hủy</Text>
@@ -1315,7 +1316,7 @@ function ReceiveBatchModal({
           />
           <MobileTextField label="Ghi chú" onChange={setNote} value={note} />
 
-          {error ? <Text style={local.error}>{error}</Text> : null}
+          <ErrorLine error={error} />
           <View style={local.modalButtons}>
             <Pressable disabled={busy} onPress={onClose} style={local.secondary}>
               <Text style={local.secondaryText}>Hủy</Text>
@@ -1453,7 +1454,7 @@ function BulkExportModal({
               placeholder="Ghi chú xuất khẩn cấp"
               placeholderTextColor={c.muted}
             />
-            {error ? <Text style={local.error}>{error}</Text> : null}
+            <ErrorLine error={error} />
             <View style={local.modalButtons}>
               <Pressable disabled={busy} onPress={onClose} style={local.secondary}>
                 <Text style={local.secondaryText}>Hủy</Text>

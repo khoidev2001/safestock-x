@@ -220,6 +220,49 @@ export function warehousePickupStates(
 }
 
 /**
+ * Câu trạng thái cho KHO đang đăng nhập, khi phần của kho mình đã xong nhưng
+ * nhiệm vụ vẫn còn chờ. Trả `null` nghĩa là dùng nhãn trạng thái chung.
+ *
+ * VÌ SAO CẦN: trạng thái nhiệm vụ chỉ rời `PENDING_WAREHOUSE` khi kho CUỐI CÙNG
+ * xuất xong. Kho thôn soạn hàng từ sáng, đội đã tới ký nhận và chở đi rồi, mà
+ * người trực kho mở nhiệm vụ ra vẫn đọc "Chờ kho chuẩn bị" — họ hiểu thành máy
+ * chưa ghi nhận cái mình vừa làm, rồi bấm lại, rồi gọi lên xã hỏi.
+ *
+ * KHÔNG viết "Kho đã chuẩn bị xong" trống không: câu đó nói về CẢ nhiệm vụ, mà
+ * lúc này nó sai — vẫn còn kho khác chưa đụng tới. Nói rõ hai vế, và gọi tên kho
+ * còn thiếu, vì việc tiếp theo của người đọc là nhấc máy gọi đúng kho đó.
+ *
+ * Từ ba kho trở lên thì đếm thay vì liệt kê: một dòng badge không chứa nổi ba
+ * cái tên tiếng Việt đầy đủ, mà cắt ngắn thì lại không gọi được ai.
+ */
+export function ownWarehouseWaitingLabel(
+  missionStatus: string,
+  assignedWarehouseId: string | null | undefined,
+  pickupStates: WarehousePickupState[],
+): string | null {
+  // Chỉ đúng ở đúng một trạng thái. Các trạng thái khác đã tự nói đúng sự thật.
+  if (missionStatus !== "PENDING_WAREHOUSE") return null;
+  // Tài khoản không gắn kho (điều phối xã) nhìn cả nhiệm vụ — "kho mình" vô nghĩa.
+  if (!assignedWarehouseId) return null;
+
+  const mine = pickupStates.find((state) => state.warehouseId === assignedWarehouseId);
+  // Phần của mình chưa xuất xong thì "Chờ kho chuẩn bị" đang nói đúng về mình.
+  if (!mine || !mine.ready) return null;
+
+  const waiting = pickupStates.filter(
+    (state) => state.warehouseId !== assignedWarehouseId && !state.ready,
+  );
+  // Mọi kho đã xong: máy chủ sắp chuyển sang READY, đừng chen một câu tạm vào.
+  if (waiting.length === 0) return null;
+
+  const others =
+    waiting.length <= 2
+      ? waiting.map((state) => state.name).join(", ")
+      : `${waiting.length} kho khác`;
+  return `Kho mình đã chuẩn bị xong · còn chờ ${others}`;
+}
+
+/**
  * Chặng công việc của một nhiệm vụ, chung cho cả hai bên nhìn vào nó.
  *
  * Một chuỗi việc, hai người theo dõi: kho soạn hàng rồi giao tay, đội cứu hộ

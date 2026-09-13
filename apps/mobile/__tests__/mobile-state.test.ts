@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { foldVietnamese } from "../vietnamese-text";
+import {
+  ERROR_BANNER_VISIBLE_MS,
+  isBannerExpired,
+  nextErrorBanner,
+} from "../error-banner-state";
 import { MAX_RECORDING_MS, selectRecordingBackend } from "../audio-platform-state";
 import { parseOfflineEnvelope, serializeOfflineEnvelope } from "../offline-cache-state";
 import {
@@ -20,6 +25,7 @@ import {
   filterMissionsByNo,
   missionPickupStage,
   ownWarehouseStage,
+  ownWarehouseWaitingLabel,
   warehousePickupStates,
   missionStageForViewer,
   missionStageLabel,
@@ -1034,4 +1040,108 @@ test("chuỗi không dấu và mã vật tư giữ nguyên, chỉ hạ chữ th�
   assert.equal(foldVietnamese("WATER-01"), "water-01");
   assert.equal(foldVietnamese("CANVAS-01-LONG-CHAU"), "canvas-01-long-chau");
   assert.equal(foldVietnamese(""), "");
+});
+
+/*
+  Dải báo lỗi trượt lên từ đáy.
+
+  Ba luật đáng khoá, vì cả ba đều sinh ra từ chuyện thật ngoài hiện trường: mất
+  sóng thì mọi lời gọi hỏng gần như cùng lúc.
+*/
+test("lỗi mới thay thế lỗi đang hiện, không xếp chồng", () => {
+  const dau = nextErrorBanner(null, "Mất kết nối", 1000);
+  const sau = nextErrorBanner(dau, "Hết phiên đăng nhập", 2000);
+  assert.equal(sau?.message, "Hết phiên đăng nhập");
+  assert.notEqual(sau?.key, dau?.key);
+});
+
+test("cùng một câu lặp lại thì GIỮ NGUYÊN dải, không làm mới bộ đếm", () => {
+  /*
+    Lỗi làm mới nền lặp mỗi 15 giây. Sinh dải mới mỗi lần là bộ đếm 6 giây không
+    bao giờ chạy hết, và dải đỏ nằm lại vĩnh viễn trên màn hình.
+  */
+  const dau = nextErrorBanner(null, "Mất kết nối", 1000);
+  const lai = nextErrorBanner(dau, "Mất kết nối", 9999);
+  assert.equal(lai, dau);
+});
+
+test("chuỗi rỗng không làm hiện dải trống", () => {
+  assert.equal(nextErrorBanner(null, "", 1000), null);
+  assert.equal(nextErrorBanner(null, "   ", 1000), null);
+  const dang = nextErrorBanner(null, "Mất kết nối", 1000);
+  assert.equal(nextErrorBanner(dang, "", 2000), dang);
+});
+
+test("dải tắt sau đúng thời gian đã định", () => {
+  const dai = nextErrorBanner(null, "Mất kết nối", 1000);
+  assert.ok(dai);
+  assert.equal(isBannerExpired(dai, 1000, 1000 + ERROR_BANNER_VISIBLE_MS - 1), false);
+  assert.equal(isBannerExpired(dai, 1000, 1000 + ERROR_BANNER_VISIBLE_MS), true);
+});
+
+
+test("kho xong phần mình thì không còn đọc 'Chờ kho chuẩn bị' nữa", () => {
+  /*
+    Người trực kho thôn đã xuất đủ và đội đã ký nhận, nhưng kho tổng chưa đụng
+    tới nên trạng thái nhiệm vụ vẫn là PENDING_WAREHOUSE. Nhãn chung nói đúng về
+    NHIỆM VỤ nhưng sai về NGƯỜI ĐANG ĐỌC, và họ hiểu thành máy chưa ghi nhận.
+  */
+  const states = warehousePickupStates([
+    { warehouseId: "kho-thon", status: "PICKED_UP", warehouse: { name: "Kho thôn Long Châu" } },
+    { warehouseId: "kho-tong", status: "ACCEPTED", warehouse: { name: "Kho xã Đồng Xuân" } },
+  ]);
+  assert.equal(
+    ownWarehouseWaitingLabel("PENDING_WAREHOUSE", "kho-thon", states),
+    "Kho mình đã chuẩn bị xong · còn chờ Kho xã Đồng Xuân",
+  );
+  // Kho tổng — chính kho còn nợ — vẫn phải đọc nhãn chung.
+  assert.equal(ownWarehouseWaitingLabel("PENDING_WAREHOUSE", "kho-tong", states), null);
+});
+
+test("kho CHƯA xong phần mình thì tuyệt đối không được đọc 'Kho mình đã chuẩn bị xong'", () => {
+  /*
+    Ca phân biệt: BA kho, kho đang đăng nhập chưa xuất xong, và một kho khác cũng
+    chưa. Bỏ điều kiện "phần của mình đã xong" thì hàm vẫn tìm thấy kho khác còn
+    thiếu và vẫn dựng ra câu — tức là báo cho người trực rằng họ đã làm xong một
+    việc họ chưa hề làm, rồi họ bỏ đi.
+  */
+  const states = warehousePickupStates([
+    { warehouseId: "toi", status: "ACCEPTED", warehouse: { name: "Kho thôn Long Châu" } },
+    { warehouseId: "kho-khac", status: "ACCEPTED", warehouse: { name: "Kho xã Đồng Xuân" } },
+    { warehouseId: "xong-roi", status: "PREPARED", warehouse: { name: "Kho thôn Tân An" } },
+  ]);
+  assert.equal(ownWarehouseWaitingLabel("PENDING_WAREHOUSE", "toi", states), null);
+});
+
+test("từ ba kho còn thiếu trở lên thì đếm, không liệt kê tên", () => {
+  // Một dòng badge không chứa nổi ba tên tiếng Việt đầy đủ; cắt ngắn thì lại
+  // không gọi được ai, nên thà nói con số.
+  const states = warehousePickupStates([
+    { warehouseId: "a", status: "PICKED_UP", warehouse: { name: "Kho thôn Tân An" } },
+    { warehouseId: "b", status: "ACCEPTED", warehouse: { name: "Kho thôn Long Bình" } },
+    { warehouseId: "c", status: "ACCEPTED", warehouse: { name: "Kho thôn Long Châu" } },
+    { warehouseId: "d", status: "ACCEPTED", warehouse: { name: "Kho thôn Phú Sơn" } },
+  ]);
+  assert.equal(
+    ownWarehouseWaitingLabel("PENDING_WAREHOUSE", "a", states),
+    "Kho mình đã chuẩn bị xong · còn chờ 3 kho khác",
+  );
+});
+
+test("không chen câu tạm khi mọi kho đã xong, hay khi tài khoản không gắn kho", () => {
+  const xong = warehousePickupStates([
+    { warehouseId: "a", status: "PREPARED", warehouse: { name: "Kho thôn Tân An" } },
+    { warehouseId: "b", status: "PICKED_UP", warehouse: { name: "Kho xã Đồng Xuân" } },
+  ]);
+  // Mọi kho xong: máy chủ sắp chuyển sang READY, để nhãn chung nói.
+  assert.equal(ownWarehouseWaitingLabel("PENDING_WAREHOUSE", "a", xong), null);
+  // Điều phối xã nhìn cả nhiệm vụ — "kho mình" vô nghĩa.
+  assert.equal(ownWarehouseWaitingLabel("PENDING_WAREHOUSE", null, xong), null);
+  // Trạng thái khác đã tự nói đúng sự thật rồi.
+  const dangCho = warehousePickupStates([
+    { warehouseId: "a", status: "PICKED_UP", warehouse: { name: "Kho thôn Tân An" } },
+    { warehouseId: "b", status: "ACCEPTED", warehouse: { name: "Kho xã Đồng Xuân" } },
+  ]);
+  assert.equal(ownWarehouseWaitingLabel("READY", "a", dangCho), null);
+  assert.equal(ownWarehouseWaitingLabel("COMPLETED", "a", dangCho), null);
 });

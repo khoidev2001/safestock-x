@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import { ApiError, BASE } from "@/lib/api";
 import { useAuth } from "@/lib/auth-store";
-import { getNotifications, markAllRead } from "@/lib/mission-api";
+import { getNotifications, markAllRead, markNotificationsRead } from "@/lib/mission-api";
 import {
   advanceInterCommuneLoan,
   getInterCommuneLoans,
@@ -76,13 +76,34 @@ export function NotificationBell({
   });
   const loanById = new Map((loanQuery.data ?? []).map((loan) => [loan.id, loan]));
 
-  async function toggle() {
-    const next = !open;
-    setOpen(next);
-    if (next && unread > 0) {
-      await markAllRead();
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
-    }
+  function toggle() {
+    setOpen(!open);
+  }
+
+  /**
+   * Đánh dấu đã đọc ĐÚNG tin vừa bấm, không đụng tới tin khác.
+   *
+   * Trước đây chỉ cần mở chuông là cả danh sách thành đã đọc. Với ba bốn tin thì
+   * không sao, nhưng khi chuông có ba mươi mốt dòng thì một cú liếc đã xoá sạch
+   * dấu của những dòng chưa ai đọc — và dòng quan trọng nhất lẫn vào đó, không
+   * còn cách nào tìm lại.
+   *
+   * Bỏ qua tin đã đọc rồi: bấm lại lần nữa không việc gì phải gọi mạng.
+   */
+  async function markOneRead(notification: { id: string; read: boolean }) {
+    if (notification.read) return;
+    await markNotificationsRead([notification.id]);
+    queryClient.invalidateQueries({ queryKey: ["notifications"] });
+  }
+
+  /**
+   * Vẫn giữ đường xoá sạch dấu, vì bỏ đánh-dấu-hết-khi-mở mà không bù lại thì
+   * người trực phải bấm ba mươi mốt lần mới hết chấm đỏ.
+   */
+  async function markEverythingRead() {
+    if (unread === 0) return;
+    await markAllRead();
+    queryClient.invalidateQueries({ queryKey: ["notifications"] });
   }
 
   return (
@@ -114,7 +135,18 @@ export function NotificationBell({
               (`isolate` trong incident-map), không phải ở đây. */}
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
           <div className="absolute right-0 z-30 mt-2 w-80 overflow-hidden rounded-md border bg-[var(--surface)] shadow-2xl">
-            <div className="border-b px-4 py-2.5 text-sm font-semibold">Thông báo</div>
+            <div className="flex items-center justify-between gap-2 border-b px-4 py-2.5">
+              <span className="text-sm font-semibold">Thông báo</span>
+              {unread > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => void markEverythingRead()}
+                  className="text-[11px] font-semibold text-[var(--color-accent)] hover:underline"
+                >
+                  Đánh dấu tất cả đã đọc
+                </button>
+              ) : null}
+            </div>
             {/* Cao tới 800px để đọc được nhiều thông báo trong một lượt mở, nhưng
                 không vượt quá màn hình: hộp thả xuống từ chuông sát mép trên, nên
                 trên laptop cao 768px thì 800px cứng làm phần cuối danh sách rơi ra
@@ -127,19 +159,29 @@ export function NotificationBell({
               ) : (
                 items.map((n) =>
                   n.loanId && canManageLoans ? (
-                    <LoanNotificationCard
+                    <div
                       key={n.id}
-                      notification={n}
-                      loan={loanById.get(n.loanId)}
-                      loading={loanQuery.isPending}
-                    />
+                      onClick={() => void markOneRead(n)}
+                      className={unreadRowClass(n.read)}
+                    >
+                      <UnreadDot read={n.read} />
+                      <LoanNotificationCard
+                        notification={n}
+                        loan={loanById.get(n.loanId)}
+                        loading={loanQuery.isPending}
+                      />
+                    </div>
                   ) : n.missionId ? (
                     <button
                       key={n.id}
                       type="button"
-                      onClick={() => openMission(n.missionId as string, n.fieldUpdateId)}
-                      className="block w-full border-b px-4 py-3 text-left transition last:border-0 hover:bg-[var(--surface-2)]"
+                      onClick={() => {
+                        void markOneRead(n);
+                        openMission(n.missionId as string, n.fieldUpdateId);
+                      }}
+                      className={`block w-full border-b px-4 py-3 text-left transition last:border-0 hover:bg-[var(--surface-2)] ${unreadRowClass(n.read)}`}
                     >
+                      <UnreadDot read={n.read} />
                       {/* Số hiệu trước tiêu đề: trong chuông có cả chục dòng của
                           nhiều nhiệm vụ khác nhau, không có số thì phải mở từng
                           dòng ra mới biết dòng nào thuộc việc mình đang theo. */}
@@ -163,7 +205,17 @@ export function NotificationBell({
                       </p>
                     </button>
                   ) : (
-                    <div key={n.id} className="border-b px-4 py-3 last:border-0">
+                    <div
+                      key={n.id}
+                      role={n.read ? undefined : "button"}
+                      tabIndex={n.read ? undefined : 0}
+                      onClick={() => void markOneRead(n)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") void markOneRead(n);
+                      }}
+                      className={`border-b px-4 py-3 last:border-0 ${unreadRowClass(n.read)}`}
+                    >
+                      <UnreadDot read={n.read} />
                       <p className="text-sm font-medium">{n.title}</p>
                       {/* body có thể dài khi kèm giải thích AI → gói 3 dòng, tránh tràn dropdown. */}
                       <p className="mt-0.5 line-clamp-3 text-xs text-[var(--text-muted)]">
@@ -178,6 +230,28 @@ export function NotificationBell({
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Nền nhạt cho dòng CHƯA đọc.
+ *
+ * Bỏ đánh-dấu-hết-khi-mở rồi thì phải nhìn ra dòng nào chưa đọc, không thì cả
+ * danh sách trông như nhau và con số ở chuông chẳng chỉ vào đâu cả.
+ */
+function unreadRowClass(read: boolean): string {
+  return read ? "" : "bg-[var(--surface-2)]";
+}
+
+/** Chấm đỏ nhỏ đầu dòng chưa đọc — dấu thứ hai cho ai phân biệt màu nền kém. */
+function UnreadDot({ read }: { read: boolean }) {
+  if (read) return null;
+  return (
+    <span
+      aria-label="Chưa đọc"
+      className="float-right mt-1 h-2 w-2 rounded-full"
+      style={{ background: "var(--color-critical)" }}
+    />
   );
 }
 
