@@ -1,5 +1,6 @@
 import { apiFetch } from "./api";
 import type { SimulatorAlarmPolicy } from "./simulator-queue";
+import type { SuppressedIncident } from "./suppressed-incidents";
 
 export interface Warehouse {
   id: string;
@@ -59,6 +60,8 @@ export interface SnapshotResponse {
     policyVersion: string;
   };
   incidents: { id: string; title: string }[];
+  /** Máy chủ cũ không trả trường này. */
+  suppressed?: SuppressedIncident[];
 }
 
 export interface AlarmAcknowledgementBody {

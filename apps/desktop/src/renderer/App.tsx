@@ -34,6 +34,7 @@ import {
 import { useAlarmBell } from "./lib/use-alarm-bell";
 import { alarmTitleFor, selectAlarmingIncidents } from "./lib/incident-alarm";
 import { useIncidentStream } from "./lib/use-incident-stream";
+import { describeSuppressedIncidents } from "./lib/suppressed-incidents";
 
 interface LogLine {
   id: number;
@@ -170,6 +171,8 @@ export function App() {
                   : `Đã gửi xác nhận ${operation.readings.length} thông số về máy chủ.`,
                 "sensor",
               );
+              const suppressedMessage = describeSuppressedIncidents(response.suppressed);
+              if (suppressedMessage) pushLog(suppressedMessage, "alert");
             } else {
               const response = await acknowledgeAlarm({
                 warehouseId: operation.warehouseId,
