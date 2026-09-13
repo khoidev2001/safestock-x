@@ -396,6 +396,15 @@ export class SupplyReturnItemDto {
   @Min(0)
   @Max(1_000_000)
   returnedQuantity!: number;
+
+  /**
+   * Lý do trả THIẾU (mất, hỏng không mang về được…). Có lý do thì dòng trả thiếu
+   * vẫn tính là đã hoàn trả; về đủ thì máy chủ bỏ qua trường này.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
 }
 
 /**

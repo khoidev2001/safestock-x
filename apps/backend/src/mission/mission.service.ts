@@ -182,13 +182,80 @@ export function missionOrderBy(sort: MissionListSort): Prisma.MissionOrderByWith
 }
 
 /**
+ * Tiến độ hoàn trả của MỘT kho trong nhiệm vụ.
+ *
+ * Nhiệm vụ lấy hàng từ nhiều kho thì mỗi kho tự đếm lại phần mình đã giao ra, nên
+ * "đã hoàn trả" là câu trả lời theo từng kho chứ không phải một cờ chung — chỉ
+ * trạng thái RETURNED của nhiệm vụ mới là "mọi kho đã nhận lại đủ".
+ */
+export interface SupplyReturnProgress {
+  warehouseId: string;
+  warehouseName: string;
+  /** Số dòng vật tư tái sử dụng kho này đã giao cho đội. */
+  returnableLineCount: number;
+  /** Số dòng còn chưa về đủ (chưa đếm cũng tính là chưa về). */
+  outstandingLineCount: number;
+  /** Kho này đã nhận lại đủ toàn bộ phần mình giao ra. */
+  returned: boolean;
+}
+
+/**
+ * Phần vật tư của MỘT dòng còn phải đòi về — 0 nghĩa là dòng đó đã xong.
+ *
+ * Xong khi về đủ, HOẶC khi kho đã đếm và ghi lý do cho phần thiếu (mất, hỏng
+ * không mang về được…). Phần thiếu có lý do là khoản đã được giải trình, không
+ * còn là hàng "đang ở ngoài": bắt nhiệm vụ treo mãi chờ một cái áo phao đã trôi
+ * theo lũ thì nó không bao giờ khép sổ được.
+ */
+export function returnOutstandingQuantity(row: {
+  pickedUpQuantity: number | null;
+  returnedQuantity: number | null;
+  returnNote?: string | null;
+}): number {
+  const shortfall = Math.max(0, (row.pickedUpQuantity ?? 0) - (row.returnedQuantity ?? 0));
+  if (shortfall > 0 && row.returnedQuantity != null && row.returnNote?.trim()) return 0;
+  return shortfall;
+}
+
+/** Gom các dòng tái sử dụng đã giao ra thành tiến độ hoàn trả theo từng kho. */
+export function supplyReturnProgressByWarehouse(
+  rows: {
+    warehouseId: string;
+    pickedUpQuantity: number | null;
+    returnedQuantity: number | null;
+    returnNote?: string | null;
+    warehouse?: { id: string; name: string } | null;
+  }[],
+): SupplyReturnProgress[] {
+  const byWarehouse = new Map<string, SupplyReturnProgress>();
+  for (const row of rows) {
+    const entry = byWarehouse.get(row.warehouseId) ?? {
+      warehouseId: row.warehouseId,
+      warehouseName: row.warehouse?.name ?? row.warehouseId,
+      returnableLineCount: 0,
+      outstandingLineCount: 0,
+      returned: true,
+    };
+    entry.returnableLineCount += 1;
+    if (returnOutstandingQuantity(row) > 0) {
+      entry.outstandingLineCount += 1;
+      entry.returned = false;
+    }
+    byWarehouse.set(row.warehouseId, entry);
+  }
+  return [...byWarehouse.values()];
+}
+
+/**
  * Kho khai số vật tư tái sử dụng đã nhận lại.
  *
- * Bỏ trống `items` nghĩa là "về đủ hết" — đường một nút bấm, giữ nguyên như trước.
- * Có `items` là kho đếm từng dòng, và dòng nào còn thiếu thì nhiệm vụ chưa khép.
+ * Bỏ trống `items` nghĩa là "phần của kho mình về đủ hết" — đường một nút bấm.
+ * Có `items` là kho đếm từng dòng; dòng thiếu mà không ghi lý do thì kho đó chưa
+ * xong phần mình.
  */
 export interface SupplyReturnInput {
-  items?: { sku: string; returnedQuantity: number }[];
+  /** `note`: lý do trả thiếu — chỉ có nghĩa khi số trả ít hơn số đã giao ra. */
+  items?: { sku: string; returnedQuantity: number; note?: string | null }[];
 }
 
 @Injectable()
@@ -675,29 +742,60 @@ export class MissionService {
    * đi" và cùng phép lọc hàng tái sử dụng — để cờ này với danh sách đếm lại
    * không bao giờ nói hai điều khác nhau.
    *
-   * Phạm vi TOÀN nhiệm vụ, không theo kho người hỏi: một lượt xác nhận hoàn trả
-   * đóng cả nhiệm vụ, nên chừng nào còn một kho có hàng ngoài kia thì nhiệm vụ
-   * vẫn cần được trả.
+   * Phạm vi TOÀN nhiệm vụ, không theo kho người hỏi: chừng nào còn một kho có
+   * hàng ngoài kia thì nhiệm vụ vẫn cần được trả. Kèm theo là tiến độ theo TỪNG
+   * kho (`supplyReturnProgress`), vì mỗi kho tự ký phần mình đã giao ra.
    *
    * Nhận cả MẢNG chứ không phải từng nhiệm vụ một: danh sách trả về tới 100 dòng,
    * mà tra danh mục từng dòng là 100 lượt hỏi cơ sở dữ liệu cho một câu trả lời
    * gộp lại được thành một.
    */
   private async withReturnableSupplyFlags<
-    T extends { warehouseRequests?: { sku: string; pickedUpQuantity: number | null }[] | null },
-  >(missions: T[]): Promise<(T & { hasReturnableSupplies: boolean })[]> {
+    T extends {
+      warehouseRequests?:
+        | {
+            sku: string;
+            warehouseId: string;
+            pickedUpQuantity: number | null;
+            returnedQuantity: number | null;
+            returnNote?: string | null;
+            warehouse?: { id: string; name: string } | null;
+          }[]
+        | null;
+    },
+  >(
+    missions: T[],
+  ): Promise<
+    (T & { hasReturnableSupplies: boolean; supplyReturnProgress: SupplyReturnProgress[] })[]
+  > {
     // Chưa ký nhận mang đi thì chưa có gì ở ngoài kho để mà đòi về. Không có phiếu
     // nào cũng vậy — nhiệm vụ cũ từ trước khi tách phiếu theo vật tư không có gì
     // để đòi, và ngã ở đây thì cả lượt mở nhiệm vụ hỏng theo.
     const handedOver = (mission: T) =>
       (mission.warehouseRequests ?? []).filter((request) => (request.pickedUpQuantity ?? 0) > 0);
     const reusable = await this.reusableSkus(
-      missions.flatMap((mission) => handedOver(mission).map((request) => request.sku)),
+      missions.flatMap((mission) =>
+        (mission.warehouseRequests ?? []).map((request) => request.sku),
+      ),
     );
-    return missions.map((mission) => ({
-      ...mission,
-      hasReturnableSupplies: handedOver(mission).some((request) => reusable.has(request.sku)),
-    }));
+    return missions.map((mission) => {
+      const returnable = handedOver(mission).filter((request) => reusable.has(request.sku));
+      return {
+        ...mission,
+        // Cờ theo TỪNG dòng: giao diện bày trạng thái hoàn trả cạnh từng vật tư,
+        // và mì tôm đã phát thì không được ghi là "chưa hoàn trả".
+        ...(mission.warehouseRequests
+          ? {
+              warehouseRequests: mission.warehouseRequests.map((request) => ({
+                ...request,
+                reusable: reusable.has(request.sku),
+              })),
+            }
+          : {}),
+        hasReturnableSupplies: returnable.length > 0,
+        supplyReturnProgress: supplyReturnProgressByWarehouse(returnable),
+      };
+    });
   }
 
   /**
@@ -1698,6 +1796,7 @@ export class MissionService {
         unit: true,
         pickedUpQuantity: true,
         returnedQuantity: true,
+        returnNote: true,
         warehouse: { select: { id: true, name: true } },
       },
     });
@@ -1709,7 +1808,6 @@ export class MissionService {
         .filter((request) => reusableSkus.has(request.sku))
         .map((request) => {
           const handedOver = request.pickedUpQuantity ?? 0;
-          const returned = request.returnedQuantity ?? 0;
           return {
             sku: request.sku,
             itemName: request.itemName,
@@ -1719,7 +1817,9 @@ export class MissionService {
             handedOverQuantity: handedOver,
             /** `null` = kho chưa đếm dòng này, khác hẳn "đã đếm và về 0". */
             returnedQuantity: request.returnedQuantity,
-            outstandingQuantity: Math.max(0, handedOver - returned),
+            /** Lý do trả thiếu đã ghi; có lý do thì dòng này tính là đã hoàn trả. */
+            returnNote: request.returnNote,
+            outstandingQuantity: returnOutstandingQuantity(request),
           };
         }),
     };
@@ -1756,9 +1856,11 @@ export class MissionService {
    *
    * Hai đường vào, và chúng nói hai điều khác nhau:
    *
-   *   - KHÔNG truyền `items`: "về đủ hết". Mọi dòng tái sử dụng của nhiệm vụ được
-   *     ghi là đã về đủ và nhiệm vụ khép sổ — giữ nguyên hành vi cũ, gồm cả việc
-   *     một kho ký thay được cho cả nhiệm vụ (hàng thừa thường dồn về một chỗ).
+   *   - KHÔNG truyền `items`: "phần của kho tôi đã về đủ". Chỉ những dòng tái sử
+   *     dụng DO KHO NGƯỜI BẤM giao ra được ghi là đã về đủ. Trước đây đường này ghi
+   *     đủ cho mọi dòng của cả nhiệm vụ, nên một nhiệm vụ lấy hàng từ sáu kho chỉ
+   *     cần một kho bấm là cả sáu kho bị ghi "đã nhận lại" và nhiệm vụ khép sổ —
+   *     trong khi năm kho kia chưa hề đếm lại được cái áo phao nào.
    *   - CÓ `items`: kho đếm từng dòng. Số đếm được ghi lại NGAY, kể cả khi còn
    *     thiếu — thiếu mà không ghi thì con số đó chỉ nằm trong đầu người trực, và
    *     tới chuyến sau không ai còn nhớ đội đang nợ bao nhiêu cái loa. Nhiệm vụ
@@ -1790,10 +1892,10 @@ export class MissionService {
       tham gia phương án đều bị chặn, kể cả kho tổng vừa xuất phần lớn số hàng.
 
       Điều kiện đúng là kho của người bấm CÓ THAM GIA nhiệm vụ này: hoặc là kho
-      nhận báo cáo, hoặc có phiếu vật tư trong phương án. Một nhiệm vụ huy động
-      nhiều kho, và hàng thừa thường dồn về một chỗ chứ không chia lại đúng như
-      lúc xuất — bắt từng kho ký riêng thì nhiệm vụ treo mãi ở kho không có gì để
-      nhận về.
+      nhận báo cáo, hoặc có phiếu vật tư trong phương án. Mỗi kho chỉ ký được phần
+      CHÍNH MÌNH đã giao ra; nhiệm vụ khép sổ khi mọi kho có hàng tái sử dụng ở
+      ngoài đều đã ký. Kho chỉ xuất đồ tiêu hao không có dòng nào phải trả, nên
+      không chặn nhiệm vụ.
     */
     if (scopeWarehouseId && scopeWarehouseId !== mission.warehouseId) {
       const participates = await this.prisma.missionWarehouseRequest.count({
@@ -1804,7 +1906,7 @@ export class MissionService {
       }
     }
     this.guardTransition(mission.status, MissionStatus.RETURNED);
-    await this.recordReturnedQuantities(id, scopeWarehouseId, input);
+    const ownWasOutstanding = await this.recordReturnedQuantities(id, scopeWarehouseId, input);
 
     /*
       Còn dòng nào chưa về đủ thì nhiệm vụ CHƯA khép sổ.
@@ -1814,6 +1916,12 @@ export class MissionService {
     */
     const outstanding = await this.outstandingReturns(id);
     if (outstanding.length > 0) {
+      const ownStillOutstanding = outstanding.some(
+        (item) => !scopeWarehouseId || item.warehouseId === scopeWarehouseId,
+      );
+      if (ownWasOutstanding && !ownStillOutstanding) {
+        await this.notifyPartialSupplyReturn(mission, scopeWarehouseId, outstanding);
+      }
       return {
         ...(await this.prisma.mission.findUniqueOrThrow({ where: { id } })),
         outstandingReturns: outstanding,
@@ -1853,14 +1961,15 @@ export class MissionService {
   /**
    * Ghi số đã nhận về cho từng dòng vật tư tái sử dụng.
    *
-   * Không truyền `items` nghĩa là "về đủ hết": mọi dòng tái sử dụng của NHIỆM VỤ
-   * (không chỉ của kho đang bấm) được ghi bằng đúng số đã giao ra.
+   * Không truyền `items` nghĩa là "phần của kho tôi về đủ hết": mọi dòng tái sử
+   * dụng CỦA KHO ĐANG BẤM được ghi bằng đúng số đã giao ra. Dòng của kho khác
+   * không bao giờ được ghi hộ — kho A không biết kho B đã nhận lại hàng chưa.
    */
   private async recordReturnedQuantities(
     missionId: string,
     scopeWarehouseId: string | null | undefined,
     input: SupplyReturnInput,
-  ) {
+  ): Promise<boolean> {
     const requests = await this.prisma.missionWarehouseRequest.findMany({
       where: { missionId, pickedUpQuantity: { gt: 0 } },
       select: {
@@ -1869,11 +1978,12 @@ export class MissionService {
         itemName: true,
         warehouseId: true,
         pickedUpQuantity: true,
+        returnedQuantity: true,
+        returnNote: true,
       },
     });
     const reusable = await this.reusableSkus(requests.map((request) => request.sku));
     const returnableRows = requests.filter((request) => reusable.has(request.sku));
-    if (returnableRows.length === 0) return;
     const now = new Date();
 
     /*
@@ -1893,17 +2003,23 @@ export class MissionService {
     const mine = returnableRows.filter(
       (row) => !scopeWarehouseId || row.warehouseId === scopeWarehouseId,
     );
+    /** Trước lượt ghi này, phần của kho đang bấm còn dòng nào chưa về đủ không. */
+    const ownWasOutstanding = mine.some((row) => returnOutstandingQuantity(row) > 0);
     if (!input.items) {
-      if (mine.length === 0) return;
+      if (mine.length === 0) return ownWasOutstanding;
       await this.prisma.$transaction(
         mine.map((row) =>
           this.prisma.missionWarehouseRequest.update({
             where: { id: row.id },
-            data: { returnedQuantity: row.pickedUpQuantity ?? 0, returnedAt: now },
+            data: {
+              returnedQuantity: row.pickedUpQuantity ?? 0,
+              returnNote: null,
+              returnedAt: now,
+            },
           }),
         ),
       );
-      return;
+      return ownWasOutstanding;
     }
 
     // Kho chỉ đếm được phần CHÍNH MÌNH đã giao ra; dòng của kho khác không phải
@@ -1927,12 +2043,68 @@ export class MissionService {
           `${row.itemName}: nhận về ${item.returnedQuantity} trong khi chỉ giao ra ${handedOver}. Kiểm tra lại số đếm.`,
         );
       }
+      // Lý do chỉ giữ khi thật sự trả thiếu: về đủ rồi mà còn dính câu "mất một
+      // chiếc" của lượt đếm trước là sổ nói hai điều ngược nhau.
+      const note = item.note?.trim() || null;
       return this.prisma.missionWarehouseRequest.update({
         where: { id: row.id },
-        data: { returnedQuantity: item.returnedQuantity, returnedAt: now },
+        data: {
+          returnedQuantity: item.returnedQuantity,
+          returnNote: item.returnedQuantity < handedOver ? note : null,
+          returnedAt: now,
+        },
       });
     });
     if (updates.length > 0) await this.prisma.$transaction(updates);
+    return ownWasOutstanding;
+  }
+
+  /**
+   * Một kho vừa nhận lại đủ phần mình, nhưng nhiệm vụ còn chờ kho khác.
+   *
+   * Phải có thông báo cho bước này: điện thoại của đội cứu hộ và của các kho còn
+   * lại chỉ tải lại màn nhiệm vụ khi có thông báo mới của chính nhiệm vụ đó. Im
+   * lặng thì họ vẫn thấy kho này "chưa hoàn trả" cho tới lúc tự thoát ra rồi vào
+   * lại. Kho vừa bấm không cần nghe lại việc của chính mình.
+   */
+  private async notifyPartialSupplyReturn(
+    mission: { id: string; missionNo: number | null; warehouseId: string },
+    scopeWarehouseId: string | null | undefined,
+    outstanding: { warehouseId: string; warehouseName: string }[],
+  ) {
+    const warehouse = scopeWarehouseId
+      ? await this.prisma.warehouse.findUnique({
+          where: { id: scopeWarehouseId },
+          select: { name: true },
+        })
+      : null;
+    const waitingOn = [...new Set(outstanding.map((item) => item.warehouseName))];
+    const notification = {
+      kind: NotificationKind.MISSION_SUPPLIES_RETURNED,
+      title: `${warehouse?.name ?? "Một kho"} đã nhận lại vật tư`,
+      body: `${missionLabel(mission.missionNo)}: còn chờ ${waitingOn.join(", ")} xác nhận hoàn trả vật tư.`,
+      missionId: mission.id,
+    };
+    for (const role of [UserRole.ADMIN, UserRole.RESCUE]) {
+      await this.notifications.create({ ...notification, recipientRole: role });
+    }
+    // Mọi kho tham gia, kể cả kho đã ký xong phần mình: màn của họ cũng đang bày
+    // tiến độ hoàn trả của cả nhiệm vụ.
+    const participants = await this.prisma.missionWarehouseRequest.findMany({
+      where: { missionId: mission.id },
+      select: { warehouseId: true },
+      distinct: ["warehouseId"],
+    });
+    const otherWarehouseIds = [
+      ...new Set(participants.map((participant) => participant.warehouseId)),
+    ].filter((warehouseId) => warehouseId !== scopeWarehouseId);
+    for (const warehouseId of otherWarehouseIds) {
+      await this.notifications.create({
+        ...notification,
+        recipientRole: UserRole.WAREHOUSE,
+        warehouseId,
+      });
+    }
   }
 
   /** Những dòng tái sử dụng của nhiệm vụ còn thiếu — rỗng nghĩa là khép sổ được. */
@@ -1945,6 +2117,7 @@ export class MissionService {
         unit: true,
         pickedUpQuantity: true,
         returnedQuantity: true,
+        returnNote: true,
         warehouse: { select: { id: true, name: true } },
       },
     });
@@ -1959,10 +2132,8 @@ export class MissionService {
         warehouseName: request.warehouse.name,
         handedOverQuantity: request.pickedUpQuantity ?? 0,
         returnedQuantity: request.returnedQuantity,
-        outstandingQuantity: Math.max(
-          0,
-          (request.pickedUpQuantity ?? 0) - (request.returnedQuantity ?? 0),
-        ),
+        returnNote: request.returnNote,
+        outstandingQuantity: returnOutstandingQuantity(request),
       }))
       .filter((item) => item.outstandingQuantity > 0);
   }

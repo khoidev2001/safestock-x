@@ -1,6 +1,10 @@
 import { BadRequestException } from "@nestjs/common";
 import { MissionStatus, UserRole } from "@prisma/client";
-import { MissionService } from "../mission.service";
+import {
+  MissionService,
+  returnOutstandingQuantity,
+  supplyReturnProgressByWarehouse,
+} from "../mission.service";
 
 /**
  * Kho đếm lại vật tư tái sử dụng khi đội cứu hộ mang đồ về.
@@ -146,6 +150,134 @@ describe("kho xác nhận hoàn trả vật tư", () => {
       data: expect.objectContaining({ returnedQuantity: 10 }),
     });
     expect(state.prisma.mission.updateMany).toHaveBeenCalled();
+  });
+
+  it("nhiệm vụ nhiều kho: một kho bấm 'đã hoàn trả đủ' chỉ ghi phần của kho đó", async () => {
+    // Lỗi cũ: kho A bấm một nút là mọi dòng của cả nhiệm vụ bị ghi đã về đủ, kho B
+    // chưa đếm gì cũng thành "đã nhận lại", và nhiệm vụ khép sổ.
+    const rowA = requestRow();
+    const rowB = requestRow({
+      id: "request-vest-b",
+      warehouseId: "warehouse-b",
+      pickedUpQuantity: 4,
+      warehouse: { id: "warehouse-b", name: "Kho thôn Phú Sơn" },
+    });
+    const state = makeService([rowA, rowB]);
+    state.missionWarehouseRequest.findMany
+      .mockResolvedValueOnce([rowA, rowB])
+      .mockResolvedValueOnce([{ ...rowA, returnedQuantity: 10 }, rowB]);
+
+    const result = await state.service.markReturnedByWarehouse(MISSION_ID, "user-1", "warehouse-a");
+
+    expect(state.missionWarehouseRequest.update).toHaveBeenCalledTimes(1);
+    expect(state.missionWarehouseRequest.update).toHaveBeenCalledWith({
+      where: { id: "request-vest" },
+      data: expect.objectContaining({ returnedQuantity: 10 }),
+    });
+    expect(state.prisma.mission.updateMany).not.toHaveBeenCalled();
+    expect(result.outstandingReturns).toEqual([
+      expect.objectContaining({ warehouseId: "warehouse-b", outstandingQuantity: 4 }),
+    ]);
+    // Chưa khép sổ nhưng vẫn phải báo: điện thoại của đội cứu hộ và kho còn lại
+    // chỉ tải lại màn nhiệm vụ khi có thông báo mới. Kho vừa bấm thì không nhận.
+    const recipients = state.notifications.create.mock.calls.map(
+      ([notification]: [{ recipientRole: string; warehouseId?: string }]) =>
+        `${notification.recipientRole}:${notification.warehouseId ?? ""}`,
+    );
+    expect(recipients).toEqual(["ADMIN:", "RESCUE:", "WAREHOUSE:warehouse-b"]);
+  });
+
+  it("kho bấm lại khi phần mình đã ghi đủ từ trước thì không báo lặp", async () => {
+    const rowA = requestRow({ returnedQuantity: 10 });
+    const rowB = requestRow({
+      id: "request-vest-b",
+      warehouseId: "warehouse-b",
+      pickedUpQuantity: 4,
+      warehouse: { id: "warehouse-b", name: "Kho thôn Phú Sơn" },
+    });
+    const state = makeService([rowA, rowB]);
+
+    await state.service.markReturnedByWarehouse(MISSION_ID, "user-1", "warehouse-a");
+
+    expect(state.notifications.create).not.toHaveBeenCalled();
+  });
+
+  it("tiến độ hoàn trả tách theo từng kho", () => {
+    expect(
+      supplyReturnProgressByWarehouse([
+        requestRow({ returnedQuantity: 10 }),
+        requestRow({
+          warehouseId: "warehouse-b",
+          pickedUpQuantity: 4,
+          returnedQuantity: 1,
+          warehouse: { id: "warehouse-b", name: "Kho thôn Phú Sơn" },
+        }),
+      ] as never),
+    ).toEqual([
+      expect.objectContaining({ warehouseId: "warehouse-a", returned: true }),
+      expect.objectContaining({
+        warehouseId: "warehouse-b",
+        warehouseName: "Kho thôn Phú Sơn",
+        outstandingLineCount: 1,
+        returned: false,
+      }),
+    ]);
+  });
+
+  it("trả thiếu KÈM LÝ DO thì tính là đã hoàn trả và khép sổ", async () => {
+    // Áo phao trôi theo lũ thì không bao giờ về đủ; có lý do giải trình thì phần
+    // thiếu không còn là hàng "đang ở ngoài" nữa.
+    const state = makeService([requestRow()]);
+    state.missionWarehouseRequest.findMany
+      .mockResolvedValueOnce([requestRow()])
+      .mockResolvedValueOnce([
+        requestRow({ returnedQuantity: 7, returnNote: "Mất 3 chiếc khi vượt lũ" }),
+      ]);
+
+    const result = await state.service.markReturnedByWarehouse(
+      MISSION_ID,
+      "user-1",
+      "warehouse-a",
+      { items: [{ sku: "VEST-ADULT", returnedQuantity: 7, note: "  Mất 3 chiếc khi vượt lũ " }] },
+    );
+
+    expect(state.missionWarehouseRequest.update).toHaveBeenCalledWith({
+      where: { id: "request-vest" },
+      data: expect.objectContaining({ returnedQuantity: 7, returnNote: "Mất 3 chiếc khi vượt lũ" }),
+    });
+    expect(result.outstandingReturns).toEqual([]);
+    expect(state.prisma.mission.updateMany).toHaveBeenCalled();
+  });
+
+  it("về đủ thì bỏ lý do trả thiếu cũ", async () => {
+    const state = makeService([requestRow({ returnedQuantity: 7, returnNote: "Mất 3 chiếc" })]);
+
+    await state.service.markReturnedByWarehouse(MISSION_ID, "user-1", "warehouse-a", {
+      items: [{ sku: "VEST-ADULT", returnedQuantity: 10, note: "Mất 3 chiếc" }],
+    });
+
+    expect(state.missionWarehouseRequest.update).toHaveBeenCalledWith({
+      where: { id: "request-vest" },
+      data: expect.objectContaining({ returnedQuantity: 10, returnNote: null }),
+    });
+  });
+
+  it("phần còn thiếu của một dòng: có lý do mới tính là xong", () => {
+    expect(returnOutstandingQuantity({ pickedUpQuantity: 10, returnedQuantity: 7 })).toBe(3);
+    expect(
+      returnOutstandingQuantity({ pickedUpQuantity: 10, returnedQuantity: 7, returnNote: "   " }),
+    ).toBe(3);
+    expect(
+      returnOutstandingQuantity({ pickedUpQuantity: 10, returnedQuantity: 7, returnNote: "Mất" }),
+    ).toBe(0);
+    // Chưa đếm (null) thì chưa có con số nào để giải trình.
+    expect(
+      returnOutstandingQuantity({
+        pickedUpQuantity: 10,
+        returnedQuantity: null,
+        returnNote: "Mất",
+      }),
+    ).toBe(10);
   });
 
   it("không nhận số trả lớn hơn số đã giao ra", async () => {

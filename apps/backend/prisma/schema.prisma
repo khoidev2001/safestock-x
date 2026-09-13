@@ -889,6 +889,10 @@ model MissionWarehouseRequest {
   /// số vẫn được ghi lại ngay để không ai phải nhớ trong đầu tới chuyến sau.
   returnedQuantity      Int?
   returnedAt            DateTime?
+  /// Lý do trả THIẾU — ví dụ "mất khi đang vượt lũ". Có lý do thì dòng này được
+  /// tính là đã hoàn trả dù số về ít hơn số giao ra: phần thiếu đã được giải
+  /// trình, không còn là hàng "đang ở ngoài" chờ đòi về.
+  returnNote            String?
   createdAt             DateTime                      @default(now())
   updatedAt             DateTime                      @updatedAt
 
