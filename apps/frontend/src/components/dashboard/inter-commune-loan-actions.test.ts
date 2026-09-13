@@ -7,7 +7,9 @@ import {
   loanActions,
   outstanding,
   peerDeliveryNotice,
+  sortByAttention,
   statusLabel,
+  waitingOnMe,
 } from "./inter-commune-loan-actions";
 
 const actionsFor = (d: "OUTGOING" | "INCOMING", s: Parameters<typeof loanActions>[1], m = false) =>
@@ -145,4 +147,77 @@ test("khoản cho mượn và khoản đã quyết đều không báo gì", () =
   assert.equal(peerDeliveryNotice(loanState({ direction: "OUTGOING" })), "none");
   assert.equal(peerDeliveryNotice(loanState({ status: "APPROVED" })), "none");
   assert.equal(peerDeliveryNotice(loanState({ status: "CANCELLED" })), "none");
+});
+
+/*
+  Thứ tự sổ mượn: việc của mình lên đầu.
+
+  Dựng lại đúng màn hình đã gặp: ba khoản "chờ bên kia quyết" không làm gì được,
+  và một khoản đã được đồng ý đang chờ mình bấm nhận hàng — khoản ấy từng bị đẩy
+  xuống cuối vì máy chủ gom theo trạng thái.
+*/
+const book = (over: Partial<Parameters<typeof waitingOnMe>[0] & { requestedAt: string }> = {}) => ({
+  direction: "INCOMING" as const,
+  status: "REQUESTED" as const,
+  recordedManually: false,
+  returnedQuantity: 0,
+  returnAcceptedQuantity: 0,
+  requestedAt: "2026-09-13T02:00:00.000Z",
+  ...over,
+});
+
+test("bên cho mượn phải quyết, bên đi mượn chỉ chờ — cùng một trạng thái REQUESTED", () => {
+  assert.equal(waitingOnMe(book({ direction: "OUTGOING" })), true);
+  assert.equal(waitingOnMe(book({ direction: "INCOMING" })), false);
+});
+
+test("đã đồng ý thì tới lượt bên đi mượn nhận hàng", () => {
+  assert.equal(waitingOnMe(book({ status: "APPROVED", direction: "INCOMING" })), true);
+  assert.equal(waitingOnMe(book({ status: "APPROVED", direction: "OUTGOING" })), false);
+});
+
+test("bên cho mượn chưa xác nhận cầm lại đủ thì vẫn là việc của mình, kể cả khi sổ ghi đã trả xong", () => {
+  const chuaNhanDu = book({
+    direction: "OUTGOING",
+    status: "RETURNED",
+    returnedQuantity: 25,
+    returnAcceptedQuantity: 0,
+  });
+  assert.equal(waitingOnMe(chuaNhanDu), true);
+  assert.equal(waitingOnMe({ ...chuaNhanDu, returnAcceptedQuantity: 25 }), false);
+});
+
+test("khoản ghi tay: người giữ sổ làm cả hai vai nên còn nợ là còn việc", () => {
+  assert.equal(waitingOnMe(book({ recordedManually: true, status: "ACTIVE" })), true);
+  assert.equal(waitingOnMe(book({ recordedManually: true, status: "REQUESTED" })), false);
+});
+
+test("khoản chờ mình nhận hàng phải đứng trên ba khoản chờ bên kia quyết", () => {
+  const canNuoc = book({ status: "APPROVED", requestedAt: "2026-09-13T02:51:00.000Z" });
+  const boPin = book({ requestedAt: "2026-09-13T02:49:00.000Z" });
+  const gao = book({ requestedAt: "2026-09-13T02:33:00.000Z" });
+  const bat = book({ requestedAt: "2026-09-12T15:56:00.000Z" });
+
+  const xepLai = sortByAttention([boPin, gao, bat, canNuoc]);
+  assert.deepEqual(
+    xepLai.map((l) => l.requestedAt),
+    [canNuoc.requestedAt, boPin.requestedAt, gao.requestedAt, bat.requestedAt],
+  );
+});
+
+test("trong cùng một nhóm vẫn giữ mới nhất lên đầu", () => {
+  const cu = book({ requestedAt: "2026-09-10T00:00:00.000Z" });
+  const moi = book({ requestedAt: "2026-09-13T00:00:00.000Z" });
+  assert.deepEqual(
+    sortByAttention([cu, moi]).map((l) => l.requestedAt),
+    [moi.requestedAt, cu.requestedAt],
+  );
+});
+
+test("sắp xếp không đụng vào mảng gốc", () => {
+  // Mảng đến từ React state; `sort` gốc là đột biến nên phải chép trước.
+  const goc = [book({ requestedAt: "2026-09-10T00:00:00.000Z" }), book({ status: "APPROVED" })];
+  const truoc = goc.map((l) => l.requestedAt);
+  sortByAttention(goc);
+  assert.deepEqual(goc.map((l) => l.requestedAt), truoc);
 });

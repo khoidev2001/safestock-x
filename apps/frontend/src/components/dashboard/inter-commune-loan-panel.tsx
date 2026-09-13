@@ -20,6 +20,7 @@ import {
   loanActions,
   outstanding,
   peerDeliveryNotice,
+  sortByAttention,
   statusLabel,
   type LoanAction,
 } from "./inter-commune-loan-actions";
@@ -207,7 +208,9 @@ export function InterCommuneLoanPanel({ warehouseId }: { warehouseId: string }) 
   });
 
   const loans = query.data ?? [];
-  const openLoans = loans.filter((l) => isLoanOpen(l));
+  // Việc của mình lên đầu — xem `sortByAttention`. Sổ đã đóng thì không còn việc
+  // gì để làm nên cứ giữ nguyên thứ tự máy chủ trả về.
+  const openLoans = sortByAttention(loans.filter((l) => isLoanOpen(l)));
   const closedLoans = loans.filter((l) => !isLoanOpen(l));
 
   return (
