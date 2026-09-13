@@ -721,12 +721,20 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
    * cạn nên mới phải mượn — nên lô còn hàng có thể không tồn tại, mà bắt buộc có
    * thì hàng mượn về không nhập vào đâu được. Nên: ưu tiên lô còn hàng (để hàng
    * cùng loại nằm chung một chỗ), không có thì lấy lô đã hết của chính mặt hàng
-   * ấy trong phạm vi kho mình. Hết cách thì nói thẳng phải nhập lô mới ở tab Vật
-   * tư — thà một câu chỉ đúng việc phải làm còn hơn lỗi "không tìm thấy lô".
+   * ấy trong phạm vi kho mình. Kho CHƯA TỪNG có mặt hàng ấy thì tự mở một lô rỗng
+   * trên kệ của kho nhận — xem `openBatchForBorrowedGoods`.
    */
   private async pickBatchForLoanMove(
     effect: "DEDUCT" | "ADD",
-    input: { itemSku: string; userId: string; scopeWarehouseId?: string | null },
+    input: {
+      itemSku: string;
+      userId: string;
+      scopeWarehouseId?: string | null;
+      /** Tên và đơn vị ghi trên khoản mượn — đủ để khai vật tư nếu danh mục chưa có. */
+      item?: { name: string; unit: string };
+      /** Mã lô mở mới. Cố định theo khoản mượn để bấm lại không đẻ thêm lô rỗng. */
+      newBatchCode: string;
+    },
   ): Promise<string> {
     if (effect === "DEDUCT") return this.pickBatchForSku(input);
 
@@ -769,12 +777,129 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
     if (!batch && receivingWarehouseId) {
       batch = await findBatch({ zone: { warehouse: { organizationId } } });
     }
-    if (!batch) {
+    if (batch) return batch.id;
+    return this.openBatchForBorrowedGoods({ ...input, organizationId, receivingWarehouseId });
+  }
+
+  /**
+   * Mở một lô RỖNG để hàng mượn về có chỗ nhập vào.
+   *
+   * Đã xảy ra thật: xã Đồng Xuân mượn 1 loa cầm tay của Xuân Thọ, Xuân Thọ đồng ý,
+   * nhưng bấm "Xác nhận đã nhận hàng" thì bị chặn vì kho chưa có lô MEGAPHONE-01
+   * nào. Mà mượn chính là vì không có — bắt người trực sang tab Vật tư tạo lô
+   * trước là chặn đúng trường hợp tính năng này sinh ra để giải quyết.
+   *
+   * Lô mở ra số lượng 0; phần cộng vẫn đi qua `InventoryService.import` như mọi
+   * lần nhận khác, để giữ nguyên kiểm quyền, giao dịch và điểm sẵn sàng.
+   */
+  private async openBatchForBorrowedGoods(input: {
+    itemSku: string;
+    userId: string;
+    organizationId: string;
+    receivingWarehouseId: string | null;
+    item?: { name: string; unit: string };
+    newBatchCode: string;
+  }): Promise<string> {
+    const warehouseId =
+      input.receivingWarehouseId ??
+      (
+        await this.prisma.warehouse.findFirst({
+          where: { organizationId: input.organizationId },
+          orderBy: { createdAt: "asc" },
+          select: { id: true },
+        })
+      )?.id;
+    if (!warehouseId) {
+      throw new BadRequestException("Đơn vị chưa có kho nào để nhận hàng mượn về.");
+    }
+
+    const shelf = await this.prisma.shelf.findFirst({
+      where: { isLocked: false, zone: { warehouseId } },
+      orderBy: [{ zone: { code: "asc" } }, { code: "asc" }],
+      select: { id: true },
+    });
+    if (!shelf) {
       throw new BadRequestException(
-        `Kho chưa có lô nào của vật tư ${input.itemSku} để nhận hàng vào. Tạo lô ở tab Vật tư rồi ghi nhận lại.`,
+        "Kho nhận chưa có kệ nào đang mở để xếp hàng mượn về. Thêm kệ hoặc mở khoá kệ rồi ghi nhận lại.",
       );
     }
+
+    const itemId = await this.findOrCreateItem(input);
+    const batch = await this.prisma.itemBatch.upsert({
+      where: { itemId_batchCode: { itemId, batchCode: input.newBatchCode } },
+      // Đã có từ lần bấm trước (lần đó vấp ở bước sau) thì dùng lại, đừng đổi gì.
+      update: {},
+      create: {
+        itemId,
+        shelfId: shelf.id,
+        batchCode: input.newBatchCode,
+        quantity: 0,
+      },
+      select: { id: true },
+    });
+    await this.prisma.auditLog.create({
+      data: {
+        actorId: input.userId,
+        action: "INVENTORY_OPEN_BATCH_FOR_LOAN",
+        entity: "ItemBatch",
+        entityId: batch.id,
+        metadata: {
+          sku: input.itemSku,
+          batchCode: input.newBatchCode,
+          shelfId: shelf.id,
+          warehouseId,
+        },
+      },
+    });
     return batch.id;
+  }
+
+  /**
+   * Vật tư theo mã; danh mục chưa có thì khai mới theo tên và đơn vị trên khoản mượn.
+   *
+   * Mỗi xã một cơ sở dữ liệu, nên mã vật tư của xã cho mượn có thể chưa từng xuất
+   * hiện ở đây. Ghi tay thì không có tên và đơn vị để khai — khi đó mới chịu báo.
+   */
+  private async findOrCreateItem(input: {
+    itemSku: string;
+    userId: string;
+    item?: { name: string; unit: string };
+  }): Promise<string> {
+    const existing = await this.prisma.item.findUnique({
+      where: { sku: input.itemSku },
+      select: { id: true },
+    });
+    if (existing) return existing.id;
+    if (!input.item) {
+      throw new BadRequestException(
+        `Danh mục chưa có vật tư ${input.itemSku}. Khai vật tư ở tab Vật tư rồi ghi nhận lại.`,
+      );
+    }
+
+    // Danh mục là duy nhất theo tên; nhóm theo đơn vị để không vấp đơn vị lệch.
+    const categoryName = `Hàng mượn liên xã (${input.item.unit})`;
+    const category = await this.prisma.itemCategory.upsert({
+      where: { name: categoryName },
+      update: {},
+      create: { name: categoryName, unit: input.item.unit },
+      select: { id: true },
+    });
+    const item = await this.prisma.item.upsert({
+      where: { sku: input.itemSku },
+      update: {},
+      create: { sku: input.itemSku, name: input.item.name, categoryId: category.id },
+      select: { id: true },
+    });
+    await this.prisma.auditLog.create({
+      data: {
+        actorId: input.userId,
+        action: "INVENTORY_CREATE_ITEM",
+        entity: "Item",
+        entityId: item.id,
+        metadata: { sku: input.itemSku, name: input.item.name, categoryId: category.id },
+      },
+    });
+    return item.id;
   }
 
   async recordManually(input: {
@@ -814,6 +939,7 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
         itemSku: input.itemSku ?? "",
         userId: input.userId,
         scopeWarehouseId: input.scopeWarehouseId,
+        newBatchCode: `LOAN-MANUAL-${Date.now()}`,
       }));
     const batch = await this.batchInfo(batchId);
 
@@ -925,6 +1051,8 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
             itemSku: loan.itemSku,
             userId: input.userId,
             scopeWarehouseId: input.scopeWarehouseId,
+            item: { name: loan.itemName, unit: loan.unit },
+            newBatchCode: `LOAN-${loan.id}`,
           }));
 
     // GIÀNH quyền chuyển trạng thái trước khi đụng kho.
@@ -1148,6 +1276,8 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
       itemSku: loan.itemSku,
       userId: input.userId,
       scopeWarehouseId: input.scopeWarehouseId ?? loan.warehouseId,
+      item: { name: loan.itemName, unit: loan.unit },
+      newBatchCode: `LOAN-${loan.id}`,
     });
     await this.moveStock("ADD", {
       userId: input.userId,
