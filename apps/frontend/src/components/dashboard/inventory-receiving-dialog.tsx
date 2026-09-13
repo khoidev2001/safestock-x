@@ -57,7 +57,7 @@ export function InventoryReceivingDialog({
       mode === "NEW" &&
       [sku, name, categoryName, unit].some((value) => value.trim().length < 1)
     ) {
-      setError("Vật tư mới cần SKU, tên, danh mục và đơn vị tính.");
+      setError("Vật tư mới cần mã vật tư, tên, danh mục và đơn vị tính.");
       return;
     }
 
@@ -147,7 +147,7 @@ export function InventoryReceivingDialog({
             </Field>
           ) : (
             <>
-              <Field label="SKU">
+              <Field label="Mã vật tư">
                 <Input onChange={setSku} value={sku} />
               </Field>
               <Field label="Tên vật tư">

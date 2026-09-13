@@ -25,7 +25,7 @@ interface CellValue {
 }
 
 const HEADERS = [
-  "SKU",
+  "Mã vật tư",
   "Tên vật tư",
   "Số lượng",
   "Đơn vị",

@@ -2574,7 +2574,7 @@ export class MissionService {
       if (!mission) throw new NotFoundException("Không tìm thấy nhiệm vụ");
       if (mission._count?.warehouseRequests > 0) {
         throw new BadRequestException(
-          "Nhiệm vụ này chuẩn bị theo từng vật tư; vui lòng dùng danh sách yêu cầu SKU",
+          "Nhiệm vụ này chuẩn bị theo từng vật tư; vui lòng dùng danh sách yêu cầu theo mã vật tư",
         );
       }
 
