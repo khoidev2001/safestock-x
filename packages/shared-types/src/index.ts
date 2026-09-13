@@ -282,3 +282,4 @@ export * from "./water-bottle";
 export * from "./warehouse-request-bulk";
 export * from "./route-arrows";
 export * from "./map-icons";
+export * from "./supply-groups";

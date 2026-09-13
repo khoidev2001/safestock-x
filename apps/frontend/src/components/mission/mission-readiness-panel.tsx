@@ -1,22 +1,26 @@
 "use client";
 
 import {
+  chunkBySupplyGroup,
   LITERS_PER_WATER_BOTTLE,
   litersFromBottles,
+  sortBySupplyGroup,
   WATER_BOTTLE_SKU,
 } from "@safestock/shared-types";
+import { useMemo } from "react";
 import { CollapsiblePanel } from "@/components/shared/collapsible-panel";
 import { ColorIcon } from "@/components/shared/color-icon";
 import { Pagination, usePagination } from "@/components/shared/pagination";
 import type { MissionReadinessAssessment, MissionReadinessStatus } from "@/lib/mission-api";
+import { SUPPLY_GROUP_STYLES, SupplyGroupHeading, supplyGroupStripe } from "./supply-group";
 
 /**
  * Số vật tư mỗi trang.
  *
  * Khối này chỉ để soi lại đủ hay chưa, mà danh sách đầy đủ hơn hai chục dòng thì
- * nó chiếm trọn màn hình và đẩy phần hành động xuống dưới. Giữ nguyên thứ tự và
- * nguyên số dòng của bản đánh giá — chỉ cắt trang, không sắp lại cũng không lọc
- * bớt dòng "Đủ".
+ * nó chiếm trọn màn hình và đẩy phần hành động xuống dưới. Giữ nguyên số dòng của
+ * bản đánh giá — không lọc bớt dòng "Đủ". Thứ tự chỉ đổi đúng một điều: gom theo
+ * nhóm vật tư (xem `sortBySupplyGroup`), trong nhóm vẫn theo thứ tự bản đánh giá.
  */
 const READINESS_ITEMS_PER_PAGE = 10;
 
@@ -97,8 +101,12 @@ export function MissionReadinessPanel({
   const meta = STATUS_META[assessment.status];
   const shortCount = assessment.items.filter((item) => item.shortage > 0).length;
   const readyCount = assessment.items.length - shortCount;
+  const groupedItems = useMemo(
+    () => sortBySupplyGroup(assessment.items, (item) => item.sku),
+    [assessment.items],
+  );
   const { page, pageItems, pageSize, setPage, totalPages } = usePagination(
-    assessment.items,
+    groupedItems,
     READINESS_ITEMS_PER_PAGE,
   );
 
@@ -128,37 +136,52 @@ export function MissionReadinessPanel({
       badge={<span className="tabular text-sm font-semibold">{assessment.fulfillment}%</span>}
     >
       <div className="divide-y rounded-md border">
-        {pageItems.map((item) => (
-          <div className="grid grid-cols-[1fr_auto] gap-3 px-4 py-3" key={item.sku}>
-            <div className="min-w-0">
-              <p className="flex items-center gap-1.5 text-sm font-medium">
-                <span className="truncate">{item.itemName}</span>
-                <WhyNeeded itemName={item.itemName} reason={ITEM_REASONS[item.sku]} />
-              </p>
-              {/* Có đơn vị thì "760/760" mới đọc được là chai hay bộ. Thiếu 0 thì
-                  không nhắc: dòng nào cũng kết bằng "thiếu 0" là dạy mắt bỏ qua
-                  đúng chữ "thiếu". */}
-              <p className="mt-0.5 text-xs text-[var(--text-muted)]">
-                Đáp ứng {item.allocated.toLocaleString("vi")}/{item.required.toLocaleString("vi")}
-                {item.unit ? ` ${item.unit}` : ""}
-                {item.shortage > 0
-                  ? `, thiếu ${item.shortage.toLocaleString("vi")}${item.unit ? ` ${item.unit}` : ""}`
-                  : ""}
-              </p>
-              {item.sku === WATER_BOTTLE_SKU && (
-                <p className="mt-0.5 text-xs text-[var(--text-muted)]">
-                  Chai {LITERS_PER_WATER_BOTTLE.toLocaleString("vi")} lít · quy ra{" "}
-                  {litersFromBottles(item.required).toLocaleString("vi")} lít nước uống
-                </p>
-              )}
-            </div>
-            <span
-              className="self-center whitespace-nowrap text-xs font-semibold"
-              style={{ color: STATUS_META[item.status].color }}
-            >
-              {STATUS_META[item.status].itemLabel}
-            </span>
-          </div>
+        {chunkBySupplyGroup(pageItems, (item) => item.sku).map((chunk) => (
+          // Tiêu đề nhóm là một dải màu mảnh căn giữa, không phải thẻ lồng thẻ: nó
+          // chỉ chia đoạn danh sách, còn dòng vật tư vẫn là thứ người đọc dò theo.
+          // Vạch màu cùng tông ở mép trái mỗi dòng cho biết dòng thuộc nhóm nào.
+          <section aria-label={chunk.label} key={chunk.group} className="divide-y">
+            <h5 className="px-4 py-2" style={{ background: SUPPLY_GROUP_STYLES[chunk.group].tint }}>
+              <SupplyGroupHeading group={chunk.group} label={chunk.label} />
+            </h5>
+            {chunk.items.map((item) => (
+              <div
+                className="grid grid-cols-[1fr_auto] gap-3 px-4 py-3"
+                key={item.sku}
+                style={supplyGroupStripe(chunk.group)}
+              >
+                <div className="min-w-0">
+                  <p className="flex items-center gap-1.5 text-sm font-medium">
+                    <span className="truncate">{item.itemName}</span>
+                    <WhyNeeded itemName={item.itemName} reason={ITEM_REASONS[item.sku]} />
+                  </p>
+                  {/* Có đơn vị thì "760/760" mới đọc được là chai hay bộ. Thiếu 0 thì
+                      không nhắc: dòng nào cũng kết bằng "thiếu 0" là dạy mắt bỏ qua
+                      đúng chữ "thiếu". */}
+                  <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+                    Đáp ứng {item.allocated.toLocaleString("vi")}/
+                    {item.required.toLocaleString("vi")}
+                    {item.unit ? ` ${item.unit}` : ""}
+                    {item.shortage > 0
+                      ? `, thiếu ${item.shortage.toLocaleString("vi")}${item.unit ? ` ${item.unit}` : ""}`
+                      : ""}
+                  </p>
+                  {item.sku === WATER_BOTTLE_SKU && (
+                    <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+                      Chai {LITERS_PER_WATER_BOTTLE.toLocaleString("vi")} lít · quy ra{" "}
+                      {litersFromBottles(item.required).toLocaleString("vi")} lít nước uống
+                    </p>
+                  )}
+                </div>
+                <span
+                  className="self-center whitespace-nowrap text-xs font-semibold"
+                  style={{ color: STATUS_META[item.status].color }}
+                >
+                  {STATUS_META[item.status].itemLabel}
+                </span>
+              </div>
+            ))}
+          </section>
         ))}
       </div>
 
