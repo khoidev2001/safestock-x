@@ -149,6 +149,8 @@ export function MissionDetailScreen({
 }) {
   const [mission, setMission] = useState<MissionDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  /** Đang hỏi máy chủ bản mới — kể cả khi đã vẽ bản lưu ra trước. */
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cacheStoredAt, setCacheStoredAt] = useState<string | null>(null);
   const [resultText, setResultText] = useState("");
@@ -239,6 +241,7 @@ export function MissionDetailScreen({
     } catch {
       setLoading(true);
     }
+    setRefreshing(true);
     try {
       const latest = await fetchMissionForViewer(token, missionId, role);
       setMission(latest);
@@ -254,6 +257,7 @@ export function MissionDetailScreen({
       );
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [token, userId, missionId, role]);
 
@@ -787,11 +791,13 @@ export function MissionDetailScreen({
         </Text>
       </View>
 
+      {/* Vòng xoay thật thay cho ba khối xương: khối xương cùng màu nền thẻ, mờ
+          60% trên nền sáng, nên trên máy nhìn như một màn hình trống — người dùng
+          tưởng bấm hỏng rồi bấm lại. */}
       {loading ? (
-        <View style={{ padding: 16 }}>
-          {[0, 1, 2].map((i) => (
-            <View key={i} style={styles.skeleton} />
-          ))}
+        <View style={styles.center} accessibilityRole="progressbar">
+          <ActivityIndicator size="large" color={c.primary} />
+          <Text style={[styles.emptyText, { marginTop: 12 }]}>Đang tải nhiệm vụ…</Text>
         </View>
       ) : error && !mission ? (
         <View style={styles.center}>
@@ -804,6 +810,17 @@ export function MissionDetailScreen({
         </View>
       ) : mission ? (
         <ScrollView contentContainerStyle={styles.detailScroll}>
+          {/* Đang vẽ bản lưu mà bản mới chưa về: phải nói ra, không thì người
+              trực đọc trạng thái cũ mà tưởng là mới nhất. */}
+          {refreshing ? (
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}
+              accessibilityRole="progressbar"
+            >
+              <ActivityIndicator size="small" color={c.primary} />
+              <Text style={{ color: c.muted, fontSize: 12 }}>Đang tải bản mới nhất…</Text>
+            </View>
+          ) : null}
           {cacheStoredAt ? (
             <View
               style={{
@@ -3100,25 +3117,22 @@ const local = StyleSheet.create({
     borderColor: c.green,
     padding: 14,
   },
-  photoHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
+  // Tiêu đề một dòng, hai nút một dòng riêng bên dưới.
+  //
+  // Đã tràn thật trên máy: tiêu đề và hai nút chung một hàng, khối nút không co
+  // được nên nút "Thư viện" lòi ra ngoài mép thẻ. `flexWrap` trong khối nút không
+  // cứu được, vì chính khối nút mới là thứ bị đẩy ra ngoài chứ không phải nút.
+  photoHeader: { gap: 8, marginBottom: 8 },
   photoTitle: { color: c.text, fontSize: 13, fontWeight: "700" },
-  // `flexWrap` để hai nút xuống dòng thay vì tràn ra ngoài mép thẻ: nhãn dài ngắn
-  // tuỳ trạng thái ("Chụp ảnh" đổi thành "Đã đủ"), mà màn hẹp thì một hàng không
-  // chứa nổi cả hai nút kèm biểu tượng.
-  photoActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  photoActions: { flexDirection: "row", gap: 8 },
   photoAdd: {
     flexDirection: "row",
     alignItems: "center",
     // Căn giữa theo chiều ngang nữa: thiếu nó thì khi nút bị co lại, biểu tượng và
     // chữ dồn về mép trái, lệch hẳn so với nút bên cạnh.
     justifyContent: "center",
-    // Co lại được thay vì đẩy nút kia ra khỏi màn hình.
-    flexShrink: 1,
+    // Hai nút chia đều bề ngang, không nút nào đẩy nút kia ra ngoài.
+    flex: 1,
     gap: 6,
     borderWidth: 1,
     borderColor: c.primary,
