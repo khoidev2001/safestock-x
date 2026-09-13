@@ -74,6 +74,9 @@ async function resetDatabase() {
   await prisma.organization.deleteMany();
 }
 
+/** Băm mật khẩu. Ở cấp mô-đun vì cả `main` lẫn phần dựng kho thôn đều cần. */
+const password = (plain: string) => bcrypt.hashSync(plain, 10);
+
 async function main() {
   const validationErrors = validateSeedDataset();
   validationErrors.push(...validateVerifiedWarehouseLocations());
@@ -86,7 +89,6 @@ async function main() {
   const organization = await prisma.organization.create({
     data: { name: "Hội Chữ thập đỏ xã Đồng Xuân" },
   });
-  const password = (plain: string) => bcrypt.hashSync(plain, 10);
   await prisma.user.createMany({
     data: [
       // Một xã có NHIỀU quản trị viên cùng duyệt nhiệm vụ để chia tải. Mỗi người
@@ -109,21 +111,24 @@ async function main() {
       {
         organizationId: organization.id,
         email: "admindongxuan",
-        passwordHash: password("admin123"),
-        fullName: "Trần Đình Khôi",
+        passwordHash: password("admin123@"),
+        fullName: "Khôi",
         role: "ADMIN",
       },
       {
         organizationId: organization.id,
-        email: "staff",
-        passwordHash: password("staff123"),
+        // Tên đăng nhập theo XÃ, không theo chức danh: "staff" đúng với mọi kho ở
+        // mọi xã nên nhìn vào không biết đang cầm kho nào, mà một database có thể
+        // chứa nhiều xã cùng lúc.
+        email: "dongxuan",
+        passwordHash: password("dongxuan123"),
         fullName: "Phụ trách kho trung tâm",
         role: "WAREHOUSE",
       },
       {
         organizationId: organization.id,
-        email: "rescue",
-        passwordHash: password("rescue123"),
+        email: "cuuhodongxuan",
+        passwordHash: password("cuuho123"),
         fullName: "Đội cứu hộ Đồng Xuân",
         role: "RESCUE",
       },
@@ -142,11 +147,11 @@ async function main() {
     },
   });
   const warehouseUser = await prisma.user.update({
-    where: { email: "staff" },
+    where: { email: "dongxuan" },
     data: { warehouseId: centralWarehouse.id },
   });
   const rescueUser = await prisma.user.findUniqueOrThrow({
-    where: { email: "rescue" },
+    where: { email: "cuuhodongxuan" },
   });
 
   const { zones, shelves } = await createCentralStorage(centralWarehouse.id);
@@ -192,11 +197,7 @@ async function main() {
   // tình huống của thôn mình, nên mỗi thôn đúng một tài khoản. Tài khoản
   // truongthon@ cũ trỏ trùng kho Long Châu là dấu vết từ thời có vai trưởng thôn
   // riêng — đã bỏ, vì 18 tài khoản cho 17 kho thì không ai biết ai giữ kho nào.
-  const hamletLeaderIds = await createHamletLeaders(
-    organization.id,
-    hamletWarehouses,
-    password("truongthon123"),
-  );
+  const hamletLeaderIds = await createHamletLeaders(organization.id, hamletWarehouses);
 
   const deviceByCode = await seedDevices(prisma, {
     centralWarehouse,
@@ -418,18 +419,22 @@ function hamletAccountEmail(warehouseName: string): string {
   return normalizeHamletName(hamletName).replace(/\s+/g, "");
 }
 
-async function createHamletLeaders(
-  organizationId: string,
-  warehouses: Warehouse[],
-  passwordHash: string,
-) {
+/**
+ * Mật khẩu kho thôn là TÊN ĐĂNG NHẬP cộng `123`, mỗi thôn một cái.
+ *
+ * Trước đây cả mười bảy dùng chung `truongthon123`. Mật khẩu chung nghĩa là đổi
+ * của một người là đổi của cả mười bảy, và ai biết một cái thì mở được kho của
+ * mọi thôn còn lại — trong khi mỗi người chỉ được phép thấy kho của mình.
+ */
+async function createHamletLeaders(organizationId: string, warehouses: Warehouse[]) {
   const leaderIds = new Map<string, string>();
   for (const warehouse of warehouses) {
+    const email = hamletAccountEmail(warehouse.name);
     const user = await prisma.user.create({
       data: {
         organizationId,
-        email: hamletAccountEmail(warehouse.name),
-        passwordHash,
+        email,
+        passwordHash: password(email + "123"),
         fullName: `Trưởng ${warehouse.name.replace("Kho ", "")}`,
         role: "WAREHOUSE",
         warehouseId: warehouse.id,
