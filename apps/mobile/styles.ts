@@ -332,6 +332,7 @@ export const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
+    justifyContent: "center",
   },
   btnReject: {
     flex: 1,
@@ -342,7 +343,14 @@ export const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: "center",
   },
-  btnAcceptText: { color: "#052e16", fontSize: 15, fontWeight: "800" },
+  /**
+   * Chữ TRẮNG, không phải xanh gần đen.
+   *
+   * `#052e16` trên nền `c.green` (#15803D) chỉ được tỉ lệ tương phản 2,97 — dưới
+   * chuẩn tối thiểu 4,5 — nên chữ chìm hẳn vào nền, đọc như một nút bị vô hiệu.
+   * Trắng cho 5,02. Đây là nút xác nhận hoàn thành nhiệm vụ, bấm ngoài nắng.
+   */
+  btnAcceptText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800", textAlign: "center" },
   btnRejectText: { color: c.red, fontSize: 15, fontWeight: "800" },
 
   // Reason input block

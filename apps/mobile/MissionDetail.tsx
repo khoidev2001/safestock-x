@@ -2780,18 +2780,27 @@ const local = StyleSheet.create({
     marginBottom: 8,
   },
   photoTitle: { color: c.text, fontSize: 13, fontWeight: "700" },
-  photoActions: { flexDirection: "row", gap: 8 },
+  // `flexWrap` để hai nút xuống dòng thay vì tràn ra ngoài mép thẻ: nhãn dài ngắn
+  // tuỳ trạng thái ("Chụp ảnh" đổi thành "Đã đủ"), mà màn hẹp thì một hàng không
+  // chứa nổi cả hai nút kèm biểu tượng.
+  photoActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   photoAdd: {
     flexDirection: "row",
     alignItems: "center",
+    // Căn giữa theo chiều ngang nữa: thiếu nó thì khi nút bị co lại, biểu tượng và
+    // chữ dồn về mép trái, lệch hẳn so với nút bên cạnh.
+    justifyContent: "center",
+    // Co lại được thay vì đẩy nút kia ra khỏi màn hình.
+    flexShrink: 1,
     gap: 6,
     borderWidth: 1,
     borderColor: c.primary,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,
+    minHeight: 36,
   },
-  photoAddText: { color: c.primary, fontSize: 13, fontWeight: "700" },
+  photoAddText: { color: c.primary, fontSize: 13, fontWeight: "700", textAlign: "center" },
   photoStrip: { marginBottom: 4 },
   thumbWrap: { marginRight: 8 },
   thumb: { width: 72, height: 72, borderRadius: 8, backgroundColor: c.surfaceAlt },
