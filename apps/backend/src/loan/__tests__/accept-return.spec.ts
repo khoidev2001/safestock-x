@@ -23,14 +23,14 @@ describe("acceptReturn", () => {
   };
 
   function dungService(loan: Record<string, unknown> | null) {
-    const daGhi: { quantity: number }[] = [];
-    const capNhat: Record<string, unknown>[] = [];
+    const recordedMoves: { quantity: number }[] = [];
+    const loanUpdates: Record<string, unknown>[] = [];
     const prisma = {
       user: { findUnique: async () => ({ organizationId: "org-cho-muon" }) },
       interCommuneLoan: {
         findFirst: async () => loan,
         update: async ({ data }: { data: Record<string, unknown> }) => {
-          capNhat.push(data);
+          loanUpdates.push(data);
           return { ...loan, ...data };
         },
       },
@@ -39,7 +39,7 @@ describe("acceptReturn", () => {
     };
     const inventory = {
       import: async (_u: string, _b: string, quantity: number) => {
-        daGhi.push({ quantity });
+        recordedMoves.push({ quantity });
       },
       export: async () => {
         throw new Error("chiều về không được TRỪ kho bên cho mượn");
@@ -50,35 +50,35 @@ describe("acceptReturn", () => {
       inventory as never,
       { create: async () => undefined } as never,
     );
-    return { service, daGhi, capNhat };
+    return { service, recordedMoves, loanUpdates };
   }
 
   it("cộng đúng phần nhận lần này và ghi lại số đã xác nhận", async () => {
-    const { service, daGhi, capNhat } = dungService({ ...LOAN });
+    const { service, recordedMoves, loanUpdates } = dungService({ ...LOAN });
 
     await service.acceptReturn({ loanId: "loan-1", userId: "u1", quantity: 10 });
 
-    expect(daGhi).toEqual([{ quantity: 10 }]);
-    expect(capNhat).toEqual([{ returnAcceptedQuantity: 10 }]);
+    expect(recordedMoves).toEqual([{ quantity: 10 }]);
+    expect(loanUpdates).toEqual([{ returnAcceptedQuantity: 10 }]);
   });
 
   it("bỏ trống số lượng thì nhận hết phần đang chờ", async () => {
-    const { service, daGhi } = dungService({ ...LOAN, returnAcceptedQuantity: 5 });
+    const { service, recordedMoves } = dungService({ ...LOAN, returnAcceptedQuantity: 5 });
 
     await service.acceptReturn({ loanId: "loan-1", userId: "u1" });
 
     // Bên kia khai trả 15, mình đã xác nhận 5 → còn chờ 10.
-    expect(daGhi).toEqual([{ quantity: 10 }]);
+    expect(recordedMoves).toEqual([{ quantity: 10 }]);
   });
 
   it("chặn nhận nhiều hơn phần bên kia đã báo trả", async () => {
-    const { service, daGhi } = dungService({ ...LOAN });
+    const { service, recordedMoves } = dungService({ ...LOAN });
 
     await expect(
       service.acceptReturn({ loanId: "loan-1", userId: "u1", quantity: 16 }),
     ).rejects.toBeInstanceOf(BadRequestException);
     // Nhận khống là cộng vào kho phần hàng chưa ai đưa — kho tự sinh ra hàng.
-    expect(daGhi).toEqual([]);
+    expect(recordedMoves).toEqual([]);
   });
 
   it("chặn khi không còn phần nào đang chờ", async () => {
@@ -98,11 +98,11 @@ describe("acceptReturn", () => {
   });
 
   it("không thấy khoản mượn thì báo rõ, không cộng bừa", async () => {
-    const { service, daGhi } = dungService(null);
+    const { service, recordedMoves } = dungService(null);
 
     await expect(service.acceptReturn({ loanId: "loan-1", userId: "u1" })).rejects.toBeInstanceOf(
       NotFoundException,
     );
-    expect(daGhi).toEqual([]);
+    expect(recordedMoves).toEqual([]);
   });
 });

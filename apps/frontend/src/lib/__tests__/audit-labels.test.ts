@@ -63,13 +63,13 @@ const BACKEND_ENTITIES = [
 ];
 
 test("mọi thao tác backend ghi ra đều có tên tiếng Việt", () => {
-  const thieu = BACKEND_ACTIONS.filter((action) => !(action in AUDIT_ACTION_LABELS));
-  assert.deepEqual(thieu, []);
+  const missing = BACKEND_ACTIONS.filter((action) => !(action in AUDIT_ACTION_LABELS));
+  assert.deepEqual(missing, []);
 });
 
 test("mọi loại bản ghi backend ghi ra đều có tên tiếng Việt", () => {
-  const thieu = BACKEND_ENTITIES.filter((entity) => !(entity in AUDIT_ENTITY_LABELS));
-  assert.deepEqual(thieu, []);
+  const missing = BACKEND_ENTITIES.filter((entity) => !(entity in AUDIT_ENTITY_LABELS));
+  assert.deepEqual(missing, []);
 });
 
 /**
@@ -79,7 +79,7 @@ test("mọi loại bản ghi backend ghi ra đều có tên tiếng Việt", () 
  * đúng nghĩa mà chẳng có dấu nào, và luật đó đánh trượt nó ngay. Chặn thẳng những
  * từ sẽ lọt ra nếu ai đó chép nguyên mã vào bảng nhãn mới là đúng thứ cần bắt.
  */
-const TU_TIENG_ANH = [
+const ENGLISH_WORDS = [
   "inventory",
   "export",
   "import",
@@ -121,7 +121,7 @@ test("không nhãn nào còn sót chữ tiếng Anh", () => {
     ...Object.entries(AUDIT_ENTITY_LABELS),
   ]) {
     const thuong = nhan.toLowerCase();
-    const dinh = TU_TIENG_ANH.filter((tu) => new RegExp(`\\b${tu}\\b`).test(thuong));
+    const dinh = ENGLISH_WORDS.filter((tu) => new RegExp(`\\b${tu}\\b`).test(thuong));
     assert.deepEqual(dinh, [], `${ma} còn chữ tiếng Anh trong "${nhan}"`);
   }
 });
@@ -162,6 +162,6 @@ test("bản ghi cũ trong DB được dịch lúc hiển thị, không đi sửa
 
 test("lý do do người dùng tự gõ thì giữ nguyên từng chữ", () => {
   // Ghi chú của cán bộ xã là bằng chứng hậu kiểm — không được sửa dù một dấu phẩy.
-  const cuaNguoiDung = "Kho hết hàng, xe không chở hết chuyến đầu";
-  assert.equal(auditReasonLabel(cuaNguoiDung), cuaNguoiDung);
+  const userText = "Kho hết hàng, xe không chở hết chuyến đầu";
+  assert.equal(auditReasonLabel(userText), userText);
 });

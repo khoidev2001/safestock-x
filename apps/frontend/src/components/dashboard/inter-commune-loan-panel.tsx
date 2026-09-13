@@ -624,7 +624,7 @@ function LoanRow({
   // Hàng bên kia đã báo trả mà mình chưa xác nhận cầm được. Chỉ bên CHO MƯỢN mới
   // có việc này, và bản ghi ghi tay thì không: người giữ nó làm thay cả hai vai
   // nên đã cộng kho ngay ở bước ghi nhận.
-  const dangTrenDuongVe = isLender && !loan.recordedManually
+  const inTransitBack = isLender && !loan.recordedManually
     ? loan.returnedQuantity - loan.returnAcceptedQuantity
     : 0;
 
@@ -705,7 +705,7 @@ function LoanRow({
         ))}
       </dl>
 
-      {dangTrenDuongVe > 0 ? (
+      {inTransitBack > 0 ? (
         <div className="mt-3 flex flex-wrap items-end gap-2 border-t pt-3">
           <label className="text-xs">
             <span className="block text-[var(--text-muted)]">Số nhận lại lần này</span>
@@ -713,7 +713,7 @@ function LoanRow({
               className="mt-1 w-32 rounded-md border px-2 py-1.5 text-sm"
               inputMode="numeric"
               onChange={(e) => onQuantity(e.target.value)}
-              placeholder={String(dangTrenDuongVe)}
+              placeholder={String(inTransitBack)}
               value={quantity}
             />
           </label>
@@ -727,7 +727,7 @@ function LoanRow({
             {busy ? "Đang xử lý…" : "Xác nhận đã nhận lại"}
           </button>
           <p className="w-full text-xs text-[var(--text-muted)]">
-            {loan.peerCommuneName} báo đã trả {dangTrenDuongVe} {loan.unit} nhưng chưa ai bên mình
+            {loan.peerCommuneName} báo đã trả {inTransitBack} {loan.unit} nhưng chưa ai bên mình
             xác nhận cầm được. Bấm khi hàng đã về tới kho — bước này mới cộng kho thật.
           </p>
         </div>

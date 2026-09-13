@@ -142,13 +142,13 @@ test("mũi tên hẹp hơn nét tuyến, để nằm lọt lòng chứ không tr
   const points = svg.match(/points="([^"]+)"/)[1].split(" ").map(Number);
   const xs = points.filter((_, i) => i % 2 === 0);
   const strokeWidth = Number(svg.match(/stroke-width="([\d.]+)"/)[1]);
-  const beRongDonVi = Math.max(...xs) - Math.min(...xs) + strokeWidth;
-  const beRongPixel = (beRongDonVi / 24) * size;
+  const widthUnits = Math.max(...xs) - Math.min(...xs) + strokeWidth;
+  const widthPixels = (widthUnits / 24) * size;
 
   const NET_TUYEN_PX = 7;
   assert.ok(
-    beRongPixel <= NET_TUYEN_PX,
-    `Mũi tên rộng ${beRongPixel.toFixed(2)}px, tràn ra ngoài nét tuyến ${NET_TUYEN_PX}px`,
+    widthPixels <= NET_TUYEN_PX,
+    `Mũi tên rộng ${widthPixels.toFixed(2)}px, tràn ra ngoài nét tuyến ${NET_TUYEN_PX}px`,
   );
   // Và phải DÀI hơn RỘNG, không thì nó lại thành một chấm không rõ hướng.
   const ys = points.filter((_, i) => i % 2 === 1);
