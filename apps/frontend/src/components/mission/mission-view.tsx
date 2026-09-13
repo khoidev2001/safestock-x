@@ -55,7 +55,7 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { blobToWavBase64, SILENCE_RMS } from "@/lib/audio-wav";
 import { ActionPlanView } from "./action-plan-view";
 import { MissionInbox } from "./mission-inbox";
-import { MissionReadinessPanel } from "./mission-readiness-panel";
+import { MissionReadinessSummary } from "./mission-readiness-summary";
 import { CoordinationAnalysisPanel, requestId } from "./coordination-analysis-panel";
 import { WarehouseRequestPanel } from "./warehouse-request-panel";
 import { WorkflowStepper } from "./workflow-stepper";
@@ -1571,12 +1571,6 @@ export function MissionView({
                      Đọc cờ từ `mission` chứ không từ một truy vấn riêng: `mission` đã
                      có sẵn trước khi khối này được dựng, nên không có cảnh khối bật
                      mở rồi tự đóng lại ngay trước mắt người dùng lúc mở trang. */
-                  /* Tiền tố `tham-muu-` để KHÔNG trùng key với khối khả năng đáp
-                     ứng ngay bên dưới. Hai khối là anh em ruột trong cùng một
-                     fragment và cùng đổi key theo `mission.actionPlan`; trùng key
-                     giữa hai anh em thì React nhân bản hoặc bỏ sót phần tử — đúng
-                     lỗi đã gặp: bấm lập bản tham mưu xong khối này hiện ra bốn năm
-                     lần chồng lên nhau. */
                   key={mission.actionPlan ? "tham-muu-da-co-ke-hoach" : "tham-muu-chua-co-ke-hoach"}
                   defaultOpen={!mission.actionPlan}
                   missionId={mission.id}
@@ -1603,26 +1597,15 @@ export function MissionView({
                      bày ra nút cho một việc chắc chắn bị từ chối. */
                   requirementsEditable={isAdmin && !isPublished && mission.status === "DRAFT"}
                   missionNo={mission.missionNo}
+                  readiness={mission.readinessAssessment}
                 />
               )}
-              {mission.readinessAssessment && (
-                /* Cùng mốc với khối tham mưu: có kế hoạch cứu hộ rồi thì thu gọn
-                   lại. Mức đáp ứng và danh sách vật tư thiếu ở đây được kế hoạch
-                   cứu hộ bên dưới kể lại một lần nữa.
-
-                   ĐỨNG SAU khối tham mưu, không phải trước. Khối tham mưu là nơi
-                   ADMIN chốt CẦN những gì và bao nhiêu; khối này trả lời kho có
-                   đáp ứng nổi từng ấy không. Đảo lại là bắt đọc câu trả lời trước
-                   khi biết câu hỏi — và tệ hơn, sau mỗi lần sửa vật tư ở trên,
-                   con số ở đây đổi theo mà người sửa phải cuộn ngược lên mới thấy.
-
-                   `defaultOpen` chỉ đọc một lần lúc dựng, nên `key` phải đổi theo
-                   thì khối mới tự đóng ngay sau khi lập kế hoạch. */
-                <MissionReadinessPanel
-                  /* Tiền tố `dap-ung-` — xem chú thích ở khối tham mưu bên trên. */
-                  key={mission.actionPlan ? "dap-ung-da-co-ke-hoach" : "dap-ung-chua-co-ke-hoach"}
+              {/* ADMIN đọc dòng này cuối phần vật tư trong khối tham mưu. Người
+                  không mở được khối đó vẫn cần biết kho có đáp ứng nổi hay không. */}
+              {!isAdmin && mission.readinessAssessment && (
+                <MissionReadinessSummary
                   assessment={mission.readinessAssessment}
-                  defaultOpen={!mission.actionPlan}
+                  className="px-5 py-4"
                 />
               )}
               {/* Không có kế hoạch cứu hộ thì khối SKU không có chỗ để gá vào. */}

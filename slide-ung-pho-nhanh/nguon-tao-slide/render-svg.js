@@ -17,7 +17,14 @@ function svgFor(slide) {
   const parts = [];
   for (const e of slide.els) {
     if (e.t === 'img') {
-      parts.push(`<image href="${uri(e.src)}" x="${e.x * S}" y="${e.y * S}" width="${e.w * S}" height="${e.h * S}" preserveAspectRatio="none"/>`);
+      // ảnh bo góc: cắt theo clipPath hình chữ nhật bo góc
+      let clip = '';
+      if (e.r > 0) {
+        const id = `c${parts.length}`;
+        parts.push(`<clipPath id="${id}"><rect x="${e.x * S}" y="${e.y * S}" width="${e.w * S}" height="${e.h * S}" rx="${e.r * S}"/></clipPath>`);
+        clip = ` clip-path="url(#${id})"`;
+      }
+      parts.push(`<image href="${uri(e.src)}" x="${e.x * S}" y="${e.y * S}" width="${e.w * S}" height="${e.h * S}" preserveAspectRatio="none"${clip}/>`);
     } else if (e.t === 'rect') {
       const st = e.line ? ` stroke="${e.line.color}" stroke-opacity="${e.line.alpha}" stroke-width="${e.line.w || 1}"` : '';
       parts.push(`<rect x="${e.x * S}" y="${e.y * S}" width="${e.w * S}" height="${e.h * S}" rx="${(e.r || 0) * S}" fill="${e.fill}" fill-opacity="${e.alpha}"${st}/>`);

@@ -4,23 +4,31 @@ const TOTAL = 26;
 const BG = 'bg-content.jpg';
 
 // ---------- shared chrome ----------
+// Phần đầu slide gọn: hàng logo + số trang sát mép trên, vạch kẻ ở 0.72in, dòng chữ xanh (eyebrow) ngay dưới vạch kẻ
+// và ngay trên tiêu đề, tiêu đề ở TITLE_TOP.
+const HEAD_RULE = 0.72, EYEBROW_TOP = 0.88, TITLE_TOP = 1.14;
 function chrome(eyebrow, title, opts = {}) {
   const n = slides.length + 1;
+  const titleSize = opts.titleSize || 31;
   const els = [
     img(BG, 0, 0, SW, SH),
     rect(0, 0, SW, SH, C.ink, 0.34),
-    img('mark-sm.png', M, 0.4, 0.34, 0.34),
-    txt({ x: M + 0.5, y: 0.48, w: 4, text: 'ỨNG PHÓ NHANH', size: 11, weight: 'eb', color: C.greenSoft, spacing: 1.6 }),
-    txt({ x: SW - M - 3, y: 0.44, w: 3, text: `${String(n).padStart(2, '0')} / ${TOTAL}`, size: 11, weight: 'sb', color: C.dim, align: 'right' }),
-    rect(M, 0.95, SW - 2 * M, 0.012, C.white, 0.16),
-    txt({ x: M, y: 1.26, w: 9, text: eyebrow, size: 11.5, weight: 'eb', color: C.green, spacing: 2.2 }),
-    txt({ x: M, y: 1.58, w: SW - 2 * M - 0.4, text: title, size: opts.titleSize || 31, weight: 'eb', color: C.white, lh: 1.18 }),
+    img('mark-sm.png', M, 0.28, 0.3, 0.3),
+    txt({ x: M + 0.44, y: 0.33, w: 4, text: 'ỨNG PHÓ NHANH', size: 10.5, weight: 'eb', color: C.greenSoft, spacing: 1.6 }),
+    txt({ x: SW - M - 3, y: 0.33, w: 3, text: `${String(n).padStart(2, '0')} / ${TOTAL}`, size: 10.5, weight: 'sb', color: C.dim, align: 'right' }),
+    rect(M, HEAD_RULE, SW - 2 * M, 0.012, C.white, 0.16),
+    txt({ x: M, y: EYEBROW_TOP, w: 9, text: eyebrow, size: 11.5, weight: 'eb', color: C.green, spacing: 2.2 }),
+    txt({ x: M, y: TITLE_TOP, w: SW - 2 * M - 0.4, text: title, size: titleSize, weight: 'eb', color: C.white, lh: 1.18 }),
     rect(M, SH - 0.64, SW - 2 * M, 0.01, C.white, 0.1),
     txt({ x: SW - M - 3, y: SH - 0.5, w: 3, text: 'ungphonhanh.life', size: 9.5, weight: 'm', color: C.dim, align: 'right' }),
   ];
-  // thu nhỏ tiêu đề (titleSize) không kéo phần thân lên: vẫn chừa chỗ theo chiều cao dòng 31pt
-  const titleLines = wrap(title, opts.titleSize || 31, 'eb', SW - 2 * M - 0.4).length;
-  let bodyTop = 1.58 + titleLines * (31 * 1.18) / 72 + 0.34;
+  const titleLines = wrap(title, titleSize, 'eb', SW - 2 * M - 0.4).length;
+  // fill: slide đã được thiết kế lấp kín phần thân -> phần thân bám sát tiêu đề theo cỡ chữ tiêu đề thật.
+  // Các slide khác giữ bố cục cũ (thân bắt đầu ở 1.58 + dòng tiêu đề 31pt + 0.34), chỉ dời lên một nửa phần chỗ vừa
+  // có để khoảng cách tiêu đề–nội dung và nội dung–chân trang vẫn cân.
+  const tight = TITLE_TOP + titleLines * (titleSize * 1.18) / 72 + 0.22;
+  const legacy = 1.58 + titleLines * (31 * 1.18) / 72 + 0.34;
+  let bodyTop = opts.fill ? tight : (tight + legacy) / 2;
   if (opts.sub) {
     const s = txt({ x: M, y: bodyTop, w: opts.subW || 10.2, text: opts.sub, size: 14, weight: 'm', color: C.muted, lh: 1.4 });
     els.push(s);
@@ -63,7 +71,9 @@ const path = require('path');
 
 const PHOTOS = require('./anh-config');
 const CUT_DIR = 'anh/da-cat';
-const hasPhoto = (slot) => fs.existsSync(path.join(__dirname, CUT_DIR, slot + '.jpg'));
+// ảnh đã cắt: ảnh chụp màn hình là .png (giữ nét chữ), ảnh chụp thật là .jpg
+const photoFile = (slot) => ['.png', '.jpg'].map((e) => CUT_DIR + '/' + slot + e).find((f) => fs.existsSync(path.join(__dirname, f)));
+const hasPhoto = (slot) => !!photoFile(slot);
 
 // Chú thích ảnh nằm NGOÀI khung, ngay dưới mép dưới của ảnh — để không che
 // watermark/nguồn của toà soạn ở góc ảnh.
@@ -79,12 +89,14 @@ function photoH(slot, caption) {
 }
 
 // Khung ảnh: có ảnh thì ghép ảnh, chưa có thì vẽ khung chờ cùng kích thước.
-function photo(slot, x, y, caption, accent = C.greenSoft) {
+// round: bo góc ảnh bằng bán kính của card (0.12in); ba bộ render tự cắt ảnh theo góc bo này.
+const PHOTO_R = 0.12;
+function photo(slot, x, y, caption, accent = C.greenSoft, round = true) {
   const { w, h, label } = PHOTOS[slot];
   const out = hasPhoto(slot)
     ? [
-        img(CUT_DIR + '/' + slot + '.jpg', x, y, w, h),
-        rect(x, y, w, h, C.white, 0, 0.12, { color: C.white, alpha: 0.18, w: 1 }),
+        { ...img(photoFile(slot), x, y, w, h), r: round ? PHOTO_R : 0 },
+        rect(x, y, w, h, C.white, 0, round ? PHOTO_R : 0, { color: C.white, alpha: 0.18, w: 1 }),
       ]
     : [
         rect(x, y, w, h, C.white, 0.05, 0.12, { color: accent, alpha: 0.4, w: 1.4 }),
@@ -98,8 +110,8 @@ function photo(slot, x, y, caption, accent = C.greenSoft) {
 const slides = [];
 // ---------- quy trình 6 bước: timeline dựng dần qua nhiều slide ----------
 const STEPS = [
-  ['Ghi nhận tình huống', 'Trưởng thôn báo cáo và ghim điểm gặp nạn lên bản đồ.'],
-  ['AI phân tích và con người điều phối', 'AI đọc mô tả bằng lời thành số liệu và đề xuất vật tư, người điều phối sẽ chốt phương án.'],
+  ['Ghi nhận tình huống', 'Trưởng thôn báo cáo và đánh dấu điểm gặp nạn trên bản đồ.'],
+  ['AI hỗ trợ phân tích và\nđề xuất vật tư', 'AI đọc mô tả bằng lời thành số liệu và đề xuất vật tư, người điều phối sẽ chốt phương án.'],
   ['Chọn kho tiếp tế gần điểm gặp nạn nhất', 'Hệ thống cân nhắc vị trí, tồn kho và khả năng đáp ứng của từng kho.'],
   ['Xác nhận & thông báo', 'Kho phụ trách nhận lệnh chuẩn bị, xuất vật tư; đội cứu hộ nhận nhiệm vụ cùng lúc.'],
   ['Đội cứu hộ xác nhận hoàn thành', 'Báo cáo kết quả nhiệm vụ kèm hình ảnh tại hiện trường.'],
@@ -112,9 +124,10 @@ const GHOST = { accent: '#24323F', num: '#35485A' };
 // hot = null: slide tổng quan, cả 6 bước hiển thị bình thường
 // hot = [n...]: các bước được làm nổi bật, những bước còn lại mờ đi
 function timelineSlide(hot, eyebrowNote, title, notes) {
-  const { els, bodyTop } = chrome(`QUY TRÌNH ĐIỀU PHỐI CỨU HỘ  ·  ${eyebrowNote}`, title);
+  const { els, bodyTop } = chrome(`QUY TRÌNH ĐIỀU PHỐI CỨU HỘ  ·  ${eyebrowNote}`, title, { fill: true });
   const gap = 0.34, rowGap = 0.44;
-  const w = (SW - 2 * M - 2 * gap) / 3, h = 1.9;
+  // card cao lấp phần thân (chừa 0.12 trên vạch chân trang); nội dung thiết kế cho card cao 1.9 nên dời xuống canh giữa
+  const w = (SW - 2 * M - 2 * gap) / 3, h = (6.82 - 0.12 - bodyTop - rowGap) / 2, dy = (h - 1.9) / 2;
   const colX = (c) => M + c * (w + gap);
   const rowY = (r) => bodyTop + r * (h + rowGap);
   // xếp rắn bò: 1-2-3 ở hàng trên, 6-5-4 ở hàng dưới để bước 4 nằm ngay dưới bước 3
@@ -142,10 +155,10 @@ function timelineSlide(hot, eyebrowNote, title, notes) {
     els.push(rect(x, y, w, h, C.card, live ? 0.78 : 0.55, 0.12,
       { color: glow ? C.green : C.white, alpha: glow ? 0.5 : live ? 0.16 : 0.1, w: glow ? 1.5 : 1 }));
     els.push(rect(x, y, 0.055, h, accent, 0.95, 0.03));
-    els.push(...numberBadge(x + 0.3, y + 0.24, 0.46, String(i + 1), accent));
-    els.push(txt({ x: x + 0.9, y: y + 0.31, w: w - 1.18, text: head, size: 14, weight: 'b',
+    els.push(...numberBadge(x + 0.3, y + dy + 0.24, 0.46, String(i + 1), accent));
+    els.push(txt({ x: x + 0.9, y: y + dy + 0.31, w: w - 1.18, text: head, size: 14, weight: 'b',
       color: live ? C.white : DIM.title, lh: 1.25 }));
-    els.push(txt({ x: x + 0.3, y: y + 0.98, w: w - 0.6, text: body, size: 11.5, weight: 'r',
+    els.push(txt({ x: x + 0.3, y: y + dy + 0.98, w: w - 0.6, text: body, size: 11.5, weight: 'r',
       color: live ? C.text : DIM.body, lh: 1.42 }));
   });
 
@@ -200,7 +213,8 @@ function timelineSlide(hot, eyebrowNote, title, notes) {
   const qy = y + ph + 0.26;
   els.push(rect(M, qy, SW - 2 * M, 0.9, C.green, 0.12, 0.12, { color: C.green, alpha: 0.45, w: 1 }));
   els.push(rect(M, qy, 0.06, 0.9, C.green, 1, 0.03));
-  els.push(txt({ x: M + 0.42, y: qy + 0.16, w: SW - 2 * M - 0.8, text: 'Chúng em trăn trở: liệu công nghệ và AI có thể giảm bớt gánh nặng cho những người đang trực tiếp điều phối cứu hộ? Đó là lý do Ứng Phó Nhanh ra đời.', size: 15.5, weight: 'sb', color: C.white, lh: 1.4 }));
+  // dòng đầu dài nên chữ 13.5pt để vừa một dòng như bản người dùng ngắt trong PowerPoint (15.5pt sẽ tự xuống 3 dòng, tràn ô)
+  els.push(txt({ x: M + 0.42, y: qy + 0.19, w: SW - 2 * M - 0.8, lines: ['Chúng em trăn trở: liệu công nghệ và AI có thể giảm bớt gánh nặng cho những người đang trực tiếp điều phối cứu hộ?', 'Đó là lý do Ứng Phó Nhanh ra đời.'], size: 13.5, weight: 'sb', color: C.white, lh: 1.4 }));
   slides.push({ els, notes: 'Chúng em sinh ra và lớn lên tại vùng đất năm nào cũng chịu ảnh hưởng của bão lũ. Trong nhóm có thành viên là chiến sĩ Công an nhân dân, đã trực tiếp tham gia cứu hộ trong đợt bão lũ lịch sử năm 2025.' });
 }
 // ============ 2B. THIỆT HẠI 2025 ============
@@ -229,7 +243,7 @@ function timelineSlide(hot, eyebrowNote, title, notes) {
   els.push(rect(M, by, SW - 2 * M, 0.94, C.red, 0.12, 0.12, { color: C.red, alpha: 0.45, w: 1 }));
   els.push(rect(M, by, 0.06, 0.94, C.red, 1, 0.03));
   els.push(txt({ x: M + 0.42, y: by + 0.17, w: 3.1, text: '9.730 tỷ đồng', size: 30, weight: 'eb', color: C.red, lh: 1.1 }));
-  els.push(txt({ x: M + 3.5, y: by + 0.21, w: SW - 2 * M - 3.9, text: 'Tổng thiệt hại thiên tai của tỉnh trong năm 2025. Mỗi con số ở đây là một lần vật tư phải đến đúng nơi, đúng lúc.', size: 14.5, weight: 'sb', color: C.white, lh: 1.4 }));
+  els.push(txt({ x: M + 3.5, y: by + 0.21, w: SW - 2 * M - 3.9, lines: ['Tổng thiệt hại thiên tai của tỉnh trong năm 2025.', 'Mỗi con số ở đây là một lần vật tư phải đến đúng nơi, đúng lúc.'], size: 14.5, weight: 'sb', color: C.white, lh: 1.4 }));
   els.push(txt({ x: M, y: by + 1.04, w: SW - 2 * M, text: 'Nguồn: báo cáo thiệt hại của tỉnh Đắk Lắk (địa bàn Phú Yên cũ sau sáp nhập), số liệu tính đến ngày 20/11/2025.', size: 9.5, weight: 'r', color: C.dim }));
 
   slides.push({ els, notes: 'Năm 2025 là dấu mốc trực tiếp thúc đẩy nhóm em bắt tay vào làm. Đợt mưa lũ giữa tháng 11, mưa phổ biến bốn trăm đến sáu trăm mi-li-mét, có nơi trên tám trăm. Lũ trên sông Ba và sông Kỳ Lộ vượt các đỉnh lũ lịch sử. Tính đến ngày hai mươi tháng mười một, toàn tỉnh có mười chín người chết, sáu người mất tích, hơn tám mươi lăm nghìn bảy trăm lượt nhà bị ngập, hơn mười hai nghìn tám trăm hộ bị cô lập. Bốn mươi xã phường phải công bố tình huống khẩn cấp, trong đó có xã Đồng Xuân quê em. Tổng thiệt hại vượt chín nghìn bảy trăm ba mươi tỷ đồng. Đoạn này nói chậm, để con số tự nói.' });
@@ -237,7 +251,7 @@ function timelineSlide(hot, eyebrowNote, title, notes) {
 
 // ============ 2C. HIỆN TRƯỜNG QUA ẢNH ============
 {
-  const { els, bodyTop } = chrome('HIỆN TRƯỜNG THÁNG 11/2025', 'Những gì chúng em nhìn thấy tận mắt', {
+  const { els, bodyTop } = chrome('HIỆN TRƯỜNG THÁNG 11/2025', 'Những gì mà người dân đã gánh chịu hằng năm', {
     sub: 'Đằng sau mỗi con số ở slide trước là những ngày nước ngập tới mái nhà, đường bị cắt và vật tư không kịp tới nơi cần.',
     subW: 11.2,
   });
@@ -248,7 +262,7 @@ function timelineSlide(hot, eyebrowNote, title, notes) {
     'Vật tư cứu trợ được đưa tới từng nhà bằng xuồng.',
   ];
   const cols = [C.sky, C.orange, C.green];
-  caps.forEach((cap, i) => els.push(...photo('hien-truong-' + (i + 1), M + i * (pw + gap), y, cap, cols[i])));
+  caps.forEach((cap, i) => els.push(...photo('hien-truong-' + (i + 1), M + i * (pw + gap), y, cap, cols[i], false)));
 
   const by = y + Math.max(...caps.map((c, i) => photoH('hien-truong-' + (i + 1), c))) + 0.24;
   els.push(txt({ x: M, y: by, w: SW - 2 * M, text: 'Nguồn ảnh: Báo Thanh Niên, Báo Dân Trí — đợt mưa lũ tháng 11/2025.', size: 11, weight: 'r', color: C.dim }));
@@ -258,12 +272,13 @@ function timelineSlide(hot, eyebrowNote, title, notes) {
 // ============ 3. VẤN ĐỀ ============
 {
   const { els, bodyTop } = chrome('VẤN ĐỀ', 'Bài toán trong những giờ khẩn cấp');
-  const y = bodyTop, lw = 4.45;
-  els.push(...card(M, y, lw, 4.0, C.orange));
-  els.push(txt({ x: M + 0.36, y: y + 0.36, w: lw - 0.72, text: 'Phía sau mỗi nhiệm vụ cứu hộ không chỉ là lòng dũng cảm', size: 17, weight: 'b', color: C.white, lh: 1.32 }));
-  els.push(txt({ x: M + 0.36, y: y + 1.084, w: lw - 0.72, text: 'Đó còn là bài toán về thời gian, con người, vật tư và khả năng điều phối.', size: 13, weight: 'r', color: C.text, lh: 1.5 }));
-  els.push(rect(M + 0.36, y + 1.962, lw - 0.72, 0.01, C.white, 0.16));
-  els.push(txt({ x: M + 0.36, y: y + 2.34, w: lw - 0.72, text: 'Sau nhiều giờ, thậm chí nhiều ngày liên tục, con người sẽ xuống sức — trong khi quyết định vẫn phải đưa ra trong vài phút.', size: 13, weight: 'sb', color: C.amber, lh: 1.45 }));
+  const y = bodyTop, lw = PHOTOS['kho-khan'].w;
+  // cột trái: ảnh ở trên, câu nhấn mạnh màu vàng trong thẻ ngay dưới ảnh, tổng cao bằng lưới 4 câu hỏi (4.0)
+  const ph = PHOTOS['kho-khan'].h, noteY = y + ph + 0.15, noteH = 4.0 - ph - 0.15;
+  els.push(...photo('kho-khan', M, y));
+  els.push(...card(M, noteY, lw, noteH, C.orange));
+  els.push(txt({ x: M + 0.3, y: noteY + 0.24, w: lw - 0.6, lines: ['Sau nhiều giờ, thậm chí nhiều ngày liên tục,', 'con người sẽ xuống sức — trong khi', 'quyết định vẫn phải đưa ra trong vài phút.'], size: 12.5, weight: 'sb', color: C.amber, lh: 1.45 }));
+  els.push(txt({ x: M, y: y + 4.0 + 0.1, w: SW - 2 * M, text: 'Ảnh: cán bộ kiểm đếm vật tư phòng chống thiên tai bằng sổ ghi chép tay (Minh họa).', size: 9.5, weight: 'r', color: C.dim }));
 
   const rx = M + lw + 0.34, rw = SW - M - rx, cw = (rw - 0.3) / 2, ch = 1.85;
   const qs = [
@@ -339,29 +354,25 @@ timelineSlide([1, 2], 'BƯỚC 1 → 2 / 6', 'Ghi nhận đúng chỗ, phân tí
   'Quy trình bắt đầu từ tin báo của trưởng thôn, sau đó AI phân tích tình hình để người điều phối chốt phương án.');
 // ============ 6. AI THAM MƯU ============
 {
-  const { els, bodyTop } = chrome('AI THAM MƯU', 'Trưởng thôn báo cáo — AI phân tích và lập bản tham mưu', {
-    titleSize: 28, // tiêu đề dài: 31pt sẽ rớt chữ "mưu" xuống dòng 2 đè lên ảnh
+  const { els, bodyTop } = chrome('AI THAM MƯU', 'Trưởng thôn báo cáo — AI hỗ trợ phân tích và lập bản tham mưu', {
+    fill: true,
+    titleSize: 25, // tiêu đề dài: từ 26pt trở lên sẽ rớt xuống dòng 2 đè lên ảnh
   });
-  const y = bodyTop, h = 4.16, lw = PHOTOS['ai-tham-muu'].w;
-  // ảnh chụp màn hình thật: người điều phối kể bằng lời, AI điền sẵn số liệu vào form
-  els.push(...photo('ai-tham-muu', M, y, 'Màn hình thật trên hệ thống Ứng Phó Nhanh.', C.sky));
-
-  els.push({ t: 'tri', x: M + lw + 0.25, y: y + h / 2 - 0.15, w: 0.24, h: 0.3, fill: C.greenSoft, alpha: 0.9 });
-
-  const rx = M + lw + 0.74, rw = SW - M - rx, rh = 0.95, gap = 0.12;
-  const outs = [
-    ['Số liệu ngay lập tức điền sẵn để người điều phối kiểm tra', 'Loại tình huống, số người, số giờ cô lập, trẻ em, người già, ca y tế.', C.green],
-    ['Danh mục vật tư đề xuất', 'Vật tư, thiết bị và nguồn lực cần thiết cho nhiệm vụ.', C.amber],
-    ['Kho xuất hàng tối ưu', 'Dựa trên vị trí, tồn kho và khả năng đáp ứng của từng kho.', C.sky],
-    ['Bản tham mưu sẵn sàng duyệt', 'Người điều phối chỉ cần kiểm tra, chỉnh sửa và xác nhận phương án.', C.orange],
-  ];
-  outs.forEach(([head, body, col], i) => {
-    const cy = y + i * (rh + gap);
-    els.push(...card(rx, cy, rw, rh, col));
-    els.push(txt({ x: rx + 0.3, y: cy + 0.2, w: rw - 0.6, text: head, size: 13.5, weight: 'b', color: C.white }));
-    els.push(txt({ x: rx + 0.3, y: cy + 0.52, w: rw - 0.6, text: body, size: 11.5, weight: 'r', color: C.muted, lh: 1.3 }));
+  // hai ảnh chụp màn hình nguyên vẹn, cao hết vùng thân slide, canh giữa theo bề ngang, nối bằng mũi tên
+  const SHOTS = ['ai-tham-muu', 'phan-tich-tinh-huong'];
+  const aGap = 0.5, mid = bodyTop + PHOTOS[SHOTS[0]].h / 2;
+  const rowW = SHOTS.reduce((sum, k) => sum + PHOTOS[k].w, 0) + aGap * (SHOTS.length - 1);
+  let x = (SW - rowW) / 2;
+  SHOTS.forEach((slot, i) => {
+    if (i > 0) {
+      els.push({ t: 'tri', x: x + (aGap - 0.26) / 2, y: mid - 0.17, w: 0.26, h: 0.34, fill: C.greenSoft, alpha: 0.95 });
+      x += aGap;
+    }
+    els.push(...photo(slot, x, bodyTop));
+    x += PHOTOS[slot].w;
   });
-  slides.push({ els, notes: 'AI đọc mô tả bằng lời thành số liệu, đề xuất vật tư và chọn kho tối ưu để rút ngắn thời gian ứng cứu.' });
+  els.push(txt({ x: M, y: SH - 0.5, w: 7, text: 'Nguồn: màn hình thật trên hệ thống Ứng Phó Nhanh.', size: 9.5, weight: 'm', color: C.dim }));
+  slides.push({ els, notes: 'Hai màn hình thật, đi từ trái sang phải. Một: trưởng thôn kể bằng lời, AI đọc thành số liệu và điền sẵn vào form. Hai: AI phân tích tình huống, lập danh mục vật tư theo nhóm và chỉ ra ngay món nào kho trong xã không đủ, ví dụ thiếu 15 áo phao người lớn. Người điều phối chỉ việc kiểm tra, chỉnh sửa và xác nhận.' });
 }
 
 // ============ TIMELINE: thêm bước 3 ============
@@ -369,25 +380,14 @@ timelineSlide([3], 'BƯỚC 3 / 6', 'Chọn kho theo khoảng cách và khả n�
   'Sau khi có danh mục vật tư, hệ thống chọn kho tiếp tế gần điểm gặp nạn nhất.');
 // ============ CHỌN KHO TIẾP TẾ (đi sâu bước 3) ============
 {
-  const { els, bodyTop } = chrome('BƯỚC 3  ·  CHỌN KHO TIẾP TẾ', 'Kho nào gần nhất? Không đủ thì lấy tiếp ở đâu?');
-  const y = bodyTop, lw = 5.55;
-  // ảnh chụp màn hình thật: thứ tự lấy hàng từ gần đến xa và vật tư lấy ở từng kho
-  els.push(...photo('chon-kho', M, y, 'Màn hình thật: hệ thống xếp kho lấy hàng từ gần đến xa.', C.sky));
-
-  const rx = M + lw + 0.38, rw = SW - M - rx, rh = 0.78, gap = 0.105;
-  const rules = [
-    ['Đường đi thực tế, không phải đường chim bay', 'Hệ thống định tuyến theo đường sá thật, không đo đường thẳng.', C.green],
-    ['Gần trước, hạn dùng gần hết trước', 'Cùng khoảng cách thì ưu tiên lô sắp hết hạn, tránh lãng phí.', C.amber],
-    ['Thiếu thì tràn sang kho kế tiếp', 'Lấy hết phần kho gần có, phần thiếu chuyển sang kho gần kế tiếp.', C.sky],
-    ['Tự loại kho không thể xuất', 'Kho đang có sự cố, vật tư hỏng hoặc hết hạn đều bị loại.', C.orange],
-    ['Cả xã vẫn không đủ?', 'Hệ thống gợi ý kho của xã lân cận để người điều phối liên hệ.', C.red],
-  ];
-  rules.forEach(([head, body, col], i) => {
-    const cy = y + i * (rh + gap);
-    els.push(...card(rx, cy, rw, rh, col));
-    els.push(txt({ x: rx + 0.3, y: cy + 0.13, w: rw - 0.6, text: head, size: 13, weight: 'b', color: C.white }));
-    els.push(txt({ x: rx + 0.3, y: cy + 0.42, w: rw - 0.6, text: body, size: 11.5, weight: 'r', color: C.muted, lh: 1.3 }));
-  });
+  const { els, bodyTop } = chrome('BƯỚC 3  ·  CHỌN KHO TIẾP TẾ', 'Kho nào gần nhất? Không đủ thì lấy tiếp ở đâu?', { fill: true });
+  // ảnh chụp màn hình thật (thứ tự lấy hàng từ gần đến xa + tuyến đường trên bản đồ) cao hết cỡ, canh giữa;
+  // ghi chú chỉ là một dòng chữ ngay dưới ảnh (không nền) để dành chỗ cho ảnh; dòng nguồn nằm góc trái chân trang
+  const { w: pw, h: ph } = PHOTOS['chon-kho'];
+  const px = (SW - pw) / 2;
+  els.push(...photo('chon-kho', px, bodyTop));
+  els.push(txt({ x: px, y: bodyTop + ph + 0.08, w: pw, text: '* Khoảng cách được đo theo đường sá thật, không đo đường chim bay.', size: 12, weight: 'sb', color: C.text }));
+  els.push(txt({ x: M, y: SH - 0.5, w: 7, text: 'Nguồn: màn hình thật trên hệ thống Ứng Phó Nhanh.', size: 9.5, weight: 'm', color: C.dim }));
 
   slides.push({ els, notes: 'Hệ thống tính quãng đường thực tế từ điểm gặp nạn tới từng kho, ưu tiên kho gần nhất. Kho gần nhất không đủ thì lấy hết phần đang có rồi tràn sang kho gần thứ hai, thứ ba. Kho đang có sự cố hoặc vật tư hỏng, hết hạn sẽ bị loại khỏi phương án.' });
 }
@@ -397,37 +397,27 @@ timelineSlide([4], 'BƯỚC 4 / 6', 'Phương án được duyệt, thông tin �
   'Người điều phối xác nhận phương án, kho và đội cứu hộ nhận thông báo cùng lúc.');
 // ============ XÁC NHẬN & THÔNG BÁO (đi sâu bước 4) ============
 {
-  const { els, bodyTop } = chrome('BƯỚC 4  ·  XÁC NHẬN & THÔNG BÁO', 'Xác nhận một lần, hai bộ phận cùng nhận thông tin');
-  const y = bodyTop, gap = 0.36, w = (SW - 2 * M - gap) / 2, h = 3.45;
-  const cols = [
-    ['BỘ PHẬN KHO', 'Chuẩn bị và xuất vật tư', C.amber, [
-      'Nhận thông báo ngay khi người điều phối xác nhận phương án.',
-      'Nhận thông tin xong là soạn vật tư theo danh sách và xuất kho, tồn kho trừ ngay lúc xuất.',
-    ]],
-    ['ĐỘI CỨU HỘ', 'Biết đi đâu, nhận gì, ở kho nào', C.sky, [
-      'Điểm gặp nạn hiển thị trực tiếp trên bản đồ.',
-      'Danh sách vật tư cần nhận cho nhiệm vụ của mình.',
-      'Danh sách kho cần đến kèm vị trí từng kho trên bản đồ.',
-      'Đường đi từ các kho đến điểm gặp nạn',
-    ]],
-  ];
-  cols.forEach(([label, sub, col, items], i) => {
-    const x = M + i * (w + gap);
-    els.push(...card(x, y, w, h, col));
-    els.push(txt({ x: x + 0.36, y: y + 0.3, w: w - 0.72, text: label, size: 10.5, weight: 'eb', color: col, spacing: 1.8 }));
-    els.push(txt({ x: x + 0.36, y: y + 0.6, w: w - 0.72, text: sub, size: 17, weight: 'eb', color: C.white }));
-    els.push(rect(x + 0.36, y + 1.12, w - 0.72, 0.01, C.white, 0.14));
-    let cy = y + 1.34;
-    for (const it of items) {
-      els.push(rect(x + 0.38, cy + 0.08, 0.09, 0.09, col, 0.95, 0.045));
-      const t = txt({ x: x + 0.64, y: cy, w: w - 1.0, text: it, size: 12.5, weight: 'r', color: C.text, lh: 1.4 });
-      els.push(t);
-      cy += t.h + 0.16;
-    }
-  });
-  const by = y + h + 0.28;
-  els.push(rect(M, by, SW - 2 * M, 0.62, C.green, 0.12, 0.1, { color: C.green, alpha: 0.4, w: 1 }));
-  els.push(txt({ x: M + 0.36, y: by + 0.17, w: SW - 2 * M - 0.72, text: 'Không ai phải gọi điện hỏi lại: kho biết chuẩn bị gì, đội cứu hộ biết đi đâu và nhận ở đâu.', size: 13, weight: 'sb', color: C.white }));
+  const { els, bodyTop } = chrome('BƯỚC 4  ·  XÁC NHẬN & THÔNG BÁO', 'Xác nhận một lần, hai bộ phận cùng nhận thông tin', { fill: true });
+  // hai khung màu theo vai trò lấp kín bề ngang: khung vàng cho bộ phận kho, khung xanh dương cho đội cứu hộ.
+  // Mỗi khung có nền tô nhạt cùng màu, viền màu và nhãn đặc màu ở góc trên; ảnh canh giữa trong khung, cao bằng nhau.
+  const K = PHOTOS['kho-chuan-bi'], B = PHOTOS['doi-cuu-ho-ban-do'], D = PHOTOS['doi-cuu-ho-kho'];
+  const panelGap = 0.3, inGap = 0.2, panelY = bodyTop - 0.06, imgY = panelY + 0.46, panelH = imgY + K.h + 0.09 - panelY;
+  const pad = (SW - 2 * M - panelGap - inGap - K.w - B.w - D.w) / 4; // lề trái/phải ảnh trong mỗi khung
+  const w1 = K.w + 2 * pad, x2 = M + w1 + panelGap, w2 = SW - M - x2;
+  const panel = (x, w, label, col) => {
+    els.push(rect(x, panelY, w, panelH, col, 0.1, 0.16, { color: col, alpha: 0.55, w: 1.5 }));
+    const t = txt({ x: 0, y: 0, w: 4, text: label, size: 11, weight: 'eb', color: C.ink, spacing: 1.6 });
+    const pw = widthOf(label, 11, 'eb', 1.6) + 0.4, ph = 0.3;
+    els.push(rect(x + pad, panelY + 0.09, pw, ph, col, 1, ph / 2));
+    Object.assign(t, { x: x + pad + 0.2, y: panelY + 0.09 + (ph - t.h) / 2, w: pw - 0.3 });
+    els.push(t);
+  };
+  panel(M, w1, 'BỘ PHẬN KHO', C.amber);
+  els.push(...photo('kho-chuan-bi', M + pad, imgY));
+  panel(x2, w2, 'ĐỘI CỨU HỘ', C.sky);
+  els.push(...photo('doi-cuu-ho-ban-do', x2 + pad, imgY));
+  els.push(...photo('doi-cuu-ho-kho', x2 + pad + B.w + inGap, imgY));
+  els.push(txt({ x: M, y: SH - 0.5, w: 7, text: 'Nguồn: màn hình thật trên hệ thống Ứng Phó Nhanh.', size: 9.5, weight: 'm', color: C.dim }));
 
   slides.push({ els, notes: 'Khi người điều phối xác nhận, kho và đội cứu hộ nhận thông tin cùng một lúc. Kho có phiếu yêu cầu riêng để chuẩn bị và xuất vật tư; đội cứu hộ thấy điểm gặp nạn trên bản đồ, biết cần nhận vật tư gì và phải tới những kho nào.' });
 }
@@ -637,23 +627,14 @@ timelineSlide([6], 'BƯỚC 6 / 6  ·  KHÉP VÒNG', 'Vật tư hoàn trả xong
 // ============ K6. TRỢ LÝ AI ============
 {
   const { els, bodyTop } = chrome('TRỢ LÝ AI', 'Hỏi bằng tiếng Việt. Nhưng không được bịa số.');
-  const y = bodyTop, lw = 5.0, rx = M + lw + 0.38, rw = SW - M - rx, h = 3.2;
+  const y = bodyTop, lw = PHOTOS['tro-ly-ai'].w, rx = M + lw + 0.38, rw = SW - M - rx, h = PHOTOS['tro-ly-ai'].h;
 
-  els.push(...card(M, y, lw, h, C.sky));
-  els.push(txt({ x: M + 0.34, y: y + 0.28, w: lw - 0.68, text: 'HỎI BẰNG NGÔN NGỮ TỰ NHIÊN', size: 10.5, weight: 'eb', color: C.sky, spacing: 1.7 }));
-  const q = txt({ x: M + 0.5, y: y + 0.83, w: lw - 1.0, text: '“Kho nào còn nhiều áo phao nhất?”', size: 13, weight: 'sb', color: C.white, lh: 1.35 });
-  els.push(rect(M + 0.34, y + 0.7, lw - 0.68, q.h + 0.26, C.sky, 0.14, 0.1, { color: C.sky, alpha: 0.4, w: 1 }));
-  els.push(q);
-  els.push(txt({ x: M + 0.34, y: y + 1.44, w: lw - 0.68, text: 'Khoảng 2 giây là có số, kèm phân bổ theo từng kho.', size: 12, weight: 'r', color: C.text }));
-  els.push(rect(M + 0.34, y + 1.86, lw - 0.68, 0.01, C.white, 0.16));
-  els.push(txt({ x: M + 0.34, y: y + 2.02, w: lw - 0.68, text: 'KHI CON SỐ KHÔNG KHỚP DỮ LIỆU', size: 10.5, weight: 'eb', color: C.red, spacing: 1.7 }));
-  els.push(rect(M + 0.34, y + 2.42, lw - 0.68, 0.56, C.red, 0.16, 0.1, { color: C.red, alpha: 0.45, w: 1 }));
-  els.push(txt({ x: M + 0.5, y: y + 2.57, w: lw - 1.0, text: '“Chưa thể tạo câu trả lời an toàn.”', size: 13, weight: 'sb', color: C.white }));
+  els.push(...photo('tro-ly-ai', M, y));
 
   const rh = 0.94, gap = 0.19;
-  [['Đối chiếu từng con số', 'Câu trả lời được soi lại với dữ liệu kho tại thời điểm hỏi; lệch thì chặn, không hiển thị.', C.green],
-   ['Bắt buộc trích nguồn', 'Định mức và quy trình sơ cứu dựa trên Sphere Standards, IFRC, WHO và cơ quan phòng chống thiên tai Việt Nam.', C.amber],
-   ['Chạy tại chỗ', 'Mô hình chạy trên máy đặt tại xã: không gửi dữ liệu ra ngoài, 0 đồng mỗi lượt gọi.', C.sky]].forEach(([hd, bd, col], i) => {
+  [['Đối chiếu từng con số', 'Câu trả lời được soi lại với dữ liệu kho tại thời điểm hỏi;\nlệch thì chặn, không hiển thị.', C.green],
+   ['Bắt buộc trích nguồn', 'Định mức và quy trình sơ cứu dựa trên Sphere Standards, IFRC, WHO\nvà cơ quan phòng chống thiên tai Việt Nam.', C.amber],
+   ['Chạy tại chỗ', 'Mô hình chạy trên máy đặt tại xã: không gửi dữ liệu ra ngoài,\n0 đồng mỗi lượt gọi.', C.sky]].forEach(([hd, bd, col], i) => {
     const yy = y + i * (rh + gap);
     els.push(...card(rx, yy, rw, rh, col));
     els.push(txt({ x: rx + 0.3, y: yy + 0.16, w: rw - 0.6, text: hd, size: 13.5, weight: 'b', color: C.white }));
@@ -671,7 +652,7 @@ timelineSlide([6], 'BƯỚC 6 / 6  ·  KHÉP VÒNG', 'Vật tư hoàn trả xong
 // ============ K7. THƯ QUAN TÂM ============
 {
   const { els, bodyTop } = chrome('HỘI CHỮ THẬP ĐỎ XÃ ĐỒNG XUÂN', 'Sản phẩm này có một nơi để về');
-  const y = bodyTop, lw = 3.2, rx = M + lw + 0.44, rw = SW - M - rx, h = 4.05;
+  const y = bodyTop, lw = PHOTOS['thu-quan-tam'].w, rx = M + lw + 0.44, rw = SW - M - rx, h = PHOTOS['thu-quan-tam'].h;
 
   els.push(...photo('thu-quan-tam', M, y));
 

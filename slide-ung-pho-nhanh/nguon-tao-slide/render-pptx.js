@@ -1,4 +1,5 @@
 // Editable PowerPoint: every text block stays a real text box in Be Vietnam Pro.
+const fs = require('fs');
 const pptxgen = require('pptxgenjs');
 const { SW, SH, PPT_BOLD } = require('./core');
 const slides = require('./slides');
@@ -52,4 +53,28 @@ slides.forEach((s, idx) => {
   if (s.notes) slide.addNotes(s.notes);
 });
 
-pres.writeFile({ fileName: 'Ung-Pho-Nhanh-Slide.pptx' }).then((f) => console.log('pptx written:', f));
+// pptxgenjs chỉ bo ảnh thành elip, nên ảnh có e.r > 0 được đổi prstGeom rect -> roundRect ngay trong XML.
+// Ảnh trong slide XML nằm đúng thứ tự các phần tử img của slide, nên ghép theo thứ tự.
+const JSZip = require('jszip');
+(async () => {
+  const zip = await JSZip.loadAsync(await pres.write({ outputType: 'nodebuffer' }));
+  let rounded = 0;
+  for (let i = 0; i < slides.length; i++) {
+    const imgs = slides[i].els.filter((e) => e.t === 'img');
+    if (!imgs.some((e) => e.r > 0)) continue;
+    const name = `ppt/slides/slide${i + 1}.xml`;
+    let n = 0;
+    const xml = (await zip.file(name).async('string')).replace(/<p:pic>[\s\S]*?<\/p:pic>/g, (pic) => {
+      const e = imgs[n++];
+      if (!e || !(e.r > 0)) return pic;
+      const adj = Math.round((e.r / Math.min(e.w, e.h)) * 100000);
+      rounded++;
+      return pic.replace('<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>',
+        `<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val ${adj}"/></a:avLst></a:prstGeom>`);
+    });
+    if (n !== imgs.length) throw new Error(`slide ${i + 1}: ${n} ảnh trong XML, ${imgs.length} ảnh trong nguồn`);
+    zip.file(name, xml);
+  }
+  fs.writeFileSync('Ung-Pho-Nhanh-Slide.pptx', await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }));
+  console.log('pptx written: Ung-Pho-Nhanh-Slide.pptx, bo góc', rounded, 'ảnh');
+})();

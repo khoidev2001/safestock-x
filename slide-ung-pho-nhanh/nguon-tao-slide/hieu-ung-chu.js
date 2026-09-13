@@ -20,6 +20,7 @@ const MAX_STEP = 220;   // giãn cách tối đa giữa hai khối (ms)
 function isStatic(e) {
   if (e.w >= 13 && e.h >= 7) return true;                          // nền, scrim, lớp phủ
   if (e.t === 'img' && /mark-sm|logo-sm/.test(e.src)) return true; // logo thương hiệu
+  if (e.hdr) return true;                                           // nhãn dòng chữ xanh ở hàng đầu: hiện sẵn để nhìn vào trước
   if (e.t === 'rect' && e.h <= 0.02) return true;                  // vạch kẻ mảnh
   if (e.t === 'text') {
     const s = (e.lines && e.lines[0]) || '';
@@ -74,7 +75,8 @@ function groupsOf(els) {
     const p = els[i - 1];
     if (e.t === 'rect' && p && prevGi >= 0 && Math.abs(p.x - e.x) < 0.03 && Math.abs(p.y - e.y) < 0.03
       && Math.abs(p.w - e.w) < 0.03 && Math.abs((p.h || 0) - (e.h || 0)) < 0.03) {
-      groups[prevGi].push(i); return;
+      // ghi lại khối của viền: mũi tên đặt giữa hai ảnh có thể bám vào viền thay vì ảnh
+      groups[prevGi].push(i); giOf[i] = prevGi; return;
     }
     if (isBoxEl(e) || isPicEl(e)) {
       groups.push([i]);

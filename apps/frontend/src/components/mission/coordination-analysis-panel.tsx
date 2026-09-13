@@ -9,10 +9,12 @@ import { ApiError } from "@/lib/api";
 import {
   getLatestCoordinationAnalysis,
   type CoordinationAnalysisSnapshot,
+  type MissionReadinessAssessment,
   type MissionRequirement,
 } from "@/lib/mission-api";
 import { RequirementEditor } from "./requirement-editor";
 import { InterCommuneBorrowSection } from "./inter-commune-borrow";
+import { MissionReadinessSummary } from "./mission-readiness-summary";
 
 export function CoordinationAnalysisPanel({
   missionId,
@@ -23,6 +25,7 @@ export function CoordinationAnalysisPanel({
   defaultOpen,
   requirements,
   requirementsEditable = false,
+  readiness = null,
 }: {
   missionId: string;
   /** Số nhiệm vụ, đi kèm yêu cầu mượn để xã lân cận biết hàng xin về làm gì. */
@@ -61,6 +64,11 @@ export function CoordinationAnalysisPanel({
   requirements: MissionRequirement[];
   /** ADMIN còn sửa được danh sách vật tư không (nhiệm vụ chưa phát hành). */
   requirementsEditable?: boolean;
+  /**
+   * Khả năng đáp ứng tính trên chính `requirements` ở trên — hiện thành một dòng
+   * tóm tắt ngay dưới bảng vật tư.
+   */
+  readiness?: MissionReadinessAssessment | null;
 }) {
   const latest = useQuery({
     queryKey: ["mission", missionId, "coordination-analysis"],
@@ -107,7 +115,14 @@ export function CoordinationAnalysisPanel({
       {latest.isPending ? (
         <AnalysisSkeleton />
       ) : !analysis ? (
-        <EmptyState />
+        <>
+          <EmptyState />
+          {readiness ? (
+            <div className="mt-4">
+              <MissionReadinessSummary assessment={readiness} />
+            </div>
+          ) : null}
+        </>
       ) : (
         <AnalysisBody
           analysis={analysis}
@@ -116,6 +131,7 @@ export function CoordinationAnalysisPanel({
           missionNo={missionNo}
           requirements={requirements}
           requirementsEditable={requirementsEditable}
+          readiness={readiness}
         />
       )}
       {/* Không bọc trong div có viền: chưa có bằng chứng thì khối này trả về null,
@@ -132,6 +148,7 @@ function AnalysisBody({
   missionNo,
   requirements,
   requirementsEditable,
+  readiness,
 }: {
   analysis: CoordinationAnalysis;
   snapshot: CoordinationAnalysisSnapshot;
@@ -139,6 +156,7 @@ function AnalysisBody({
   missionNo?: number;
   requirements: MissionRequirement[];
   requirementsEditable: boolean;
+  readiness: MissionReadinessAssessment | null;
 }) {
   // Phân bổ chỉ mang mã SKU; tên và đơn vị lấy từ bảng nhu cầu ngay phía trên.
   const itemBySku = new Map(
@@ -201,6 +219,11 @@ function AnalysisBody({
           canRecalculate={requirementsEditable}
         />
       </Section>
+
+      {/* Chốt lại sau cả hai nửa "lấy hàng ở đâu": nội xã và mượn liên xã. Chỉ còn
+          tỉ lệ và số loại đã đủ — đủ hay thiếu từng dòng đã nằm trong bảng vật tư,
+          liệt kê lại là hai bảng nói cùng một điều. */}
+      {readiness ? <MissionReadinessSummary assessment={readiness} /> : null}
 
       <div>
         {/* Dự báo là thông tin nền, không phải việc phải làm ngay: gấp lại để
