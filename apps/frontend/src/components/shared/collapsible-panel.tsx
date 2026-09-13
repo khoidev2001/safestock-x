@@ -61,8 +61,7 @@ export function CollapsiblePanel({
    *
    * Hoạt ảnh gập chạy được là nhờ `overflow: hidden` — không cắt thì nội dung
    * vẫn hiện nguyên si trong lúc ô chứa co lại. Nhưng cắt MÃI thì các bong bóng
-   * chú thích ở dòng đầu và dòng cuối (xem `WhyNeeded` trong khối khả năng đáp
-   * ứng) bị xén mất một nửa. Nên chỉ cắt trong lúc chạy hoạt ảnh; mở xong thì
+   * chú thích hay menu thò ra ở dòng đầu và dòng cuối bị xén mất một nửa. Nên chỉ cắt trong lúc chạy hoạt ảnh; mở xong thì
    * thả ra. Lúc đang gập thì cắt luôn, vì lúc đó chẳng có gì được phép thò ra.
    */
   const [clipping, setClipping] = useState(!open);
