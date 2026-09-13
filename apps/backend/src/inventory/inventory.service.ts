@@ -151,7 +151,7 @@ export class InventoryService {
       },
     });
     if (!item || ((scopeWarehouseId || actor) && item.batches.length === 0)) {
-      throw new NotFoundException(`Không tìm thấy vật tư SKU=${sku} trong kho được phân công`);
+      throw new NotFoundException(`Không tìm thấy vật tư mã ${sku} trong kho được phân công`);
     }
     return item;
   }
@@ -726,7 +726,7 @@ export class InventoryService {
       return response;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-        throw new ConflictException("SKU, danh mục hoặc mã lô đã tồn tại");
+        throw new ConflictException("Mã vật tư, danh mục hoặc mã lô đã tồn tại");
       }
       throw error;
     }
@@ -740,7 +740,7 @@ export class InventoryService {
     const sku = input.sku.trim().toUpperCase();
     const name = input.name.trim();
     if (!sku || !name) {
-      throw new BadRequestException("SKU và tên vật tư không được để trống");
+      throw new BadRequestException("Mã vật tư và tên vật tư không được để trống");
     }
 
     let category;

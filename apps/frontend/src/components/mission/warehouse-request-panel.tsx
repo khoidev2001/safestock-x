@@ -250,7 +250,7 @@ export function WarehouseRequestPanel({
       open={panelOpen}
       onOpenChange={setPanelOpenChoice}
       headingId="warehouse-request-title"
-      title="Chuẩn bị vật tư theo SKU"
+      title="Chuẩn bị vật tư theo mã vật tư"
       subtitle={
         <>
           {preparedCount}/{requests.length} vật tư kho đã xuất · {pickedUpCount}/{requests.length}{" "}

@@ -108,7 +108,7 @@ function UploadCard({ warehouseId }: { warehouseId: string }) {
       </div>
       <p className="mt-1 text-sm text-[var(--text-muted)]">
         Đính kèm bảng kiểm kê theo từng lô. Giữ 7 cột cũ và thêm Batch ID, mã lô, mã kệ ở cột 8–10;
-        báo cáo có một SKU ở nhiều lô sẽ không được duyệt nếu thiếu định danh lô. Số liệu chỉ được
+        báo cáo có một mã vật tư ở nhiều lô sẽ không được duyệt nếu thiếu định danh lô. Số liệu chỉ được
         cập nhật sau khi xã phê duyệt.
       </p>
 

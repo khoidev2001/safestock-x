@@ -1978,7 +1978,7 @@ function RoleActions({
             {nothingToReturn
               ? "Không cần trả vật tư — nhiệm vụ không có gì để thu hồi."
               : returnProgress && returnProgress.length > 1
-                ? `Đang chờ các kho đếm lại và xác nhận hoàn trả: ${returnedWarehouseCount}/${returnProgress.length} kho đã nhận lại (xem từng kho ở khối "Chuẩn bị vật tư theo SKU").`
+                ? `Đang chờ các kho đếm lại và xác nhận hoàn trả: ${returnedWarehouseCount}/${returnProgress.length} kho đã nhận lại (xem từng kho ở khối "Chuẩn bị vật tư theo mã vật tư").`
                 : "Đang chờ kho đếm lại và xác nhận đã hoàn trả vật tư."}
           </p>
         )}

@@ -175,7 +175,7 @@ function ReportRows({ rows }: { rows: ReportRow[] }) {
       <table className="w-full min-w-[760px] text-left text-sm">
         <thead className="sticky top-0 bg-[var(--surface-2)] text-xs uppercase">
           <tr>
-            <th className="px-3 py-2">SKU / vật tư</th>
+            <th className="px-3 py-2">Mã vật tư / tên</th>
             <th className="px-3 py-2">Lô / kệ</th>
             <th className="px-3 py-2 text-right">Số lượng</th>
             <th className="px-3 py-2">Đơn vị</th>

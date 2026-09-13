@@ -218,7 +218,7 @@ export class ReportService {
           });
           if (!batch) {
             throw new ConflictException(
-              `Lô ${row.batchCode ?? row.batchId} của SKU ${row.sku} không còn ở vị trí đã kiểm đếm`,
+              `Lô ${row.batchCode ?? row.batchId} của mã vật tư ${row.sku} không còn ở vị trí đã kiểm đếm`,
             );
           }
         } else {
@@ -240,11 +240,11 @@ export class ReportService {
             take: 2,
           });
           if (candidates.length === 0) {
-            throw new ConflictException(`SKU ${row.sku} không có lô trong kho báo cáo`);
+            throw new ConflictException(`Mã vật tư ${row.sku} không có lô trong kho báo cáo`);
           }
           if (candidates.length > 1) {
             throw new ConflictException(
-              `SKU ${row.sku} có nhiều lô; báo cáo phải ghi rõ lô đã kiểm đếm`,
+              `Mã vật tư ${row.sku} có nhiều lô; báo cáo phải ghi rõ lô đã kiểm đếm`,
             );
           }
           batch = candidates[0];
@@ -490,7 +490,7 @@ function validateApprovalRows(value: Prisma.JsonValue): ApprovalRow[] {
     const mode = batchId || batchCode ? "BATCH" : "LEGACY";
     const previousMode = skuModes.get(skuKey);
     if (previousMode && previousMode !== mode) {
-      throw new BadRequestException(`SKU ${sku} không được trộn dòng theo lô và dòng tổng hợp`);
+      throw new BadRequestException(`Mã vật tư ${sku} không được trộn dòng theo lô và dòng tổng hợp`);
     }
     skuModes.set(skuKey, mode);
     const rowKey = batchId
@@ -502,7 +502,7 @@ function validateApprovalRows(value: Prisma.JsonValue): ApprovalRow[] {
       throw new BadRequestException(
         batchId || batchCode
           ? `Lô ${batchCode ?? batchId} bị lặp trong báo cáo`
-          : `SKU ${sku} bị lặp trong báo cáo`,
+          : `Mã vật tư ${sku} bị lặp trong báo cáo`,
       );
     }
     seenRows.add(rowKey);

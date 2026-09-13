@@ -40,7 +40,7 @@ export function SemanticInventoryTools({ warehouseId }: { warehouseId: string })
         <div className="min-w-0">
           <h2 className="text-sm font-semibold">Tìm và chuẩn hóa vật tư bằng embedding local</h2>
           <p className="text-xs text-[var(--text-muted)]">
-            Tìm theo công dụng, không cần nhớ đúng tên hay mã SKU.
+            Tìm theo công dụng, không cần nhớ đúng tên hay mã vật tư.
           </p>
         </div>
       </div>
@@ -122,7 +122,7 @@ function SemanticResults({
   if (!data) {
     return normalize ? (
       <p className="mt-3 text-xs text-[var(--text-muted)]">
-        Chỉ gợi ý cho người duyệt; hệ thống không tự ghi hay đổi SKU.
+        Chỉ gợi ý cho người duyệt; hệ thống không tự ghi hay đổi mã vật tư.
       </p>
     ) : null;
   }
