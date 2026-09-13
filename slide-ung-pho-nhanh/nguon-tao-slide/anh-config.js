@@ -8,4 +8,8 @@ module.exports = {
   'hien-truong-3': { w: 3.72, h: 2.7, label: 'ẢNH HIỆN TRƯỜNG 3' },
   // văn bản A4 dọc: khung để đúng tỷ lệ dọc và cắt từ mép trên để không mất phần đầu thư
   'thu-quan-tam': { w: 3.2, h: 4.05, label: 'ẢNH CHỤP THƯ QUAN TÂM', position: 'top' },
+  // ảnh chụp màn hình 701×854: khung giữ đúng tỷ lệ gốc để không cắt mất chữ, dpi cao để chữ trên giao diện còn nét
+  'ai-tham-muu': { w: 3.152, h: 3.84, label: 'ẢNH MÀN HÌNH AI THAM MƯU', position: 'top', dpi: 225 },
+  // ảnh chụp màn hình 723×532 cho slide 11 (chọn kho): giữ đúng tỷ lệ, dpi ≈ độ phân giải gốc để khỏi phóng to
+  'chon-kho': { w: 5.4, h: 3.973, label: 'ẢNH MÀN HÌNH THỨ TỰ LẤY HÀNG', position: 'top', dpi: 134 },
 };

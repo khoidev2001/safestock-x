@@ -35,9 +35,9 @@ Mở lại PowerPoint sau khi cài.
 | 6 | Giải pháp — bốn mắt xích, người điều phối rẽ đôi tới kho và đội cứu hộ |
 | 7 | Quy trình: tổng quan 6 bước |
 | 8 | Quy trình: nhấn bước 1 + 2 |
-| 9 | Đi sâu bước 2 — AI lập bản tham mưu |
+| 9 | Đi sâu bước 2 — AI lập bản tham mưu — **có ảnh chụp màn hình thật** bên trái |
 | 10 | Quy trình: nhấn bước 3 |
-| 11 | Đi sâu bước 3 — chọn kho tiếp tế |
+| 11 | Đi sâu bước 3 — chọn kho tiếp tế — **có ảnh chụp màn hình thật** bên trái |
 | 12 | Quy trình: nhấn bước 4 |
 | 13 | Đi sâu bước 4 — kho và đội cứu hộ nhận cùng lúc |
 | 14 | Quy trình: nhấn bước 5 |
@@ -62,9 +62,9 @@ nói chèn ở slide 20 nếu dư thời gian.
 
 **Phần kết (slide 25–26):** giá trị mang lại · cảm ơn và chuyển sang demo (mục 9).
 
-### Ảnh thực tế — slide 2, 4 và 24
+### Ảnh thực tế — slide 2, 4, 9, 11 và 24
 
-Bốn ảnh hiện trường đợt mưa lũ tháng 11/2025 và ảnh chụp thư quan tâm **đã được ghép sẵn**
+Bốn ảnh hiện trường đợt mưa lũ tháng 11/2025 và ảnh chụp thư quan tâm, cùng hai ảnh chụp màn hình (AI tham mưu, thứ tự lấy hàng), **đã được ghép sẵn**
 vào slide. Ảnh gốc nằm ở `nguon-tao-slide/anh/`, bản đã cắt vừa khung ở `anh/da-cat/`.
 
 | Slide | Ảnh | Nguồn |
@@ -73,6 +73,8 @@ vào slide. Ảnh gốc nằm ở `nguon-tao-slide/anh/`, bản đã cắt vừa
 | 4 | Người dân trèo lên nóc nhà chờ cứu hộ | — |
 | 4 | Cứu hộ đưa người già và trẻ nhỏ ra khỏi vùng ngập | — |
 | 4 | Trao vật tư cứu trợ tới từng nhà bằng xuồng | Báo Thanh Niên |
+| 9 | Màn hình AI đọc lời kể thành số liệu | Chụp màn hình hệ thống |
+| 11 | Màn hình thứ tự lấy hàng từ gần đến xa | Chụp màn hình hệ thống |
 | 24 | Thư quan tâm Hội Chữ thập đỏ xã Đồng Xuân | Nhóm tự chụp |
 
 Nguồn ảnh báo chí được ghi ở dòng dưới ba ảnh slide 4:
