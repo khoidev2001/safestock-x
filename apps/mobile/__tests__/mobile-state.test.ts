@@ -25,6 +25,7 @@ import {
   filterMissionsByNo,
   missionPickupStage,
   ownWarehouseStage,
+  mergeOwnWarehouseRequests,
   ownWarehouseWaitingLabel,
   warehousePickupStates,
   missionStageForViewer,
@@ -1144,4 +1145,54 @@ test("không chen câu tạm khi mọi kho đã xong, hay khi tài khoản khôn
   ]);
   assert.equal(ownWarehouseWaitingLabel("READY", "a", dangCho), null);
   assert.equal(ownWarehouseWaitingLabel("COMPLETED", "a", dangCho), null);
+});
+
+
+test("gộp phiếu kho mình KHÔNG được xoá mất phiếu của kho khác", () => {
+  /*
+    Đây là lỗi đã xảy ra thật: màn chi tiết gọi hai lần mạng rồi lấy kết quả thứ
+    hai GHI ĐÈ lên kết quả thứ nhất. Tài khoản kho vì thế chỉ còn nhìn thấy đúng
+    phiếu của mình, nên nhãn "kho mình xong, còn chờ ai" không bao giờ hiện ra —
+    hàm tính nhãn không hề sai, nó chỉ không được cho xem hai kho kia.
+  */
+  const all = [
+    { id: "r1", missionId: "m1", warehouseId: "kho-tong", status: "PENDING" },
+    { id: "r2", missionId: "m1", warehouseId: "kho-thon", status: "ACCEPTED" },
+    { id: "r3", missionId: "m1", warehouseId: "kho-khac", status: "PENDING" },
+  ];
+  // Bản `own` mới hơn một nhịp: cùng id nhưng đã xuất xong.
+  const own = [
+    { id: "r2", missionId: "m1", warehouseId: "kho-thon", status: "PICKED_UP" },
+    { id: "r9", missionId: "m2", warehouseId: "kho-thon", status: "PENDING" },
+  ];
+  const merged = mergeOwnWarehouseRequests(all, own, "m1");
+  assert.deepEqual(
+    merged.map((r) => [r.id, r.status]),
+    [
+      ["r1", "PENDING"],
+      // Ưu tiên bản `own` vì nó được gọi sau.
+      ["r2", "PICKED_UP"],
+      ["r3", "PENDING"],
+    ],
+  );
+  // Phiếu của nhiệm vụ KHÁC không được lẫn vào.
+  assert.equal(
+    merged.some((r) => r.id === "r9"),
+    false,
+  );
+});
+
+test("phiếu kho mình chưa có trong danh sách đầy đủ thì thêm vào, không bỏ rơi", () => {
+  // Hai lời gọi lệch nhau một nhịp: điều phối vừa thêm phiếu sau khi lời gọi thứ
+  // nhất đã trả về. Thiếu phiếu chính người đang đọc phải làm là tệ nhất.
+  const merged = mergeOwnWarehouseRequests(
+    [{ id: "r1", missionId: "m1", warehouseId: "kho-tong", status: "PENDING" }],
+    [{ id: "r2", missionId: "m1", warehouseId: "kho-thon", status: "PENDING" }],
+    "m1",
+  );
+  assert.deepEqual(merged.map((r) => r.id), ["r1", "r2"]);
+  // Không có phiếu nào của mình thì trả nguyên danh sách đầy đủ.
+  const all = [{ id: "r1", missionId: "m1", warehouseId: "kho-tong", status: "PENDING" }];
+  assert.equal(mergeOwnWarehouseRequests(all, [], "m1"), all);
+  assert.deepEqual(mergeOwnWarehouseRequests(null, null, "m1"), []);
 });

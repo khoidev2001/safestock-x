@@ -235,6 +235,38 @@ export function warehousePickupStates(
  * Từ ba kho trở lên thì đếm thay vì liệt kê: một dòng badge không chứa nổi ba
  * cái tên tiếng Việt đầy đủ, mà cắt ngắn thì lại không gọi được ai.
  */
+/**
+ * Gộp phiếu vật tư của KHO MÌNH vào danh sách đầy đủ của nhiệm vụ.
+ *
+ * VÌ SAO PHẢI GỘP CHỨ KHÔNG THAY: màn chi tiết gọi hai lần mạng — `/missions/:id`
+ * trả phiếu của MỌI kho, còn `/warehouse-requests/own` trả phiếu của riêng kho
+ * đang đăng nhập. Trước đây kết quả thứ hai GHI ĐÈ thẳng lên kết quả thứ nhất,
+ * nên tài khoản kho chỉ còn nhìn thấy đúng phiếu của mình, và mọi thứ cần biết
+ * "kho khác tới đâu rồi" đều mù: nhãn trạng thái, danh sách kho còn thiếu, con
+ * số tiến độ.
+ *
+ * Hai nguồn trả về CÙNG một hình dạng dữ liệu cho cùng một phiếu (đã đối chiếu:
+ * chỉ khác mỗi trường `mission` đính kèm), nên gộp không mất gì. Vẫn ưu tiên bản
+ * `own` vì nó được gọi sau, mới hơn một nhịp.
+ *
+ * Giữ nguyên THỨ TỰ của danh sách đầy đủ: màn hình đánh số điểm lấy hàng theo
+ * thứ tự này, đảo chỗ là "kho số 2" trong đầu người đọc trỏ sang kho khác.
+ */
+export function mergeOwnWarehouseRequests<
+  T extends { id: string; missionId: string },
+>(all: T[] | null | undefined, own: T[] | null | undefined, missionId: string): T[] {
+  const mine = (own ?? []).filter((request) => request.missionId === missionId);
+  if (mine.length === 0) return all ?? [];
+  const byId = new Map(mine.map((request) => [request.id, request]));
+  const merged = (all ?? []).map((request) => byId.get(request.id) ?? request);
+  // Phiếu của kho mình mà danh sách đầy đủ không có: chỉ xảy ra khi hai lời gọi
+  // lệch nhau một nhịp (điều phối vừa thêm phiếu). Thà thừa còn hơn thiếu phiếu
+  // chính người đang đọc phải làm.
+  const seen = new Set(merged.map((request) => request.id));
+  for (const request of mine) if (!seen.has(request.id)) merged.push(request);
+  return merged;
+}
+
 export function ownWarehouseWaitingLabel(
   missionStatus: string,
   assignedWarehouseId: string | null | undefined,

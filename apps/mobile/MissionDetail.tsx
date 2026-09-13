@@ -66,6 +66,7 @@ import {
   missionStageForViewer,
   missionStageLabel,
   missionStageNeedsAction,
+  mergeOwnWarehouseRequests,
   ownWarehouseStage,
   ownWarehouseWaitingLabel,
   warehousePickupStates,
@@ -239,7 +240,11 @@ export function MissionDetailScreen({
       const latest = await fetchMission(token, missionId);
       if (role === "WAREHOUSE") {
         const ownRequests = await fetchWarehouseMaterialRequests(token);
-        latest.warehouseRequests = ownRequests.filter((request) => request.missionId === missionId);
+        latest.warehouseRequests = mergeOwnWarehouseRequests(
+          latest.warehouseRequests,
+          ownRequests,
+          missionId,
+        );
       }
       setMission(latest);
       setCacheStoredAt(null);
