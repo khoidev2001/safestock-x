@@ -3,13 +3,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { CollapsiblePanel } from "@/components/shared/collapsible-panel";
-import {
-  BULK_ACTION_LABEL,
-  planBulkAction,
-  warehouseProgress,
-} from "./warehouse-request-progress";
+import { BULK_ACTION_LABEL, planBulkAction, warehouseProgress } from "./warehouse-request-progress";
 import {
   acceptWarehouseRequest,
+  bulkWarehouseRequests,
   confirmWarehousePickup,
   prepareWarehouseRequest,
   reportWarehouseRequestDiscrepancy,
@@ -106,49 +103,34 @@ export function WarehouseRequestPanel({
    * soạn sẵn chứ không xét từng món. Bắt bấm mười lần giữa lúc lũ đang lên là bắt họ
    * trả giá cho một chi tiết của phần mềm.
    *
-   * CHẠY TUẦN TỰ, không `Promise.all`. Mỗi lượt gọi đều đụng vào tồn kho và ghi giao
-   * dịch; bắn song song thì backend phải chịu mười giao dịch cùng lúc trên cùng một
-   * lô hàng, và lỗi tranh chấp sẽ nổ ra ở đúng chỗ khó lần nhất. Chậm hơn vài trăm
-   * mili-giây, đổi lại thứ tự rõ ràng và biết chính xác dừng ở dòng nào.
+   * MỘT lượt gọi máy chủ, không lặp gọi từng dòng ở đây: mỗi lượt gọi lẻ tự báo điều
+   * phối một lần, nên "xuất tất cả" mười món từng làm chuông điều phối kêu mười lần.
+   * Máy chủ vẫn chạy tuần tự từng dòng, dừng ở lỗi đầu tiên và nói rõ đã xong mấy
+   * dòng — rồi gửi đúng một câu tổng cho cả kho.
+   *
+   * Tiếp nhận hàng loạt mang theo ghi chú đã gõ sẵn ở từng dòng. Ký nhận hàng loạt
+   * luôn là lấy ĐỦ — dòng nào có số khác đã bị loại khỏi danh sách này từ trước
+   * (xem `bulkPickupRows`).
    */
   const bulkAction = useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       kind,
       requests: targets,
     }: {
       kind: "accept" | "prepare" | "pickup";
       requests: MissionWarehouseRequest[];
-    }) => {
-      let done = 0;
-      for (const request of targets) {
-        try {
-          if (kind === "accept") {
-            await acceptWarehouseRequest(request.id, notes[request.id]?.trim() || undefined);
-          } else if (kind === "prepare") {
-            await prepareWarehouseRequest(request.id);
-          } else {
-            // Hàng loạt = LẤY ĐỦ. Dòng nào người dùng đã gõ số khác đều bị loại khỏi
-            // danh sách này từ trước (xem `bulkPickupRows`), nên ở đây không có ca
-            // nào phải đoán xem họ định ký nhận bao nhiêu.
-            await confirmWarehousePickup(request.id, {
-              receivedQuantity: request.preparedQuantity,
-            });
-          }
-          done += 1;
-        } catch (error) {
-          // Nói rõ ĐÃ XONG MẤY DÒNG trước khi vỡ. Chỉ ném lỗi gốc thì người dùng
-          // không biết nên bấm lại cả loạt hay chỉ còn vài dòng cuối — mà bấm lại
-          // cả loạt sau khi bảy dòng đã xuất là chuyện phải tránh.
-          const reason = error instanceof Error ? error.message : "lỗi không rõ";
-          throw new Error(
-            done === 0
-              ? `Không làm được dòng nào: ${reason}`
-              : `Đã xong ${done}/${targets.length} dòng rồi dừng ở “${request.itemName}”: ${reason}`,
-          );
-        }
-      }
-      return done;
-    },
+    }) =>
+      bulkWarehouseRequests(
+        kind,
+        targets.map((request) => request.id),
+        kind === "accept"
+          ? Object.fromEntries(
+              targets
+                .map((request) => [request.id, notes[request.id]?.trim() ?? ""] as const)
+                .filter(([, note]) => note !== ""),
+            )
+          : undefined,
+      ),
     onMutate: () => setActionError(null),
     onSuccess: (_, variables) => {
       setNotes((current) => {
@@ -420,8 +402,8 @@ export function WarehouseRequestPanel({
             </div>
           ) : partialPickupCount > 0 ? (
             <p className="rounded-md border border-dashed p-3 text-xs text-[var(--text-muted)]">
-              {partialPickupCount} vật tư đang khai lấy thiếu — ký riêng từng dòng kèm lý do,
-              không ký gộp được.
+              {partialPickupCount} vật tư đang khai lấy thiếu — ký riêng từng dòng kèm lý do, không
+              ký gộp được.
             </p>
           ) : null}
           <div className="divide-y rounded-md border">

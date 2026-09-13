@@ -599,6 +599,22 @@ export const prepareWarehouseRequest = (requestId: string) =>
   apiFetch<MissionWarehouseRequest>(`/api/missions/warehouse-requests/${requestId}/prepare`, {
     method: "POST",
   });
+/**
+ * Tiếp nhận / xuất / ký nhận cả loạt vật tư của kho trong MỘT lượt gọi.
+ *
+ * Không lặp gọi từng dòng ở máy khách: mỗi lượt gọi lẻ tự báo điều phối một lần,
+ * nên mười dòng là mười tiếng chuông. Lượt hàng loạt ở máy chủ gửi một câu tổng.
+ * Ký nhận hàng loạt luôn là lấy ĐỦ số đã soạn.
+ */
+export const bulkWarehouseRequests = (
+  kind: "accept" | "prepare" | "pickup",
+  requestIds: string[],
+  notes?: Record<string, string>,
+) =>
+  apiFetch<{ done: number; total: number }>(`/api/missions/warehouse-requests/bulk`, {
+    method: "POST",
+    body: JSON.stringify({ kind, requestIds, notes }),
+  });
 /** Người đi lấy ký nhận: cầm đi bao nhiêu, thiếu thì vì sao. */
 export const confirmWarehousePickup = (
   requestId: string,

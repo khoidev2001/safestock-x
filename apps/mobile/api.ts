@@ -771,6 +771,30 @@ export async function confirmWarehousePickup(
   return mutateWarehouseMaterialRequest(token, requestId, "pickup", { receivedQuantity, note });
 }
 
+/**
+ * Tiếp nhận / xuất / ký nhận cả loạt vật tư của kho trong MỘT lượt gọi.
+ *
+ * Lặp gọi từng dòng thì mỗi dòng tự báo điều phối một lần — mười dòng là mười
+ * tiếng chuông trên web. Máy chủ chạy tuần tự rồi gửi đúng một câu tổng.
+ * Ký nhận hàng loạt luôn là lấy ĐỦ số đã soạn.
+ */
+export async function bulkWarehouseMaterialRequests(
+  token: string,
+  kind: "accept" | "prepare" | "pickup",
+  requestIds: string[],
+): Promise<{ done: number; total: number }> {
+  const res = await request(apiUrl("/api/missions/warehouse-requests/bulk"), {
+    method: "POST",
+    headers: { ...authHeader(token), "Content-Type": "application/json" },
+    body: JSON.stringify({ kind, requestIds }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message ?? "Không hoàn tất được thao tác hàng loạt");
+  }
+  return res.json();
+}
+
 async function mutateWarehouseMaterialRequest(
   token: string,
   requestId: string,

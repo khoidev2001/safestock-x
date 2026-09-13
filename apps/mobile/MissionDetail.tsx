@@ -34,6 +34,7 @@ import {
   fetchMissionDeliveryPhoto,
   fetchMissionWarehouseRoutes,
   fetchWarehouseMaterialRequests,
+  bulkWarehouseMaterialRequests,
   confirmWarehousePickup,
   fetchReturnableSupplies,
   markSuppliesReturned,
@@ -489,28 +490,28 @@ export function MissionDetailScreen({
   }
 
   /**
-   * Chạy một việc cho cả loạt dòng, TUẦN TỰ chứ không song song.
+   * Chạy một việc cho cả loạt dòng trong MỘT lượt gọi máy chủ.
    *
-   * Mỗi lượt gọi đều đụng vào tồn kho thật. Bắn năm lượt cùng lúc là năm giao
-   * dịch tranh nhau đúng những lô hàng đó, và thứ tự chúng chốt không ai đoán
-   * được. Chạy lần lượt thì chậm hơn vài giây, đổi lại kho luôn cộng trừ đúng.
-   *
-   * Dừng ngay ở lỗi ĐẦU TIÊN. Chạy tiếp là giấu mất chỗ hỏng: người dùng thấy
-   * "xong" trong khi một dòng đã trượt, mà chính dòng đó mới là dòng có chuyện.
+   * Không lặp gọi từng dòng ở đây: mỗi lượt gọi lẻ tự báo điều phối một lần, nên
+   * "xuất tất cả" mười món từng làm chuông trên web kêu mười lần. Máy chủ vẫn chạy
+   * tuần tự từng dòng (mỗi dòng đụng tồn kho thật), dừng ở lỗi ĐẦU TIÊN kèm số dòng
+   * đã xong, rồi gửi một câu tổng cho cả kho.
    */
   async function runBulkWarehouseAction(kind: BulkActionKind, rows: WarehouseMaterialRequest[]) {
     setBulkBusy(true);
     setError(null);
     try {
-      for (const request of rows) {
-        if (kind === "pickup") {
-          await confirmWarehousePickup(token, request.id, request.preparedQuantity);
-          setPickedQuantities((current) => ({ ...current, [request.id]: "" }));
-        } else if (kind === "accept") {
-          await acceptWarehouseMaterialRequest(token, request.id);
-        } else {
-          await prepareWarehouseMaterialRequest(token, request.id);
-        }
+      await bulkWarehouseMaterialRequests(
+        token,
+        kind,
+        rows.map((request) => request.id),
+      );
+      if (kind === "pickup") {
+        setPickedQuantities((current) => {
+          const next = { ...current };
+          for (const request of rows) next[request.id] = "";
+          return next;
+        });
       }
       await load();
     } catch (e) {
@@ -1143,31 +1144,6 @@ function WarehouseMaterialRequestPanel({
         </View>
       ) : null}
 
-      {/* Một nút duy nhất, đúng mốc kế tiếp. Bày cả ba cùng lúc thì người dùng
-          phải tự đoán bấm cái nào trước, mà bấm sai thứ tự là máy chủ chặn. */}
-      {bulk.kind && !offline ? (
-        <View style={{ marginBottom: 12 }}>
-          <Pressable
-            disabled={bulkDisabled}
-            onPress={() => onBulkAction(bulk.kind as BulkActionKind, bulk.rows)}
-            accessibilityRole="button"
-            style={[styles.actionButton, { opacity: bulkDisabled ? 0.6 : 1 }]}
-          >
-            <Text style={styles.actionButtonText}>
-              {bulkBusy
-                ? "Đang xử lý…"
-                : `${BULK_ACTION_LABEL[bulk.kind]} (${bulk.rows.length} dòng)`}
-            </Text>
-          </Pressable>
-          {/* Nói rõ vì sao còn dòng ở lại. Lặng lẽ bỏ qua thì người dùng bấm xong
-              tưởng đã hết, trong khi vẫn còn khoản hàng chưa ai ký. */}
-          {bulk.partialPickupCount > 0 ? (
-            <Text style={[styles.emptyText, { textAlign: "left", marginTop: 6 }]}>
-              {bulk.partialPickupCount} dòng khai lấy thiếu — phải ký riêng từng dòng kèm lý do.
-            </Text>
-          ) : null}
-        </View>
-      ) : null}
       {requests.map((request) => {
         const busy = busyRequestId === request.id;
         /*
@@ -1313,9 +1289,9 @@ function WarehouseMaterialRequestPanel({
                   accessibilityRole="button"
                   disabled={busy}
                   onPress={() => onAction("pickup", request)}
-                  style={[styles.actionButton, { opacity: busy ? 0.6 : 1 }]}
+                  style={[styles.actionButton, rowActionButton, { opacity: busy ? 0.6 : 1 }]}
                 >
-                  <Text style={styles.actionButtonText}>
+                  <Text style={[styles.actionButtonText, rowActionButtonText]}>
                     {busy ? "Đang gửi…" : "Ký nhận đã lấy hàng"}
                   </Text>
                 </Pressable>
@@ -1344,9 +1320,13 @@ function WarehouseMaterialRequestPanel({
                       onAction(request.status === "PENDING" ? "accept" : "prepare", request)
                     }
                     accessibilityRole="button"
-                    style={[styles.actionButton, { flexGrow: 1, opacity: busy ? 0.6 : 1 }]}
+                    style={[
+                      styles.actionButton,
+                      rowActionButton,
+                      { flexGrow: 1, opacity: busy ? 0.6 : 1 },
+                    ]}
                   >
-                    <Text style={styles.actionButtonText}>
+                    <Text style={[styles.actionButtonText, rowActionButtonText]}>
                       {busy
                         ? "Đang xử lý…"
                         : request.status === "PENDING"
@@ -1377,9 +1357,50 @@ function WarehouseMaterialRequestPanel({
           </View>
         );
       })}
+      {/* Một nút duy nhất, đúng mốc kế tiếp. Bày cả ba cùng lúc thì người dùng
+          phải tự đoán bấm cái nào trước, mà bấm sai thứ tự là máy chủ chặn.
+
+          Nằm DƯỚI danh sách, màu VÀNG: người dùng lướt qua các dòng vật tư trước
+          rồi mới tới nút làm gộp, và màu khác hẳn nút xanh của từng dòng để không
+          ai tưởng mình đang bấm cho riêng một món. */}
+      {bulk.kind && !offline ? (
+        <View style={{ marginTop: 2 }}>
+          <Pressable
+            disabled={bulkDisabled}
+            onPress={() => onBulkAction(bulk.kind as BulkActionKind, bulk.rows)}
+            accessibilityRole="button"
+            style={[styles.actionButton, bulkButton, { opacity: bulkDisabled ? 0.6 : 1 }]}
+          >
+            <Text style={styles.actionButtonText}>
+              {bulkBusy
+                ? "Đang xử lý…"
+                : `${BULK_ACTION_LABEL[bulk.kind]} (${bulk.rows.length} dòng)`}
+            </Text>
+          </Pressable>
+          {/* Nói rõ vì sao còn dòng ở lại. Lặng lẽ bỏ qua thì người dùng bấm xong
+              tưởng đã hết, trong khi vẫn còn khoản hàng chưa ai ký. */}
+          {bulk.partialPickupCount > 0 ? (
+            <Text style={[styles.emptyText, { textAlign: "left", marginTop: 6 }]}>
+              {bulk.partialPickupCount} dòng khai lấy thiếu — phải ký riêng từng dòng kèm lý do.
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   );
 }
+
+/**
+ * Màu nút trong bảng chuẩn bị vật tư của kho.
+ *
+ * Nút của TỪNG DÒNG xanh lá chữ trắng — "làm bước này cho món này". Nút GỘP vàng,
+ * chữ giữ màu tối vì chữ trắng trên nền vàng gần như không đọc được ngoài nắng.
+ * Đặt riêng ở đây chứ không sửa `styles.actionButton` dùng chung: các màn khác
+ * vẫn giữ nút cam.
+ */
+const rowActionButton = { backgroundColor: c.green } as const;
+const rowActionButtonText = { color: "#FFFFFF" } as const;
+const bulkButton = { backgroundColor: "#FACC15" } as const;
 
 function warehouseRequestStatus(status: WarehouseMaterialRequest["status"]): string {
   if (status === "PENDING") return "CHỜ TIẾP NHẬN";
