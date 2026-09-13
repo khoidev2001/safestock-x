@@ -803,7 +803,12 @@ export function MissionDetailScreen({
                   offline={Boolean(cacheStoredAt)}
                   outstanding={outstandingReturns}
                   nothingToReturn={mission.hasReturnableSupplies === false}
-                  handedOver={(mission.warehouseRequests ?? []).filter(
+                  /* CHỈ hàng của kho mình. Từ khi danh sách phiếu không còn bị
+                     cắt về một kho (xem `mergeOwnWarehouseRequests`), lọc theo cả
+                     nhiệm vụ sẽ bày ra cả hàng kho khác đã giao — mà máy chủ chỉ
+                     ghi nhận phần của kho đang đăng nhập, nên người trực gõ số
+                     cho những dòng đó xong sẽ không thấy gì thay đổi. */
+                  handedOver={ownRequests.filter(
                     (request) => (request.pickedUpQuantity ?? 0) > 0,
                   )}
                   onConfirm={() => void confirmSuppliesReturned()}
