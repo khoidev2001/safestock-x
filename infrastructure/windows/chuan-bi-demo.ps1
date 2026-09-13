@@ -417,7 +417,7 @@ if ($CanhBao.Count -gt 0) {
 
 Write-Host ""
 Write-Host "   Tài khoản:  admin / admin123               (điều phối xã, cửa sổ thường)" -ForegroundColor DarkGray
-Write-Host "               longchau / truongthon123   (kho thôn, cửa sổ ẩn danh)" -ForegroundColor DarkGray
+Write-Host "               longchau / longchau123     (kho thôn, cửa sổ ẩn danh)" -ForegroundColor DarkGray
 Write-Host "               iot / iot123456            (đăng nhập trong app IoT Simulator)" -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "   Khai tình huống đi HAI bước, đúng tên nút trên màn:" -ForegroundColor DarkGray
