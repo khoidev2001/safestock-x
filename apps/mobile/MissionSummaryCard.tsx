@@ -93,12 +93,11 @@ export function MissionSummaryCard({
         {/* Dòng giữa là VIỆC PHẢI LÀM, viết theo vai của chính người đang đọc.
             Chưa tra được chặng thì lùi về tên thiên tai, đừng để trống một dòng
             rồi người đọc ngồi chờ nó hiện ra. */}
-        {/* Mức nguy viết thành CHỮ, không chỉ là sọc màu bên trái.
-            Màn chi tiết mở ra là thấy ngay dòng "CHƯA NGUY CẤP" to đùng; ở đây
-            chỉ có một vệt màu nên hai màn hình nói hai chuyện khác nhau về cùng
-            một nhiệm vụ. Ai phân biệt màu kém thì vệt màu còn không nói gì cả. */}
-        <Text style={[styles.cardDanger, { color: danger.color }]}>⚠ {danger.label}</Text>
-
+        {/* KHÔNG in mức nguy thành chữ ở đây. Thẻ đã nói hai con số quyết định
+            được việc — số người gặp nạn ở góc phải, và chặng đang chờ ai làm gì
+            ở dòng dưới. Thêm một dòng "CỨU NGAY" nữa chỉ là xếp hạng nhiệm vụ,
+            trong khi cái nào cũng phải đi. Mức nguy vẫn còn ở vệt màu bên trái
+            và ở màn chi tiết. */}
         <View style={styles.stageRow}>
           <Text
             style={[styles.stageText, stageNeedsAction && { color: c.amber }]}

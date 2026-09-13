@@ -143,7 +143,6 @@ export const styles = StyleSheet.create({
   peopleBadgeText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
   stageRow: { marginTop: 12, gap: 2 },
   /** Mức nguy trên thẻ danh sách — cùng chữ, cùng màu với thẻ đầu màn chi tiết. */
-  cardDanger: { fontSize: 12, fontWeight: "900", letterSpacing: 0.8, marginTop: 8 },
   cardPlace: { color: c.muted, fontSize: 13, fontWeight: "600", marginTop: 4 },
   stageText: { color: c.text, fontSize: 24, fontWeight: "900", lineHeight: 30 },
   stageDisaster: { color: c.muted, fontSize: 14, fontWeight: "600" },
@@ -342,6 +341,10 @@ export const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
+    // Cùng `justifyContent` với nút cạnh nó: hai nút nằm chung một hàng `flex: 1`
+    // nên cái nào có chữ dài hơn sẽ kéo cả hàng cao lên, và nút còn lại phải giữ
+    // chữ ở giữa chiều cao mới, không dính lên mép trên.
+    justifyContent: "center",
   },
   /**
    * Chữ TRẮNG, không phải xanh gần đen.
@@ -351,7 +354,7 @@ export const styles = StyleSheet.create({
    * Trắng cho 5,02. Đây là nút xác nhận hoàn thành nhiệm vụ, bấm ngoài nắng.
    */
   btnAcceptText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800", textAlign: "center" },
-  btnRejectText: { color: c.red, fontSize: 15, fontWeight: "800" },
+  btnRejectText: { color: c.red, fontSize: 15, fontWeight: "800", textAlign: "center" },
 
   // Reason input block
   reasonBox: {
@@ -461,7 +464,6 @@ export const styles = StyleSheet.create({
   },
   attachedText: { color: c.text, fontSize: 13, fontWeight: "700" },
   attachedRemove: { color: c.red, fontSize: 13, fontWeight: "700" },
-  voiceError: { color: c.red, fontSize: 13, marginBottom: 12, textAlign: "center" },
   // Xác nhận gửi thành công.
   successBox: {
     backgroundColor: "rgba(34,197,94,0.16)",
