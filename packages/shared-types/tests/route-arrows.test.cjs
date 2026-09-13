@@ -108,26 +108,51 @@ test("hướng lấy từ đúng đoạn mũi tên đang nằm trên, nên nó q
   assert.ok(bearings.some((bearing) => bearing === 90), `có đoạn rẽ đông: ${bearings}`);
 });
 
-test("hình mũi tên xoay theo phương vị và có viền trắng để không tan vào ảnh vệ tinh", () => {
+test("hình mũi tên xoay theo phương vị và tô trắng để nổi trên nét màu của tuyến", () => {
   const svg = routeArrowSvg(90, 16, "#1d4ed8");
   assert.match(svg, /rotate\(90\.0deg\)/);
-  assert.match(svg, /stroke="#ffffff"/);
+  // Ruột trắng: mũi tên nằm TRONG nét màu nên phải tương phản với chính nét ấy.
+  assert.match(svg, /fill="#ffffff"/);
+  // Viền lấy màu tuyến, để chỗ mũi tên đè lên mép trắng của tuyến vẫn tách ra được.
   assert.match(svg, /stroke="#1d4ed8"/);
 });
 
-test("mũi tên là một GẠCH có đầu nhọn, không phải hình tam giác trơn", () => {
-  // Tam giác trơn giữa tuyến đọc ra thành một dấu ghim hay mảnh vụn của lớp bản
-  // đồ: không có thân thì mắt không bắt được trục, phải nhìn kỹ mới biết nó chỉ
-  // đâu. Khoá lại bằng test vì đây là khác biệt người dùng nhìn thấy, không phải
-  // chuyện thẩm mỹ nội bộ.
+test("mũi tên là hình ĐẶC, không phải nét kẻ có quầng trắng", () => {
+  // Bản trước vẽ bằng nét: thân màu 3.4 kèm quầng trắng 6.4 trên khung 26px, quy
+  // ra 6,9px quầng và 12,8px bề ngang đầu nhọn — trong khi thân tuyến chỉ dày 7px.
+  // Mũi tên tràn ra hai bên và cái quầng biến nó thành một cục rời, đọc như dấu
+  // ghim rơi trên tuyến. Khoá lại bằng test vì đây là thứ người dùng nhìn thấy.
   const svg = routeArrowSvg(0, 16, "#1d4ed8");
-  // Có phần THÂN: một nét thẳng chạy dọc trục giữa khung 24×24.
-  assert.match(svg, /M12 20\.6 L12 5\.4/);
-  // Và có ĐẦU NHỌN gắn vào đầu thân đó.
-  assert.match(svg, /L12 4\.2/);
-  // Nét, không phải mảng tô — mảng tô chính là hình tam giác của bản trước.
-  assert.match(svg, /fill="none"/);
-  assert.doesNotMatch(svg, /fill="#1d4ed8"/);
+  assert.match(svg, /<polygon /);
+  assert.doesNotMatch(svg, /fill="none"/);
+  assert.doesNotMatch(svg, /stroke-width="6\.4"/);
+});
+
+test("mũi tên hẹp hơn nét tuyến, để nằm lọt lòng chứ không tràn ra hai bên", () => {
+  /*
+    Đây là ràng buộc số học, không phải thẩm mỹ: thân tuyến vẽ bằng
+    `weight: 7` ở cả web (`incident-map.tsx`) lẫn điện thoại
+    (`mission-map-html.ts`). Mũi tên rộng hơn 7px là thò ra ngoài đường.
+
+    Đo thẳng từ chuỗi SVG: lấy hoành độ nhỏ nhất và lớn nhất của đa giác trong
+    khung 24, cộng bề dày viền, rồi quy về pixel theo cỡ khung.
+  */
+  const size = 16;
+  const svg = routeArrowSvg(0, size, "#1d4ed8");
+  const points = svg.match(/points="([^"]+)"/)[1].split(" ").map(Number);
+  const xs = points.filter((_, i) => i % 2 === 0);
+  const strokeWidth = Number(svg.match(/stroke-width="([\d.]+)"/)[1]);
+  const beRongDonVi = Math.max(...xs) - Math.min(...xs) + strokeWidth;
+  const beRongPixel = (beRongDonVi / 24) * size;
+
+  const NET_TUYEN_PX = 7;
+  assert.ok(
+    beRongPixel <= NET_TUYEN_PX,
+    `Mũi tên rộng ${beRongPixel.toFixed(2)}px, tràn ra ngoài nét tuyến ${NET_TUYEN_PX}px`,
+  );
+  // Và phải DÀI hơn RỘNG, không thì nó lại thành một chấm không rõ hướng.
+  const ys = points.filter((_, i) => i % 2 === 1);
+  assert.ok(Math.max(...ys) - Math.min(...ys) > Math.max(...xs) - Math.min(...xs));
 });
 
 test("mũi tên rải THƯA để hai cái liền nhau không dính thành một vệt", () => {

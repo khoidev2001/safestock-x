@@ -57,7 +57,7 @@ const ROUTE_COLOR = "#2563eb";
  * giác trơn, phần thân chiếm gần hết chiều cao khung nên khung nhỏ thì cái gạch
  * lại co về đúng một vệt như cũ.
  */
-const ARROW_ICON_SIZE = 26;
+const ARROW_ICON_SIZE = 16;
 
 /**
  * Kho vẽ MỘT màu, không phân biệt kho tổng với kho thôn bằng màu.

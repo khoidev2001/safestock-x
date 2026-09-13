@@ -881,7 +881,7 @@ function RouteLine({ color, points }: { color: string; points: RoutePoint[] }) {
  * tam giác trơn: phần thân chiếm gần hết chiều cao khung, nên ở 17px cái gạch chỉ
  * còn hơn chục pixel và lại đọc ra thành một vệt nhỏ như cũ.
  */
-const ARROW_ICON_SIZE = 26;
+const ARROW_ICON_SIZE = 16;
 function arrowIcon(bearing: number, color: string): L.DivIcon {
   return L.divIcon({
     html: routeArrowSvg(bearing, ARROW_ICON_SIZE, color),
