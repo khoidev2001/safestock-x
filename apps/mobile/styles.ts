@@ -160,6 +160,8 @@ export const styles = StyleSheet.create({
   metaTime: { color: c.text, fontSize: 14, fontWeight: "700" },
   metaHint: { color: c.amber, fontSize: 13, fontWeight: "700" },
 
+  /** Hàng chứa huy hiệu MỚI / VỪA XEM, nằm dưới hàng tiêu đề. */
+  badgeRow: { flexDirection: "row", alignItems: "center", marginTop: 6 },
   newBadge: { backgroundColor: c.amber, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
   newBadgeText: { color: "#0f172a", fontSize: 10, fontWeight: "800" },
   /** Nhãn "vừa xem": xám nhạt, KHÔNG tranh chỗ với nhãn MỚI vốn màu nổi. */

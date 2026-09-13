@@ -71,24 +71,36 @@ export function MissionSummaryCard({
           <Text numberOfLines={1} style={styles.disasterName}>
             {missionNo != null ? `Nhiệm vụ số ${missionNo}` : disaster.label}
           </Text>
-          {isNew ? (
-            <View style={styles.newBadge}>
-              <Text style={styles.newBadgeText}>MỚI</Text>
-            </View>
-          ) : null}
-          {/* Nói rõ VÌ SAO thẻ này nằm trên cùng. Không có nhãn thì người trực
-              thấy danh sách tự đảo chỗ và nghi số liệu sai. */}
-          {justViewed && !isNew ? (
-            <View style={styles.viewedBadge}>
-              <Text style={styles.viewedBadgeText}>VỪA XEM</Text>
-            </View>
-          ) : null}
           {/* Góc phải là SỐ NGƯỜI GẶP NẠN, nền đỏ — con số quyết định điều mấy xe,
               mấy người. Không xếp hạng mức nguy: nhiệm vụ nào cũng phải làm. */}
           <View style={styles.peopleBadge}>
             <Text style={styles.peopleBadgeText}>{affectedPeople} người gặp nạn</Text>
           </View>
         </View>
+
+        {/* HUY HIỆU XUỐNG HÀNG RIÊNG, không chen vào hàng tiêu đề.
+            Ở bề ngang 360dp, hàng trên đã kín: biểu tượng, "Nhiệm vụ số 25" và
+            "100 người gặp nạn" cộng lại vừa đúng. Nhét thêm "VỪA XEM" vào đó thì
+            thứ bị bóp là tiêu đề — nó có `flex: 1` nên co lại thành "Nhiệm v…",
+            tức là mất đúng con số mà người trực đọc để gọi cho nhau qua điện
+            thoại. Số người gặp nạn thì không co được vì nền đỏ bọc sát chữ.
+
+            Chỉ tốn thêm một hàng ở những thẻ CÓ huy hiệu; thẻ thường không đổi. */}
+        {isNew || justViewed ? (
+          <View style={styles.badgeRow}>
+            {isNew ? (
+              <View style={styles.newBadge}>
+                <Text style={styles.newBadgeText}>MỚI</Text>
+              </View>
+            ) : (
+              /* Nói rõ VÌ SAO thẻ này nằm trên cùng. Không có nhãn thì người trực
+                 thấy danh sách tự đảo chỗ và nghi số liệu sai. */
+              <View style={styles.viewedBadge}>
+                <Text style={styles.viewedBadgeText}>VỪA XEM</Text>
+              </View>
+            )}
+          </View>
+        ) : null}
 
         {/* Dòng giữa là VIỆC PHẢI LÀM, viết theo vai của chính người đang đọc.
             Chưa tra được chặng thì lùi về tên thiên tai, đừng để trống một dòng
