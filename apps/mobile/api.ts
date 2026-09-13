@@ -487,6 +487,12 @@ export interface MissionDetail {
   requirements: MissionRequirement[];
   warehouseRequests?: WarehouseMaterialRequest[];
   /**
+   * Phiếu vật tư của MỌI kho, đúng như chi tiết nhiệm vụ trả về. Màn của kho thay
+   * `warehouseRequests` bằng phiếu riêng của kho mình, nên danh sách hoàn trả theo
+   * kho đọc từ đây. Do app tự gắn, máy chủ không gửi.
+   */
+  allWarehouseRequests?: WarehouseMaterialRequest[];
+  /**
    * Có vật tư tái sử dụng nào đang nằm ngoài kho không.
    *
    * `false` là KHÔNG CẦN TRẢ — nhiệm vụ chỉ phát đồ tiêu hao, phát xong là xong.
@@ -494,6 +500,11 @@ export interface MissionDetail {
    * tự kết luận là không cần trả.
    */
   hasReturnableSupplies?: boolean;
+  /**
+   * Tiến độ hoàn trả theo TỪNG kho có vật tư tái sử dụng đã giao ra. Mỗi kho tự ký
+   * phần mình; nhiệm vụ chỉ sang RETURNED khi mọi kho đã ký.
+   */
+  supplyReturnProgress?: SupplyReturnProgress[];
   /** Ảnh bằng chứng đã gửi kèm lúc báo hoàn thành — chỉ phần mô tả, không có bytes. */
   deliveryPhotos?: MissionDeliveryPhoto[];
 }
@@ -561,6 +572,12 @@ export interface WarehouseMaterialRequest {
   pickedUpQuantity: number | null;
   pickupNote: string | null;
   pickedUpAt: string | null;
+  /** Số đã quay về kho sau nhiệm vụ; `null` là kho chưa đếm dòng này. */
+  returnedQuantity?: number | null;
+  /** Lý do trả thiếu — có lý do thì dòng thiếu vẫn tính là đã hoàn trả. */
+  returnNote?: string | null;
+  /** Hàng tái sử dụng; `false` là đồ tiêu hao. Chỉ có ở chi tiết nhiệm vụ. */
+  reusable?: boolean;
   adminNote: string | null;
   acceptedAt: string | null;
   preparedAt: string | null;
@@ -642,7 +659,8 @@ export async function completeMission(
 }
 
 /**
- * KHO xác nhận đã nhận lại vật tư — bước CUỐI, đóng hẳn nhiệm vụ.
+ * KHO xác nhận đã nhận lại PHẦN VẬT TƯ CỦA KHO MÌNH. Nhiệm vụ chỉ khép sổ khi mọi
+ * kho có hàng tái sử dụng ở ngoài đều đã xác nhận.
  *
  * Giao xong chưa phải là xong: phao cứu sinh, đèn pin, loa cầm tay là hàng tái
  * sử dụng, phải quay về kho rồi mới khép sổ được. Người ký là người ĐẾM LẠI hàng
@@ -652,17 +670,27 @@ export function markSuppliesReturned(
   token: string,
   missionId: string,
   /**
-   * Số đã nhận lại của từng dòng. Bỏ trống nghĩa là "về đủ hết" — đường một nút
-   * bấm; có danh sách là kho đếm từng dòng và nhiệm vụ chỉ khép khi không còn
+   * Số đã nhận lại của từng dòng. Bỏ trống nghĩa là "phần của kho mình về đủ hết"
+   * — đường một nút bấm; có danh sách là kho đếm từng dòng và nhiệm vụ chỉ khép khi không còn
    * dòng nào thiếu.
    */
-  items?: { sku: string; returnedQuantity: number }[],
+  items?: SupplyReturnCount[],
 ): Promise<MissionDetail & { outstandingReturns?: ReturnableSupply[] }> {
   return postAuthorized(
     token,
     `/api/missions/${missionId}/supplies-returned`,
     items ? { items } : {},
   );
+}
+
+/** Tiến độ hoàn trả vật tư của MỘT kho trong nhiệm vụ. */
+export interface SupplyReturnProgress {
+  warehouseId: string;
+  warehouseName: string;
+  returnableLineCount: number;
+  outstandingLineCount: number;
+  /** Kho này đã nhận lại đủ toàn bộ phần vật tư tái sử dụng mình giao ra. */
+  returned: boolean;
 }
 
 /** Một dòng vật tư tái sử dụng kho phải đếm lại khi đội mang đồ về. */
@@ -676,7 +704,18 @@ export interface ReturnableSupply {
   handedOverQuantity: number;
   /** `null` = kho chưa đếm dòng này, khác hẳn "đã đếm và về 0". */
   returnedQuantity: number | null;
+  /** Lý do trả thiếu đã ghi; có lý do thì dòng này tính là đã hoàn trả. */
+  returnNote?: string | null;
+  /** Phần còn phải đòi về — 0 khi về đủ hoặc phần thiếu đã có lý do. */
   outstandingQuantity: number;
+}
+
+/** Số kho đếm được cho một dòng, kèm lý do nếu trả thiếu. */
+export interface SupplyReturnCount {
+  sku: string;
+  returnedQuantity: number;
+  /** Lý do trả thiếu — có lý do thì dòng thiếu vẫn tính là đã hoàn trả. */
+  note?: string;
 }
 
 /** Danh sách vật tư phải thu hồi của nhiệm vụ, theo phạm vi kho đang đăng nhập. */
