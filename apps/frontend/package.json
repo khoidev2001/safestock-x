@@ -46,6 +46,7 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@next/eslint-plugin-next": "^15.5.22",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/leaflet": "^1.9.21",
     "@types/node": "^20.16.10",
