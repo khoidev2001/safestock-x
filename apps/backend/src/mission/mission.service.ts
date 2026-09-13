@@ -1864,9 +1864,27 @@ export class MissionService {
     if (returnableRows.length === 0) return;
     const now = new Date();
 
+    /*
+      Nút "đã nhận lại đủ" chỉ ký được phần CỦA CHÍNH KHO MÌNH.
+
+      Trước đây nhánh này ghi đủ cho MỌI dòng của nhiệm vụ, bất kể dòng ấy thuộc
+      kho nào — trong khi nhánh khai từng dòng ngay bên dưới đã lọc theo kho từ
+      đầu. Hậu quả khi một nhiệm vụ có hai kho tiếp tế: kho A bấm một cái là dòng
+      của kho B cũng thành "đã trả đủ", `outstandingReturns` không còn thấy gì
+      thiếu nên nhiệm vụ khép sổ luôn, và màn hình của kho B hiện "đã nhận lại
+      vật tư" trong khi họ chưa đếm lại một món nào. Hàng của kho B biến mất khỏi
+      mọi danh sách phải đòi.
+
+      Tài khoản không gắn kho (kho tổng, quản trị xã) vẫn ký được cả nhiệm vụ:
+      cùng quy ước với nhánh khai từng dòng.
+    */
+    const mine = returnableRows.filter(
+      (row) => !scopeWarehouseId || row.warehouseId === scopeWarehouseId,
+    );
     if (!input.items) {
+      if (mine.length === 0) return;
       await this.prisma.$transaction(
-        returnableRows.map((row) =>
+        mine.map((row) =>
           this.prisma.missionWarehouseRequest.update({
             where: { id: row.id },
             data: { returnedQuantity: row.pickedUpQuantity ?? 0, returnedAt: now },
@@ -1878,11 +1896,9 @@ export class MissionService {
 
     // Kho chỉ đếm được phần CHÍNH MÌNH đã giao ra; dòng của kho khác không phải
     // việc của họ, và nhận bừa ở đây là để một kho sửa sổ của kho bên cạnh.
-    const editable = new Map(
-      returnableRows
-        .filter((row) => !scopeWarehouseId || row.warehouseId === scopeWarehouseId)
-        .map((row) => [row.sku, row]),
-    );
+    // Dùng lại đúng `mine` ở trên: hai nhánh mà lọc bằng hai đoạn mã riêng thì
+    // sửa một bên quên bên kia — đó chính là cách lỗi vừa rồi lọt qua.
+    const editable = new Map(mine.map((row) => [row.sku, row]));
     const updates = input.items.map((item) => {
       const row = editable.get(item.sku);
       if (!row) {
