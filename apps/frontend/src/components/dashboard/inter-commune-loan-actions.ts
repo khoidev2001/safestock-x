@@ -139,3 +139,94 @@ export function isLoanOpen(loan: {
     loan.direction === "OUTGOING" && loan.returnAcceptedQuantity < loan.returnedQuantity
   );
 }
+
+/**
+ * Tin báo về việc yêu cầu mượn đã sang tới xã kia chưa.
+ *
+ * VÌ SAO PHẢI TÁCH BA TRẠNG THÁI: `peerLoanId` rỗng có HAI nghĩa khác hẳn nhau.
+ * Lần gửi đầu tiên chạy nền sau khi máy chủ đã trả lời cho trình duyệt (xem
+ * `sendToPeer` ở backend), nên trong một hai giây đầu nó rỗng mà chưa hỏng gì.
+ * Chỉ khi máy chủ đã thử và thất bại thì `peerDeliveryError` mới được ghi.
+ *
+ * Trước đây màn hình chỉ nhìn `peerLoanId` nên hét "chưa gửi được" ngay giữa lúc
+ * đang gửi bình thường, rồi tự hết. Báo động giả kiểu ấy tệ hơn không báo: người
+ * trực sẽ gọi điện báo xã kia một khoản mà lát nữa họ nhận được thật, hoặc quen
+ * mắt rồi bỏ qua luôn cả lần hỏng thật.
+ *
+ * Chỉ xét khoản ĐI MƯỢN đang chờ duyệt: khoản cho mượn thì bản ghi sinh ra từ
+ * chính lời gọi của xã kia, không có chuyện chưa gửi tới.
+ */
+export type PeerDeliveryNotice = "none" | "sending" | "failed";
+
+export function peerDeliveryNotice(loan: {
+  direction: InterCommuneDirection;
+  status: InterCommuneStatus;
+  peerLoanId: string | null;
+  peerDeliveryError: string | null;
+}): PeerDeliveryNotice {
+  if (loan.direction !== "INCOMING" || loan.status !== "REQUESTED") return "none";
+  if (loan.peerLoanId) return "none";
+  return loan.peerDeliveryError ? "failed" : "sending";
+}
+
+/**
+ * Khoản này đang chờ CHÍNH MÌNH làm gì đó, hay chờ xã bên kia.
+ *
+ * Mỗi trạng thái có đúng một bên phải ra tay tiếp theo, và bên đó đổi theo hướng
+ * của khoản mượn: cùng là REQUESTED nhưng bên cho mượn phải quyết, còn bên đi
+ * mượn chỉ ngồi chờ (nút "Huỷ yêu cầu" là quyền, không phải việc phải làm).
+ *
+ * Ngoại lệ đứng trước mọi trạng thái: bên CHO MƯỢN chưa xác nhận cầm lại đủ hàng
+ * thì vẫn là việc của mình, kể cả khi sổ đã ghi RETURNED — cùng lý do với
+ * `isLoanOpen`, hàng đã rời kho bên kia nhưng chưa ai xác nhận nó về tới nơi.
+ *
+ * Khoản ghi tay không có xã nào bên kia để chờ: người giữ sổ làm cả hai vai.
+ */
+export function waitingOnMe(loan: {
+  direction: InterCommuneDirection;
+  status: InterCommuneStatus;
+  recordedManually: boolean;
+  returnedQuantity: number;
+  returnAcceptedQuantity: number;
+}): boolean {
+  if (loan.recordedManually) {
+    return loan.status === "ACTIVE" || loan.status === "PARTIALLY_RETURNED";
+  }
+  if (loan.direction === "OUTGOING" && loan.returnAcceptedQuantity < loan.returnedQuantity) {
+    return true;
+  }
+  switch (loan.status) {
+    case "REQUESTED":
+      return loan.direction === "OUTGOING";
+    case "APPROVED":
+    case "ACTIVE":
+    case "PARTIALLY_RETURNED":
+      return loan.direction === "INCOMING";
+    default:
+      return false;
+  }
+}
+
+/**
+ * Xếp lại sổ mượn: việc của mình lên đầu.
+ *
+ * VÌ SAO CẦN: trước đây danh sách giữ nguyên thứ tự máy chủ trả về, mà thứ tự ấy
+ * gom theo TRẠNG THÁI. Hậu quả là ba khoản "chờ bên kia quyết" — không làm gì
+ * được — nằm trên, còn khoản duy nhất đang chờ mình bấm "Xác nhận đã nhận hàng"
+ * bị đẩy xuống cuối. Người trực phải cuộn qua những dòng không cần đụng tới để
+ * tìm dòng cần đụng, và trong lúc điều phối thì thứ bị cuộn qua là thứ bị quên.
+ *
+ * Trong mỗi nhóm vẫn giữ MỚI NHẤT LÊN ĐẦU, đúng như máy chủ đang trả về — đổi cả
+ * hai chiều cùng lúc thì người quen mắt không còn tìm thấy gì ở chỗ cũ.
+ *
+ * Không sửa tại chỗ: mảng đến từ React state, `sort` gốc là đột biến.
+ */
+export function sortByAttention<
+  T extends Parameters<typeof waitingOnMe>[0] & { requestedAt: string },
+>(loans: readonly T[]): T[] {
+  return [...loans].sort((a, b) => {
+    const mine = Number(waitingOnMe(b)) - Number(waitingOnMe(a));
+    if (mine !== 0) return mine;
+    return b.requestedAt.localeCompare(a.requestedAt);
+  });
+}
