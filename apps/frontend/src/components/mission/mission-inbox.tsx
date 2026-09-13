@@ -211,7 +211,8 @@ export function MissionInbox({
                     Đây là tổng THẬT do backend đếm trên cả bảng, không phải số
                     dòng đang nằm trên trang — mảng đã tải bị chặn ở 100, hộp có
                     104 nhiệm vụ vẫn cứ hiện 100. */}
-                {data && ` (${(data.filterTotals[option.value] ?? 0).toLocaleString("vi-VN")})`}
+                {data?.filterTotals &&
+                  ` (${(data.filterTotals[option.value] ?? 0).toLocaleString("vi-VN")})`}
               </button>
             );
           })}
