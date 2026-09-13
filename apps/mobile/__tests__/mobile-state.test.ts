@@ -25,6 +25,7 @@ import {
   filterMissionsByNo,
   missionPickupStage,
   ownWarehouseStage,
+  crossWarehouseRequests,
   ownWarehouseWaitingLabel,
   warehousePickupStates,
   missionStageForViewer,
@@ -1147,4 +1148,31 @@ test("không chen câu tạm khi mọi kho đã xong, hay khi tài khoản khôn
   ]);
   assert.equal(ownWarehouseWaitingLabel("READY", "a", pickupStates), null);
   assert.equal(ownWarehouseWaitingLabel("COMPLETED", "a", pickupStates), null);
+});
+
+test("tài khoản kho vẫn thấy kho khác, nên nhãn 'còn chờ …' hiện được", () => {
+  /*
+    Lỗi đã thấy trên máy thật: người trực Long Châu xong phần mình, hai kho khác
+    chưa, mà nhãn vẫn là "Chờ kho chuẩn bị". Hàm tính nhãn đúng — nó bị cho đọc
+    `warehouseRequests`, trường mà với tài khoản kho chỉ còn phiếu của chính kho.
+  */
+  const mission = {
+    warehouseRequests: [
+      { warehouseId: "long-chau", status: "PICKED_UP", warehouse: { name: "Kho thôn Long Châu" } },
+    ],
+    allWarehouseRequests: [
+      { warehouseId: "long-chau", status: "PICKED_UP", warehouse: { name: "Kho thôn Long Châu" } },
+      { warehouseId: "tong", status: "PENDING", warehouse: { name: "Kho xã Đồng Xuân" } },
+      { warehouseId: "tan-binh", status: "PENDING", warehouse: { name: "Kho thôn Tân Bình" } },
+    ],
+  };
+  const states = warehousePickupStates(crossWarehouseRequests(mission));
+  assert.equal(
+    ownWarehouseWaitingLabel("PENDING_WAREHOUSE", "long-chau", states),
+    // Xếp theo tên (xem `warehousePickupStates`), nên kho thôn đứng trước kho xã.
+    "Kho mình đã chuẩn bị xong · còn chờ Kho thôn Tân Bình, Kho xã Đồng Xuân",
+  );
+  // Bản ngoại tuyến cũ chưa có trường mới: lùi về danh sách đang có.
+  assert.equal(crossWarehouseRequests({ warehouseRequests: mission.warehouseRequests }).length, 1);
+  assert.deepEqual(crossWarehouseRequests(null), []);
 });

@@ -70,6 +70,7 @@ import {
   missionStageLabel,
   missionStageNeedsAction,
   ownWarehouseStage,
+  crossWarehouseRequests,
   ownWarehouseWaitingLabel,
   warehousePickupStates,
 } from "./mission-state";
@@ -707,8 +708,8 @@ export function MissionDetailScreen({
 
   /** Từng kho đã xuất xong chưa — để đội cứu hộ đi được kho nào hay kho ấy. */
   const pickupStates = useMemo(
-    () => warehousePickupStates(mission?.warehouseRequests),
-    [mission?.warehouseRequests],
+    () => warehousePickupStates(crossWarehouseRequests(mission)),
+    [mission],
   );
   /**
    * Kho đã soạn xong mà đội CHƯA ký nhận — tức là còn hàng đang chờ người tới lấy.
@@ -1071,11 +1072,17 @@ export function MissionDetailScreen({
                         mission.status)}
                   </Text>
                 </View>
-                <Text style={[styles.emptyText, { marginTop: 10, textAlign: "left" }]}>
-                  {allWarehousesReady
-                    ? "Các kho đã chuẩn bị xong vật tư. Việc liên hệ và triển khai do con người quyết định ngoài thực tế."
-                    : "Bạn nhận thông tin phương án và tự đến các điểm lấy vật tư; ứng dụng không phân công cá nhân hoặc đội."}
-                </Text>
+                {/* Câu này viết cho NGƯỜI ĐI LẤY HÀNG — "tự đến các điểm lấy vật
+                    tư" là việc của đội cứu hộ. Người trực kho đứng tại kho chờ đội
+                    tới, đọc câu này là hiểu nhầm phần việc của mình; nhãn ngay trên
+                    đã nói đủ phần của kho. */}
+                {fieldForce ? (
+                  <Text style={[styles.emptyText, { marginTop: 10, textAlign: "left" }]}>
+                    {allWarehousesReady
+                      ? "Các kho đã chuẩn bị xong vật tư. Việc liên hệ và triển khai do con người quyết định ngoài thực tế."
+                      : "Bạn nhận thông tin phương án và tự đến các điểm lấy vật tư; ứng dụng không phân công cá nhân hoặc đội."}
+                  </Text>
+                ) : null}
                 {/* Nói thẳng vì sao CHƯA có ô báo kết quả, và điều gì sẽ mở nó ra.
                 Không có dòng này thì người đi hiện trường mở nhiệm vụ ra chỉ thấy
                 trống, và "trống" đọc ra thành "app hỏng" chứ không phải "chưa tới

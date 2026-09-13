@@ -186,6 +186,24 @@ export interface WarehousePickupState {
 }
 
 /**
+ * Phiếu vật tư của MỌI kho trong nhiệm vụ — nguồn cho mọi câu hỏi "kho khác tới
+ * đâu rồi".
+ *
+ * Với tài khoản kho, `warehouseRequests` chỉ còn phiếu của chính kho đó (màn chi
+ * tiết thay bằng kết quả `/warehouse-requests/own`), còn danh sách đầy đủ nằm ở
+ * `allWarehouseRequests`. Đọc nhầm trường thì nhãn "Kho mình đã chuẩn bị xong ·
+ * còn chờ …" không bao giờ hiện: hàm tính nhãn chỉ thấy đúng một kho là kho mình.
+ *
+ * Bản ghi cũ trong bộ nhớ ngoại tuyến chưa có trường mới thì lùi về
+ * `warehouseRequests` — thiếu còn hơn trống.
+ */
+export function crossWarehouseRequests<T>(
+  mission: { warehouseRequests?: T[] | null; allWarehouseRequests?: T[] | null } | null | undefined,
+): T[] {
+  return mission?.allWarehouseRequests ?? mission?.warehouseRequests ?? [];
+}
+
+/**
  * Từng kho đã sẵn sàng chưa, để đội cứu hộ đi ĐƯỢC KHO NÀO HAY KHO ẤY.
  *
  * Trước đây màn hình chỉ nói một câu duy nhất, và câu đó chỉ đổi khi TẤT CẢ các
