@@ -1139,6 +1139,22 @@ export function returnLoan(
   return postAuthorized(token, `/api/loans/${encodeURIComponent(loanId)}/return`, input);
 }
 
+/**
+ * Lỗi này có phải là "chưa chạm được tới máy chủ" không.
+ *
+ * Nhận theo THÔNG ĐIỆP chứ không theo lớp lỗi: React Native ném `TypeError`,
+ * Hermes trên máy khác lại ném `Error` trần, còn bản web thì ném `TypeError` với
+ * câu chữ khác hẳn. Bắt theo lớp là sót một trong ba.
+ */
+function isConnectivityError(error: Error): boolean {
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("network request failed") ||
+    message.includes("failed to fetch") ||
+    message.includes("network error")
+  );
+}
+
 function apiUrl(path: string): string {
   return `${requireApiBase()}${path}`;
 }
@@ -1149,12 +1165,19 @@ async function request(input: string, init?: RequestInit, timeoutMs = 10_000): P
   try {
     return await fetch(input, { ...init, signal: controller.signal });
   } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(
-        "Không kết nối được ungphonhanh.life. Kiểm tra Internet hoặc mạng LAN nội bộ.",
-      );
+    // `fetch` CHỈ ném khi chưa chạm được tới máy chủ — mất sóng, sai DNS, hỏng
+    // TLS, hoặc quá hạn. Máy chủ trả 4xx/5xx thì nó vẫn resolve bình thường.
+    // Nên mọi nhánh ở đây đều là một chuyện: điện thoại chưa ra tới nơi.
+    //
+    // Không để lọt `error` gốc ra ngoài: React Native ném đúng chữ
+    // "Network request failed" — người trực ngoài hiện trường đọc một câu tiếng
+    // Anh sẽ không biết là phải kiểm sóng, tưởng ứng dụng hỏng.
+    if (error instanceof Error && error.name !== "AbortError" && !isConnectivityError(error)) {
+      throw error;
     }
-    throw error;
+    throw new Error(
+      "Không kết nối được ungphonhanh.life. Kiểm tra Internet hoặc mạng LAN nội bộ.",
+    );
   } finally {
     clearTimeout(timeout);
   }

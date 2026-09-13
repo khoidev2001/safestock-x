@@ -663,11 +663,9 @@ function NotificationsScreen({
           </Text>
         </View>
       ) : null}
-      {error && items.length > 0 ? (
-        <View style={{ paddingHorizontal: 16, paddingTop: 10 }}>
-          <Text style={{ color: c.amber, fontSize: 12 }}>{error}</Text>
-        </View>
-      ) : null}
+      {/* Còn dữ liệu cũ trên màn thì lượt tải hỏng chỉ là chuyện thoáng qua —
+          đẩy xuống dải ở đáy, đừng chèn một dòng chữ vào giữa danh sách. */}
+      {items.length > 0 ? <ErrorLine error={error} /> : null}
 
       {loading ? (
         <View style={{ padding: 16 }}>

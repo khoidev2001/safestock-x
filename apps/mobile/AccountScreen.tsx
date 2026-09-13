@@ -12,6 +12,7 @@ import {
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { updateOwnPhone, updateOwnProfile, type AuthUser } from "./api";
 import { pickAvatarImage } from "./avatar-image";
+import { ErrorLine } from "./error-banner";
 import { confirmAction } from "./dialog";
 import { mobileRoleLabel } from "./role-labels";
 import { c, styles } from "./styles";
@@ -231,7 +232,7 @@ function AvatarPicker({
           <MaterialCommunityIcons name="camera" size={12} color="#FFFFFF" />
         </View>
       </Pressable>
-      {error ? <Text style={local.avatarError}>{error}</Text> : null}
+      <ErrorLine error={error} />
     </View>
   );
 }
@@ -353,7 +354,7 @@ function NameSection({
           </View>
         </View>
       )}
-      {error ? <Text style={local.phoneError}>{error}</Text> : null}
+      <ErrorLine error={error} />
       {notice ? <Text style={local.phoneNotice}>{notice}</Text> : null}
     </View>
   );
@@ -500,7 +501,7 @@ function PhoneSection({
         </View>
       )}
 
-      {error ? <Text style={local.phoneError}>{error}</Text> : null}
+      <ErrorLine error={error} />
       {notice ? <Text style={local.phoneNotice}>{notice}</Text> : null}
     </View>
   );
@@ -565,7 +566,6 @@ const local = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarError: { color: c.red, fontSize: 11, fontWeight: "700", marginTop: 6, maxWidth: 140 },
   name: { color: c.text, fontSize: 20, fontWeight: "800" },
   role: { color: c.muted, fontSize: 13, fontWeight: "700", marginTop: 3 },
 
@@ -633,7 +633,6 @@ const local = StyleSheet.create({
     borderColor: c.border,
   },
   phoneGhostText: { color: c.text, fontSize: 14, fontWeight: "700" },
-  phoneError: { color: c.red, fontSize: 13, fontWeight: "700", marginTop: 10 },
   phoneNotice: { color: c.green, fontSize: 13, fontWeight: "700", marginTop: 10 },
   disabled: { opacity: 0.6 },
 

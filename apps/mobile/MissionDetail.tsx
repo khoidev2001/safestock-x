@@ -15,6 +15,7 @@ import {
   type CameraViewProps,
 } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
+import { ErrorLine } from "./error-banner";
 import {
   ActivityIndicator,
   Image,
@@ -763,7 +764,7 @@ export function MissionDetailScreen({
           {/* Lỗi nằm NGOÀI khối gấp: nó nói về lượt tải vừa rồi, không phải về
               nội dung nhiệm vụ, nên gấp mất là người dùng ngồi nhìn dữ liệu cũ
               mà không biết lượt làm mới đã hỏng. */}
-          {error ? <Text style={[styles.errorText, { marginBottom: 12 }]}>{error}</Text> : null}
+          <ErrorLine error={error} />
 
           {completed ? (
             <>

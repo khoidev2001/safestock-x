@@ -445,7 +445,7 @@ export function ReportScreen({ token, user }: { token: string; user: AuthUser })
           </>
         ) : null}
 
-        {voiceError ? <Text style={styles.voiceError}>{voiceError}</Text> : null}
+        <ErrorLine error={voiceError} />
 
         <IncidentPinMap point={pinnedPoint} onChange={setPinnedPoint} disabled={sending} />
 

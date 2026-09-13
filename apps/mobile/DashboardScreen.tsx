@@ -355,7 +355,7 @@ export function DashboardScreen({
           </Text>
         </View>
       ) : null}
-      {error && snapshot ? <Text style={local.inlineError}>{error}</Text> : null}
+      {snapshot ? <ErrorLine error={error} /> : null}
 
       {/* `flexGrow: 0` KHÔNG phải trang trí: ScrollView của react-native-web mặc
           định là `flexGrow: 1`, nên hàng chip nằm trong màn hình `flex: 1` sẽ
@@ -767,7 +767,6 @@ const local = StyleSheet.create({
   },
   offlineTitle: { color: c.amber, fontSize: 13, fontWeight: "800" },
   offlineText: { color: c.muted, fontSize: 12, marginTop: 3 },
-  inlineError: { color: c.amber, fontSize: 12, marginBottom: 12 },
   /** Xem ghi chú ở `InventoryScreen`: ScrollView web mặc định `flexGrow: 1`. */
   chipScroller: { flexGrow: 0, flexShrink: 0 },
   warehouseChips: { alignItems: "center", gap: 8, paddingBottom: 12 },
