@@ -67,6 +67,7 @@ import {
   missionStageLabel,
   missionStageNeedsAction,
   ownWarehouseStage,
+  ownWarehouseWaitingLabel,
   warehousePickupStates,
 } from "./mission-state";
 import {
@@ -665,6 +666,12 @@ export function MissionDetailScreen({
    * là bắt đội ngồi chờ trong khi hàng ở kho thôn đã nằm sẵn trên kệ từ sáng.
    */
   const warehousesToVisit = pickupStates.filter((state) => state.ready && !state.pickedUp);
+  /** Câu thay cho "Chờ kho chuẩn bị" khi phần của kho mình đã xong. */
+  const ownWaitingLabel = ownWarehouseWaitingLabel(
+    mission?.status ?? "",
+    warehouseId,
+    pickupStates,
+  );
   const allWarehousesReady = pickupStates.length > 0 && pickupStates.every((state) => state.ready);
 
   /**
@@ -971,7 +978,13 @@ export function MissionDetailScreen({
                       ? allWarehousesReady
                         ? "Tất cả các kho đã chuẩn bị xong — hãy đến lấy"
                         : `${warehousesToVisit.map((state) => state.name).join(", ")} đã chuẩn bị xong — hãy đến lấy`
-                      : (STATUS_LABEL[mission.status] ?? mission.status)}
+                      : /* Người trực KHO đọc câu này. "Chờ kho chuẩn bị" nói về cả
+                           nhiệm vụ, nên kho nào xong phần mình rồi vẫn thấy y hệt
+                           lúc chưa làm gì — họ hiểu thành máy chưa ghi nhận, rồi
+                           bấm lại, rồi gọi lên xã hỏi. Xem `ownWarehouseWaitingLabel`. */
+                        (ownWaitingLabel ??
+                        STATUS_LABEL[mission.status] ??
+                        mission.status)}
                   </Text>
                 </View>
                 <Text style={[styles.emptyText, { marginTop: 10, textAlign: "left" }]}>
