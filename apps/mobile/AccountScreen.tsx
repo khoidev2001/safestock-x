@@ -120,6 +120,14 @@ export function AccountScreen({
 
         <PhoneSection token={token} user={user} onProfileChanged={onProfileChanged} />
 
+        {/* Miếng đẩy: nội dung ngắn thì nó nở ra, dồn nút đăng xuất xuống đáy.
+            Nội dung dài thì nó co về 0 — và lúc ấy `marginTop` cố định của nút
+            mới là thứ giữ khoảng cách. Trước đây nút chỉ có `marginTop: "auto"`,
+            nên khi màn hình vừa đủ một trang thì khoảng cách ấy biến mất và nút
+            đăng xuất dính ngay dưới nút thêm số điện thoại. */}
+        <View style={{ flexGrow: 1 }} />
+        <View style={local.logoutDivider} />
+
 
         <Pressable
           onPress={() => void askLogout()}
@@ -629,8 +637,23 @@ const local = StyleSheet.create({
   phoneNotice: { color: c.green, fontSize: 13, fontWeight: "700", marginTop: 10 },
   disabled: { opacity: 0.6 },
 
+  /**
+   * Vạch ngăn trước nút đăng xuất.
+   *
+   * Đăng xuất là việc KHÔNG QUAY LẠI ĐƯỢC: nó xoá dữ liệu ngoại tuyến và cắt
+   * thông báo điều phối. Nó không được nằm sát ngay dưới một nút vô hại như
+   * "Thêm số điện thoại" — ngón cái đang quen bấm chỗ đó, mà ngoài hiện trường
+   * thì bấm nhầm rồi mất sóng là không đăng nhập lại được.
+   */
+  logoutDivider: {
+    height: 1,
+    backgroundColor: c.border,
+    marginTop: 24,
+  },
   logout: {
-    marginTop: "auto",
+    // 20 chứ không phải "auto": xem miếng đẩy ở trên, "auto" co về 0 khi nội dung
+    // vừa kín một trang và khi ấy không còn gì tách hai nút ra.
+    marginTop: 20,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
