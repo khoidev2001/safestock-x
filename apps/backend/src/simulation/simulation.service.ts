@@ -8,7 +8,7 @@ import {
 } from "@nestjs/common";
 import { TelemetrySource, VirtualDeviceType, WarehouseKind } from "@prisma/client";
 import { Permission } from "@safestock/shared-types";
-import { IncidentService } from "../incident/incident.service";
+import { IncidentService, type SuppressedIncident } from "../incident/incident.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { SimulationAccessService } from "./simulation-access.service";
 import { SIMULATOR_ALARM_POLICY, type SimulatorAlarmPolicy } from "./simulation-policy";
@@ -263,6 +263,7 @@ export class SimulationService {
           observedAt: event.observedAt,
         })),
         incidents: scan.incidents.map((incident) => ({ id: incident.id, title: incident.title })),
+        suppressed: scan.suppressed,
       };
     } catch (error) {
       if (!isUniqueConflict(error)) throw error;
@@ -363,6 +364,8 @@ export class SimulationService {
       submission: summarizeSubmission(submission),
       events: [],
       incidents,
+      // Lượt gửi lại không quét sự cố lần nữa, nên không có gì bị chặn ở lượt này.
+      suppressed: [] as SuppressedIncident[],
     };
   }
 }

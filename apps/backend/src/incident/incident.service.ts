@@ -31,6 +31,15 @@ const SEVERITY_LABEL: Record<string, string> = {
   CRITICAL: "Nghiêm trọng",
 };
 
+/** Sự cố vừa phát hiện nhưng không tạo, vì sự cố cùng loại trên cùng thiết bị còn mở. */
+export interface SuppressedIncident {
+  kind: string;
+  title: string;
+  deviceCode: string;
+  openIncidentId: string;
+  openIncidentTitle: string;
+}
+
 export interface IncidentScanSource {
   submissionId: string;
   observedAt: Date;
@@ -119,24 +128,34 @@ export class IncidentService {
       where: { warehouseId, state: { not: IncidentState.RESOLVED } },
       include: { evidence: true },
     });
-    const openKeys = new Set(
-      openIncidents.flatMap((i) => i.evidence.map((e) => `${i.kind}|${e.deviceCode}`)),
-    );
+    const openByKey = new Map<string, { id: string; title: string }>();
+    for (const open of openIncidents) {
+      for (const e of open.evidence) {
+        openByKey.set(`${open.kind}|${e.deviceCode}`, { id: open.id, title: open.title });
+      }
+    }
 
     const recipients = await this.resolveEmailRecipients(warehouseId);
     const created = [] as Awaited<ReturnType<typeof this.persist>>[];
-    let suppressed = 0;
+    const suppressed: SuppressedIncident[] = [];
     for (const incident of detected) {
-      const isDuplicate = incident.evidence.some((e) =>
-        openKeys.has(`${incident.kind}|${e.deviceCode}`),
-      );
-      if (isDuplicate) {
+      const blocking = incident.evidence
+        .map((e) => ({ deviceCode: e.deviceCode, open: openByKey.get(`${incident.kind}|${e.deviceCode}`) }))
+        .find((match) => match.open);
+      if (blocking?.open) {
         // Không tạo sự cố mới thì cũng KHÔNG có thư nào được gửi. Trước đây bước
         // này im lặng hoàn toàn, nên người vận hành kéo lại thanh trượt, không
         // nhận được gì, và kết luận nhầm là email hoặc cảnh báo đã hỏng — trong
-        // khi hệ thống đang làm đúng việc chống báo động trùng. Đếm và ghi log để
-        // "không có gì xảy ra" có lý do nhìn thấy được.
-        suppressed += 1;
+        // khi hệ thống đang làm đúng việc chống báo động trùng. Trả danh sách này
+        // về cho người gửi để "không có gì xảy ra" có lý do nhìn thấy được, kể cả
+        // khi họ gửi qua domain và không đọc được log máy chủ.
+        suppressed.push({
+          kind: incident.kind,
+          title: incident.title,
+          deviceCode: blocking.deviceCode,
+          openIncidentId: blocking.open.id,
+          openIncidentTitle: blocking.open.title,
+        });
         this.log.log(
           `Bỏ qua ${incident.kind} ở kho ${warehouseId}: sự cố cùng loại trên cùng thiết bị đang mở. ` +
             `Đóng sự cố cũ rồi mới kích lại được.`,
