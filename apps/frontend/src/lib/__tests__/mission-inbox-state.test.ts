@@ -205,6 +205,35 @@ test("giao xong và thu hồi xong là hai câu khác nhau, cùng đọc ra 'đ�
   );
 });
 
+test("nhiệm vụ nhiều kho: một kho nhận lại chưa phải là đã trả vật tư", () => {
+  const progress = (returned: boolean[]) =>
+    returned.map((done, index) => ({
+      warehouseId: `w${index}`,
+      warehouseName: `Kho ${index}`,
+      returnableLineCount: 1,
+      outstandingLineCount: done ? 0 : 1,
+      returned: done,
+    }));
+  assert.equal(
+    missionStageLabel({
+      ...stageBase,
+      status: "COMPLETED",
+      hasReturnableSupplies: true,
+      supplyReturnProgress: progress([true, false, false]),
+    }),
+    "Đã hoàn thành (1/3 kho đã nhận lại vật tư)",
+  );
+  assert.equal(
+    missionStageLabel({
+      ...stageBase,
+      status: "COMPLETED",
+      hasReturnableSupplies: true,
+      supplyReturnProgress: progress([false, false]),
+    }),
+    "Đã hoàn thành (chưa hoàn vật tư)",
+  );
+});
+
 test("huỷ là kết thúc, không mang theo giai đoạn cũ", () => {
   // Huỷ một nhiệm vụ đã lập kế hoạch vẫn phải đọc ra "Đã huỷ", không phải bước cũ.
   assert.equal(missionStageLabel({ ...stageBase, status: "CANCELLED" }), "Đã huỷ");

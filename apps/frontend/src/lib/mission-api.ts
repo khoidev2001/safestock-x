@@ -4,6 +4,7 @@ import type {
   FieldUpdateIntent,
   WhatIfSimulationResult,
 } from "@safestock/shared-types";
+import type { SupplyReturnProgress } from "./mission-inbox-state";
 
 export type MissionStatus =
   | "DRAFT"
@@ -60,6 +61,12 @@ export interface MissionWarehouseRequest {
   pickedUpQuantity: number | null;
   pickupNote: string | null;
   pickedUpAt: string | null;
+  /** Số đã quay về kho sau nhiệm vụ; `null` là kho chưa đếm dòng này. */
+  returnedQuantity?: number | null;
+  /** Lý do trả thiếu — có lý do thì dòng thiếu vẫn tính là đã hoàn trả. */
+  returnNote?: string | null;
+  /** Hàng tái sử dụng (phải trả về kho); `false` là đồ tiêu hao, phát xong là xong. */
+  reusable?: boolean;
   adminNote: string | null;
   acceptedAt: string | null;
   preparedAt: string | null;
@@ -136,6 +143,13 @@ export interface Mission {
    * kho nên backend trả `false` cho cả nhiệm vụ chưa xuất hàng.
    */
   hasReturnableSupplies?: boolean;
+  /**
+   * Tiến độ hoàn trả theo TỪNG kho có vật tư tái sử dụng đã giao ra.
+   *
+   * Nhiệm vụ lấy hàng từ nhiều kho thì mỗi kho tự ký phần mình; chỉ khi mọi kho
+   * đã ký thì nhiệm vụ mới sang RETURNED.
+   */
+  supplyReturnProgress?: SupplyReturnProgress[];
   fulfillment: number;
   // Mô tả thô của trưởng thôn (mobile) khi mission là "hộp thư" báo cáo — web tự điền + phân tích.
   reportText?: string | null;

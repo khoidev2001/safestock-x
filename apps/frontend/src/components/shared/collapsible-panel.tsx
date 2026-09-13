@@ -17,6 +17,12 @@ export interface CollapsiblePanelProps {
   /** Màu riêng cho tiêu đề, dùng cho khối cảnh báo. */
   tone?: string;
   defaultOpen?: boolean;
+  /**
+   * Điều khiển từ ngoài — dùng khi một nút NẰM TRONG tiêu đề cũng cần mở khối ra
+   * (ví dụ bấm thẻ kho để xem vật tư của kho đó). Bỏ trống thì khối tự giữ trạng thái.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   className?: string;
   /** Nền riêng, dùng cho khối đổi màu theo mức khẩn cấp. */
   style?: React.CSSProperties;
@@ -41,12 +47,15 @@ export function CollapsiblePanel({
   badge,
   tone,
   defaultOpen = true,
+  open: controlledOpen,
+  onOpenChange,
   className,
   style,
   headingId,
   children,
 }: CollapsiblePanelProps) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
+  const open = controlledOpen ?? uncontrolledOpen;
   /**
    * Có đang cắt phần thừa hay không.
    *
@@ -56,7 +65,7 @@ export function CollapsiblePanel({
    * ứng) bị xén mất một nửa. Nên chỉ cắt trong lúc chạy hoạt ảnh; mở xong thì
    * thả ra. Lúc đang gập thì cắt luôn, vì lúc đó chẳng có gì được phép thò ra.
    */
-  const [clipping, setClipping] = useState(!defaultOpen);
+  const [clipping, setClipping] = useState(!open);
 
   /*
     Thả cắt bằng ĐỒNG HỒ chứ không bằng `transitionend`.
@@ -67,7 +76,11 @@ export function CollapsiblePanel({
     bên trong đều có `transition`), nên nghe nó còn phải lọc thêm.
   */
   useEffect(() => {
-    if (!open) return;
+    // Bị đóng từ ngoài thì cắt ngay, như lúc tự bấm đóng.
+    if (!open) {
+      setClipping(true);
+      return;
+    }
     const timer = setTimeout(() => setClipping(false), COLLAPSE_MS + 40);
     return () => clearTimeout(timer);
   }, [open]);
@@ -78,7 +91,8 @@ export function CollapsiblePanel({
         type="button"
         onClick={() => {
           setClipping(true);
-          setOpen((current) => !current);
+          setUncontrolledOpen(!open);
+          onOpenChange?.(!open);
         }}
         aria-expanded={open}
         className="flex w-full items-start gap-3 text-left"
