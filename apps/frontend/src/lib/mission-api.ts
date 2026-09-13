@@ -512,14 +512,14 @@ export const listMissions = (statuses?: MissionStatus[]) =>
 export type MissionInboxSort = "newest" | "oldest" | "most-people" | "fewest-people";
 /** Ô tìm kiếm đang nhắm vào trường nào. */
 export type MissionSearchField = "text" | "mission-no" | "affected-people";
-export type MissionInboxFilter = "all" | "needs-action" | "published";
+export type MissionInboxFilter = "all" | "needs-action" | "published" | "completed";
 
 export interface MissionInboxPage {
   items: Mission[];
   /** Số nhiệm vụ khớp bộ lọc hiện tại — cơ sở để chia trang. */
   total: number;
-  /** Tổng nhiệm vụ người này nhìn thấy được, KHÔNG theo bộ lọc. */
-  totalAll: number;
+  /** Số nhiệm vụ của từng bộ lọc trong phạm vi người này nhìn thấy, KHÔNG theo từ khoá tìm kiếm. */
+  filterTotals: Record<MissionInboxFilter, number>;
   page: number;
   pageSize: number;
   totalPages: number;

@@ -118,7 +118,7 @@ export type MissionListSort = "newest" | "oldest" | "most-people" | "fewest-peop
 export type MissionSearchField = "text" | "mission-no" | "affected-people";
 
 /** Lọc theo phần việc, khớp `MissionInboxFilter` phía web. */
-export type MissionListFilter = "all" | "needs-action" | "published";
+export type MissionListFilter = "all" | "needs-action" | "published" | "completed";
 
 /** Trần mỗi trang — chặn một request xin 100.000 dòng kéo sập bộ nhớ. */
 const MAX_PAGE_SIZE = 100;
@@ -2091,24 +2091,52 @@ export class MissionService {
         : {}),
     };
 
-    const conditions: Prisma.MissionWhereInput[] = [];
-    if (params.filter === "needs-action") {
-      const statuses = needsActionStatuses(params.role);
-      conditions.push({ status: { in: statuses } });
-      // Kho đã xuất xong phần của mình thì hết việc, dù nhiệm vụ vẫn đang chờ các
-      // kho khác. Không có vế này thì mọi kho đều thấy "cần xử lý" tới lúc nhiệm
-      // vụ đóng.
-      if (params.role === UserRole.WAREHOUSE && params.scopeWarehouseId) {
-        conditions.push({
-          warehousePreparations: {
-            some: { warehouseId: params.scopeWarehouseId, preparedAt: null },
-          },
-        });
+    // Một định nghĩa cho mỗi bộ lọc, dùng cho cả trang đang xem lẫn con số trên
+    // từng nút lọc — hai chỗ tự viết điều kiện riêng thì nút "Cần xử lý (5)" bấm
+    // vào lại ra 6 dòng.
+    const filterConditions = (
+      filter: MissionListFilter | undefined,
+    ): Prisma.MissionWhereInput[] => {
+      if (filter === "needs-action") {
+        const conditions: Prisma.MissionWhereInput[] = [
+          { status: { in: needsActionStatuses(params.role) } },
+        ];
+        // Kho đã xuất xong phần của mình thì hết việc, dù nhiệm vụ vẫn đang chờ các
+        // kho khác. Không có vế này thì mọi kho đều thấy "cần xử lý" tới lúc nhiệm
+        // vụ đóng.
+        if (params.role === UserRole.WAREHOUSE && params.scopeWarehouseId) {
+          conditions.push({
+            warehousePreparations: {
+              some: { warehouseId: params.scopeWarehouseId, preparedAt: null },
+            },
+          });
+        }
+        return conditions;
       }
-    }
-    if (params.filter === "published") {
-      conditions.push({ status: { notIn: [MissionStatus.DRAFT, MissionStatus.CANCELLED] } });
-    }
+      if (filter === "published") {
+        // Đã phát hành và CÒN ĐANG CHẠY. Nhiệm vụ hiện trường đã báo xong nằm ở
+        // "Đã hoàn thành" — để chung ở đây thì việc đang chạy lẫn vào việc đã xong.
+        return [
+          {
+            status: {
+              notIn: [
+                MissionStatus.DRAFT,
+                MissionStatus.CANCELLED,
+                MissionStatus.COMPLETED,
+                MissionStatus.RETURNED,
+              ],
+            },
+          },
+        ];
+      }
+      if (filter === "completed") {
+        // Hiện trường đã giao và báo kết quả — bất kể vật tư đã hoàn trả về kho hay chưa.
+        return [{ status: { in: [MissionStatus.COMPLETED, MissionStatus.RETURNED] } }];
+      }
+      return [];
+    };
+
+    const conditions = filterConditions(params.filter);
 
     const search = params.search?.trim();
     if (search) {
@@ -2141,12 +2169,15 @@ export class MissionService {
       conditions.length > 0 ? { AND: [scope, ...conditions] } : scope;
 
     const pageSize = Math.min(Math.max(Math.trunc(params.pageSize ?? 15) || 15, 1), MAX_PAGE_SIZE);
-    const [total, totalAll] = await Promise.all([
+    const [total, totalAll, totalNeedsAction, totalPublished, totalCompleted] = await Promise.all([
       this.prisma.mission.count({ where }),
-      // Con số cạnh chữ "Hộp nhiệm vụ": tổng nhiệm vụ người này nhìn thấy được,
-      // KHÔNG theo bộ lọc đang bật — nó trả lời "hộp này có bao nhiêu", không
-      // phải "bộ lọc vừa rồi khớp bao nhiêu" (câu đó do phân trang trả lời).
+      // Con số trên từng nút lọc: đếm trong phạm vi nhìn thấy, KHÔNG theo từ khoá
+      // tìm kiếm — nó trả lời "hộp này có bao nhiêu nhiệm vụ loại này", không phải
+      // "lần tìm vừa rồi khớp bao nhiêu" (câu đó do phân trang trả lời).
       this.prisma.mission.count({ where: scope }),
+      this.prisma.mission.count({ where: { AND: [scope, ...filterConditions("needs-action")] } }),
+      this.prisma.mission.count({ where: { AND: [scope, ...filterConditions("published")] } }),
+      this.prisma.mission.count({ where: { AND: [scope, ...filterConditions("completed")] } }),
     ]);
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     // Xin trang 9 khi chỉ còn 3 trang (vừa lọc hẹp lại) thì kéo về trang cuối,
@@ -2172,7 +2203,12 @@ export class MissionService {
     return {
       items: await this.withReturnableSupplyFlags(items.map(withCoordinationAnalysisFlag)),
       total,
-      totalAll,
+      filterTotals: {
+        all: totalAll,
+        "needs-action": totalNeedsAction,
+        published: totalPublished,
+        completed: totalCompleted,
+      } satisfies Record<MissionListFilter, number>,
       page,
       pageSize,
       totalPages,

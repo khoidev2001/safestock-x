@@ -50,7 +50,7 @@ import {
 
 /** Giá trị hợp lệ cho hai tham số hiển thị; ngoài danh sách thì rơi về mặc định. */
 const MISSION_SORTS: MissionListSort[] = ["newest", "oldest", "most-people", "fewest-people"];
-const MISSION_FILTERS: MissionListFilter[] = ["all", "needs-action", "published"];
+const MISSION_FILTERS: MissionListFilter[] = ["all", "needs-action", "published", "completed"];
 const MISSION_SEARCH_FIELDS: MissionSearchField[] = ["text", "mission-no", "affected-people"];
 import { MissionCoordinationService } from "./mission-coordination.service";
 import { CoordinationAnalysisService } from "./coordination-analysis.service";
