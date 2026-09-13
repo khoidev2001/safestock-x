@@ -5,7 +5,7 @@ const expand = require(".");
 const patchedPackage = require("brace-expansion-patched/package.json");
 
 test("keeps legacy callable CJS API on top of patched brace-expansion", () => {
-  assert.equal(patchedPackage.version, "5.0.8");
+  assert.equal(patchedPackage.version, "5.0.9");
   assert.equal(typeof expand, "function");
   assert.equal(expand.expand, expand);
   assert.deepEqual(expand("asset-{a,b}-{1..2}"), [
