@@ -997,11 +997,18 @@ export function MissionDetailScreen({
                         mission.status)}
                   </Text>
                 </View>
-                <Text style={[styles.emptyText, { marginTop: 10, textAlign: "left" }]}>
-                  {allWarehousesReady
-                    ? "Các kho đã chuẩn bị xong vật tư. Việc liên hệ và triển khai do con người quyết định ngoài thực tế."
-                    : "Bạn nhận thông tin phương án và tự đến các điểm lấy vật tư; ứng dụng không phân công cá nhân hoặc đội."}
-                </Text>
+                {/* Câu này viết cho NGƯỜI ĐI LẤY HÀNG — "tự đến các điểm lấy vật
+                    tư" là việc của đội cứu hộ. Người trực kho đọc nó thì sai vai:
+                    họ đứng tại kho và chờ đội tới, không đi đâu cả. Nhãn ngay
+                    trên đã nói đủ phần việc của kho, nên với họ để trống là đúng
+                    hơn là nói một câu không phải của mình. */}
+                {fieldForce ? (
+                  <Text style={[styles.emptyText, { marginTop: 10, textAlign: "left" }]}>
+                    {allWarehousesReady
+                      ? "Các kho đã chuẩn bị xong vật tư. Việc liên hệ và triển khai do con người quyết định ngoài thực tế."
+                      : "Bạn nhận thông tin phương án và tự đến các điểm lấy vật tư; ứng dụng không phân công cá nhân hoặc đội."}
+                  </Text>
+                ) : null}
                 {/* Nói thẳng vì sao CHƯA có ô báo kết quả, và điều gì sẽ mở nó ra.
                 Không có dòng này thì người đi hiện trường mở nhiệm vụ ra chỉ thấy
                 trống, và "trống" đọc ra thành "app hỏng" chứ không phải "chưa tới
