@@ -388,6 +388,18 @@ describe("MissionWarehouseRequestService.confirmPickup — thông báo ký nhậ
     ).toHaveLength(0);
   });
 
+  it("ký nhận xong thì báo mọi màn hình đang mở nhiệm vụ tải lại — kể cả đội cứu hộ không nhận chuông", async () => {
+    // Ký nhận bàn giao chỉ báo điều phối. Không có tín hiệu này, màn điểm lấy hàng
+    // của đội cứu hộ đứng yên ở "soạn xong · tới lấy được" dù kho đã bàn giao xong.
+    const { service, notifications } = harness(40, 2);
+    const broadcastMissionUpdate = jest.fn();
+    Object.assign(notifications, { broadcastMissionUpdate });
+
+    await service.confirmPickup("request-1", "warehouse-user", 40, null, "warehouse-a");
+
+    expect(broadcastMissionUpdate).toHaveBeenCalledWith("org-1", "mission-1");
+  });
+
   it("lấy THIẾU chỉ ra MỘT thông báo, và tiêu đề nói thẳng là thiếu", async () => {
     // Gửi kèm cả thông báo "đã lấy hàng" thì lần thiếu chìm trong tiếng ồn của lần
     // đủ — đúng cái bẫy mà việc chỉ-báo-khi-thiếu ngày trước sinh ra để tránh.

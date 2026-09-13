@@ -314,13 +314,15 @@ function MobileRoleShell({
             role={user.role}
             warehouseId={user.warehouseId}
             missionId={missionFromList}
-            // Thông báo mới nhất của CHÍNH nhiệm vụ đang mở. Kho xuất hàng hay ký
-            // nhận xong là màn hình tự tải lại, người dùng không phải thoát ra rồi
-            // vào lại mới thấy — mà lúc đang đứng ở kho thì không ai nghĩ tới
-            // chuyện đó.
-            refreshSignal={
-              feed.items.find((item) => item.missionId === missionFromList)?.id ?? null
-            }
+            // Thông báo mới nhất của CHÍNH nhiệm vụ đang mở, ghép với tín hiệu
+            // "nhiệm vụ vừa đổi" không kèm chuông. Kho xuất hàng hay ký nhận xong
+            // là màn hình tự tải lại, người dùng không phải thoát ra rồi vào lại
+            // mới thấy — mà lúc đang đứng ở kho thì không ai nghĩ tới chuyện đó.
+            // Chỉ dựa vào thông báo thì hụt: kho ký nhận bàn giao chỉ báo điều
+            // phối, nên màn của đội cứu hộ cứ đứng yên ở "soạn xong · tới lấy được".
+            refreshSignal={`${
+              feed.items.find((item) => item.missionId === missionFromList)?.id ?? ""
+            }#${feed.missionUpdates[missionFromList] ?? 0}`}
             onBack={() => setMissionFromList(null)}
           />
         ) : tab === "home" ? (

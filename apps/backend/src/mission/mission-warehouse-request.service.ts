@@ -694,10 +694,26 @@ export class MissionWarehouseRequestService {
     return user.warehouseId;
   }
 
+  /**
+   * Gửi thông báo, và báo mọi màn hình đang mở nhiệm vụ đó tải lại.
+   *
+   * Mọi thay đổi trạng thái của yêu cầu vật tư đều đi qua đây (lượt hàng loạt tắt
+   * câu báo của từng dòng nhưng luôn gửi câu tổng), nên đây là chỗ duy nhất phải
+   * nhớ phát tín hiệu. Thông báo chỉ tới vai được gọi tên — ký nhận bàn giao chỉ
+   * báo điều phối — còn tín hiệu tải lại tới cả xã: đội cứu hộ đang xem danh sách
+   * điểm lấy hàng phải thấy kho vừa bàn giao xong mà không cần một tiếng chuông.
+   */
   private async notify(input: Parameters<NotificationService["create"]>[0], context: string) {
     await this.notifications.create(input).catch((error) => {
       this.log.warn(`Tạo thông báo ${context} lỗi: ${message(error)}`);
     });
+    if (input.organizationId && input.missionId) {
+      try {
+        this.notifications.broadcastMissionUpdate?.(input.organizationId, input.missionId);
+      } catch (error) {
+        this.log.warn(`Phát tín hiệu cập nhật ${context} lỗi: ${message(error)}`);
+      }
+    }
   }
 }
 
