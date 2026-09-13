@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
+import { ErrorBanner } from "./error-banner";
 import { buildPinMapHtml, type PinnedPoint } from "./incident-pin-map-html";
 import { c } from "./styles";
 
@@ -316,6 +317,9 @@ export function IncidentPinMapShell({
             {renderSurface({ html, onMessage: handleMessage, command })}
           </View>
         </View>
+        {/* Biểu mẫu là cửa sổ riêng đè lên app: dải lỗi của app nằm bên dưới
+            và bị che. Dải gắn ở đây mở sau nên nhận lỗi thay. */}
+        <ErrorBanner placement="top" />
       </Modal>
 
       {failed ? (

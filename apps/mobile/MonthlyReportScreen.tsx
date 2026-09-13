@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ErrorLine } from "./error-banner";
+import { ErrorLine, useErrorState } from "./error-banner";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import {
   Pressable,
@@ -37,7 +37,7 @@ export function MonthlyReportScreen({ token, user }: { token: string; user: Auth
   const [rejectNote, setRejectNote] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useErrorState();
   const [draft, setDraft] = useState<MonthlyReportDraftRow[]>([]);
   const [draftWarehouse, setDraftWarehouse] = useState<{ id: string; name: string } | null>(null);
   /**
@@ -66,7 +66,7 @@ export function MonthlyReportScreen({ token, user }: { token: string; user: Auth
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [setError, token]);
 
   useEffect(() => {
     void load();
@@ -132,7 +132,7 @@ export function MonthlyReportScreen({ token, user }: { token: string; user: Auth
     setDraftWarehouse(null);
     setPendingConfirm(false);
     setError(null);
-  }, [period]);
+  }, [period, setError]);
 
   const openReport = async (id: string) => {
     setBusy(true);
@@ -398,6 +398,10 @@ export function MonthlyReportScreen({ token, user }: { token: string; user: Auth
                         ),
                       )
                     }
+                    // Trần 7 chữ số (tới 9.999.999): đủ cho mọi kho xã, và chặn chuỗi
+                    // số dài vô hạn làm ô giãn cao che hết các lô bên dưới.
+                    maxLength={7}
+                    multiline={false}
                     placeholder="Số đếm"
                     placeholderTextColor={c.muted}
                     style={screenStyles.countInput}

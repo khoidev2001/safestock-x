@@ -228,6 +228,15 @@ export default function App() {
           onProfileChanged={handleProfileChanged}
         />
       )}
+      {/* Dải báo lỗi gắn ở GỐC, ngoài cả hai nhánh, và chỉ gắn đúng MỘT lần.
+
+          Trước đây nó nằm trong vỏ app đã đăng nhập. Màn đăng nhập vẫn đẩy lỗi
+          qua `showError(...)`, nhưng lúc đó chưa có dải nào lắng nghe — nên sai
+          mật khẩu hay mất mạng đều bị nuốt: nút quay vài giây rồi trở về như cũ,
+          không một chữ nào. Người dùng sẽ bấm lại mãi, rồi kết luận app hỏng.
+
+          Đặt SAU cùng để dải nằm trên mọi thứ khác. */}
+      <ErrorBanner />
     </SafeAreaView>
   );
 }
@@ -407,9 +416,6 @@ function MobileRoleShell({
         onDismiss={feed.dismiss}
         onOpen={openFromToast}
       />
-      {/* Đặt SAU cùng để dải lỗi nằm trên mọi thứ khác. Gắn đúng một lần ở đây,
-          các màn chỉ việc gọi `showError(...)`. */}
-      <ErrorBanner />
     </View>
   );
 }

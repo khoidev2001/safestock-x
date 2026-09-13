@@ -9,11 +9,12 @@
  * Nằm trên thanh tab (`bottom: 76`) chứ không sát đáy: đè lên thanh tab thì đúng
  * lúc báo lỗi lại chặn mất đường thoát sang màn khác.
  */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import {
   ERROR_BANNER_VISIBLE_MS,
+  createErrorChannel,
   nextErrorBanner,
   type ErrorBanner as ErrorBannerData,
 } from "./error-banner-state";
@@ -28,11 +29,16 @@ type Listener = (message: string) => void;
  * `catch` của một hàm bất đồng bộ, chỗ không có hook nào dùng được. Context sẽ
  * bắt mọi hàm như thế phải nhận thêm tham số, hoặc phải bọc lại bằng hook.
  */
-const listeners = new Set<Listener>();
+const channel = createErrorChannel();
 
-/** Hiện dải lỗi. Gọi được từ bất cứ đâu, kể cả ngoài component. */
+/**
+ * Hiện dải lỗi. Gọi được từ bất cứ đâu, kể cả ngoài component.
+ *
+ * Lỗi đi tới dải gắn SAU CÙNG — xem `createErrorChannel` về chuyện biểu mẫu mở
+ * bằng `Modal` che mất dải của app.
+ */
 export function showError(message: string): void {
-  for (const listener of listeners) listener(message);
+  channel.emit(message);
 }
 
 /**
@@ -49,8 +55,43 @@ export function ErrorLine({ error }: { error: string | null | undefined }) {
   return null;
 }
 
+/**
+ * Trạng thái lỗi cho BIỂU MẪU người dùng bấm gửi — mỗi lần đặt lỗi là mỗi lần hiện.
+ *
+ * `useState` thường không đủ ở đây: bấm "Xác nhận" hai lần với cùng dữ liệu sai
+ * thì hai lần ra cùng một câu, React thấy giá trị không đổi nên không vẽ lại, và
+ * `ErrorLine` không phát lại. Dải đầu đã tự tắt sau 6 giây, nên lần bấm thứ hai
+ * không có phản hồi nào — người dùng đọc thành "nút hỏng".
+ *
+ * CHỈ dùng cho lỗi do người dùng vừa bấm. Màn tải nền (danh sách, dashboard) làm
+ * mới mỗi 15 giây vẫn dùng `ErrorLine`: cho lỗi trùng hiện lại ở đó là lúc mất
+ * sóng dải đỏ bật lên liên tục.
+ */
+export function useErrorState(): [string | null, (message: string | null) => void] {
+  const [error, setErrorState] = useState<string | null>(null);
+  const setError = useCallback((message: string | null) => {
+    setErrorState(message);
+    if (message) showError(message);
+  }, []);
+  return [error, setError];
+}
+
 /** Dải lỗi. Gắn một lần, đặt SAU nội dung để nó nằm trên cùng. */
-export function ErrorBanner() {
+/**
+ * `bottom`: khoảng cách tới đáy. Mặc định chừa chỗ cho thanh tab; trong một biểu
+ * mẫu toàn màn hình không có thanh tab thì hạ thấp xuống sát đáy.
+ */
+export function ErrorBanner({
+  bottom = 76,
+  placement = "bottom",
+}: {
+  bottom?: number;
+  /**
+   * Trong biểu mẫu thì đặt `"top"`: nút xác nhận của biểu mẫu nằm ở ĐÁY, và dải
+   * lỗi ở đáy đè đúng lên nó — người dùng muốn bấm lại thì bấm trúng dải.
+   */
+  placement?: "top" | "bottom";
+} = {}) {
   const [banner, setBanner] = useState<ErrorBannerData | null>(null);
   const enter = useRef(new Animated.Value(0)).current;
 
@@ -58,10 +99,7 @@ export function ErrorBanner() {
     const listener: Listener = (message) => {
       setBanner((current) => nextErrorBanner(current, message, Date.now()));
     };
-    listeners.add(listener);
-    return () => {
-      listeners.delete(listener);
-    };
+    return channel.subscribe(listener);
   }, []);
 
   useEffect(() => {
@@ -84,10 +122,11 @@ export function ErrorBanner() {
     <Animated.View
       style={[
         local.wrap,
+        placement === "top" ? { top: 12 } : { bottom },
         {
           opacity: enter,
           transform: [
-            { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [80, 0] }) },
+            { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [placement === "top" ? -80 : 80, 0] }) },
           ],
         },
       ]}
@@ -118,8 +157,6 @@ const local = StyleSheet.create({
     position: "absolute",
     left: 12,
     right: 12,
-    // Trên thanh tab: đè lên nó thì lúc báo lỗi lại chặn mất đường sang màn khác.
-    bottom: 76,
   },
   banner: {
     flexDirection: "row",
