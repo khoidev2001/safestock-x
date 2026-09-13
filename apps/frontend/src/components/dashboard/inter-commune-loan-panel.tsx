@@ -19,6 +19,7 @@ import {
   isLoanOpen,
   loanActions,
   outstanding,
+  peerDeliveryNotice,
   statusLabel,
   type LoanAction,
 } from "./inter-commune-loan-actions";
@@ -628,11 +629,14 @@ function LoanRow({
             {loan.recordedManually ? " · ghi tay" : ""}
           </p>
           {/* "Chờ bên kia quyết" chỉ đúng khi bên kia ĐÃ nhận được yêu cầu.
-              `peerLoanId` rỗng nghĩa là tin chưa rời khỏi máy chủ mình — không
-              nói ra thì người trực ngồi đợi một câu trả lời không ai sẽ gửi. */}
-          {loan.direction === "INCOMING" && loan.status === "REQUESTED" && !loan.peerLoanId ? (
+              Ba trạng thái và lý do phải tách chúng ra: xem `peerDeliveryNotice`. */}
+          {peerDeliveryNotice(loan) === "failed" ? (
             <p className="mt-1 text-xs font-semibold text-[var(--color-critical)]">
               Chưa gửi được sang xã {loan.peerCommuneName} — họ chưa nhận được yêu cầu này.
+            </p>
+          ) : peerDeliveryNotice(loan) === "sending" ? (
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              Đang gửi sang xã {loan.peerCommuneName}…
             </p>
           ) : null}
         </div>

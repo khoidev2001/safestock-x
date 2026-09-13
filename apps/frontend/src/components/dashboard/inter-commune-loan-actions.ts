@@ -139,3 +139,32 @@ export function isLoanOpen(loan: {
     loan.direction === "OUTGOING" && loan.returnAcceptedQuantity < loan.returnedQuantity
   );
 }
+
+/**
+ * Tin báo về việc yêu cầu mượn đã sang tới xã kia chưa.
+ *
+ * VÌ SAO PHẢI TÁCH BA TRẠNG THÁI: `peerLoanId` rỗng có HAI nghĩa khác hẳn nhau.
+ * Lần gửi đầu tiên chạy nền sau khi máy chủ đã trả lời cho trình duyệt (xem
+ * `sendToPeer` ở backend), nên trong một hai giây đầu nó rỗng mà chưa hỏng gì.
+ * Chỉ khi máy chủ đã thử và thất bại thì `peerDeliveryError` mới được ghi.
+ *
+ * Trước đây màn hình chỉ nhìn `peerLoanId` nên hét "chưa gửi được" ngay giữa lúc
+ * đang gửi bình thường, rồi tự hết. Báo động giả kiểu ấy tệ hơn không báo: người
+ * trực sẽ gọi điện báo xã kia một khoản mà lát nữa họ nhận được thật, hoặc quen
+ * mắt rồi bỏ qua luôn cả lần hỏng thật.
+ *
+ * Chỉ xét khoản ĐI MƯỢN đang chờ duyệt: khoản cho mượn thì bản ghi sinh ra từ
+ * chính lời gọi của xã kia, không có chuyện chưa gửi tới.
+ */
+export type PeerDeliveryNotice = "none" | "sending" | "failed";
+
+export function peerDeliveryNotice(loan: {
+  direction: InterCommuneDirection;
+  status: InterCommuneStatus;
+  peerLoanId: string | null;
+  peerDeliveryError: string | null;
+}): PeerDeliveryNotice {
+  if (loan.direction !== "INCOMING" || loan.status !== "REQUESTED") return "none";
+  if (loan.peerLoanId) return "none";
+  return loan.peerDeliveryError ? "failed" : "sending";
+}

@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { isLoanOpen, isOpen, loanActions, outstanding, statusLabel } from "./inter-commune-loan-actions";
+import {
+  isLoanOpen,
+  isOpen,
+  loanActions,
+  outstanding,
+  peerDeliveryNotice,
+  statusLabel,
+} from "./inter-commune-loan-actions";
 
 const actionsFor = (d: "OUTGOING" | "INCOMING", s: Parameters<typeof loanActions>[1], m = false) =>
   loanActions(d, s, m).map((a) => a.to);
@@ -95,4 +102,47 @@ test("mọi trạng thái đều có nhãn tiếng Việt, không lọt mã hằ
   ] as const) {
     assert.notEqual(statusLabel(s), s);
   }
+});
+
+/*
+  Tin báo "đã sang tới xã kia chưa".
+
+  Chốt giữ một báo động giả có thật: lần gửi đầu tiên chạy nền, nên ngay sau khi
+  bấm thì `peerLoanId` còn rỗng mà chưa hỏng gì. Màn hình từng hét "chưa gửi
+  được" đúng lúc ấy rồi tự hết.
+*/
+const loanState = (over: Partial<Parameters<typeof peerDeliveryNotice>[0]> = {}) => ({
+  direction: "INCOMING" as const,
+  status: "REQUESTED" as const,
+  peerLoanId: null,
+  peerDeliveryError: null,
+  ...over,
+});
+
+test("đang gửi thì báo đang gửi, chưa được coi là hỏng", () => {
+  assert.equal(peerDeliveryNotice(loanState()), "sending");
+});
+
+test("chỉ báo hỏng khi máy chủ đã ghi lý do hỏng", () => {
+  assert.equal(
+    peerDeliveryNotice(loanState({ peerDeliveryError: "Không liên lạc được với máy chủ xã Xuân Thọ." })),
+    "failed",
+  );
+});
+
+test("gửi tới nơi rồi thì im lặng, kể cả khi lý do hỏng cũ còn sót", () => {
+  assert.equal(peerDeliveryNotice(loanState({ peerLoanId: "peer-1" })), "none");
+  // Máy chủ xoá `peerDeliveryError` cùng lúc ghi `peerLoanId`, nhưng đừng phụ
+  // thuộc vào điều đó: có id bên kia là đã tới nơi.
+  assert.equal(
+    peerDeliveryNotice(loanState({ peerLoanId: "peer-1", peerDeliveryError: "hỏng cũ" })),
+    "none",
+  );
+});
+
+test("khoản cho mượn và khoản đã quyết đều không báo gì", () => {
+  // Bản ghi OUTGOING sinh ra từ chính lời gọi của xã kia — không có chuyện chưa gửi tới.
+  assert.equal(peerDeliveryNotice(loanState({ direction: "OUTGOING" })), "none");
+  assert.equal(peerDeliveryNotice(loanState({ status: "APPROVED" })), "none");
+  assert.equal(peerDeliveryNotice(loanState({ status: "CANCELLED" })), "none");
 });
