@@ -63,6 +63,12 @@ export class NotificationGateway implements OnModuleInit, OnGatewayInit, OnGatew
         : notificationRoom(target.organizationId, target.role);
       this.server.to(room).emit("notification", notification);
     };
+    this.notifications.broadcastMissionUpdate = (organizationId, missionId) => {
+      // Phòng chung của từng vai là đủ: tài khoản gắn kho cũng luôn ở phòng chung
+      // của vai mình. `to([...])` gộp trùng nên mỗi ổ cắm nhận đúng một lần.
+      const rooms = Object.values(UserRole).map((role) => notificationRoom(organizationId, role));
+      this.server.to(rooms).emit("mission_updated", { missionId });
+    };
   }
 }
 

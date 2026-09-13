@@ -185,6 +185,7 @@ describe("MissionService warehouse participation", () => {
       // Nhiệm vụ dựng trong test chưa có dòng nào đội ký nhận mang đi, nên chưa có
       // gì ở ngoài kho để đòi về.
       hasReturnableSupplies: false,
+      supplyReturnProgress: [],
     });
   });
 

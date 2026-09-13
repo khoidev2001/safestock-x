@@ -89,7 +89,7 @@ async function bagSungDanhMuc(): Promise<Map<string, string>> {
  * dồn số lượng vào lô cũ: cộng dồn thì mỗi lần lỡ tay chạy lại là tồn kho phồng lên
  * mà không có lô nào để lần ra.
  */
-async function taoLoNeuThieu(
+async function createBatchIfMissing(
   itemId: string,
   shelfId: string,
   batchCode: string,
@@ -123,7 +123,7 @@ async function taoLoNeuThieu(
   return true;
 }
 
-async function napKhoTong(itemBySku: Map<string, string>) {
+async function stockCentralWarehouse(itemBySku: Map<string, string>) {
   const central = await prisma.warehouse.findFirstOrThrow({ where: { kind: "CENTRAL" } });
   const shelves = new Map(
     (
@@ -142,7 +142,7 @@ async function napKhoTong(itemBySku: Map<string, string>) {
     // chưa nhập, và người đi lấy hàng sẽ đứng trước đúng cái kệ trống.
     if (!shelfId) throw new Error(`Kho tổng chưa có kệ ${definition.shelfCode}`);
 
-    const created = await taoLoNeuThieu(
+    const created = await createBatchIfMissing(
       itemId,
       shelfId,
       definition.batchCode,
@@ -163,7 +163,7 @@ async function napKhoTong(itemBySku: Map<string, string>) {
   }
 }
 
-async function napKhoThon(itemBySku: Map<string, string>) {
+async function stockHamletWarehouses(itemBySku: Map<string, string>) {
   for (let index = 0; index < HAMLET_WAREHOUSES.length; index++) {
     const definition = HAMLET_WAREHOUSES[index];
     const warehouse = await prisma.warehouse.findFirst({
@@ -191,7 +191,7 @@ async function napKhoThon(itemBySku: Map<string, string>) {
       if (!itemId) throw new Error(`Không tìm thấy mặt hàng ${stock.sku}`);
       // Mã lô đặt y hệt seed.ts để hai đường nạp không sinh ra hai lô cho cùng
       // một thứ hàng ở cùng một kho.
-      const created = await taoLoNeuThieu(
+      const created = await createBatchIfMissing(
         itemId,
         shelf.id,
         `${stock.sku}-${definition.key.toUpperCase()}`,
@@ -215,9 +215,9 @@ async function main() {
   console.log("Danh mục:");
   const itemBySku = await bagSungDanhMuc();
   console.log("\nKho tổng:");
-  await napKhoTong(itemBySku);
+  await stockCentralWarehouse(itemBySku);
   console.log("\nKho thôn:");
-  await napKhoThon(itemBySku);
+  await stockHamletWarehouses(itemBySku);
 
   console.log(
     `\nXong. Nhóm mới ${summary.nhomMoi} · mặt hàng mới ${summary.itemMoi} · ` +

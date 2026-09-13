@@ -196,13 +196,13 @@ async function main() {
   console.log(`Ton kho: tao ${batchesCreated} lo, cap nhat ${batchesUpdated} lo.`);
 
   // --- Đối chiếu: đếm lại từ cơ sở dữ liệu, không tin vào bộ đếm ở trên.
-  const tonKho = await prisma.itemBatch.findMany({
+  const stockedBatches = await prisma.itemBatch.findMany({
     where: { shelf: { zone: { warehouseId: warehouse.id } }, circulation: "IN_STOCK" },
     select: { quantity: true, item: { select: { sku: true } } },
   });
-  const tongSoMa = new Set(tonKho.map((b) => b.item.sku)).size;
-  const tongSoLuong = tonKho.reduce((sum, b) => sum + b.quantity, 0);
-  console.log(`Doi chieu: kho xa ban co ${tongSoMa} ma hang, tong ${tongSoLuong} don vi.`);
+  const distinctSkuCount = new Set(stockedBatches.map((b) => b.item.sku)).size;
+  const totalQuantity = stockedBatches.reduce((sum, b) => sum + b.quantity, 0);
+  console.log(`Doi chieu: kho xa ban co ${distinctSkuCount} ma hang, tong ${totalQuantity} don vi.`);
 }
 
 main()

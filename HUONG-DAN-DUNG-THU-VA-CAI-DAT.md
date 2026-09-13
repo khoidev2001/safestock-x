@@ -137,16 +137,16 @@ Người giữ kho thôn kiêm luôn việc báo tình huống của thôn mình
 | Tài khoản | Mật khẩu | Vai | Phạm vi |
 |---|---|---|---|
 | `admin` | `admin123@` | Quản trị xã | Toàn xã |
-| `staff` | `staff123` | Phụ trách kho | Kho xã Đồng Xuân |
-| `rescue` | `rescue123` | Đội cứu hộ | Toàn xã |
+| `dongxuan` | `dongxuan123` | Phụ trách kho | Kho xã Đồng Xuân |
+| `cuuhodongxuan` | `cuuho123` | Đội cứu hộ | Toàn xã |
 | `iot` | `iot123456` | Thiết bị IoT (app desktop) | Kho trung tâm |
 
 **Lưu ý:** mọi tài khoản đều đăng nhập bằng **tên đăng nhập trần**, không phải một
-địa chỉ email — `admin`, `staff`, `longchau`, không kèm hậu tố tên miền.
+địa chỉ email — `admin`, `dongxuan`, `longchau`, không kèm hậu tố tên miền.
 
 ### 3.2. Mười bảy tài khoản phụ trách kho thôn
 
-Tất cả cùng vai **phụ trách kho**, mật khẩu chung `truongthon123`. Tên đăng nhập là
+Tất cả cùng vai **phụ trách kho**, mật khẩu riêng là tên đăng nhập thêm `123` (ví dụ `longchau123`). Tên đăng nhập là
 tên thôn bỏ dấu viết liền, nên nhìn là biết ai giữ kho nào.
 
 | Tài khoản | Kho phụ trách | | Tài khoản | Kho phụ trách |
@@ -169,9 +169,9 @@ trung tâm + 17 kho thôn) + 1 tài khoản thiết bị IoT.
 | Nơi làm việc | Thiết bị | Tài khoản |
 |---|---|---|
 | Quản trị xã | Máy tính (web) | `admin` |
-| **Kho trung tâm** | Máy tính riêng: web **và** app IoT | `staff@` cho web · `iot@` cho app desktop |
+| **Kho trung tâm** | Máy tính riêng: web **và** app IoT | `dongxuan` cho web · `iot@` cho app desktop |
 | **Kho thôn** (17 kho) | Điện thoại (APK) | `<tênthôn>@` |
-| Đội cứu hộ | Điện thoại (APK) | `rescue@` |
+| Đội cứu hộ | Điện thoại (APK) | `cuuhodongxuan` |
 
 **Vì sao kho trung tâm cần hai tài khoản trên cùng một máy:** mỗi lượt đăng nhập xoay
 khóa phiên của tài khoản đó. Web và app IoT dùng chung một tài khoản sẽ đá nhau — web
@@ -183,7 +183,7 @@ giúp nhật ký phân biệt số liệu do thiết bị bơm với thao tác d
 
 **① Một nhiệm vụ thường cần hai tài khoản kho.** Hệ thống phân bổ vật tư theo kho gần
 điểm sự cố, nên một nhiệm vụ hay trải trên cả kho trung tâm lẫn kho thôn. Nếu chỉ
-đăng nhập `staff@`, nhiệm vụ sẽ dừng ở *Chờ kho chuẩn bị* và **không bao giờ tới
+đăng nhập `dongxuan`, nhiệm vụ sẽ dừng ở *Chờ kho chuẩn bị* và **không bao giờ tới
 trạng thái Sẵn sàng**.
 *Ví dụ đã kiểm chứng:* một báo cáo ngập tại thôn Phú Hòa chia 5 loại vật tư thành
 **1 ở kho trung tâm** và **4 ở Kho thôn Long Châu** — phải đăng nhập thêm
@@ -230,7 +230,7 @@ buổi trình diễn; nếu S01–S05 chạy đúng thì hệ thống đang kh�
 | S10 | **Tài khoản** | 21 tài khoản; chỉ quản trị xã thấy được mục này |
 
 **Bước 3 — Thử phân quyền (điểm đáng chấm).** Đăng xuất, đăng nhập lại bằng
-`rescue` / `rescue123`. Mục **Tài khoản** và **Nhật ký** biến mất.
+`cuuhodongxuan` / `cuuho123`. Mục **Tài khoản** và **Nhật ký** biến mất.
 Quan trọng hơn: đây không phải chỉ ẩn nút — gọi thẳng API tương ứng cũng bị **chặn
 403** ở máy chủ.
 
@@ -291,7 +291,7 @@ tế, phân bổ theo kho gần điểm sự cố. Xem lại từng dòng, chỉ
 > chỉ diễn giải bằng lời. Nếu tồn kho không đủ, hệ thống nói rõ thiếu bao nhiêu chứ
 > không làm tròn cho đẹp.
 
-**③ Kho chuẩn bị theo từng mã vật tư** — vai `staff@` và/hoặc kho thôn liên quan
+**③ Kho chuẩn bị theo từng mã vật tư** — vai `dongxuan` và/hoặc kho thôn liên quan
 Phiếu yêu cầu hiện **ngay lập tức** qua WebSocket (không cần tải lại trang) ở đúng kho
 được phân bổ. Mỗi mã vật tư đi qua bốn mốc riêng: *tiếp nhận* → *đã soạn xong* → *người
 đi lấy ký nhận*; nếu không đủ thì kho **báo chênh lệch** và quản trị duyệt hoặc bác.
@@ -302,7 +302,7 @@ Chỉ khi **tất cả** kho liên quan ký nhận xong, nhiệm vụ mới chuy
 > khoảng giữa hai mốc đó chính là nơi hàng bị thiếu. Bảng tiến độ tách theo từng kho
 > chứ không gộp một con số, để điều phối biết phải gọi điện nhắc kho nào.
 
-**④ Giao hàng và đóng nhiệm vụ** — vai `rescue@`
+**④ Giao hàng và đóng nhiệm vụ** — vai `cuuhodongxuan`
 Người đi giao báo **kết quả thực tế**, một trong ba: giao đủ, giao một phần, hoặc không
 giao được. Giao thất bại thì vật tư **tự hoàn về kho trong cùng một giao dịch** chứ
 không biến mất.
@@ -401,8 +401,8 @@ Internet (§1.2). Vì vậy app chỉ dùng được khi máy chủ demo đang b
 
 | Vai | Giao diện |
 |---|---|
-| Đội cứu hộ (`rescue@`) | Lệnh · Báo cáo · Cảnh báo — **không có** nghiệp vụ kho |
-| Phụ trách kho (`staff@`, `<tênthôn>@`) | Nghiệp vụ kho đầy đủ, kiêm việc báo tình huống của thôn |
+| Đội cứu hộ (`cuuhodongxuan`) | Lệnh · Báo cáo · Cảnh báo — **không có** nghiệp vụ kho |
+| Phụ trách kho (`dongxuan`, `<tênthôn>@`) | Nghiệp vụ kho đầy đủ, kiêm việc báo tình huống của thôn |
 
 Các việc đáng thử:
 
@@ -705,17 +705,17 @@ Sau khi build, chép giá trị `LOCAL_ROUTING_GRAPH_VERSION` từ manifest vào
 ### 9.1. 15 phút — chỉ xem giao diện và nghiệp vụ
 
 Không cần cài gì. Dùng bản demo online (§4): đăng nhập `admin`, đi hết S01–S10, hỏi
-trợ lý AI ba câu, thử đăng nhập lại bằng `rescue@` để thấy phân quyền đổi.
+trợ lý AI ba câu, thử đăng nhập lại bằng `cuuhodongxuan` để thấy phân quyền đổi.
 
 ### 9.2. 45 phút — xem trọn luồng điều phối
 
 Tự cài theo §8 (bỏ qua §8.6 nếu không chấm AI), rồi:
 
 1. Smoke test §4 — 10 phút
-2. Luồng điều phối §5.2, mở hai cửa sổ trình duyệt cho `admin` và `staff@` (nhớ có thể
+2. Luồng điều phối §5.2, mở hai cửa sổ trình duyệt cho `admin` và `dongxuan` (nhớ có thể
    cần thêm tài khoản kho thôn) — 20 phút
 3. Trợ lý AI §5.3, 10 câu — 10 phút
-4. Thử phân quyền: đăng nhập `rescue@`, gọi thẳng một API quản trị → phải nhận 403 — 5 phút
+4. Thử phân quyền: đăng nhập `cuuhodongxuan`, gọi thẳng một API quản trị → phải nhận 403 — 5 phút
 
 ### 9.3. 90 phút — chấm đầy đủ
 

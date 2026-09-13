@@ -94,15 +94,19 @@ export function WorkflowStepper({
        mép trái ô còn vạch chiếm phần còn lại — bước cuối không có vạch nên lại
        dạt sang trái ô của nó. Ba bước vì thế không bao giờ thẳng hàng với nhau.
 
-       `items-start` để vạch nối không bị kéo giãn theo cột có chữ dài hai dòng. */
-    <div className="flex items-start">
+       `items-start` để vạch nối không bị kéo giãn theo cột có chữ dài hai dòng.
+
+       Điện thoại xếp DỌC: bốn cột trong 340px chỉ còn chừng 50px mỗi cột, nhãn
+       "Lập kế hoạch và phát hành" bẻ thành năm dòng mỗi dòng một tiếng. Xếp dọc
+       thì hình bên trái, nhãn một dòng bên phải, vạch nối thành đoạn đứng. */
+    <div className="flex flex-col sm:flex-row sm:items-start">
       {STEPS.map((step, i) => {
         const isDone = i <= done;
         // Đúng một bước được gắn "Đang chờ": bước kế ngay sau bước đã xong.
         const isActive = i === active;
         return (
           <Fragment key={step.key}>
-            <div className="flex flex-1 flex-col items-center gap-1.5 text-center">
+            <div className="flex items-center gap-3 text-left sm:flex-1 sm:flex-col sm:gap-1.5 sm:text-center">
               {/* MÀU nói bước đã xong hay chưa, HÌNH giữ nguyên theo bước.
                   Xong thì xanh lá, chưa thì đen. Đổi luôn cả hình (trước đây bước
                   xong biến thành dấu tích) làm mất mốc nhận dạng: người đọc quét
@@ -112,7 +116,7 @@ export function WorkflowStepper({
                   Đen ở đây là `--text`, không phải #000 cứng: nền tối thì chữ đen
                   tuyền biến mất, còn `--text` tự đảo theo giao diện. */}
               <div
-                className={`flex h-10 w-10 items-center justify-center transition ${isActive ? "scale-110" : ""}`}
+                className={`flex h-10 w-10 shrink-0 items-center justify-center transition ${isActive ? "scale-110" : ""}`}
                 style={{ color: isDone ? "var(--color-accent)" : "var(--text)" }}
               >
                 <ColorIcon mono name={step.icon} size={24} />
@@ -134,7 +138,7 @@ export function WorkflowStepper({
               /* `mt-5` đẩy vạch xuống ngang tâm vòng tròn (ô hình cao 40px), để nó
                  nối hai hình chứ không trôi lên trên đầu chúng. */
               <div
-                className="mx-2 mt-5 h-0.5 min-w-4 flex-1"
+                className="ml-[19px] h-3 w-0.5 sm:mx-2 sm:mt-5 sm:h-0.5 sm:w-auto sm:min-w-4 sm:flex-1"
                 style={{ background: i < done ? "var(--color-accent)" : "var(--border)" }}
               />
             )}

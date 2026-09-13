@@ -16,7 +16,7 @@ export type InventoryRowAction =
  * chỉnh" trong khi định bấm "Kiểm kê" — hai thao tác ghi vào sổ kho khác nhau.
  */
 const ACTION_BUTTON_CLASS =
-  "w-full rounded border px-2 py-1 text-center text-xs transition-colors " +
+  "w-full rounded border px-2 py-2 text-center text-xs transition-colors @4xl:py-1 " +
   "hover:border-[var(--color-accent)] hover:bg-[color-mix(in_oklch,var(--color-accent)_10%,transparent)] " +
   "hover:text-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 " +
   "focus-visible:ring-[var(--color-accent)] active:translate-y-px";
@@ -78,17 +78,48 @@ export function InventoryTable({
     );
   }
 
+  const onLoanOf = (batch: InventoryBatch) =>
+    (batch.loans ?? []).reduce(
+      (sum, loan) => sum + loan.quantity - loan.returnedOk - loan.returnedDamaged - loan.lost,
+      0,
+    );
+
+  const renderActions = (batch: InventoryBatch) => (
+    <>
+      <button className={ACTION_BUTTON_CLASS} onClick={() => onPrint(batch)} type="button">
+        In QR
+      </button>
+      {actions
+        .filter((action) => allowedActions.includes(action.key))
+        .map((action) => (
+          <button
+            className={ACTION_BUTTON_CLASS}
+            key={action.key}
+            onClick={() => onAction(batch, action.key)}
+            type="button"
+          >
+            {action.label}
+          </button>
+        ))}
+    </>
+  );
+
   return (
-    <section className="rounded-md border bg-[var(--surface)]">
-      <header className="flex items-center justify-between gap-4 border-b p-5">
-        <div className="flex items-center gap-2">
+    // Khung đo bề ngang của CHÍNH nó (container query), không đo màn hình: cột
+    // chức năng bên trái mở hay thu làm khung này chênh nhau 200px ở cùng một
+    // màn hình, mà bảng bảy cột chỉ đọc được khi khung đủ rộng thật.
+    <section className="@container rounded-md border bg-[var(--surface)]">
+      <header className="flex items-center justify-between gap-4 border-b p-4 sm:p-5">
+        <div className="flex min-w-0 items-center gap-2">
           <ColorIcon name="inventory" size={20} tone="orange" />
-          <div>
+          <div className="min-w-0">
             <h2 className="text-sm font-semibold">Tồn kho theo lô</h2>
             <p className="text-xs text-[var(--text-muted)]">Số vật lý, đang mượn và khả dụng</p>
           </div>
         </div>
-        <span className="tabular text-xs text-[var(--text-muted)]">{sorted.length} lô</span>
+        <span className="tabular shrink-0 text-xs text-[var(--text-muted)]">
+          {sorted.length} lô
+        </span>
       </header>
 
       {sorted.length === 0 ? (
@@ -100,85 +131,121 @@ export function InventoryTable({
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[920px] text-left text-sm">
-            <thead className="bg-[var(--surface-2)] text-xs text-[var(--text-muted)]">
-              <tr>
-                <th className="px-4 py-3 font-medium">Vật tư / lô</th>
-                <th className="px-4 py-3 font-medium">Vị trí</th>
-                <th className="px-4 py-3 font-medium">Tình trạng</th>
-                <th className="px-4 py-3 text-right font-medium">Vật lý</th>
-                <th className="px-4 py-3 text-right font-medium">Đang mượn</th>
-                <th className="px-4 py-3 text-right font-medium">Khả dụng</th>
-                <th className="px-4 py-3 text-right font-medium">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {pagination.pageItems.map((batch) => {
-                const onLoan = (batch.loans ?? []).reduce(
-                  (sum, loan) =>
-                    sum + loan.quantity - loan.returnedOk - loan.returnedDamaged - loan.lost,
-                  0,
-                );
-                return (
-                  <tr key={batch.id} className="align-top hover:bg-[var(--surface-2)]">
-                    <td className="px-4 py-3">
+        <>
+          {/* Khung hẹp (điện thoại, máy tính bảng): mỗi lô một thẻ. Bảng bảy cột
+              ép vào 375px thì chỉ thấy ba cột đầu, chữ bẻ từng tiếng và mỗi dòng
+              cao gần hai trăm pixel vì cột nút thao tác — ba con số quan trọng
+              nhất (vật lý, đang mượn, khả dụng) lại nằm ngoài màn hình. */}
+          <ul className="divide-y @4xl:hidden">
+            {pagination.pageItems.map((batch) => {
+              const onLoan = onLoanOf(batch);
+              return (
+                <li className="p-4" key={batch.id}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
                       <p className="font-medium">{batch.item.name}</p>
-                      <p className="text-xs text-[var(--text-muted)]">Lô {batch.batchCode}</p>
-                    </td>
-                    <td className="px-4 py-3">
-                      {batch.shelf
-                        ? `${batch.shelf.zone.code} / ${batch.shelf.code}`
-                        : "Chưa xếp kệ"}
-                    </td>
-                    <td className="px-4 py-3">
+                      <p className="text-xs text-[var(--text-muted)]">
+                        Lô {batch.batchCode} ·{" "}
+                        {batch.shelf
+                          ? `${batch.shelf.zone.code} / ${batch.shelf.code}`
+                          : "Chưa xếp kệ"}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
                       <span className="rounded-md bg-[var(--surface-2)] px-2 py-1 text-xs font-medium">
                         {itemConditionLabel(batch.condition)}
                       </span>
                       {batch.expiryDate ? (
-                        <p className="mt-1 text-xs text-[var(--text-muted)]">
+                        <p className="mt-1.5 text-xs text-[var(--text-muted)]">
                           HSD {new Date(batch.expiryDate).toLocaleDateString("vi-VN")}
                         </p>
                       ) : null}
-                    </td>
-                    <td className="tabular px-4 py-3 text-right font-semibold">{batch.quantity}</td>
-                    <td className="tabular px-4 py-3 text-right">{onLoan}</td>
-                    <td className="tabular px-4 py-3 text-right font-semibold">
-                      {Math.max(0, batch.quantity - onLoan)}
-                    </td>
-                    <td className="px-4 py-3">
-                      {/* Lưới cố định 4 cột thay cho flex-wrap: wrap xếp nút theo
-                          bề ngang chữ nên mỗi hàng một số nút khác nhau, lệch
-                          phải, nhìn như rơi vãi. Lưới cho mọi nút cùng bề rộng và
-                          thẳng cột giữa các dòng của bảng. */}
-                      <div className="ml-auto grid w-[304px] max-w-full grid-cols-2 gap-1.5 sm:grid-cols-4">
-                        <button
-                          className={ACTION_BUTTON_CLASS}
-                          onClick={() => onPrint(batch)}
-                          type="button"
-                        >
-                          In QR
-                        </button>
-                        {actions
-                          .filter((action) => allowedActions.includes(action.key))
-                          .map((action) => (
-                            <button
-                              className={ACTION_BUTTON_CLASS}
-                              key={action.key}
-                              onClick={() => onAction(batch, action.key)}
-                              type="button"
-                            >
-                              {action.label}
-                            </button>
-                          ))}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                    </div>
+                  </div>
+                  <dl className="mt-3 grid grid-cols-3 gap-2 rounded-md bg-[var(--surface-2)] px-2 py-2 text-center">
+                    <div>
+                      <dt className="text-[11px] text-[var(--text-muted)]">Vật lý</dt>
+                      <dd className="tabular text-sm font-semibold">{batch.quantity}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] text-[var(--text-muted)]">Đang mượn</dt>
+                      <dd className="tabular text-sm">{onLoan}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] text-[var(--text-muted)]">Khả dụng</dt>
+                      <dd className="tabular text-sm font-semibold">
+                        {Math.max(0, batch.quantity - onLoan)}
+                      </dd>
+                    </div>
+                  </dl>
+                  <div className="mt-3 grid grid-cols-2 gap-1.5 @xs:grid-cols-3 @md:grid-cols-4">
+                    {renderActions(batch)}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+
+          <div className="hidden overflow-x-auto @4xl:block">
+            <table className="w-full min-w-[920px] text-left text-sm">
+              <thead className="bg-[var(--surface-2)] text-xs text-[var(--text-muted)]">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Vật tư / lô</th>
+                  <th className="px-4 py-3 font-medium">Vị trí</th>
+                  <th className="px-4 py-3 font-medium">Tình trạng</th>
+                  <th className="px-4 py-3 text-right font-medium">Vật lý</th>
+                  <th className="px-4 py-3 text-right font-medium">Đang mượn</th>
+                  <th className="px-4 py-3 text-right font-medium">Khả dụng</th>
+                  <th className="px-4 py-3 text-right font-medium">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {pagination.pageItems.map((batch) => {
+                  const onLoan = onLoanOf(batch);
+                  return (
+                    <tr key={batch.id} className="align-top hover:bg-[var(--surface-2)]">
+                      <td className="px-4 py-3">
+                        <p className="font-medium">{batch.item.name}</p>
+                        <p className="text-xs text-[var(--text-muted)]">Lô {batch.batchCode}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        {batch.shelf
+                          ? `${batch.shelf.zone.code} / ${batch.shelf.code}`
+                          : "Chưa xếp kệ"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="rounded-md bg-[var(--surface-2)] px-2 py-1 text-xs font-medium">
+                          {itemConditionLabel(batch.condition)}
+                        </span>
+                        {batch.expiryDate ? (
+                          <p className="mt-1 text-xs text-[var(--text-muted)]">
+                            HSD {new Date(batch.expiryDate).toLocaleDateString("vi-VN")}
+                          </p>
+                        ) : null}
+                      </td>
+                      <td className="tabular px-4 py-3 text-right font-semibold">
+                        {batch.quantity}
+                      </td>
+                      <td className="tabular px-4 py-3 text-right">{onLoan}</td>
+                      <td className="tabular px-4 py-3 text-right font-semibold">
+                        {Math.max(0, batch.quantity - onLoan)}
+                      </td>
+                      <td className="px-4 py-3">
+                        {/* Lưới cố định 4 cột thay cho flex-wrap: wrap xếp nút theo
+                            bề ngang chữ nên mỗi hàng một số nút khác nhau, lệch
+                            phải, nhìn như rơi vãi. Lưới cho mọi nút cùng bề rộng và
+                            thẳng cột giữa các dòng của bảng. */}
+                        <div className="ml-auto grid w-[304px] max-w-full grid-cols-4 gap-1.5">
+                          {renderActions(batch)}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
       <Pagination
         onPageChange={pagination.setPage}

@@ -10,6 +10,10 @@ export default [
       // Package con tự lint riêng — không lint chồng từ gốc.
       "apps/**",
       "packages/**",
+      // Công cụ dựng bộ slide thuyết trình (CommonJS chạy tay bằng node), không
+      // phải mã sản phẩm và không đi vào bản build nào. Ép nó theo luật ESM của
+      // ứng dụng là phải viết lại cả bộ dựng slide mà không làm app an toàn hơn.
+      "slide-ung-pho-nhanh/**",
     ],
   },
   ...base,

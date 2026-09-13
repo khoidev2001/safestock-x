@@ -21,7 +21,7 @@ trách nhiệm. Khi hậu kiểm hỏi "ai đã biết chuyện này lúc mấy 
 ## Test 1 — Tiếp nhận
 
 1. Tạo một sự cố (kéo thanh trượt vượt ngưỡng ở [09](09-cam-bien-mo-phong-va-chuong.md)).
-2. Đăng nhập `staff@` trên web, mở **Sự cố**.
+2. Đăng nhập `dongxuan` trên web, mở **Sự cố**.
 3. Bấm **Tiếp nhận**.
 
 **Kỳ vọng:** trạng thái đổi, có ghi tên người tiếp nhận và mốc thời gian.
@@ -90,7 +90,7 @@ Giấu hẳn phép đo đáng ngờ thì có ngày giấu luôn một đám chá
 
 ```bash
 API=http://localhost:3110/api
-STAFF=<mã đăng nhập của staff@>
+STAFF=<mã đăng nhập của dongxuan>
 
 # danh sách sự cố đang mở
 curl -s -H "Authorization: Bearer $STAFF" $API/incidents

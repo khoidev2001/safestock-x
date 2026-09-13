@@ -730,7 +730,10 @@ test("kho đã xuất đủ thì báo đã xuất kho, xuất một phần thì 
       }),
     ],
   )[0];
-  assert.deepEqual(pickupStopStateLabel(fullyPicked), { label: "Đã xuất kho đủ", tone: "done" });
+  assert.deepEqual(pickupStopStateLabel(fullyPicked), {
+    label: "Vật tư đã được lấy",
+    tone: "done",
+  });
 
   const onlyOnePrepared = buildPickupPlan(
     [centralRoute],
@@ -1049,10 +1052,10 @@ test("chuỗi không dấu và mã vật tư giữ nguyên, chỉ hạ chữ th�
   sóng thì mọi lời gọi hỏng gần như cùng lúc.
 */
 test("lỗi mới thay thế lỗi đang hiện, không xếp chồng", () => {
-  const dau = nextErrorBanner(null, "Mất kết nối", 1000);
-  const sau = nextErrorBanner(dau, "Hết phiên đăng nhập", 2000);
-  assert.equal(sau?.message, "Hết phiên đăng nhập");
-  assert.notEqual(sau?.key, dau?.key);
+  const firstBanner = nextErrorBanner(null, "Mất kết nối", 1000);
+  const nextBanner = nextErrorBanner(firstBanner, "Hết phiên đăng nhập", 2000);
+  assert.equal(nextBanner?.message, "Hết phiên đăng nhập");
+  assert.notEqual(nextBanner?.key, firstBanner?.key);
 });
 
 test("cùng một câu lặp lại thì GIỮ NGUYÊN dải, không làm mới bộ đếm", () => {
@@ -1138,10 +1141,10 @@ test("không chen câu tạm khi mọi kho đã xong, hay khi tài khoản khôn
   // Điều phối xã nhìn cả nhiệm vụ — "kho mình" vô nghĩa.
   assert.equal(ownWarehouseWaitingLabel("PENDING_WAREHOUSE", null, xong), null);
   // Trạng thái khác đã tự nói đúng sự thật rồi.
-  const dangCho = warehousePickupStates([
+  const pickupStates = warehousePickupStates([
     { warehouseId: "a", status: "PICKED_UP", warehouse: { name: "Kho thôn Tân An" } },
     { warehouseId: "b", status: "ACCEPTED", warehouse: { name: "Kho xã Đồng Xuân" } },
   ]);
-  assert.equal(ownWarehouseWaitingLabel("READY", "a", dangCho), null);
-  assert.equal(ownWarehouseWaitingLabel("COMPLETED", "a", dangCho), null);
+  assert.equal(ownWarehouseWaitingLabel("READY", "a", pickupStates), null);
+  assert.equal(ownWarehouseWaitingLabel("COMPLETED", "a", pickupStates), null);
 });

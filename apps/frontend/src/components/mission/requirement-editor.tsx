@@ -1,11 +1,13 @@
 "use client";
 
+import { chunkBySupplyGroup, sortBySupplyGroup } from "@safestock/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { ColorIcon } from "@/components/shared/color-icon";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Pagination, usePagination } from "@/components/shared/pagination";
 import { ApiError } from "@/lib/api";
+import { SUPPLY_GROUP_STYLES, SupplyGroupHeading, supplyGroupStripe } from "./supply-group";
 import {
   changeMissionRequirement,
   listRequirementOptions,
@@ -21,8 +23,8 @@ import {
  * việc phải làm.
  *
  * KHÔNG lọc bớt dòng nào: vẫn đủ số vật tư của bản ghi nhiệm vụ, chỉ là cắt thành
- * từng trang. Thứ tự cũng giữ nguyên như máy chủ trả về, trừ những dòng vừa thêm
- * trong lượt làm việc này — xem `recentlyAddedSkus`.
+ * từng trang. Dòng được gom theo nhóm vật tư (lương thực, cứu sinh…), trong nhóm
+ * vẫn giữ thứ tự máy chủ trả về.
  */
 const REQUIREMENTS_PER_PAGE = 10;
 
@@ -75,35 +77,36 @@ export function RequirementEditor({
     | null
   >(null);
   /**
-   * Vật tư vừa thêm trong lượt làm việc này, mới nhất đứng trước.
+   * Vật tư vừa thêm trong lượt làm việc này.
    *
-   * Máy chủ nối dòng mới vào cuối danh sách, nên thêm dòng thứ 11 trong lúc đang ở
-   * trang 1 thì bảng không đổi gì — người dùng vừa bấm "Thêm vào phương án" mà
-   * không thấy kết quả sẽ tưởng việc thêm thất bại và bấm lại. Đưa dòng ấy lên đầu
-   * thì cái vừa làm nằm đúng chỗ mắt đang nhìn, và sửa hay xoá lại được ngay.
+   * Máy chủ nối dòng mới vào cuối danh sách, và bảng lại gom theo nhóm, nên món vừa
+   * thêm có thể rơi vào trang khác trang đang xem — người dùng vừa bấm "Thêm vào
+   * phương án" mà không thấy gì đổi sẽ tưởng thất bại và bấm lại. Nên lật tới đúng
+   * trang chứa nó và tô nền dòng ấy, thay vì kéo nó lên đầu bảng làm vỡ nhóm.
    *
-   * Chỉ là thứ tự HIỂN THỊ và chỉ trong lượt này: tải lại trang thì bảng về đúng
-   * thứ tự của bản ghi. Không cần ghim lâu hơn — mục đích là xác nhận thao tác vừa
-   * rồi, không phải định nghĩa lại thứ tự của bản tham mưu.
+   * `jumpToAddedSku` chỉ sống tới lúc lật trang xong: danh sách mới về sau lượt tải
+   * lại, nên phải chờ tới khi dòng đó có mặt rồi mới biết nó nằm trang nào.
    */
-  const [recentlyAddedSkus, setRecentlyAddedSkus] = useState<string[]>([]);
+  const [lastAddedSku, setLastAddedSku] = useState<string | null>(null);
+  const [jumpToAddedSku, setJumpToAddedSku] = useState(false);
 
-  const orderedRequirements = useMemo(() => {
-    if (recentlyAddedSkus.length === 0) return requirements;
-    const pinned = [...new Set(recentlyAddedSkus)]
-      .map((sku) => requirements.find((requirement) => requirement.sku === sku))
-      // Lọc `undefined`: dòng đã ghim vẫn có thể bị xoá ngay sau đó.
-      .filter((requirement): requirement is MissionRequirement => requirement != null);
-    // `new Set` ở trên là để hàm tự đúng chứ không dựa vào nơi gọi: một mã lọt vào
-    // danh sách ghim hai lần sẽ thành hai dòng giống nhau trong bảng.
-    const pinnedSkus = new Set(pinned.map((requirement) => requirement.sku));
-    return [...pinned, ...requirements.filter((r) => !pinnedSkus.has(r.sku))];
-  }, [recentlyAddedSkus, requirements]);
+  const orderedRequirements = useMemo(
+    () => sortBySupplyGroup(requirements, (requirement) => requirement.sku),
+    [requirements],
+  );
 
   const { page, pageItems, pageSize, setPage, totalPages } = usePagination(
     orderedRequirements,
     REQUIREMENTS_PER_PAGE,
   );
+
+  useEffect(() => {
+    if (!jumpToAddedSku || !lastAddedSku) return;
+    const index = orderedRequirements.findIndex((requirement) => requirement.sku === lastAddedSku);
+    if (index < 0) return;
+    setPage(Math.floor(index / REQUIREMENTS_PER_PAGE) + 1);
+    setJumpToAddedSku(false);
+  }, [jumpToAddedSku, lastAddedSku, orderedRequirements, setPage]);
 
   const options = useQuery({
     queryKey: ["mission", missionId, "requirement-options"],
@@ -126,12 +129,8 @@ export function RequirementEditor({
       setAddSku("");
       setAddQuantity("");
       if (input.change.op === "add") {
-        const { sku } = input.change;
-        // Lọc trùng trước khi nối: thêm rồi xoá rồi thêm lại cùng một món thì nó
-        // chỉ được đứng ở một chỗ, và là chỗ đầu.
-        setRecentlyAddedSkus((current) => [sku, ...current.filter((it) => it !== sku)]);
-        // Về trang 1 vì dòng mới nay nằm ở đó.
-        setPage(1);
+        setLastAddedSku(input.change.sku);
+        setJumpToAddedSku(true);
       }
       // Nhiệm vụ mang theo `readinessAssessment` vừa tính lại, nên chỉ cần bảo
       // lượt truy vấn nhiệm vụ tải lại là khối "Khả năng đáp ứng" tự đổi theo.
@@ -201,126 +200,164 @@ export function RequirementEditor({
           <table className="min-w-full text-left text-sm">
             <thead className="bg-[var(--surface-2)] text-xs text-[var(--text-muted)]">
               <tr>
-                <th className="px-3 py-2 font-medium">Vật tư</th>
-                <th className="px-3 py-2 text-right font-medium">Nhu cầu</th>
-                <th className="px-3 py-2 text-right font-medium">Kho đáp ứng</th>
-                {editable ? <th className="px-3 py-2 text-right font-medium">Thao tác</th> : null}
+                <th className="px-2 py-2 sm:px-3 font-medium">Vật tư</th>
+                <th className="px-2 py-2 sm:px-3 text-right font-medium">Nhu cầu</th>
+                <th className="px-2 py-2 sm:px-3 text-right font-medium">Kho đáp ứng</th>
+                {editable ? (
+                  <th className="hidden px-2 py-2 sm:px-3 text-right font-medium sm:table-cell">
+                    Thao tác
+                  </th>
+                ) : null}
               </tr>
             </thead>
             <tbody>
-              {pageItems.map((requirement) => {
-                const editing = editingSku === requirement.sku;
-                return (
-                  <tr className="border-t align-top" key={requirement.sku}>
-                    <td className="px-3 py-2 font-medium">{requirement.itemName}</td>
-                    <td className="px-3 py-2 text-right">
-                      {editing ? (
-                        <input
-                          aria-label={`Số lượng ${requirement.itemName}`}
-                          autoFocus
-                          className="tabular w-24 rounded-md border bg-[var(--surface)] px-2 py-1 text-right text-sm"
-                          inputMode="numeric"
-                          onChange={(event) =>
-                            setEditingQuantity(event.target.value.replace(/\D/g, "").slice(0, 7))
-                          }
-                          value={editingQuantity}
-                        />
-                      ) : (
-                        <span className="tabular whitespace-nowrap">
-                          {requirement.required.toLocaleString("vi")} {requirement.unit}
-                        </span>
-                      )}
-                    </td>
-                    {/* Số kho đáp ứng được nằm NGAY CẠNH ô nhập: người sửa đang
+              {chunkBySupplyGroup(pageItems, (requirement) => requirement.sku).map((chunk) => (
+                <Fragment key={chunk.group}>
+                  {/* Dòng tiêu đề nhóm trải hết bề ngang bảng, căn giữa và tô màu
+                      riêng của nhóm. Nhóm dài qua trang sau thì trang sau lặp lại
+                      tiêu đề, để không trang nào mở ra với mấy dòng không rõ thuộc
+                      nhóm gì. */}
+                  <tr
+                    className="border-t"
+                    style={{ background: SUPPLY_GROUP_STYLES[chunk.group].tint }}
+                  >
+                    <th className="px-2 py-2 sm:px-3" colSpan={editable ? 4 : 3} scope="colgroup">
+                      <SupplyGroupHeading group={chunk.group} label={chunk.label} />
+                    </th>
+                  </tr>
+                  {chunk.items.map((requirement) => {
+                    const editing = editingSku === requirement.sku;
+                    const rowActions = editing ? (
+                      <div className="flex flex-wrap gap-1.5 sm:justify-end">
+                        <RowButton
+                          disabled={busy || !editingQuantity || Number(editingQuantity) < 1}
+                          onClick={() => {
+                            const next = Number(editingQuantity);
+                            if (!Number.isInteger(next) || next < 1) {
+                              setError("Số lượng phải là số nguyên dương.");
+                              return;
+                            }
+                            if (next === requirement.required) {
+                              setEditingSku(null);
+                              return;
+                            }
+                            setPending({
+                              kind: "update",
+                              sku: requirement.sku,
+                              itemName: requirement.itemName,
+                              from: requirement.required,
+                              to: next,
+                              unit: requirement.unit,
+                            });
+                          }}
+                          tone="accent"
+                        >
+                          Lưu
+                        </RowButton>
+                        <RowButton disabled={busy} onClick={() => setEditingSku(null)}>
+                          Huỷ
+                        </RowButton>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5 sm:justify-end">
+                        <RowButton
+                          disabled={busy}
+                          onClick={() => {
+                            setError(null);
+                            setEditingSku(requirement.sku);
+                            setEditingQuantity(String(requirement.required));
+                          }}
+                        >
+                          Sửa
+                        </RowButton>
+                        <RowButton
+                          disabled={busy}
+                          onClick={() => {
+                            setError(null);
+                            setPending({
+                              kind: "remove",
+                              sku: requirement.sku,
+                              itemName: requirement.itemName,
+                            });
+                          }}
+                          tone="critical"
+                        >
+                          Xoá
+                        </RowButton>
+                      </div>
+                    );
+                    return (
+                      <tr
+                        className={`border-t align-top ${
+                          requirement.sku === lastAddedSku ? "bg-[var(--accent-soft)]" : ""
+                        }`}
+                        key={requirement.sku}
+                      >
+                        <td
+                          className="py-2 pl-3 pr-2 font-medium sm:pl-4 sm:pr-3"
+                          style={supplyGroupStripe(chunk.group)}
+                        >
+                          {requirement.itemName}
+                          {/* Điện thoại: nút Sửa/Xoá nằm ngay dưới tên vật tư thay vì
+                              một cột riêng. Thêm cột thứ tư thì bảng không vừa
+                              màn hình, và cột "Kho đáp ứng" — con số người sửa cần
+                              nhìn — bị đẩy khuất ra ngoài mép phải. */}
+                          {editable ? <div className="mt-2 sm:hidden">{rowActions}</div> : null}
+                        </td>
+                        <td className="px-2 py-2 sm:px-3 text-right">
+                          {editing ? (
+                            <input
+                              aria-label={`Số lượng ${requirement.itemName}`}
+                              autoFocus
+                              className="tabular w-24 rounded-md border bg-[var(--surface)] px-2 py-1 text-right text-sm"
+                              inputMode="numeric"
+                              onChange={(event) =>
+                                setEditingQuantity(
+                                  event.target.value.replace(/\D/g, "").slice(0, 7),
+                                )
+                              }
+                              value={editingQuantity}
+                            />
+                          ) : (
+                            <span className="tabular whitespace-nowrap">
+                              {requirement.required.toLocaleString("vi")} {requirement.unit}
+                            </span>
+                          )}
+                        </td>
+                        {/* Số kho đáp ứng được nằm NGAY CẠNH ô nhập: người sửa đang
                         cân đúng hai con số này với nhau, tách chúng sang hai khối
                         là bắt họ nhớ một con số trong lúc gõ con số kia. */}
-                    <td className="px-3 py-2 text-right">
-                      <span
-                        className="tabular whitespace-nowrap"
-                        style={{
-                          color:
-                            requirement.shortage > 0
-                              ? "var(--color-critical)"
-                              : "var(--color-ready)",
-                        }}
-                      >
-                        {requirement.allocated.toLocaleString("vi")} {requirement.unit}
-                      </span>
-                      {requirement.shortage > 0 ? (
-                        <span className="block text-xs text-[var(--color-critical)]">
-                          thiếu {requirement.shortage.toLocaleString("vi")}
-                        </span>
-                      ) : null}
-                    </td>
-                    {editable ? (
-                      /* Sát mép phải của bảng: hai cột số bên trái đã căn phải,
+                        <td className="px-2 py-2 sm:px-3 text-right">
+                          <span
+                            className="tabular whitespace-nowrap"
+                            style={{
+                              color:
+                                requirement.shortage > 0
+                                  ? "var(--color-critical)"
+                                  : "var(--color-ready)",
+                            }}
+                          >
+                            {requirement.allocated.toLocaleString("vi")} {requirement.unit}
+                          </span>
+                          {requirement.shortage > 0 ? (
+                            <span className="block text-xs text-[var(--color-critical)]">
+                              thiếu {requirement.shortage.toLocaleString("vi")}
+                            </span>
+                          ) : null}
+                        </td>
+                        {editable ? (
+                          /* Sát mép phải của bảng: hai cột số bên trái đã căn phải,
                          để cột nút căn trái thì giữa bảng hở một khoảng trắng
                          chạy dọc và mắt phải nhảy qua nó ở mỗi dòng. */
-                      <td className="px-3 py-2 text-right">
-                        {editing ? (
-                          <div className="flex flex-wrap justify-end gap-1.5">
-                            <RowButton
-                              disabled={busy || !editingQuantity || Number(editingQuantity) < 1}
-                              onClick={() => {
-                                const next = Number(editingQuantity);
-                                if (!Number.isInteger(next) || next < 1) {
-                                  setError("Số lượng phải là số nguyên dương.");
-                                  return;
-                                }
-                                if (next === requirement.required) {
-                                  setEditingSku(null);
-                                  return;
-                                }
-                                setPending({
-                                  kind: "update",
-                                  sku: requirement.sku,
-                                  itemName: requirement.itemName,
-                                  from: requirement.required,
-                                  to: next,
-                                  unit: requirement.unit,
-                                });
-                              }}
-                              tone="accent"
-                            >
-                              Lưu
-                            </RowButton>
-                            <RowButton disabled={busy} onClick={() => setEditingSku(null)}>
-                              Huỷ
-                            </RowButton>
-                          </div>
-                        ) : (
-                          <div className="flex flex-wrap justify-end gap-1.5">
-                            <RowButton
-                              disabled={busy}
-                              onClick={() => {
-                                setError(null);
-                                setEditingSku(requirement.sku);
-                                setEditingQuantity(String(requirement.required));
-                              }}
-                            >
-                              Sửa
-                            </RowButton>
-                            <RowButton
-                              disabled={busy}
-                              onClick={() => {
-                                setError(null);
-                                setPending({
-                                  kind: "remove",
-                                  sku: requirement.sku,
-                                  itemName: requirement.itemName,
-                                });
-                              }}
-                              tone="critical"
-                            >
-                              Xoá
-                            </RowButton>
-                          </div>
-                        )}
-                      </td>
-                    ) : null}
-                  </tr>
-                );
-              })}
+                          <td className="hidden px-2 py-2 sm:px-3 text-right sm:table-cell">
+                            {rowActions}
+                          </td>
+                        ) : null}
+                      </tr>
+                    );
+                  })}
+                </Fragment>
+              ))}
             </tbody>
           </table>
         </div>
@@ -351,8 +388,8 @@ export function RequirementEditor({
                 thì người dùng đi tìm một món họ biết là có và kết luận hệ thống
                 sót — trong khi câu trả lời đúng là kho không còn để cấp. */}
             <p className="text-xs text-[var(--text-muted)]">
-              Chỉ hiện vật tư mà cụm kho trong xã còn ít nhất 1 đơn vị lấy ra được ngay (đã trừ
-              phần đã hứa cho nhiệm vụ khác).
+              Chỉ hiện vật tư mà cụm kho trong xã còn ít nhất 1 đơn vị lấy ra được ngay (đã trừ phần
+              đã hứa cho nhiệm vụ khác).
             </p>
             <div className="flex flex-wrap items-end gap-2">
               <label className="min-w-0 flex-1">

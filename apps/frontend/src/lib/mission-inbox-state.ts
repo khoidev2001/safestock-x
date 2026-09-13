@@ -40,8 +40,20 @@ export interface MissionInboxItem {
    * cần trả" khi thật ra chưa biết là xoá một khoản nợ có thể đang tồn tại.
    */
   hasReturnableSupplies?: boolean;
+  /** Tiến độ hoàn trả theo từng kho có vật tư tái sử dụng đã giao ra. */
+  supplyReturnProgress?: SupplyReturnProgress[];
   /** Chỉ cần biết CÓ hay KHÔNG; hình dạng kế hoạch là việc của màn hình chi tiết. */
   actionPlan?: unknown;
+}
+
+/** Tiến độ hoàn trả vật tư của MỘT kho — mỗi kho tự ký phần mình đã giao ra. */
+export interface SupplyReturnProgress {
+  warehouseId: string;
+  warehouseName: string;
+  returnableLineCount: number;
+  outstandingLineCount: number;
+  /** Kho này đã nhận lại đủ toàn bộ phần vật tư tái sử dụng mình giao ra. */
+  returned: boolean;
 }
 
 /**
@@ -123,9 +135,15 @@ export function missionStageLabel(mission: MissionInboxItem): string {
     // Chỉ nói "không cần trả" khi backend đã khẳng định là KHÔNG. Cờ để trống là
     // chưa biết, mà đoán bừa ở đây là xoá sổ một khoản nợ có thể đang tồn tại.
     if (mission.hasReturnableSupplies === false) return "Đã hoàn thành (không cần trả vật tư)";
-    return mission.status === "RETURNED"
-      ? "Đã hoàn thành (đã trả vật tư)"
-      : "Đã hoàn thành (chưa hoàn vật tư)";
+    if (mission.status === "RETURNED") return "Đã hoàn thành (đã trả vật tư)";
+    // Nhiệm vụ nhiều kho: một kho đã nhận lại phần mình KHÔNG có nghĩa là đã trả
+    // xong. Ghi rõ bao nhiêu kho đã nhận để người trực biết còn phải chờ ai.
+    const progress = mission.supplyReturnProgress ?? [];
+    const returnedCount = progress.filter((warehouse) => warehouse.returned).length;
+    if (progress.length > 1 && returnedCount > 0) {
+      return `Đã hoàn thành (${returnedCount}/${progress.length} kho đã nhận lại vật tư)`;
+    }
+    return "Đã hoàn thành (chưa hoàn vật tư)";
   }
 
   // Còn nháp: đọc dấu vết, muộn nhất thắng.

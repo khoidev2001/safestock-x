@@ -16,7 +16,7 @@ không có thật.
 
 Hàng mới về thì **chưa có mã nào để quét**. Phải tạo lô trước.
 
-1. Đăng nhập `staff@`, vào **Vật tư**.
+1. Đăng nhập `dongxuan`, vào **Vật tư**.
 2. Tiếp nhận hàng: chọn vật tư có sẵn hoặc khai mã mới, chọn kệ, nhập số lượng, hạn
    dùng, tình trạng.
 3. Gửi → lô được tạo.
@@ -33,7 +33,7 @@ nhãn dán ngoài thùng ai cũng nhìn thấy, nên trong đó không được 
 
 ## Phần 2 — Quét mã (điện thoại)
 
-1. Đăng nhập `staff@`, vào thẻ **Kho**.
+1. Đăng nhập `dongxuan`, vào thẻ **Kho**.
 2. Bấm nút **QR** cạnh ô tìm kiếm.
 3. Đưa nhãn vào khung.
 
@@ -84,7 +84,7 @@ Chống trùng dựa trên khoá do ứng dụng sinh cho mỗi thao tác.
 
 ```bash
 API=http://localhost:3110/api
-STAFF=<mã đăng nhập của staff@>
+STAFF=<mã đăng nhập của dongxuan>
 
 # tra cứu theo mã vật tư, đúng thứ nút QR làm phía sau
 curl -s -H "Authorization: Bearer $STAFF" "$API/inventory/scan?sku=WATER-01"

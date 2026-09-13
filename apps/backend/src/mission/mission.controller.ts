@@ -24,6 +24,7 @@ import { AiClientService } from "../ai/ai-client.service";
 import {
   AdminNoteDto,
   AnalyzeMissionDto,
+  BulkWarehouseRequestDto,
   ChangeRequirementDto,
   CompleteMissionDto,
   FieldUpdateDto,
@@ -49,7 +50,7 @@ import {
 
 /** Giá trị hợp lệ cho hai tham số hiển thị; ngoài danh sách thì rơi về mặc định. */
 const MISSION_SORTS: MissionListSort[] = ["newest", "oldest", "most-people", "fewest-people"];
-const MISSION_FILTERS: MissionListFilter[] = ["all", "needs-action", "published"];
+const MISSION_FILTERS: MissionListFilter[] = ["all", "needs-action", "published", "completed"];
 const MISSION_SEARCH_FIELDS: MissionSearchField[] = ["text", "mission-no", "affected-people"];
 import { MissionCoordinationService } from "./mission-coordination.service";
 import { CoordinationAnalysisService } from "./coordination-analysis.service";
@@ -315,6 +316,25 @@ export class MissionController {
   @Get("warehouse-requests/own")
   warehouseRequests(@Request() req: AuthenticatedRequest) {
     return this.warehouseRequestService.list(req.user.userId, req.user.warehouseId);
+  }
+
+  /**
+   * Nút "tiếp nhận / xuất / ký nhận tất cả". Một lượt gọi cho cả loạt để điều phối
+   * nhận MỘT thông báo, thay vì mỗi dòng một tiếng chuông.
+   */
+  @RequirePermission(Permission.MISSION_FULFILL)
+  @Post("warehouse-requests/bulk")
+  bulkWarehouseRequests(
+    @Request() req: AuthenticatedRequest,
+    @Body() dto: BulkWarehouseRequestDto,
+  ) {
+    return this.warehouseRequestService.bulk(
+      dto.kind,
+      dto.requestIds,
+      req.user.userId,
+      req.user.warehouseId,
+      dto.notes,
+    );
   }
 
   @RequirePermission(Permission.MISSION_FULFILL)

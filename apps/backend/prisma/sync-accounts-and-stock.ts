@@ -80,14 +80,6 @@ function indexUnique<T>(rows: T[], keyOf: (row: T) => string, label: string): Ma
 }
 
 type WarehouseRow = { id: string; name: string; organizationId: string };
-type BatchRow = {
-  id: string;
-  batchCode: string;
-  quantity: number;
-  itemId: string;
-  shelfId: string | null;
-};
-
 /** Mỗi lô nằm trên kệ → khu → kho; gom lại thành khoá "kho|sku|mã lô". */
 async function loadBatchesByNaturalKey(prisma: PrismaClient) {
   const batches = await prisma.itemBatch.findMany({

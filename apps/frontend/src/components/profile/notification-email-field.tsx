@@ -239,7 +239,7 @@ export function NotificationEmailField({
           </div>
         ) : verifiedEmail && !isEditing ? (
           <div className="flex flex-wrap items-center gap-2">
-            <span className="min-w-0 flex-1 break-all rounded-md border bg-[var(--surface)] px-3 py-2 text-sm">
+            <span className="min-w-0 flex-[1_1_14rem] break-all rounded-md border bg-[var(--surface)] px-3 py-2 text-sm">
               {verifiedEmail}
             </span>
             <button
@@ -273,7 +273,7 @@ export function NotificationEmailField({
             </label>
             <input
               autoComplete="email"
-              className="h-10 min-w-0 flex-1 rounded-md border bg-[var(--surface)] px-3"
+              className="h-10 min-w-0 flex-[1_1_14rem] rounded-md border bg-[var(--surface)] px-3"
               disabled={busy}
               id="notification-email-input"
               onChange={(event) => setEmail(event.target.value)}

@@ -161,7 +161,7 @@ export function UserProfileDialog({
             value={form.avatarUrl}
           />
 
-          <div className="grid gap-4 border-t pt-5 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 border-t pt-5 md:grid-cols-2">
             <ProfileField label="Họ và tên" required>
               <input
                 aria-describedby={invalidField === "fullName" ? "profile-form-status" : undefined}

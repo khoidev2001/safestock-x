@@ -93,7 +93,7 @@ export function CommuneSupplySummary({ warehouseId }: { warehouseId: string }) {
       </div>
 
       {stockQuery.isError ? null : (
-        <div className="grid gap-3 p-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-3">
           <TotalCard
             hint={
               totals.supplySkuCount > 0

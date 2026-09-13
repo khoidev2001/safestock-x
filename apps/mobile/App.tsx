@@ -314,13 +314,15 @@ function MobileRoleShell({
             role={user.role}
             warehouseId={user.warehouseId}
             missionId={missionFromList}
-            // Thông báo mới nhất của CHÍNH nhiệm vụ đang mở. Kho xuất hàng hay ký
-            // nhận xong là màn hình tự tải lại, người dùng không phải thoát ra rồi
-            // vào lại mới thấy — mà lúc đang đứng ở kho thì không ai nghĩ tới
-            // chuyện đó.
-            refreshSignal={
-              feed.items.find((item) => item.missionId === missionFromList)?.id ?? null
-            }
+            // Thông báo mới nhất của CHÍNH nhiệm vụ đang mở, ghép với tín hiệu
+            // "nhiệm vụ vừa đổi" không kèm chuông. Kho xuất hàng hay ký nhận xong
+            // là màn hình tự tải lại, người dùng không phải thoát ra rồi vào lại
+            // mới thấy — mà lúc đang đứng ở kho thì không ai nghĩ tới chuyện đó.
+            // Chỉ dựa vào thông báo thì hụt: kho ký nhận bàn giao chỉ báo điều
+            // phối, nên màn của đội cứu hộ cứ đứng yên ở "soạn xong · tới lấy được".
+            refreshSignal={`${
+              feed.items.find((item) => item.missionId === missionFromList)?.id ?? ""
+            }#${feed.missionUpdates[missionFromList] ?? 0}`}
             onBack={() => setMissionFromList(null)}
           />
         ) : tab === "home" ? (
@@ -347,11 +349,7 @@ function MobileRoleShell({
             onProfileChanged={onProfileChanged}
           />
         ) : (
-          <NotificationsScreen
-            user={user}
-            feed={feed}
-            onOpenMission={setMissionFromList}
-          />
+          <NotificationsScreen user={user} feed={feed} onOpenMission={setMissionFromList} />
         )}
       </View>
       <View style={shellStyles.tabBar}>
@@ -506,7 +504,21 @@ function tabColor(tab: MobileTab): string {
 function LoginScreen({ onLogin }: { onLogin: (result: LoginResult) => Promise<void> }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /*
+    Trên trình duyệt Edge/IE, ô mật khẩu có sẵn một con mắt riêng — chính là thứ
+    làm "chạy localhost xem được mật khẩu" trong khi máy thật thì không. App đã tự
+    vẽ nút mắt dưới đây, nên giấu con mắt của trình duyệt để khỏi hai nút chồng nhau.
+  */
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof document === "undefined") return;
+    const style = document.createElement("style");
+    style.textContent = "input::-ms-reveal,input::-ms-clear{display:none}";
+    document.head.appendChild(style);
+    return () => style.remove();
+  }, []);
   const [busy, setBusy] = useState(false);
 
   async function submit() {
@@ -544,15 +556,42 @@ function LoginScreen({ onLogin }: { onLogin: (result: LoginResult) => Promise<vo
         />
 
         <Text style={styles.label}>Mật khẩu</Text>
-        <TextInput
-          style={styles.input}
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          placeholder="Mật khẩu"
-          placeholderTextColor={c.muted}
-          aria-label="Mật khẩu"
-        />
+        {/* Nút mắt để xem lại mật khẩu vừa gõ. Trên điện thoại bàn phím nhỏ, gõ
+            nhầm một ký tự là chuyện thường, mà không xem được thì chỉ còn cách xoá
+            hết gõ lại — trong khi người dùng có thể đang đứng ngoài mưa. */}
+        <View style={{ width: "100%", marginBottom: 18, justifyContent: "center" }}>
+          <TextInput
+            style={[styles.input, { marginBottom: 0, paddingRight: 52 }]}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!passwordVisible}
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="Mật khẩu"
+            placeholderTextColor={c.muted}
+            aria-label="Mật khẩu"
+          />
+          <Pressable
+            onPress={() => setPasswordVisible((visible) => !visible)}
+            accessibilityRole="button"
+            accessibilityLabel={passwordVisible ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+            hitSlop={8}
+            style={{
+              position: "absolute",
+              right: 4,
+              width: 44,
+              height: 44,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <MaterialCommunityIcons
+              name={passwordVisible ? "eye-off-outline" : "eye-outline"}
+              size={22}
+              color={c.muted}
+            />
+          </Pressable>
+        </View>
 
         <ErrorLine error={error} />
 

@@ -4,10 +4,10 @@ import { test } from "node:test";
 import { formatDayMonthYear, formatHourMinute, formatTimeAndDate } from "../date-format";
 
 // Giờ địa phương, dựng bằng đối số rời để không phụ thuộc múi giờ máy chạy test.
-const mocThoiGian = new Date(2026, 8, 6, 15, 31);
+const sampleTime = new Date(2026, 8, 6, 15, 31);
 
 test("ngày luôn là dd/mm/yyyy, đủ hai chữ số và bốn chữ số năm", () => {
-  assert.equal(formatDayMonthYear(mocThoiGian), "06/09/2026");
+  assert.equal(formatDayMonthYear(sampleTime), "06/09/2026");
 });
 
 test("ngày và tháng một chữ số vẫn được đệm số 0", () => {
@@ -16,12 +16,12 @@ test("ngày và tháng một chữ số vẫn được đệm số 0", () => {
 });
 
 test("giờ theo 24 tiếng, không SA/CH", () => {
-  assert.equal(formatHourMinute(mocThoiGian), "15:31");
+  assert.equal(formatHourMinute(sampleTime), "15:31");
   assert.equal(formatHourMinute(new Date(2026, 8, 6, 8, 4)), "08:04");
 });
 
 test("dòng nhật ký ghép giờ trước, ngày sau", () => {
-  assert.equal(formatTimeAndDate(mocThoiGian), "15:31 06/09/2026");
+  assert.equal(formatTimeAndDate(sampleTime), "15:31 06/09/2026");
 });
 
 test("nhận cả chuỗi ISO, không chỉ Date", () => {

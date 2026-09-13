@@ -80,16 +80,16 @@ test("mở và đóng phân biệt rõ", () => {
 test("khoản đã trả xong nhưng bên cho mượn chưa xác nhận thì VẪN đang mở", () => {
   // Trạng thái nói bên MƯỢN đã trả tới đâu; hàng còn trên đường thì bên cho mượn
   // vẫn phải thấy khoản này, nếu không nút xác nhận biến mất và hàng mắc kẹt.
-  const daTraChuaNhan = {
+  const returnedNotAccepted = {
     status: "RETURNED" as const,
     direction: "OUTGOING" as const,
     returnedQuantity: 40,
     returnAcceptedQuantity: 15,
   };
-  assert.equal(isLoanOpen(daTraChuaNhan), true);
-  assert.equal(isLoanOpen({ ...daTraChuaNhan, returnAcceptedQuantity: 40 }), false);
+  assert.equal(isLoanOpen(returnedNotAccepted), true);
+  assert.equal(isLoanOpen({ ...returnedNotAccepted, returnAcceptedQuantity: 40 }), false);
   // Bên đi mượn thì trả xong là xong, không có gì để nhận lại.
-  assert.equal(isLoanOpen({ ...daTraChuaNhan, direction: "INCOMING" }), false);
+  assert.equal(isLoanOpen({ ...returnedNotAccepted, direction: "INCOMING" }), false);
 });
 
 test("mọi trạng thái đều có nhãn tiếng Việt, không lọt mã hằng ra màn hình", () => {
@@ -177,14 +177,14 @@ test("đã đồng ý thì tới lượt bên đi mượn nhận hàng", () => {
 });
 
 test("bên cho mượn chưa xác nhận cầm lại đủ thì vẫn là việc của mình, kể cả khi sổ ghi đã trả xong", () => {
-  const chuaNhanDu = book({
+  const partiallyAccepted = book({
     direction: "OUTGOING",
     status: "RETURNED",
     returnedQuantity: 25,
     returnAcceptedQuantity: 0,
   });
-  assert.equal(waitingOnMe(chuaNhanDu), true);
-  assert.equal(waitingOnMe({ ...chuaNhanDu, returnAcceptedQuantity: 25 }), false);
+  assert.equal(waitingOnMe(partiallyAccepted), true);
+  assert.equal(waitingOnMe({ ...partiallyAccepted, returnAcceptedQuantity: 25 }), false);
 });
 
 test("khoản ghi tay: người giữ sổ làm cả hai vai nên còn nợ là còn việc", () => {
@@ -198,9 +198,9 @@ test("khoản chờ mình nhận hàng phải đứng trên ba khoản chờ bê
   const gao = book({ requestedAt: "2026-09-13T02:33:00.000Z" });
   const bat = book({ requestedAt: "2026-09-12T15:56:00.000Z" });
 
-  const xepLai = sortByAttention([boPin, gao, bat, canNuoc]);
+  const sorted = sortByAttention([boPin, gao, bat, canNuoc]);
   assert.deepEqual(
-    xepLai.map((l) => l.requestedAt),
+    sorted.map((l) => l.requestedAt),
     [canNuoc.requestedAt, boPin.requestedAt, gao.requestedAt, bat.requestedAt],
   );
 });
@@ -217,7 +217,7 @@ test("trong cùng một nhóm vẫn giữ mới nhất lên đầu", () => {
 test("sắp xếp không đụng vào mảng gốc", () => {
   // Mảng đến từ React state; `sort` gốc là đột biến nên phải chép trước.
   const goc = [book({ requestedAt: "2026-09-10T00:00:00.000Z" }), book({ status: "APPROVED" })];
-  const truoc = goc.map((l) => l.requestedAt);
+  const before = goc.map((l) => l.requestedAt);
   sortByAttention(goc);
-  assert.deepEqual(goc.map((l) => l.requestedAt), truoc);
+  assert.deepEqual(goc.map((l) => l.requestedAt), before);
 });

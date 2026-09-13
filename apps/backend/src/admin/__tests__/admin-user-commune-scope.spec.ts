@@ -26,7 +26,7 @@ const SUPER_ADMIN = {
   organizationId: "org-dong-xuan",
 };
 /** Trưởng thôn Long Châu — người của xã Đồng Xuân, không liên quan tới Xuân Thọ. */
-const LONG_CHAU = {
+const DONG_XUAN_HAMLET_STAFF = {
   id: "user-long-chau",
   email: "longchau",
   role: UserRole.WAREHOUSE,
@@ -41,8 +41,8 @@ function makePrisma() {
       findUnique: jest.fn(),
       findMany: jest.fn().mockResolvedValue([]),
       create: jest.fn().mockResolvedValue({ id: "new-1" }),
-      update: jest.fn().mockResolvedValue({ id: LONG_CHAU.id }),
-      delete: jest.fn().mockResolvedValue({ id: LONG_CHAU.id }),
+      update: jest.fn().mockResolvedValue({ id: DONG_XUAN_HAMLET_STAFF.id }),
+      delete: jest.fn().mockResolvedValue({ id: DONG_XUAN_HAMLET_STAFF.id }),
     },
     organization: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn() },
     warehouse: { findUnique: jest.fn() },
@@ -92,24 +92,28 @@ describe("AdminUserService — ranh giới giữa các xã", () => {
 
   describe("sửa tài khoản", () => {
     it("không sửa được tài khoản của xã khác", async () => {
-      prisma.user.findUnique.mockResolvedValueOnce(XUAN_THO_ADMIN).mockResolvedValueOnce(LONG_CHAU);
+      prisma.user.findUnique
+        .mockResolvedValueOnce(XUAN_THO_ADMIN)
+        .mockResolvedValueOnce(DONG_XUAN_HAMLET_STAFF);
 
       await expect(
-        service.update(XUAN_THO_ADMIN.id, LONG_CHAU.id, { fullName: "Tên khác" }),
+        service.update(XUAN_THO_ADMIN.id, DONG_XUAN_HAMLET_STAFF.id, { fullName: "Tên khác" }),
       ).rejects.toBeInstanceOf(NotFoundException);
       expect(prisma.user.update).not.toHaveBeenCalled();
     });
 
     it("báo KHÔNG TÌM THẤY chứ không phải KHÔNG CÓ QUYỀN — không xác nhận id đó có thật", async () => {
-      prisma.user.findUnique.mockResolvedValueOnce(XUAN_THO_ADMIN).mockResolvedValueOnce(LONG_CHAU);
+      prisma.user.findUnique
+        .mockResolvedValueOnce(XUAN_THO_ADMIN)
+        .mockResolvedValueOnce(DONG_XUAN_HAMLET_STAFF);
 
       await expect(
-        service.update(XUAN_THO_ADMIN.id, LONG_CHAU.id, { fullName: "Tên khác" }),
+        service.update(XUAN_THO_ADMIN.id, DONG_XUAN_HAMLET_STAFF.id, { fullName: "Tên khác" }),
       ).rejects.not.toBeInstanceOf(ForbiddenException);
     });
 
     it("vẫn sửa được người của chính xã mình", async () => {
-      const ownStaff = { ...LONG_CHAU, id: "user-xt", organizationId: "org-xuan-tho" };
+      const ownStaff = { ...DONG_XUAN_HAMLET_STAFF, id: "user-xt", organizationId: "org-xuan-tho" };
       prisma.user.findUnique.mockResolvedValueOnce(XUAN_THO_ADMIN).mockResolvedValueOnce(ownStaff);
 
       await service.update(XUAN_THO_ADMIN.id, ownStaff.id, { fullName: "Tên mới" });
@@ -120,18 +124,20 @@ describe("AdminUserService — ranh giới giữa các xã", () => {
 
   describe("xoá tài khoản", () => {
     it("không xoá được tài khoản của xã khác", async () => {
-      prisma.user.findUnique.mockResolvedValueOnce(XUAN_THO_ADMIN).mockResolvedValueOnce(LONG_CHAU);
+      prisma.user.findUnique
+        .mockResolvedValueOnce(XUAN_THO_ADMIN)
+        .mockResolvedValueOnce(DONG_XUAN_HAMLET_STAFF);
 
-      await expect(service.remove(XUAN_THO_ADMIN.id, LONG_CHAU.id)).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
+      await expect(
+        service.remove(XUAN_THO_ADMIN.id, DONG_XUAN_HAMLET_STAFF.id),
+      ).rejects.toBeInstanceOf(NotFoundException);
       expect(prisma.user.delete).not.toHaveBeenCalled();
     });
   });
 
   describe("gán kho", () => {
     it("không gán được người của xã mình vào kho của xã khác", async () => {
-      const ownStaff = { ...LONG_CHAU, id: "user-xt", organizationId: "org-xuan-tho" };
+      const ownStaff = { ...DONG_XUAN_HAMLET_STAFF, id: "user-xt", organizationId: "org-xuan-tho" };
       prisma.user.findUnique.mockResolvedValueOnce(XUAN_THO_ADMIN).mockResolvedValueOnce(ownStaff);
       // Kho có thật, nhưng thuộc xã Đồng Xuân.
       prisma.warehouse.findUnique.mockResolvedValue({ organizationId: "org-dong-xuan" });
@@ -143,7 +149,7 @@ describe("AdminUserService — ranh giới giữa các xã", () => {
     });
 
     it("gán được vào kho cùng xã", async () => {
-      const ownStaff = { ...LONG_CHAU, id: "user-xt", organizationId: "org-xuan-tho" };
+      const ownStaff = { ...DONG_XUAN_HAMLET_STAFF, id: "user-xt", organizationId: "org-xuan-tho" };
       prisma.user.findUnique.mockResolvedValueOnce(XUAN_THO_ADMIN).mockResolvedValueOnce(ownStaff);
       prisma.warehouse.findUnique.mockResolvedValue({ organizationId: "org-xuan-tho" });
 

@@ -107,6 +107,10 @@ export function Pagination({
           {visiblePages.map((pageNumber) => (
             <PageButton
               ariaLabel={`Trang ${pageNumber}`}
+              // Điện thoại chỉ giữ trang đang xem và hai trang kề nó. Đủ năm số
+              // cộng bốn nút mũi tên là chín ô 36px — rộng hơn lòng thẻ ở màn
+              // 375px, đẩy cả khối tràn ngang khỏi màn hình.
+              className={Math.abs(pageNumber - page) > 1 ? "hidden sm:inline-flex" : undefined}
               isActive={pageNumber === page}
               key={pageNumber}
               onClick={() => onPageChange(pageNumber)}
@@ -198,12 +202,14 @@ function PageJump({
 function PageButton({
   ariaLabel,
   children,
+  className,
   disabled = false,
   isActive = false,
   onClick,
 }: {
   ariaLabel: string;
   children: React.ReactNode;
+  className?: string;
   disabled?: boolean;
   isActive?: boolean;
   onClick: () => void;
@@ -212,7 +218,7 @@ function PageButton({
     <button
       aria-current={isActive ? "page" : undefined}
       aria-label={ariaLabel}
-      className="inline-flex h-9 min-w-9 items-center justify-center rounded-md border px-2 text-sm font-semibold transition hover:bg-[var(--surface-2)] disabled:opacity-40"
+      className={`${className ?? "inline-flex"} h-9 min-w-9 items-center justify-center rounded-md border px-2 text-sm font-semibold transition hover:bg-[var(--surface-2)] disabled:opacity-40`}
       disabled={disabled}
       onClick={onClick}
       style={

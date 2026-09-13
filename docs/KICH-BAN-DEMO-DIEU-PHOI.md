@@ -25,10 +25,10 @@ xuất giữa chừng:
 | Cửa sổ | Tài khoản | Mật khẩu | Vai |
 |---|---|---|---|
 | A | `superadmindongxuan` | `admin123` | Điều phối xã |
-| B | `longchau` | `truongthon123` | Phụ trách Kho thôn Long Châu |
+| B | `longchau` | `longchau123` | Phụ trách Kho thôn Long Châu |
 
-Cần thêm thì: `staff` / `staff123` (kho trung tâm),
-`rescue` / `rescue123` (đội cứu hộ).
+Cần thêm thì: `dongxuan` / `dongxuan123` (kho trung tâm),
+`cuuhodongxuan` / `cuuho123` (đội cứu hộ).
 
 **Ba điều về giao diện, biết trước đỡ lúng túng:**
 
@@ -124,7 +124,7 @@ Về cửa sổ A, điều phối thấy ghi chú của kho và duyệt lại s�
 giấy khác thực tế là chuyện thường. Hệ thống có đường đi cho việc đó, không bắt
 kho phải xuất cho đủ con số."*
 
-Xuất hết các dòng → trạng thái thành **Kho đã xong**. Đăng nhập `rescue@` bấm báo
+Xuất hết các dòng → trạng thái thành **Kho đã xong**. Đăng nhập `cuuhodongxuan` bấm báo
 kết quả giao → nhiệm vụ **COMPLETED**.
 
 ---

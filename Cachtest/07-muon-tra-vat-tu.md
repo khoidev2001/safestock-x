@@ -9,7 +9,7 @@ Lực lượng hiện trường **không** tự thao tác mượn trả. Họ b�
 
 ## Phần 1 — Cho mượn
 
-1. Đăng nhập `staff@`, mở **Mượn, trả**.
+1. Đăng nhập `dongxuan`, mở **Mượn, trả**.
 2. Chọn lô, nhập số lượng mượn.
 3. Xác nhận.
 
@@ -75,7 +75,7 @@ Xem chi tiết ở [08 · Kiểm kê tháng](08-kiem-ke-thang.md).
 
 ```bash
 API=http://localhost:3110/api
-STAFF=<mã đăng nhập của staff@>
+STAFF=<mã đăng nhập của dongxuan>
 
 # cho mượn 2 đơn vị
 curl -s -H 'Content-Type: application/json' -H "Authorization: Bearer $STAFF" \

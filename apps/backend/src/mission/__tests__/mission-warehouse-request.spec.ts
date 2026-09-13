@@ -388,6 +388,18 @@ describe("MissionWarehouseRequestService.confirmPickup — thông báo ký nhậ
     ).toHaveLength(0);
   });
 
+  it("ký nhận xong thì báo mọi màn hình đang mở nhiệm vụ tải lại — kể cả đội cứu hộ không nhận chuông", async () => {
+    // Ký nhận bàn giao chỉ báo điều phối. Không có tín hiệu này, màn điểm lấy hàng
+    // của đội cứu hộ đứng yên ở "soạn xong · tới lấy được" dù kho đã bàn giao xong.
+    const { service, notifications } = harness(40, 2);
+    const broadcastMissionUpdate = jest.fn();
+    Object.assign(notifications, { broadcastMissionUpdate });
+
+    await service.confirmPickup("request-1", "warehouse-user", 40, null, "warehouse-a");
+
+    expect(broadcastMissionUpdate).toHaveBeenCalledWith("org-1", "mission-1");
+  });
+
   it("lấy THIẾU chỉ ra MỘT thông báo, và tiêu đề nói thẳng là thiếu", async () => {
     // Gửi kèm cả thông báo "đã lấy hàng" thì lần thiếu chìm trong tiếng ồn của lần
     // đủ — đúng cái bẫy mà việc chỉ-báo-khi-thiếu ngày trước sinh ra để tránh.
@@ -460,3 +472,122 @@ function prepareHarness(counts: { remainingForWarehouse: number; remainingForMis
   );
   return { service, notifications, tx };
 }
+
+describe("MissionWarehouseRequestService.bulk — một lượt hàng loạt, một thông báo", () => {
+  function bulkHarness(
+    rows: { id: string; itemName: string; warehouseId?: string; missionId?: string }[],
+  ) {
+    const requests = rows.map((row) => ({
+      id: row.id,
+      missionId: row.missionId ?? "mission-1",
+      warehouseId: row.warehouseId ?? "warehouse-a",
+      itemName: row.itemName,
+      unit: "thùng",
+      requestedQuantity: 10,
+      preparedQuantity: 10,
+      warehouse: { name: "Kho thôn Long Hà", organizationId: "org-1" },
+      mission: { missionNo: 145 },
+    }));
+    const notifications = { create: jest.fn().mockResolvedValue({}) };
+    const prisma = {
+      missionWarehouseRequest: { findMany: jest.fn().mockResolvedValue(requests) },
+    };
+    const service = new MissionWarehouseRequestService(
+      prisma as never,
+      {} as never,
+      notifications as never,
+    );
+    const accept = jest.spyOn(service, "accept").mockResolvedValue({} as never);
+    const prepare = jest.spyOn(service, "prepare").mockResolvedValue({} as never);
+    const confirmPickup = jest.spyOn(service, "confirmPickup").mockResolvedValue({} as never);
+    return { service, notifications, accept, prepare, confirmPickup };
+  }
+
+  const threeRows = [
+    { id: "r1", itemName: "Mì tôm cứu trợ" },
+    { id: "r2", itemName: "Lương khô cứu trợ" },
+    { id: "r3", itemName: "Nước uống đóng chai" },
+  ];
+
+  it("xuất tất cả ba món: tắt câu báo của từng dòng và chỉ gửi MỘT câu tổng", async () => {
+    const { service, notifications, prepare } = bulkHarness(threeRows);
+
+    await expect(
+      service.bulk("prepare", ["r1", "r2", "r3"], "warehouse-user", "warehouse-a"),
+    ).resolves.toEqual({ done: 3, total: 3 });
+
+    expect(prepare).toHaveBeenCalledTimes(3);
+    for (const call of prepare.mock.calls) expect(call[3]).toEqual({ notifyAdmin: false });
+    expect(notifications.create).toHaveBeenCalledTimes(1);
+    expect(notifications.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipientRole: UserRole.ADMIN,
+        kind: NotificationKind.WAREHOUSE_READY,
+        title: "Kho đã xuất tất cả vật tư",
+        warehouseId: "warehouse-a",
+        organizationId: "org-1",
+      }),
+    );
+    expect(notifications.create.mock.calls[0][0].body).toContain(
+      "Kho thôn Long Hà đã xuất 3 vật tư",
+    );
+  });
+
+  it("tiếp nhận và ký nhận tất cả cũng chỉ một câu tổng, đúng loại thông báo", async () => {
+    const accepted = bulkHarness(threeRows);
+    await accepted.service.bulk("accept", ["r1", "r2", "r3"], "warehouse-user", "warehouse-a");
+    expect(accepted.notifications.create).toHaveBeenCalledTimes(1);
+    expect(accepted.notifications.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: NotificationKind.WAREHOUSE_REQUEST_ACCEPTED,
+        title: "Kho đã tiếp nhận tất cả yêu cầu vật tư",
+      }),
+    );
+
+    const pickedUp = bulkHarness(threeRows);
+    await pickedUp.service.bulk("pickup", ["r1", "r2", "r3"], "warehouse-user", "warehouse-a");
+    // Hàng loạt = lấy ĐỦ số đã soạn.
+    expect(pickedUp.confirmPickup).toHaveBeenCalledWith(
+      "r1",
+      "warehouse-user",
+      10,
+      null,
+      "warehouse-a",
+      {
+        notifyAdmin: false,
+      },
+    );
+    expect(pickedUp.notifications.create).toHaveBeenCalledTimes(1);
+    expect(pickedUp.notifications.create).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Đội cứu hộ đã ký nhận tất cả vật tư" }),
+    );
+  });
+
+  it("vỡ giữa chừng: vẫn báo phần đã xong và nói rõ dừng ở dòng nào", async () => {
+    const { service, notifications, prepare } = bulkHarness(threeRows);
+    prepare
+      .mockResolvedValueOnce({} as never)
+      .mockRejectedValueOnce(new BadRequestException("Lô hàng không đủ tồn"));
+
+    await expect(
+      service.bulk("prepare", ["r1", "r2", "r3"], "warehouse-user", "warehouse-a"),
+    ).rejects.toThrow("Đã xong 1/3 dòng rồi dừng ở “Lương khô cứu trợ”: Lô hàng không đủ tồn");
+
+    expect(prepare).toHaveBeenCalledTimes(2);
+    expect(notifications.create).toHaveBeenCalledTimes(1);
+    expect(notifications.create.mock.calls[0][0].title).toBe("Kho đã xuất 1/3 vật tư");
+  });
+
+  it("từ chối loạt trộn vật tư của nhiều kho — không có câu tổng nào nói thật được", async () => {
+    const { service, notifications, prepare } = bulkHarness([
+      { id: "r1", itemName: "Mì tôm cứu trợ" },
+      { id: "r2", itemName: "Lương khô cứu trợ", warehouseId: "warehouse-b" },
+    ]);
+
+    await expect(service.bulk("prepare", ["r1", "r2"], "admin-user", null)).rejects.toThrow(
+      BadRequestException,
+    );
+    expect(prepare).not.toHaveBeenCalled();
+    expect(notifications.create).not.toHaveBeenCalled();
+  });
+});

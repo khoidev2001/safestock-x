@@ -173,7 +173,7 @@ export function ActionPlanView({
               cao gần bằng cả màn hình — phải cuộn qua nó mới đọc tiếp được. Đặt
               cạnh nhau vừa thu nhỏ bản đồ vừa cho đọc quãng đường và nhìn vị trí
               kho cùng lúc, đúng cặp thông tin người dùng đang so. */}
-          <div className={incidentPoint ? "grid gap-4 lg:grid-cols-2" : undefined}>
+          <div className={incidentPoint ? "grid grid-cols-1 gap-4 lg:grid-cols-2" : undefined}>
             <div className="min-w-0">
               {/* MỘT danh sách duy nhất cho phần điều phối kho.
                   Trước đây trên là lưới thẻ "Kho tham gia và thời gian tới điểm nạn",
@@ -257,7 +257,7 @@ export function ActionPlanView({
           tham khảo", dự báo là xác suất — trong khi thứ quyết định việc duyệt nằm ở
           các khối trên. Mở sẵn thì chúng đẩy nút duyệt xuống thêm gần một màn hình,
           mà người trực phần lớn thời gian không cần tới. */}
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Panel
           icon={<ColorIcon name="warning" size={19} tone="red" />}
           title="Cảnh báo (chỉ tham khảo)"

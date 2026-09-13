@@ -21,7 +21,7 @@ export function InventoryHistory({ warehouseId }: { warehouseId: string }) {
 
   return (
     <section className="rounded-md border bg-[var(--surface)]">
-      <header className="flex items-center justify-between gap-3 border-b px-5 py-4">
+      <header className="flex items-start justify-between gap-3 border-b px-4 py-4 sm:items-center sm:px-5">
         <div>
           <h3 className="font-semibold">Nhật ký nghiệp vụ kho</h3>
           <p className="mt-1 text-sm text-[var(--text-muted)]">
@@ -29,7 +29,7 @@ export function InventoryHistory({ warehouseId }: { warehouseId: string }) {
           </p>
         </div>
         <button
-          className="rounded-md border px-3 py-1.5 text-sm"
+          className="shrink-0 whitespace-nowrap rounded-md border px-3 py-1.5 text-sm"
           disabled={query.isFetching}
           onClick={() => void query.refetch()}
         >

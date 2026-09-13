@@ -30,7 +30,7 @@ describe("describeDevice", () => {
  */
 describe("tiêu đề sự cố không được lộ mã kỹ thuật", () => {
   const luc = (phut: number) => new Date(Date.UTC(2026, 8, 10, 0, phut, 0));
-  const tinHieu = (value: number, phut: number): SensorSignal => ({
+  const signalAt = (value: number, phut: number): SensorSignal => ({
     deviceCode: "smoke_main",
     deviceType: "SMOKE",
     eventType: "SMOKE_READING",
@@ -40,8 +40,8 @@ describe("tiêu đề sự cố không được lộ mã kỹ thuật", () => {
 
   it("cảnh báo sớm gọi tên cảm biến bằng tiếng Việt", () => {
     // Bốn điểm tăng đều, còn dưới ngưỡng nguy hiểm -> đúng điều kiện báo trước.
-    const lichSu = [tinHieu(4, 0), tinHieu(8, 5), tinHieu(12, 10), tinHieu(16, 15)];
-    const [suCo] = detectPredictiveWarning(lichSu);
+    const history = [signalAt(4, 0), signalAt(8, 5), signalAt(12, 10), signalAt(16, 15)];
+    const [suCo] = detectPredictiveWarning(history);
 
     expect(suCo).toBeDefined();
     expect(suCo.title).toBe("Dự đoán cảm biến khói khu chính sẽ vượt ngưỡng");
@@ -52,8 +52,8 @@ describe("tiêu đề sự cố không được lộ mã kỹ thuật", () => {
 
   it("bất thường thống kê cũng gọi tên bằng tiếng Việt", () => {
     // Baseline phẳng 10 điểm rồi một điểm vọt hẳn lên -> z-score vượt ngưỡng.
-    const nen = Array.from({ length: 10 }, (_, i) => tinHieu(5 + (i % 2), i));
-    const [suCo] = detectStatisticalAnomaly([...nen, tinHieu(80, 20)]);
+    const nen = Array.from({ length: 10 }, (_, i) => signalAt(5 + (i % 2), i));
+    const [suCo] = detectStatisticalAnomaly([...nen, signalAt(80, 20)]);
 
     expect(suCo).toBeDefined();
     expect(suCo.title).toBe("Bất thường ở cảm biến khói khu chính");

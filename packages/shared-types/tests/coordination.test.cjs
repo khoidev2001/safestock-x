@@ -21,7 +21,7 @@ const fixture = require(
 );
 
 test("uses one user-facing label for the RESCUE technical role", () => {
-  assert.equal(USER_ROLE_LABELS[UserRole.RESCUE], "Lực lượng hiện trường");
+  assert.equal(USER_ROLE_LABELS[UserRole.RESCUE], "Đội cứu hộ");
 });
 
 test("accepts the provenance-aware Phước Lộc golden analysis", () => {

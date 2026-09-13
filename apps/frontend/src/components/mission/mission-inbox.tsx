@@ -65,6 +65,8 @@ const FILTER_OPTIONS: { value: MissionInboxFilter; label: string }[] = [
   { value: "all", label: "Tất cả" },
   { value: "needs-action", label: "Cần xử lý" },
   { value: "published", label: "Đã duyệt" },
+  // Hiện trường đã báo xong, bất kể vật tư đã hoàn trả về kho hay chưa.
+  { value: "completed", label: "Đã hoàn thành" },
 ];
 
 const INCIDENT_LABELS: Record<string, string> = {
@@ -165,36 +167,88 @@ export function MissionInbox({
   const error = inboxQuery.error;
 
   return (
-    <section className="app-panel p-4 md:p-5" aria-labelledby="mission-inbox-title">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            {/* Tên xã nằm ngay trên tiêu đề: một xã có nhiều quản trị viên cùng
-                duyệt, và tài khoản nào cũng chỉ thấy nhiệm vụ của xã mình — nói
-                rõ ra thì không ai phải đoán danh sách này gồm phạm vi nào. */}
-            <h2 id="mission-inbox-title" className="text-base font-semibold">
-              {communeName
-                ? `Danh sách nhiệm vụ cứu hộ của xã ${communeName}`
-                : "Danh sách nhiệm vụ cứu hộ"}
-            </h2>
-            {/* Tổng THẬT do backend đếm trên cả bảng, không phải số dòng đang
-                nằm trên trang này. Trước đây nó là độ dài mảng đã tải, mà mảng
-                đó bị chặn ở 100 — hộp có 104 nhiệm vụ vẫn cứ hiện 100. */}
-            {data && (
-              <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-xs font-semibold text-[var(--text-muted)]">
-                {data.totalAll.toLocaleString("vi-VN")}
-              </span>
-            )}
-          </div>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">
-            Có thể tìm kiếm, lọc và sắp xếp nhiệm vụ.
-          </p>
+    <section
+      className="app-panel @container w-full p-4 md:p-5"
+      aria-labelledby="mission-inbox-title"
+    >
+      {/* Bố cục ba tầng, trên xuống: tiêu đề chiếm trọn chiều ngang · hàng nút lọc
+          riêng một hàng · sắp xếp (trái) và tìm kiếm (phải) chung một hàng. Lọc
+          đứng riêng vì số nút đã lên bốn; chen cùng hàng với ô chọn thì nút cuối
+          bị đẩy rớt xuống dòng dưới, lẻ loi một mình. */}
+      <header className="w-full">
+        {/* Tên xã nằm ngay trên tiêu đề: một xã có nhiều quản trị viên cùng
+            duyệt, và tài khoản nào cũng chỉ thấy nhiệm vụ của xã mình — nói
+            rõ ra thì không ai phải đoán danh sách này gồm phạm vi nào. */}
+        <h2 id="mission-inbox-title" className="text-base font-semibold">
+          {communeName
+            ? `Danh sách nhiệm vụ cứu hộ của xã ${communeName}`
+            : "Danh sách nhiệm vụ cứu hộ"}
+        </h2>
+        <p className="mt-1.5 text-sm text-[var(--text-muted)]">
+          Có thể tìm kiếm, lọc và sắp xếp nhiệm vụ.
+        </p>
+      </header>
+
+      {/* Lọc là các nút bấm thấy ngay, còn sắp xếp là ô chọn: lọc được dùng liên
+          tục trong một ca trực nên phải bấm một nhát, còn sắp xếp thì đổi vài lần
+          một buổi. */}
+      <div className="mt-6 w-full">
+        <div className="flex flex-wrap gap-2.5" role="group" aria-label="Lọc nhiệm vụ">
+          {FILTER_OPTIONS.map((option) => {
+            const active = filter === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setFilter(option.value)}
+                className={`rounded-full border px-3 py-1.5 text-sm font-medium transition ${
+                  active
+                    ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--color-accent-fg)]"
+                    : "hover:bg-[var(--surface-2)]"
+                }`}
+              >
+                {option.label}
+                {/* Số nằm ngay trong nút lọc chứ không cạnh tiêu đề: tiêu đề có tên
+                    xã dài hay xuống dòng, huy hiệu bị đẩy lạc ra một dòng riêng.
+                    Đây là tổng THẬT do backend đếm trên cả bảng, không phải số
+                    dòng đang nằm trên trang — mảng đã tải bị chặn ở 100, hộp có
+                    104 nhiệm vụ vẫn cứ hiện 100. */}
+                {data?.filterTotals &&
+                  ` (${(data.filterTotals[option.value] ?? 0).toLocaleString("vi-VN")})`}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Xuống dòng TỰ NHIÊN khi hết chỗ, không chờ một mốc bề ngang màn hình.
+          Khung này rộng hẹp theo cả cột chức năng bên trái (mở hay thu), nên mốc
+          `sm` cũ bẻ hai cụm ra một hàng ngay ở màn 768px — lúc đó ô sắp xếp
+          không co được nữa và đè thẳng lên ô chọn trường tìm kiếm. */}
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <label className="shrink-0 text-sm text-[var(--text-muted)]" htmlFor="mission-sort">
+            Sắp xếp
+          </label>
+          <select
+            id="mission-sort"
+            value={sort}
+            onChange={(event) => setSort(event.target.value as MissionInboxSort)}
+            className="select-field min-w-0 flex-1 rounded-md border bg-[var(--surface)] py-2 pl-3 text-sm sm:flex-none"
+          >
+            {SORT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Chọn trường trước, gõ sau — nằm cạnh nhau vì đọc thành một câu: "tìm
             theo SỐ THỨ TỰ: 98". Tách ra hai chỗ thì người dùng gõ xong mới phát
             hiện mình đang tìm nhầm trường. */}
-        <div className="flex w-full gap-2 lg:max-w-sm">
+        <div className="flex w-full gap-2 sm:w-auto sm:min-w-[20rem] sm:max-w-md sm:flex-1">
           <label htmlFor="mission-search-field" className="sr-only">
             Tìm theo trường nào
           </label>
@@ -232,54 +286,12 @@ export function MissionInbox({
         </div>
       </div>
 
-      {/* Lọc là các nút bấm thấy ngay, còn sắp xếp là ô chọn: lọc được dùng liên
-          tục trong một ca trực nên phải bấm một nhát, còn sắp xếp thì đổi vài lần
-          một buổi — cho nó bốn nút nữa thì thanh này dài mà chẳng ai bấm. */}
-      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Lọc nhiệm vụ">
-          {FILTER_OPTIONS.map((option) => {
-            const active = filter === option.value;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                aria-pressed={active}
-                onClick={() => setFilter(option.value)}
-                className={`rounded-full border px-3 py-1.5 text-sm font-medium transition ${
-                  active
-                    ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--color-accent-fg)]"
-                    : "hover:bg-[var(--surface-2)]"
-                }`}
-              >
-                {option.label}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <label className="shrink-0 text-sm text-[var(--text-muted)]" htmlFor="mission-sort">
-            Sắp xếp
-          </label>
-          <select
-            id="mission-sort"
-            value={sort}
-            onChange={(event) => setSort(event.target.value as MissionInboxSort)}
-            className="select-field rounded-md border bg-[var(--surface)] py-2 pl-3 text-sm"
-          >
-            {SORT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      <div className="mt-4">
+      {/* Khoảng cách lớn hơn các khoảng khác trong khối: phần trên là công cụ lọc –
+          tìm, phần dưới là nội dung, nên cần tách hẳn ra mà không cần vạch kẻ. */}
+      <div className="mt-10">
         {isLoading ? (
           <div
-            className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
+            className="grid grid-cols-1 gap-4 @xl:grid-cols-2 @4xl:grid-cols-3"
             aria-label="Đang tải nhiệm vụ"
             aria-busy="true"
           >
@@ -335,7 +347,7 @@ export function MissionInbox({
 
              Trang này chỉ có mỗi hộp nhiệm vụ nên không còn khối nào bên dưới bị
              danh sách dài đẩy khỏi màn hình. */
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 @xl:grid-cols-2 @4xl:grid-cols-3">
             {missions.map((mission) => {
               const selected = mission.id === selectedMissionId;
               const needsAction = missionNeedsAction(mission, role, warehouseId);
@@ -361,17 +373,21 @@ export function MissionInbox({
                       {mission.missionNo != null && (
                         <p className="font-semibold">Nhiệm vụ số {mission.missionNo}</p>
                       )}
-                      {/* Loại tình huống gộp vào cuối dòng địa điểm: hai dòng riêng
-                          làm thẻ cao thêm mà phần trên chỉ mang đúng một từ.
-
-                          Không có dòng địa điểm thì bỏ luôn cặp ngoặc — ghép máy
-                          móc sẽ ra " (Lũ lụt)" thừa một dấu cách đầu dòng. */}
-                      <p className="mt-0.5 line-clamp-1 text-sm text-[var(--text-muted)]">
-                        {locationLabel ? `${locationLabel} (${incidentLabel})` : incidentLabel}
-                      </p>
                     </div>
                     <MissionCardBadge mission={mission} needsAction={needsAction} />
                   </div>
+                  {/* Loại tình huống gộp vào cuối dòng địa điểm: hai dòng riêng
+                      làm thẻ cao thêm mà phần trên chỉ mang đúng một từ.
+
+                      Không có dòng địa điểm thì bỏ luôn cặp ngoặc — ghép máy
+                      móc sẽ ra " (Lũ lụt)" thừa một dấu cách đầu dòng.
+
+                      Nằm NGOÀI hàng tiêu đề, trải hết bề ngang thẻ: đứng cạnh huy
+                      hiệu thì thẻ hẹp chỉ còn chừa vài chữ, tên thôn bị cắt còn
+                      "Long Châ…" — đúng phần người trực cần đọc. */}
+                  <p className="mt-0.5 line-clamp-2 text-sm text-[var(--text-muted)]">
+                    {locationLabel ? `${locationLabel} (${incidentLabel})` : incidentLabel}
+                  </p>
                   <div className="mt-4 text-xs">
                     <p className="font-medium">{missionStageLabel(mission)}</p>
                     {/* Số người và thời gian đứng CÙNG một hàng, không phải một cột
@@ -462,7 +478,9 @@ function MissionCardBadge({
 
   // Đứng TRƯỚC nhánh "Đã duyệt": nhiệm vụ đã đóng vẫn thoả `missionIsPublished`,
   // nên xếp sau thì huy hiệu mãi mãi dừng ở "Đã duyệt" dù hiện trường đã báo xong.
-  if (mission.status === "COMPLETED") {
+  // Gồm cả RETURNED: kho đã nhận lại vật tư là mốc SAU hoàn thành, không phải lùi
+  // về "Đã duyệt" — cùng quy tắc với bộ lọc "Đã hoàn thành".
+  if (mission.status === "COMPLETED" || mission.status === "RETURNED") {
     return (
       <span className={chip} style={{ background: "var(--color-accent)" }}>
         Đã hoàn thành

@@ -30,6 +30,12 @@ export interface NotificationFeed {
   moreError: boolean;
   /** Cuộn tới đáy: xin trang tiếp. Gọi thừa không sao, hàm tự bỏ qua. */
   loadMore: () => void;
+  /**
+   * Số lần mỗi nhiệm vụ vừa đổi dữ liệu mà KHÔNG kèm thông báo cho tài khoản này
+   * (ví dụ kho ký nhận bàn giao — chỉ điều phối nhận chuông). Màn chi tiết đang mở
+   * đúng nhiệm vụ đó dùng con số này làm tín hiệu tải lại.
+   */
+  missionUpdates: Record<string, number>;
 }
 
 /**
@@ -55,6 +61,8 @@ export function useNotificationFeed(token: string, userId: string): Notification
   const [hasMore, setHasMore] = useState(false);
   const [moreError, setMoreError] = useState(false);
   const socketRef = useRef<Socket | null>(null);
+  const [missionUpdates, setMissionUpdates] = useState<Record<string, number>>({});
+  const missionUpdateTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   /**
    * Có một lượt tải thêm đang bay hay không, đọc được NGAY.
    *
@@ -165,7 +173,26 @@ export function useNotificationFeed(token: string, userId: string): Notification
       setToasts((prev) => pushToast(prev, entry));
     });
 
+    socket.on("mission_updated", (payload?: { missionId?: string }) => {
+      const missionId = payload?.missionId;
+      if (!missionId) return;
+      // Gom các tín hiệu sát nhau: "ký nhận tất cả" mười món có thể bắn vài tín hiệu
+      // trong một giây, tải lại mười lần là mười lượt mạng cho đúng một kết quả.
+      const timers = missionUpdateTimers.current;
+      const pending = timers.get(missionId);
+      if (pending) clearTimeout(pending);
+      timers.set(
+        missionId,
+        setTimeout(() => {
+          timers.delete(missionId);
+          setMissionUpdates((prev) => ({ ...prev, [missionId]: (prev[missionId] ?? 0) + 1 }));
+        }, 400),
+      );
+    });
+
     return () => {
+      for (const timer of missionUpdateTimers.current.values()) clearTimeout(timer);
+      missionUpdateTimers.current.clear();
       socket.disconnect();
       socketRef.current = null;
       setConnected(false);
@@ -224,6 +251,7 @@ export function useNotificationFeed(token: string, userId: string): Notification
     loadingMore,
     hasMore,
     moreError,
+    missionUpdates,
     /**
      * Cửa duy nhất ra ngoài, có sẵn chốt: chỉ gọi khi còn trang sau, hoặc khi
      * lượt trước hỏng (chân trang mời bấm thử lại).

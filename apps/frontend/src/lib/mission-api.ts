@@ -4,6 +4,7 @@ import type {
   FieldUpdateIntent,
   WhatIfSimulationResult,
 } from "@safestock/shared-types";
+import type { SupplyReturnProgress } from "./mission-inbox-state";
 
 export type MissionStatus =
   | "DRAFT"
@@ -60,6 +61,12 @@ export interface MissionWarehouseRequest {
   pickedUpQuantity: number | null;
   pickupNote: string | null;
   pickedUpAt: string | null;
+  /** Số đã quay về kho sau nhiệm vụ; `null` là kho chưa đếm dòng này. */
+  returnedQuantity?: number | null;
+  /** Lý do trả thiếu — có lý do thì dòng thiếu vẫn tính là đã hoàn trả. */
+  returnNote?: string | null;
+  /** Hàng tái sử dụng (phải trả về kho); `false` là đồ tiêu hao, phát xong là xong. */
+  reusable?: boolean;
   adminNote: string | null;
   acceptedAt: string | null;
   preparedAt: string | null;
@@ -136,6 +143,13 @@ export interface Mission {
    * kho nên backend trả `false` cho cả nhiệm vụ chưa xuất hàng.
    */
   hasReturnableSupplies?: boolean;
+  /**
+   * Tiến độ hoàn trả theo TỪNG kho có vật tư tái sử dụng đã giao ra.
+   *
+   * Nhiệm vụ lấy hàng từ nhiều kho thì mỗi kho tự ký phần mình; chỉ khi mọi kho
+   * đã ký thì nhiệm vụ mới sang RETURNED.
+   */
+  supplyReturnProgress?: SupplyReturnProgress[];
   fulfillment: number;
   // Mô tả thô của trưởng thôn (mobile) khi mission là "hộp thư" báo cáo — web tự điền + phân tích.
   reportText?: string | null;
@@ -512,14 +526,14 @@ export const listMissions = (statuses?: MissionStatus[]) =>
 export type MissionInboxSort = "newest" | "oldest" | "most-people" | "fewest-people";
 /** Ô tìm kiếm đang nhắm vào trường nào. */
 export type MissionSearchField = "text" | "mission-no" | "affected-people";
-export type MissionInboxFilter = "all" | "needs-action" | "published";
+export type MissionInboxFilter = "all" | "needs-action" | "published" | "completed";
 
 export interface MissionInboxPage {
   items: Mission[];
   /** Số nhiệm vụ khớp bộ lọc hiện tại — cơ sở để chia trang. */
   total: number;
-  /** Tổng nhiệm vụ người này nhìn thấy được, KHÔNG theo bộ lọc. */
-  totalAll: number;
+  /** Số nhiệm vụ của từng bộ lọc trong phạm vi người này nhìn thấy, KHÔNG theo từ khoá tìm kiếm. */
+  filterTotals: Record<MissionInboxFilter, number>;
   page: number;
   pageSize: number;
   totalPages: number;
@@ -598,6 +612,22 @@ export const reportWarehouseRequestDiscrepancy = (requestId: string, note: strin
 export const prepareWarehouseRequest = (requestId: string) =>
   apiFetch<MissionWarehouseRequest>(`/api/missions/warehouse-requests/${requestId}/prepare`, {
     method: "POST",
+  });
+/**
+ * Tiếp nhận / xuất / ký nhận cả loạt vật tư của kho trong MỘT lượt gọi.
+ *
+ * Không lặp gọi từng dòng ở máy khách: mỗi lượt gọi lẻ tự báo điều phối một lần,
+ * nên mười dòng là mười tiếng chuông. Lượt hàng loạt ở máy chủ gửi một câu tổng.
+ * Ký nhận hàng loạt luôn là lấy ĐỦ số đã soạn.
+ */
+export const bulkWarehouseRequests = (
+  kind: "accept" | "prepare" | "pickup",
+  requestIds: string[],
+  notes?: Record<string, string>,
+) =>
+  apiFetch<{ done: number; total: number }>(`/api/missions/warehouse-requests/bulk`, {
+    method: "POST",
+    body: JSON.stringify({ kind, requestIds, notes }),
   });
 /** Người đi lấy ký nhận: cầm đi bao nhiêu, thiếu thì vì sao. */
 export const confirmWarehousePickup = (

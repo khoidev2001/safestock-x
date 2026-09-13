@@ -17,6 +17,12 @@ export interface CollapsiblePanelProps {
   /** Màu riêng cho tiêu đề, dùng cho khối cảnh báo. */
   tone?: string;
   defaultOpen?: boolean;
+  /**
+   * Điều khiển từ ngoài — dùng khi một nút NẰM TRONG tiêu đề cũng cần mở khối ra
+   * (ví dụ bấm thẻ kho để xem vật tư của kho đó). Bỏ trống thì khối tự giữ trạng thái.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   className?: string;
   /** Nền riêng, dùng cho khối đổi màu theo mức khẩn cấp. */
   style?: React.CSSProperties;
@@ -41,12 +47,15 @@ export function CollapsiblePanel({
   badge,
   tone,
   defaultOpen = true,
+  open: controlledOpen,
+  onOpenChange,
   className,
   style,
   headingId,
   children,
 }: CollapsiblePanelProps) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
+  const open = controlledOpen ?? uncontrolledOpen;
   /**
    * Có đang cắt phần thừa hay không.
    *
@@ -56,7 +65,7 @@ export function CollapsiblePanel({
    * ứng) bị xén mất một nửa. Nên chỉ cắt trong lúc chạy hoạt ảnh; mở xong thì
    * thả ra. Lúc đang gập thì cắt luôn, vì lúc đó chẳng có gì được phép thò ra.
    */
-  const [clipping, setClipping] = useState(!defaultOpen);
+  const [clipping, setClipping] = useState(!open);
 
   /*
     Thả cắt bằng ĐỒNG HỒ chứ không bằng `transitionend`.
@@ -67,7 +76,11 @@ export function CollapsiblePanel({
     bên trong đều có `transition`), nên nghe nó còn phải lọc thêm.
   */
   useEffect(() => {
-    if (!open) return;
+    // Bị đóng từ ngoài thì cắt ngay, như lúc tự bấm đóng.
+    if (!open) {
+      setClipping(true);
+      return;
+    }
     const timer = setTimeout(() => setClipping(false), COLLAPSE_MS + 40);
     return () => clearTimeout(timer);
   }, [open]);
@@ -78,30 +91,42 @@ export function CollapsiblePanel({
         type="button"
         onClick={() => {
           setClipping(true);
-          setOpen((current) => !current);
+          setUncontrolledOpen(!open);
+          onOpenChange?.(!open);
         }}
         aria-expanded={open}
-        className="flex w-full items-start gap-3 text-left"
+        /* Màn rộng: tiêu đề · huy hiệu · mũi tên chung một hàng, phụ đề dưới tiêu
+           đề. Điện thoại: tiêu đề và mũi tên ở hàng đầu, huy hiệu xuống hàng hai,
+           phụ đề trải hết bề ngang thẻ ở hàng ba.
+
+           Giữ nguyên bố cục màn rộng trên điện thoại thì huy hiệu "Mức 5/5 · Rất
+           cao" ăn mất gần nửa bề ngang: tiêu đề hai chữ bẻ thành ba dòng, và các
+           thẻ kho trong phụ đề bị ép thành cột chữ dựng đứng. */
+        className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 text-left sm:grid-cols-[minmax(0,1fr)_auto_auto]"
       >
-        <span className="min-w-0 flex-1">
-          <span
-            className="flex items-center gap-2 font-semibold"
-            style={tone ? { color: tone } : undefined}
-          >
-            {icon}
-            <span id={headingId}>{title}</span>
-          </span>
-          {subtitle ? (
-            <span className="mt-1 block text-sm text-[var(--text-muted)]">{subtitle}</span>
-          ) : null}
-        </span>
-        {badge ? <span className="shrink-0">{badge}</span> : null}
         <span
-          className={`shrink-0 transition-transform duration-300 ease-out motion-reduce:transition-none ${open ? "rotate-180" : ""}`}
+          className="col-start-1 row-start-1 flex min-w-0 items-center gap-2 font-semibold"
+          style={tone ? { color: tone } : undefined}
+        >
+          {icon}
+          <span id={headingId}>{title}</span>
+        </span>
+        {badge ? (
+          <span className="col-span-2 row-start-2 mt-2 justify-self-start sm:col-span-1 sm:col-start-2 sm:row-start-1 sm:mt-0">
+            {badge}
+          </span>
+        ) : null}
+        <span
+          className={`col-start-2 row-start-1 shrink-0 transition-transform duration-300 ease-out motion-reduce:transition-none sm:col-start-3 ${open ? "rotate-180" : ""}`}
           aria-hidden="true"
         >
           <ColorIcon name="down" size={18} tone="blue" />
         </span>
+        {subtitle ? (
+          <span className="col-span-2 row-start-3 mt-1 block text-sm text-[var(--text-muted)] sm:col-span-1 sm:col-start-1 sm:row-start-2">
+            {subtitle}
+          </span>
+        ) : null}
       </button>
       {/*
         Gập bằng lưới `0fr → 1fr` chứ không bằng `max-height` phỏng chừng.
@@ -115,7 +140,7 @@ export function CollapsiblePanel({
         vẫn đọc chúng.
       */}
       <div
-        className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out motion-reduce:transition-none ${
+        className={`grid grid-cols-1 transition-[grid-template-rows,opacity] duration-300 ease-out motion-reduce:transition-none ${
           open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
         }`}
         inert={!open}

@@ -146,7 +146,7 @@ function AnalysisBody({
   );
   return (
     <div className="mt-4 space-y-4">
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <SummaryMetric label="Trạng thái" value={statusLabel(analysis.status)} />
         <SummaryMetric
           label="Mức ưu tiên"
@@ -322,7 +322,10 @@ function DataTable({
           {rows.map((row, rowIndex) => (
             <tr key={`${row.join("-")}-${rowIndex}`} className="border-t">
               {row.map((cell, cellIndex) => (
-                <td key={`${cell}-${cellIndex}`} className="px-3 py-2 align-top">
+                // Mỗi cột chừa tối thiểu 7rem: ba cột chữ trong 300px bẻ tên kho
+                // thành cột dọc mỗi dòng một tiếng. Thiếu chỗ thì bảng cuộn ngang
+                // trong khung của nó.
+                <td key={`${cell}-${cellIndex}`} className="min-w-[7rem] px-3 py-2 align-top">
                   {cell}
                 </td>
               ))}

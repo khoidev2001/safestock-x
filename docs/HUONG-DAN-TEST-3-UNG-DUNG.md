@@ -41,9 +41,9 @@ Kiểm tra backend sống: `GET http://localhost:3110/api/health` phải trả
 | Tài khoản | Mật khẩu | Vai |
 |---|---|---|
 | `superadmindongxuan` | `admin123` | Quản trị xã |
-| `staff` | `staff123` | Phụ trách kho trung tâm |
-| `rescue` | `rescue123` | Đội cứu hộ |
-| `{tênthôn}` | `truongthon123` | Phụ trách kho thôn — ví dụ `phuson@`, `longchau@`, `triemduc@` |
+| `dongxuan` | `dongxuan123` | Phụ trách kho trung tâm |
+| `cuuhodongxuan` | `cuuho123` | Đội cứu hộ |
+| `{tênthôn}` | `{tênthôn}123` | Phụ trách kho thôn — ví dụ `phuson@`, `longchau@`, `triemduc@` |
 
 Hệ thống chỉ còn **ba vai**. Vai "trưởng thôn" riêng đã bị bỏ: người giữ kho thôn
 kiêm luôn việc báo tình huống của thôn mình, nên tách hai tài khoản chỉ thêm việc
@@ -77,7 +77,7 @@ giờ bị nó làm câm.
 | Tài khoản | ✅ | — | — |
 | Nhật ký | ✅ | — | — |
 
-Hiện trường chỉ thấy **2 mục**. Đây là điều đáng kiểm: đăng nhập `rescue@` trên
+Hiện trường chỉ thấy **2 mục**. Đây là điều đáng kiểm: đăng nhập `cuuhodongxuan` trên
 web mà thấy nhiều hơn hai mục là phân quyền hỏng.
 
 ### 2.2. Điện thoại — đúng hai giao diện
@@ -96,7 +96,7 @@ việc đối chiếu tồn và quyết định cho mượn thuộc người gi�
 ### 2.3. Desktop
 
 Đăng nhập bằng **`superadmindongxuan`** — chỉ vai này có quyền bơm số liệu mô phỏng. Đăng nhập
-bằng `staff@` sẽ vào được nhưng không gửi được snapshot.
+bằng `dongxuan` sẽ vào được nhưng không gửi được snapshot.
 
 ---
 
@@ -107,7 +107,7 @@ thống.
 
 ### Bước 1 — Hiện trường báo tình huống *(điện thoại)*
 
-1. Đăng nhập `rescue`.
+1. Đăng nhập `cuuhodongxuan`.
 2. Vào thẻ **Báo cáo**.
 3. Mô tả tình huống bằng **gõ tay** hoặc **bấm giữ micro** để nói tiếng Việt.
 4. Nếu dùng giọng nói: kiểm tra chữ hiện ra khớp lời nói, **sửa lại nếu sai**, rồi mới gửi.
@@ -130,7 +130,7 @@ vật tư **theo từng mã** cho từng kho liên quan.
 **Case biên đáng thử:** phát hành một báo cáo **chưa lập phương án** → phải bị từ
 chối. Không có phương án thì kho không biết chuẩn bị gì.
 
-### Bước 3 — Kho chuẩn bị theo từng vật tư *(web, tài khoản `staff@`)*
+### Bước 3 — Kho chuẩn bị theo từng vật tư *(web, tài khoản `dongxuan`)*
 
 1. Vào **Điều phối cứu hộ**, mở nhiệm vụ.
 2. Với **từng mã vật tư**: bấm **Tiếp nhận**, rồi **Đã chuẩn bị**.
@@ -146,7 +146,7 @@ bị cả gói một lần thì kho A phải chờ kho B mới ghi nhận đư�
 
 ### Bước 4 — Hiện trường đi giao và báo kết quả *(điện thoại)*
 
-1. Đăng nhập `rescue@`, vào thẻ **Lệnh**.
+1. Đăng nhập `cuuhodongxuan`, vào thẻ **Lệnh**.
 2. Nhiệm vụ ở trạng thái **Kho đã sẵn sàng · chờ giao**, có nút **Báo kết quả giao**.
 3. Chọn một trong ba: **Giao đủ** · **Giao một phần** · **Không giao được**.
 
@@ -170,7 +170,7 @@ kho thêm lần nữa**.
 
 ### 4.1. Web
 
-#### Nghiệp vụ kho hằng ngày *(tài khoản `staff@`)*
+#### Nghiệp vụ kho hằng ngày *(tài khoản `dongxuan`)*
 
 Vào **Vật tư**, thử lần lượt: nhập kho, xuất kho, chuyển kho/kệ, điều chỉnh, báo
 tình trạng, xuất hàng loạt.
@@ -190,7 +190,7 @@ chờ kiểm tra. Trộn hàng hỏng vào tồn tốt nghĩa là lần sau cấ
 
 #### Kiểm kê tháng
 
-1. `staff@` vào **Kiểm kê**, lập phiếu, nhập số đếm **theo từng lô**, gửi.
+1. `dongxuan` vào **Kiểm kê**, lập phiếu, nhập số đếm **theo từng lô**, gửi.
 2. `superadmindongxuan` vào **Báo cáo tháng**, duyệt.
 
 **Kỳ vọng:** khi một mã có nhiều lô, báo cáo **phải ghi rõ đếm được ở lô nào** —
@@ -201,15 +201,15 @@ chỉ thấy hàng trên kệ.
 
 #### Phân quyền
 
-- Đăng nhập `rescue@` → chỉ thấy **2 mục** trên thanh điều hướng.
-- Đăng nhập `staff@` → **không** thấy *Tài khoản* và *Nhật ký*.
-- Gõ thẳng địa chỉ `/users` bằng `staff@` → phải bị đẩy đi, không hiện nội dung.
+- Đăng nhập `cuuhodongxuan` → chỉ thấy **2 mục** trên thanh điều hướng.
+- Đăng nhập `dongxuan` → **không** thấy *Tài khoản* và *Nhật ký*.
+- Gõ thẳng địa chỉ `/users` bằng `dongxuan` → phải bị đẩy đi, không hiện nội dung.
 
 ### 4.2. Điện thoại
 
 #### Giao diện hiện trường
 
-Đăng nhập `rescue@`:
+Đăng nhập `cuuhodongxuan`:
 - Mở app vào thẳng **Lệnh điều phối**, không phải màn chung chung.
 - Có đúng **ba thẻ**: Lệnh · Báo cáo · Cảnh báo.
 - **Không** có thẻ Kho ở bất kỳ đâu.
@@ -218,7 +218,7 @@ chỉ thấy hàng trên kệ.
 
 #### Giao diện phụ trách kho
 
-Đăng nhập `staff@`:
+Đăng nhập `dongxuan`:
 - Sáu thẻ: Tổng quan · Sẵn sàng · Kho · Kiểm kê · Báo cáo · Cảnh báo.
 - Thẻ **Kho**: quét QR trên lô hàng để mượn/trả, và các thao tác nhập/xuất.
 - Thẻ **Báo cáo**: báo tình huống bằng giọng nói — cùng chức năng hiện trường có.

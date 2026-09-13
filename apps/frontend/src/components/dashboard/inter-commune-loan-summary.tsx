@@ -76,7 +76,7 @@ export function InterCommuneLoanSummary() {
         </p>
       ) : (
         <>
-          <div className="grid gap-4 p-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
             <LoanColumn
               // "Đang cho mượn" — hàng của mình đang nằm ở xã khác, mình là bên chờ nhận lại.
               emptyText="Không cho xã nào mượn."

@@ -7,7 +7,7 @@
 
 ## Phần 1 — Kho lập phiếu và đếm
 
-1. Đăng nhập `staff@` (hoặc tài khoản kho thôn), vào **Kiểm kê**.
+1. Đăng nhập `dongxuan` (hoặc tài khoản kho thôn), vào **Kiểm kê**.
 2. Chọn kỳ báo cáo, ví dụ `2026-07`.
 3. Bắt đầu kiểm kê — hệ thống liệt kê các lô đang có.
 4. Nhập **số đếm thực tế cho từng lô**.

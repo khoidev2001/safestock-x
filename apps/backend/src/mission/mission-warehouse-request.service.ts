@@ -41,6 +41,7 @@ export class MissionWarehouseRequestService {
     receivedQuantity: number,
     note: string | null | undefined,
     scopeWarehouseId?: string | null,
+    options: PerItemNoticeOptions = {},
   ) {
     const request = await this.prisma.missionWarehouseRequest.findUnique({
       where: { id: requestId },
@@ -121,7 +122,9 @@ export class MissionWarehouseRequestService {
         },
         `pickup thiếu SKU ${requestId}`,
       );
-    } else {
+    } else if (options.notifyAdmin !== false) {
+      // Ca THIẾU ở trên luôn báo, kể cả trong lượt hàng loạt: thiếu là chuyện của
+      // riêng dòng đó và không được gộp chìm vào câu tổng "đã ký nhận tất cả".
       await this.notify(
         {
           recipientRole: UserRole.ADMIN,
@@ -195,7 +198,13 @@ export class MissionWarehouseRequestService {
   }
 
   /** Kho xác nhận đã đọc và tiếp nhận một SKU; retry là idempotent. */
-  async accept(requestId: string, userId: string, scopeWarehouseId?: string | null, note?: string) {
+  async accept(
+    requestId: string,
+    userId: string,
+    scopeWarehouseId?: string | null,
+    note?: string,
+    options: PerItemNoticeOptions = {},
+  ) {
     const warehouseId = await this.resolveWarehouseId(userId, scopeWarehouseId);
     const accepted = await this.prisma.missionWarehouseRequest.updateMany({
       where: {
@@ -224,7 +233,7 @@ export class MissionWarehouseRequestService {
     ) {
       throw new BadRequestException("Yêu cầu không còn ở trạng thái chờ tiếp nhận");
     }
-    if (accepted.count === 1) {
+    if (accepted.count === 1 && options.notifyAdmin !== false) {
       await this.notify(
         {
           recipientRole: UserRole.ADMIN,
@@ -367,7 +376,12 @@ export class MissionWarehouseRequestService {
    * Claim, ledger export, request finalize, summary kho và mission READY cùng
    * transaction; retry không thể xuất cùng batch lần hai.
    */
-  async prepare(requestId: string, userId: string, scopeWarehouseId?: string | null) {
+  async prepare(
+    requestId: string,
+    userId: string,
+    scopeWarehouseId?: string | null,
+    options: PerItemNoticeOptions = {},
+  ) {
     const warehouseId = await this.resolveWarehouseId(userId, scopeWarehouseId);
     const claimToken = randomUUID();
     const result = await this.prisma.$transaction(async (tx) => {
@@ -508,18 +522,22 @@ export class MissionWarehouseRequestService {
         this.log.warn(`Recalc sau prepare SKU ${requestId} lỗi: ${message(error)}`),
       );
     await Promise.all([
-      this.notify(
-        {
-          recipientRole: UserRole.ADMIN,
-          kind: NotificationKind.WAREHOUSE_READY,
-          title: "Kho đã chuẩn bị xong một vật tư",
-          body: `${result.request.warehouse.name}: ${result.request.itemName} ${result.request.preparedQuantity} ${result.request.unit}.`,
-          missionId: result.request.missionId,
-          warehouseId: result.request.warehouseId,
-          organizationId: result.request.warehouse.organizationId,
-        },
-        `prepare SKU ${requestId}`,
-      ),
+      ...(options.notifyAdmin !== false
+        ? [
+            this.notify(
+              {
+                recipientRole: UserRole.ADMIN,
+                kind: NotificationKind.WAREHOUSE_READY,
+                title: "Kho đã chuẩn bị xong một vật tư",
+                body: `${result.request.warehouse.name}: ${result.request.itemName} ${result.request.preparedQuantity} ${result.request.unit}.`,
+                missionId: result.request.missionId,
+                warehouseId: result.request.warehouseId,
+                organizationId: result.request.warehouse.organizationId,
+              },
+              `prepare SKU ${requestId}`,
+            ),
+          ]
+        : []),
       /*
        * Gọi đội hiện trường NGAY KHI MỘT KHO xong phần của mình, không đợi cả
        * phương án xong.
@@ -569,6 +587,98 @@ export class MissionWarehouseRequestService {
     return result.request;
   }
 
+  /**
+   * Tiếp nhận / xuất / ký nhận cả loạt vật tư của MỘT kho trong MỘT nhiệm vụ, và báo
+   * điều phối đúng MỘT lần.
+   *
+   * Trước đây web và app tự lặp gọi từng dòng, mà mỗi dòng tự bắn một thông báo:
+   * bấm "xuất tất cả" cho mười món là chuông trên bảng điều phối kêu mười lần liền,
+   * và người trực phải tắt từng cái cho đúng một việc. Nay các dòng vẫn chạy đúng
+   * đường của từng dòng (cùng kiểm tra, cùng giao dịch kho) nhưng tắt câu báo riêng,
+   * rồi gửi một câu tổng cho cả kho.
+   *
+   * TUẦN TỰ và dừng ở lỗi đầu tiên, như vòng lặp cũ ở máy khách: mỗi dòng đụng vào
+   * tồn kho thật, chạy song song là tranh nhau đúng những lô hàng đó. Vỡ giữa chừng
+   * thì vẫn báo phần ĐÃ làm xong — những dòng đó là thay đổi thật ở kho.
+   *
+   * Những thông báo không theo từng dòng vẫn đi như cũ, vì chúng vốn chỉ nổ một lần:
+   * gọi đội tới lấy khi kho xuất nốt món cuối, gọi đội báo kết quả khi ký nhận nốt
+   * phiếu cuối, và báo THIẾU khi ký nhận hụt.
+   */
+  async bulk(
+    kind: BulkWarehouseRequestKind,
+    requestIds: string[],
+    userId: string,
+    scopeWarehouseId?: string | null,
+    notes: Record<string, string> = {},
+  ) {
+    const ids = [...new Set(requestIds)];
+    if (ids.length === 0) throw new BadRequestException("Chưa chọn vật tư nào");
+    const requests = await this.prisma.missionWarehouseRequest.findMany({
+      where: { id: { in: ids } },
+      include: {
+        warehouse: { select: { name: true, organizationId: true } },
+        mission: { select: { missionNo: true } },
+      },
+    });
+    if (requests.length !== ids.length) {
+      throw new NotFoundException("Không tìm thấy yêu cầu vật tư");
+    }
+    // Câu tổng nói "kho X đã xuất tất cả" — chỉ đúng khi cả loạt thuộc một kho của
+    // một nhiệm vụ. Loạt trộn nhiều kho thì không có câu tổng nào nói thật được.
+    const first = requests[0];
+    if (
+      requests.some(
+        (request) =>
+          request.warehouseId !== first.warehouseId || request.missionId !== first.missionId,
+      )
+    ) {
+      throw new BadRequestException(
+        "Chỉ làm hàng loạt cho vật tư của cùng một kho trong cùng một nhiệm vụ",
+      );
+    }
+    assertWarehouseInScope(scopeWarehouseId, first.warehouseId);
+
+    const byId = new Map(requests.map((request) => [request.id, request]));
+    const done: typeof requests = [];
+    let failure: { itemName: string; reason: string } | null = null;
+    for (const id of ids) {
+      const request = byId.get(id)!;
+      try {
+        if (kind === "accept") {
+          const note = typeof notes[id] === "string" ? notes[id] : undefined;
+          await this.accept(id, userId, scopeWarehouseId, note, { notifyAdmin: false });
+        } else if (kind === "prepare") {
+          await this.prepare(id, userId, scopeWarehouseId, { notifyAdmin: false });
+        } else {
+          // Hàng loạt = LẤY ĐỦ số đã soạn. Dòng lấy thiếu phải ký riêng kèm lý do.
+          await this.confirmPickup(id, userId, request.preparedQuantity, null, scopeWarehouseId, {
+            notifyAdmin: false,
+          });
+        }
+        done.push(request);
+      } catch (error) {
+        failure = { itemName: request.itemName, reason: message(error) };
+        break;
+      }
+    }
+
+    if (done.length > 0) {
+      await this.notify(
+        bulkSummaryNotice(kind, done, ids.length),
+        `${kind} hàng loạt ${done.length}/${ids.length} SKU của kho ${first.warehouseId}`,
+      );
+    }
+    if (failure) {
+      throw new BadRequestException(
+        done.length === 0
+          ? `Không làm được dòng nào: ${failure.reason}`
+          : `Đã xong ${done.length}/${ids.length} dòng rồi dừng ở “${failure.itemName}”: ${failure.reason}`,
+      );
+    }
+    return { done: done.length, total: ids.length };
+  }
+
   private async resolveWarehouseId(
     userId: string,
     scopeWarehouseId?: string | null,
@@ -584,10 +694,26 @@ export class MissionWarehouseRequestService {
     return user.warehouseId;
   }
 
+  /**
+   * Gửi thông báo, và báo mọi màn hình đang mở nhiệm vụ đó tải lại.
+   *
+   * Mọi thay đổi trạng thái của yêu cầu vật tư đều đi qua đây (lượt hàng loạt tắt
+   * câu báo của từng dòng nhưng luôn gửi câu tổng), nên đây là chỗ duy nhất phải
+   * nhớ phát tín hiệu. Thông báo chỉ tới vai được gọi tên — ký nhận bàn giao chỉ
+   * báo điều phối — còn tín hiệu tải lại tới cả xã: đội cứu hộ đang xem danh sách
+   * điểm lấy hàng phải thấy kho vừa bàn giao xong mà không cần một tiếng chuông.
+   */
   private async notify(input: Parameters<NotificationService["create"]>[0], context: string) {
     await this.notifications.create(input).catch((error) => {
       this.log.warn(`Tạo thông báo ${context} lỗi: ${message(error)}`);
     });
+    if (input.organizationId && input.missionId) {
+      try {
+        this.notifications.broadcastMissionUpdate?.(input.organizationId, input.missionId);
+      } catch (error) {
+        this.log.warn(`Phát tín hiệu cập nhật ${context} lỗi: ${message(error)}`);
+      }
+    }
   }
 }
 
@@ -607,4 +733,66 @@ function message(error: unknown): string {
 /** "Nhiệm vụ số 145" — tên người trực gọi nhau; bản ghi cũ chưa có số thì lùi về tên chung. */
 function missionLabel(missionNo?: number | null): string {
   return missionNo != null ? `Nhiệm vụ số ${missionNo}` : "Nhiệm vụ";
+}
+
+export type BulkWarehouseRequestKind = "accept" | "prepare" | "pickup";
+
+/** Tắt câu báo điều phối của riêng từng dòng — lượt hàng loạt tự gửi một câu tổng. */
+interface PerItemNoticeOptions {
+  notifyAdmin?: boolean;
+}
+
+/** Số vật tư kể tên trong câu tổng; dài hơn thì gói thành "và N vật tư khác". */
+const BULK_NOTICE_ITEM_LIMIT = 5;
+
+function bulkSummaryNotice(
+  kind: BulkWarehouseRequestKind,
+  done: {
+    missionId: string;
+    warehouseId: string;
+    itemName: string;
+    unit: string;
+    requestedQuantity: number;
+    preparedQuantity: number;
+    warehouse: { name: string; organizationId: string };
+    mission: { missionNo: number | null };
+  }[],
+  total: number,
+): Parameters<NotificationService["create"]>[0] {
+  const first = done[0];
+  const complete = done.length === total;
+  const verb = kind === "accept" ? "tiếp nhận" : kind === "prepare" ? "xuất" : "ký nhận";
+  const scope = complete ? "tất cả" : `${done.length}/${total}`;
+  const title =
+    kind === "accept"
+      ? `Kho đã tiếp nhận ${scope} yêu cầu vật tư`
+      : kind === "prepare"
+        ? `Kho đã xuất ${scope} vật tư`
+        : `Đội cứu hộ đã ký nhận ${scope} vật tư`;
+  const listed = done
+    .slice(0, BULK_NOTICE_ITEM_LIMIT)
+    .map((request) => {
+      const quantity = kind === "accept" ? request.requestedQuantity : request.preparedQuantity;
+      return `${request.itemName} ${quantity} ${request.unit}`;
+    })
+    .join(", ");
+  const rest =
+    done.length > BULK_NOTICE_ITEM_LIMIT
+      ? ` và ${done.length - BULK_NOTICE_ITEM_LIMIT} vật tư khác`
+      : "";
+  // Dừng giữa chừng thì nói luôn trong câu: điều phối đọc "3/10" mà không biết là
+  // kho còn đang làm hay đã vỡ thì sẽ ngồi chờ bảy dòng không bao giờ tới.
+  const stopped = complete ? "" : " Lượt hàng loạt dừng giữa chừng, các dòng còn lại chưa xong.";
+  return {
+    recipientRole: UserRole.ADMIN,
+    kind:
+      kind === "accept"
+        ? NotificationKind.WAREHOUSE_REQUEST_ACCEPTED
+        : NotificationKind.WAREHOUSE_READY,
+    title,
+    body: `${missionLabel(first.mission.missionNo)}: ${first.warehouse.name} đã ${verb} ${done.length} vật tư — ${listed}${rest}.${stopped}`,
+    missionId: first.missionId,
+    warehouseId: first.warehouseId,
+    organizationId: first.warehouse.organizationId,
+  };
 }

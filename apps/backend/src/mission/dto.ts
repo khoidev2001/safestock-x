@@ -1,6 +1,9 @@
 import { Type } from "class-transformer";
 import {
   ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
+  IsObject,
   Equals,
   IsEnum,
   IsISO8601,
@@ -111,6 +114,26 @@ export class ConfirmPickupDto {
   @IsString()
   @MaxLength(1_000)
   note?: string;
+}
+
+/** Tiếp nhận / xuất / ký nhận cả loạt vật tư của một kho — xem `MissionWarehouseRequestService.bulk`. */
+export class BulkWarehouseRequestDto {
+  @IsIn(["accept", "prepare", "pickup"])
+  kind!: "accept" | "prepare" | "pickup";
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(200)
+  @IsString({ each: true })
+  requestIds!: string[];
+
+  /**
+   * Ghi chú kho gõ sẵn ở từng dòng, theo id yêu cầu — chỉ dùng khi tiếp nhận. Độ dài
+   * mỗi ghi chú do bước tiếp nhận của từng dòng kiểm, như lượt gọi lẻ.
+   */
+  @IsOptional()
+  @IsObject()
+  notes?: Record<string, string>;
 }
 
 export class ReviewWarehouseRequestDto {
@@ -373,6 +396,15 @@ export class SupplyReturnItemDto {
   @Min(0)
   @Max(1_000_000)
   returnedQuantity!: number;
+
+  /**
+   * Lý do trả THIẾU (mất, hỏng không mang về được…). Có lý do thì dòng trả thiếu
+   * vẫn tính là đã hoàn trả; về đủ thì máy chủ bỏ qua trường này.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
 }
 
 /**

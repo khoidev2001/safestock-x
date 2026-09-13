@@ -16,6 +16,8 @@ Chưa có ảnh nào thì slide vẫn dựng được — chỗ đó hiện khun
 | `hien-truong-1.jpg` | 04 — Hiện trường | Người mặc áo phao đứng trên mái nhà, nước ngập gần tới mái | — |
 | `hien-truong-2.jpg` | 04 — Hiện trường | Mặt đường bị nước xé toạc, giao thông bị chia cắt | Báo Thanh Niên |
 | `hien-truong-3.jpg` | 04 — Hiện trường | Trao vật tư cứu trợ từ xuồng cho người dân đứng dưới nước | Báo Thanh Niên |
+| `ai-tham-muu.png` | 09 — AI tham mưu | Chụp màn hình form “Quy mô ảnh hưởng” sau khi AI đã phân tích lời kể | Chụp màn hình hệ thống |
+| `chon-kho.png` | 11 — Chọn kho tiếp tế | Chụp màn hình “Thứ tự lấy hàng (gần đến xa)” | Chụp màn hình hệ thống |
 | `thu-quan-tam.jpg` | 24 — Thư quan tâm | Ảnh chụp lá thư của Hội Chữ thập đỏ xã Đồng Xuân | Nhóm tự chụp |
 
 Script tự xoay ảnh theo hướng chụp của điện thoại và tự cắt vào vùng có nội dung

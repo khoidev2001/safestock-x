@@ -155,10 +155,10 @@ export function ReportScreen({ token, user }: { token: string; user: AuthUser })
       // Nói ra lỗi thật, đừng nuốt. Câu chung chung "chưa sẵn sàng" khiến mọi
       // nguyên nhân — mất mạng, hết hạn phiên, model chưa nạp — trông giống hệt
       // nhau, và người trực không biết nên chờ hay nên gõ tay.
-      const chiTiet = error instanceof Error ? error.message.trim() : "";
+      const detail = error instanceof Error ? error.message.trim() : "";
       setVoiceError(
-        chiTiet
-          ? `Không nhận dạng được: ${chiTiet}. Vui lòng thử lại hoặc gõ tay.`
+        detail
+          ? `Không nhận dạng được: ${detail}. Vui lòng thử lại hoặc gõ tay.`
           : "Nhận dạng giọng nói chưa sẵn sàng — vui lòng gõ tay.",
       );
     } finally {

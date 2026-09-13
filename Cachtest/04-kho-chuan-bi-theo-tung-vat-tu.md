@@ -34,7 +34,7 @@ Tiến độ hiển thị dạng `x/y đã chuẩn bị` để biết còn chờ
 Ví dụ thật đã chạy:
 
 ```
-Kho trung tâm  (staff@)         → 1 mã   → chuẩn bị xong → vẫn Chờ kho chuẩn bị
+Kho trung tâm  (dongxuan)        → 1 mã   → chuẩn bị xong → vẫn Chờ kho chuẩn bị
 Kho thôn Long Châu (longchau@)   → 4 mã  → chuẩn bị xong → Sẵn sàng
 ```
 
@@ -58,7 +58,7 @@ sách. Muốn đóng nhiệm vụ thì phải báo kết quả giao, kể cả k
 ```bash
 API=http://localhost:3110/api
 STAFF=$(curl -s -H 'Content-Type: application/json' \
-  -d '{"email":"staff","password":"staff123"}' \
+  -d '{"email":"dongxuan","password":"dongxuan123"}' \
   $API/auth/login | grep -o '"accessToken":"[^"]*' | cut -d'"' -f4)
 
 # xem việc của kho mình

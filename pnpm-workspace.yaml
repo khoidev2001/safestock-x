@@ -24,15 +24,38 @@ overrides:
   "@expo/config-plugins>glob": "10.5.0"
   "@expo/metro-config>glob": "10.5.0"
   "@expo/metro-config>postcss": "8.5.23"
-  "@expo/plist>@xmldom/xmldom": "0.8.13"
+  "@expo/plist>@xmldom/xmldom": "0.8.15"
   "@nestjs/config>lodash": "4.18.1"
-  "ajv>fast-uri": "3.1.4"
+  "@nestjs/platform-express>multer": "2.3.0"
+  "ajv>fast-uri": "3.1.7"
+  "baseline-browser-mapping": "2.11.23"
+  "browserslist": "4.28.9"
   "cacache@18.0.4>tar": "7.5.22"
   "brace-expansion": "file:./packages/brace-expansion-compat"
+  "js-yaml@3": "3.15.2"
+  "js-yaml@4": "4.3.2"
   "next>postcss": "8.5.23"
-  "next>sharp": "0.35.3"
-  "qs": "6.15.2"
+  "next>sharp": "0.35.4"
+  "plist>@xmldom/xmldom": "0.9.12"
+  "postcss>nanoid": "3.3.19"
+  "qs": "6.16.0"
+  "socket.io-parser": "4.2.7"
+  "undici@6": "6.28.1"
   "uuid": "11.1.1"
+
+# Cảnh báo được bỏ qua CÓ CHỦ Ý, mỗi dòng phải kèm lý do.
+#
+# image-size (GHSA-w3rx-r6r6-pgpr, GHSA-5p2g-fcmc-qvqq): lỗi từ chối dịch vụ khi
+# đọc ảnh ICNS/JXL/HEIF độc hại. Mọi bản phát hành (tới 2.0.2) đều dính và CHƯA
+# CÓ BẢN VÁ, nên ghim phiên bản không giải quyết được. Gói chỉ đi vào qua metro —
+# bộ đóng gói của React Native chạy trên máy lập trình để đọc kích thước ảnh
+# trong mã nguồn app — không nằm trong app đã build, không chạy trên máy chủ và
+# không bao giờ đọc ảnh do người dùng gửi lên. Gỡ dòng này ngay khi image-size
+# có bản vá.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-w3rx-r6r6-pgpr
+    - GHSA-5p2g-fcmc-qvqq
 
 packageExtensions:
   "@react-native-community/netinfo@11.4.1":

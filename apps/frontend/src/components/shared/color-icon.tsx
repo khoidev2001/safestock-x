@@ -22,7 +22,9 @@ import {
   FileExcel,
   FileSearch,
   FileText,
+  FirstAidKit,
   Fire,
+  Flashlamp,
   FullScreenOne,
   HeavyRain,
   Help,
@@ -50,12 +52,14 @@ import {
   Protection,
   Refresh,
   Remind,
+  Rice,
   Robot,
   Right,
   Save,
   Send,
   Strongbox,
   Target,
+  Tent,
   Thermometer,
   Thunderstorm,
   Time,
@@ -66,6 +70,7 @@ import {
   Upload,
   User,
   VoiceOne,
+  Water,
   WaterLevel,
   WaterNo,
 } from "@icon-park/react";
@@ -154,6 +159,12 @@ const icons = {
   satellite: Earth,
   mapFlat: MapTwo,
   microphone: VoiceOne,
+  // Hình của từng nhóm vật tư cứu trợ — xem `SupplyGroupHeading`.
+  supplyFood: Rice,
+  supplyWater: Water,
+  supplyShelter: Tent,
+  supplyMedical: FirstAidKit,
+  supplyPower: Flashlamp,
 } satisfies Record<string, IconParkComponent>;
 
 const palettes = {

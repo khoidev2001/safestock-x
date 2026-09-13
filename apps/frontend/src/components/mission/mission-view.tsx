@@ -918,6 +918,7 @@ export function MissionView({
       role={role}
       assignedWarehouseId={assignedWarehouseId}
       missionStatus={mission.status}
+      supplyReturnProgress={mission.supplyReturnProgress}
     />
   ) : null;
 
@@ -1310,7 +1311,7 @@ export function MissionView({
 
               Đường kẻ đổi chiều theo cách xếp: dọc khi hai cột nằm cạnh nhau, ngang
               khi màn hình hẹp và chúng chồng lên nhau. */}
-          <div className="mt-5 grid gap-6 lg:grid-cols-2 lg:gap-0">
+          <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-2 lg:gap-0">
             <div className="min-w-0 lg:pr-7">
               <h3 className="flex items-center gap-2 text-sm font-semibold">
                 <ColorIcon name="users" size={17} tone="blue" />
@@ -1757,14 +1758,29 @@ function RoleActions({
     (mission.warehouseRequests?.length ?? 0) === 0 &&
     (Boolean(assignedPreparation && !assignedPreparation.preparedAt) || isLegacySourceWarehouse);
   /**
+   * Tiến độ hoàn trả theo từng kho.
+   *
+   * Mỗi kho chỉ ký được phần CHÍNH MÌNH đã giao ra. Trước đây một kho bấm là cả
+   * nhiệm vụ bị ghi "đã hoàn trả", kể cả phần của những kho chưa hề đếm lại.
+   */
+  const returnProgress = mission.supplyReturnProgress;
+  const ownReturn = assignedWarehouseId
+    ? returnProgress?.find((item) => item.warehouseId === assignedWarehouseId)
+    : undefined;
+  const pendingReturnWarehouses = (returnProgress ?? []).filter((item) => !item.returned);
+  const returnedWarehouseCount = (returnProgress ?? []).length - pendingReturnWarehouses.length;
+  /**
    * Kho này bấm được nút "đã hoàn trả" chưa.
    *
-   * Điều kiện là nhiệm vụ ĐÃ GIAO XONG (COMPLETED) và người đang xem là kho. Không
-   * đòi kho đó phải có phiếu riêng: hàng thừa thường dồn về một chỗ chứ không chia
-   * lại đúng như lúc xuất, nên bắt từng kho ký riêng là treo nhiệm vụ ở kho không
-   * có gì để nhận về. Máy chủ vẫn chốt lại là kho đó có tham gia nhiệm vụ.
+   * Nhiệm vụ ĐÃ GIAO XONG (COMPLETED), người đang xem là kho, và kho đó còn phần
+   * vật tư tái sử dụng chưa nhận lại. Kho đã ký xong phần mình, hay kho không giao
+   * ra thứ gì phải trả, thì không còn gì để bấm. Máy chủ cũ không trả tiến độ theo
+   * kho thì giữ hành vi cũ.
    */
-  const warehouseCanConfirmReturn = role === "WAREHOUSE" && mission.status === "COMPLETED";
+  const warehouseCanConfirmReturn =
+    role === "WAREHOUSE" &&
+    mission.status === "COMPLETED" &&
+    (returnProgress ? Boolean(ownReturn && !ownReturn.returned) : true);
   /**
    * Nhiệm vụ không có vật tư tái sử dụng nào đang nằm ngoài kho.
    *
@@ -1950,9 +1966,27 @@ function RoleActions({
           </div>
         )}
 
+        {isWarehouse && mission.status === "COMPLETED" && !nothingToReturn && returnProgress && (
+          <>
+            {ownReturn?.returned && (
+              <p className="w-full text-sm text-[var(--color-ready)]">
+                Kho của bạn đã xác nhận nhận lại đủ phần vật tư mình giao ra.
+              </p>
+            )}
+            {!ownReturn && (
+              <p className="w-full text-sm text-[var(--text-muted)]">
+                Kho của bạn không giao vật tư tái sử dụng nào trong nhiệm vụ này — không có gì phải
+                nhận lại.
+              </p>
+            )}
+          </>
+        )}
+
         {isReturned && !nothingToReturn && (
           <p className="text-sm text-[var(--color-ready)]">
-            Kho đã nhận lại vật tư — nhiệm vụ khép lại.
+            {(returnProgress?.length ?? 0) > 1
+              ? "Tất cả kho đã nhận lại vật tư — nhiệm vụ khép lại."
+              : "Kho đã nhận lại vật tư — nhiệm vụ khép lại."}
           </p>
         )}
 
@@ -1960,7 +1994,9 @@ function RoleActions({
           <p className="text-sm text-[var(--text-muted)]">
             {nothingToReturn
               ? "Không cần trả vật tư — nhiệm vụ không có gì để thu hồi."
-              : "Đang chờ kho đếm lại và xác nhận đã hoàn trả vật tư."}
+              : returnProgress && returnProgress.length > 1
+                ? `Đang chờ các kho đếm lại và xác nhận hoàn trả: ${returnedWarehouseCount}/${returnProgress.length} kho đã nhận lại (xem từng kho ở khối "Chuẩn bị vật tư theo SKU").`
+                : "Đang chờ kho đếm lại và xác nhận đã hoàn trả vật tư."}
           </p>
         )}
 
@@ -2725,7 +2761,7 @@ function IncidentFormTable({
                 đúng ô, và trình đọc màn hình đọc được ô này đang hỏi cái gì. */}
             <th
               scope="row"
-              className="w-1/2 bg-[var(--surface-2)] text-left font-medium text-[var(--text-muted)]"
+              className="w-[42%] bg-[var(--surface-2)] text-left font-medium text-[var(--text-muted)] sm:w-1/2"
             >
               <label className="block cursor-pointer px-3 py-2" htmlFor={row.id}>
                 {row.label}
@@ -2794,7 +2830,7 @@ function IncidentSummaryTable({
             <tr key={row.label}>
               <th
                 scope="row"
-                className="w-1/2 bg-[var(--surface-2)] px-3 py-2 text-left font-medium text-[var(--text-muted)]"
+                className="w-[42%] bg-[var(--surface-2)] px-3 py-2 text-left font-medium text-[var(--text-muted)] sm:w-1/2"
               >
                 {row.label}
               </th>

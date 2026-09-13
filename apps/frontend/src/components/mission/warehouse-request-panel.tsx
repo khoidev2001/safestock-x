@@ -3,13 +3,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { CollapsiblePanel } from "@/components/shared/collapsible-panel";
-import {
-  BULK_ACTION_LABEL,
-  planBulkAction,
-  warehouseProgress,
-} from "./warehouse-request-progress";
+import { BULK_ACTION_LABEL, planBulkAction, warehouseProgress } from "./warehouse-request-progress";
 import {
   acceptWarehouseRequest,
+  bulkWarehouseRequests,
   confirmWarehousePickup,
   prepareWarehouseRequest,
   reportWarehouseRequestDiscrepancy,
@@ -17,6 +14,7 @@ import {
   type MissionStatus,
   type MissionWarehouseRequest,
 } from "@/lib/mission-api";
+import type { SupplyReturnProgress } from "@/lib/mission-inbox-state";
 
 export function WarehouseRequestPanel({
   missionId,
@@ -24,6 +22,7 @@ export function WarehouseRequestPanel({
   role,
   assignedWarehouseId,
   missionStatus,
+  supplyReturnProgress,
 }: {
   missionId: string;
   requests: MissionWarehouseRequest[];
@@ -31,6 +30,11 @@ export function WarehouseRequestPanel({
   assignedWarehouseId?: string | null;
   /** Nhiệm vụ đã đóng thì khối này thu gọn — xem chú thích ở `CollapsiblePanel` bên dưới. */
   missionStatus: MissionStatus;
+  /**
+   * Tiến độ hoàn trả theo kho (chỉ kho có vật tư tái sử dụng đã giao ra). Để trống
+   * là máy chủ chưa trả thông tin này — thẻ kho giữ nguyên như cũ.
+   */
+  supplyReturnProgress?: SupplyReturnProgress[];
 }) {
   const queryClient = useQueryClient();
   /**
@@ -42,6 +46,12 @@ export function WarehouseRequestPanel({
    * bấm gì.
    */
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(null);
+  /**
+   * Khối đang mở hay gập. `null` = chưa ai bấm, chạy theo mặc định: nhiệm vụ đã
+   * đóng thì gập. Giữ ở đây chứ không để khối tự giữ, vì bấm thẻ kho trên tiêu đề
+   * cũng phải MỞ khối ra — không thì chọn kho xong chẳng thấy vật tư nào.
+   */
+  const [panelOpenChoice, setPanelOpenChoice] = useState<boolean | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [actionError, setActionError] = useState<string | null>(null);
@@ -106,49 +116,34 @@ export function WarehouseRequestPanel({
    * soạn sẵn chứ không xét từng món. Bắt bấm mười lần giữa lúc lũ đang lên là bắt họ
    * trả giá cho một chi tiết của phần mềm.
    *
-   * CHẠY TUẦN TỰ, không `Promise.all`. Mỗi lượt gọi đều đụng vào tồn kho và ghi giao
-   * dịch; bắn song song thì backend phải chịu mười giao dịch cùng lúc trên cùng một
-   * lô hàng, và lỗi tranh chấp sẽ nổ ra ở đúng chỗ khó lần nhất. Chậm hơn vài trăm
-   * mili-giây, đổi lại thứ tự rõ ràng và biết chính xác dừng ở dòng nào.
+   * MỘT lượt gọi máy chủ, không lặp gọi từng dòng ở đây: mỗi lượt gọi lẻ tự báo điều
+   * phối một lần, nên "xuất tất cả" mười món từng làm chuông điều phối kêu mười lần.
+   * Máy chủ vẫn chạy tuần tự từng dòng, dừng ở lỗi đầu tiên và nói rõ đã xong mấy
+   * dòng — rồi gửi đúng một câu tổng cho cả kho.
+   *
+   * Tiếp nhận hàng loạt mang theo ghi chú đã gõ sẵn ở từng dòng. Ký nhận hàng loạt
+   * luôn là lấy ĐỦ — dòng nào có số khác đã bị loại khỏi danh sách này từ trước
+   * (xem `bulkPickupRows`).
    */
   const bulkAction = useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       kind,
       requests: targets,
     }: {
       kind: "accept" | "prepare" | "pickup";
       requests: MissionWarehouseRequest[];
-    }) => {
-      let done = 0;
-      for (const request of targets) {
-        try {
-          if (kind === "accept") {
-            await acceptWarehouseRequest(request.id, notes[request.id]?.trim() || undefined);
-          } else if (kind === "prepare") {
-            await prepareWarehouseRequest(request.id);
-          } else {
-            // Hàng loạt = LẤY ĐỦ. Dòng nào người dùng đã gõ số khác đều bị loại khỏi
-            // danh sách này từ trước (xem `bulkPickupRows`), nên ở đây không có ca
-            // nào phải đoán xem họ định ký nhận bao nhiêu.
-            await confirmWarehousePickup(request.id, {
-              receivedQuantity: request.preparedQuantity,
-            });
-          }
-          done += 1;
-        } catch (error) {
-          // Nói rõ ĐÃ XONG MẤY DÒNG trước khi vỡ. Chỉ ném lỗi gốc thì người dùng
-          // không biết nên bấm lại cả loạt hay chỉ còn vài dòng cuối — mà bấm lại
-          // cả loạt sau khi bảy dòng đã xuất là chuyện phải tránh.
-          const reason = error instanceof Error ? error.message : "lỗi không rõ";
-          throw new Error(
-            done === 0
-              ? `Không làm được dòng nào: ${reason}`
-              : `Đã xong ${done}/${targets.length} dòng rồi dừng ở “${request.itemName}”: ${reason}`,
-          );
-        }
-      }
-      return done;
-    },
+    }) =>
+      bulkWarehouseRequests(
+        kind,
+        targets.map((request) => request.id),
+        kind === "accept"
+          ? Object.fromEntries(
+              targets
+                .map((request) => [request.id, notes[request.id]?.trim() ?? ""] as const)
+                .filter(([, note]) => note !== ""),
+            )
+          : undefined,
+      ),
     onMutate: () => setActionError(null),
     onSuccess: (_, variables) => {
       setNotes((current) => {
@@ -174,9 +169,14 @@ export function WarehouseRequestPanel({
   });
 
   if (requests.length === 0) return null;
-  // Kho đăng nhập chỉ được xem phần của chính mình — thẻ kho khác vẫn hiện để họ
-  // biết cả đoàn còn nợ ai, nhưng không mở ra được từng dòng vật tư của kho đó.
-  const lockedToOwnWarehouse = role === "WAREHOUSE" && Boolean(assignedWarehouseId);
+  /*
+    Thẻ kho nào cũng bấm được để XEM vật tư của kho đó, kể cả với tài khoản kho.
+    Xem chứ không làm hộ: mọi nút thao tác trên từng dòng vẫn chỉ hiện cho đúng
+    kho của người đang đăng nhập (`isOwnWarehouse` bên dưới).
+  */
+  const panelOpen = panelOpenChoice ?? missionStatus !== "COMPLETED";
+  const ownWarehouseListed =
+    role === "WAREHOUSE" && requests.some((request) => request.warehouseId === assignedWarehouseId);
   // Đã xuất gồm cả khoản đã có người ký nhận mang đi — không thì kho vừa làm
   // xong lại lùi về "chưa xong" ngay lúc người lấy hàng ký tên.
   const preparedCount = requests.filter(
@@ -186,6 +186,19 @@ export function WarehouseRequestPanel({
   // chưa ai tới lấy thì việc chưa xong — người cần vẫn chưa có.
   const pickedUpCount = requests.filter((request) => request.status === "PICKED_UP").length;
   const warehouseProgressRows = warehouseProgress(requests);
+  /**
+   * Trạng thái hoàn trả của một kho, chỉ có nghĩa sau khi đội đã giao xong.
+   *
+   * Mỗi kho tự ký phần mình đã giao ra, nên thẻ của từng kho phải nói riêng kho
+   * đó đã nhận lại chưa — không suy từ trạng thái chung của nhiệm vụ.
+   */
+  const returnStateOf = (warehouseId: string): "returned" | "pending" | "none" | null => {
+    if (!supplyReturnProgress) return null;
+    if (missionStatus !== "COMPLETED" && missionStatus !== "RETURNED") return null;
+    const entry = supplyReturnProgress.find((item) => item.warehouseId === warehouseId);
+    if (!entry) return "none";
+    return entry.returned ? "returned" : "pending";
+  };
 
   /**
    * Danh sách bên dưới chỉ hiện vật tư của MỘT kho.
@@ -202,10 +215,11 @@ export function WarehouseRequestPanel({
   const selectedStillExists = warehouseProgressRows.some(
     (row) => row.warehouseId === selectedWarehouseId,
   );
-  const activeWarehouseId = lockedToOwnWarehouse
-    ? (assignedWarehouseId as string)
-    : selectedStillExists
-      ? (selectedWarehouseId as string)
+  // Chưa chọn kho nào thì tài khoản kho mở sẵn phần của chính mình.
+  const activeWarehouseId = selectedStillExists
+    ? (selectedWarehouseId as string)
+    : ownWarehouseListed
+      ? (assignedWarehouseId as string)
       : (warehouseProgressRows[0]?.warehouseId ?? null);
   const activeWarehouseName =
     warehouseProgressRows.find((row) => row.warehouseId === activeWarehouseId)?.name ?? null;
@@ -232,11 +246,9 @@ export function WarehouseRequestPanel({
     <CollapsiblePanel
       /* THU GỌN khi hiện trường đã gửi kết quả: bảng này là việc phải làm của kho,
          nhiệm vụ đóng rồi thì không còn dòng nào chờ ai bấm. Dòng tóm tắt "x/y vật
-         tư kho đã xuất" vẫn đọc được lúc gập nên không mất thông tin nào.
-
-         `key` đổi theo cờ vì `CollapsiblePanel` chỉ đọc `defaultOpen` lúc dựng. */
-      key={missionStatus === "COMPLETED" ? "nhiem-vu-da-dong" : "nhiem-vu-dang-chay"}
-      defaultOpen={missionStatus !== "COMPLETED"}
+         tư kho đã xuất" vẫn đọc được lúc gập nên không mất thông tin nào. */
+      open={panelOpen}
+      onOpenChange={setPanelOpenChoice}
       headingId="warehouse-request-title"
       title="Chuẩn bị vật tư theo SKU"
       subtitle={
@@ -252,58 +264,66 @@ export function WarehouseRequestPanel({
           <span className="mt-2 flex flex-wrap gap-1.5">
             {warehouseProgressRows.map((warehouse) => {
               const isActive = warehouse.warehouseId === activeWarehouseId;
-              const selectable = !lockedToOwnWarehouse;
-              const select = () => setSelectedWarehouseId(warehouse.warehouseId);
+              const select = () => {
+                setSelectedWarehouseId(warehouse.warehouseId);
+                setPanelOpenChoice(true);
+              };
+              const returnState = returnStateOf(warehouse.warehouseId);
               return (
                 <span
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                    selectable ? "cursor-pointer" : ""
-                  }`}
+                  // `flex-wrap` + từng mẩu `whitespace-nowrap`: thẻ hẹp hơn nội dung
+                  // thì cả mẩu "0/5 đã xuất" xuống dòng trong thẻ. Không có hai lớp
+                  // này, mỗi mẩu tự co lại và bẻ chữ từng tiếng — thẻ thành cột chữ
+                  // dựng đứng bo tròn như quả bóng. Bo góc vừa phải ở màn hẹp vì
+                  // thẻ hai dòng mà bo `rounded-full` thì hai đầu phình thành hình
+                  // viên thuốc méo.
+                  className="inline-flex max-w-full cursor-pointer flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-2xl border px-2.5 py-1 text-xs font-semibold sm:rounded-full"
                   key={warehouse.warehouseId}
                   /* Thẻ nằm TRONG nút gập/mở của khối, nên không dùng <button> lồng
                    nhau được — HTML không cho, và một cú bấm sẽ vừa chọn kho vừa
                    gập cả khối lại. `role="button"` + chặn nổi bọt cho đúng một
                    việc xảy ra, giống nút "Lập bản tham mưu" trong khối tham mưu. */
-                  role={selectable ? "button" : undefined}
-                  tabIndex={selectable ? 0 : undefined}
-                  aria-pressed={selectable ? isActive : undefined}
-                  onClick={
-                    selectable
-                      ? (event) => {
-                          event.stopPropagation();
-                          select();
-                        }
-                      : undefined
-                  }
-                  onKeyDown={
-                    selectable
-                      ? (event) => {
-                          if (event.key !== "Enter" && event.key !== " ") return;
-                          event.preventDefault();
-                          event.stopPropagation();
-                          select();
-                        }
-                      : undefined
-                  }
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={isActive}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    select();
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    select();
+                  }}
                   style={{
-                    ...(warehouse.done
+                    ...(returnState === "pending"
                       ? {
-                          borderColor: "var(--color-ready)",
-                          color: "var(--color-ready)",
-                          background: "color-mix(in srgb, var(--color-ready) 10%, transparent)",
+                          // Đội đã lấy đủ nhưng kho chưa nhận lại hàng: còn việc, nên
+                          // không được xanh như đã xong.
+                          borderColor: "var(--color-attention)",
+                          color: "var(--color-attention)",
+                          background: "color-mix(in srgb, var(--color-attention) 12%, transparent)",
                         }
-                      : warehouse.awaitingPickup
+                      : warehouse.done
                         ? {
-                            borderColor: "var(--color-accent)",
-                            color: "var(--color-accent)",
-                            background: "color-mix(in srgb, var(--color-accent) 10%, transparent)",
+                            borderColor: "var(--color-ready)",
+                            color: "var(--color-ready)",
+                            background: "color-mix(in srgb, var(--color-ready) 10%, transparent)",
                           }
-                        : {
-                            borderColor: "var(--color-attention)",
-                            color: "var(--color-attention)",
-                            background:
-                              "color-mix(in srgb, var(--color-attention) 12%, transparent)",
-                          }),
+                        : warehouse.awaitingPickup
+                          ? {
+                              borderColor: "var(--color-accent)",
+                              color: "var(--color-accent)",
+                              background:
+                                "color-mix(in srgb, var(--color-accent) 10%, transparent)",
+                            }
+                          : {
+                              borderColor: "var(--color-attention)",
+                              color: "var(--color-attention)",
+                              background:
+                                "color-mix(in srgb, var(--color-attention) 12%, transparent)",
+                            }),
                     // Vòng ngoài cho thẻ đang mở, vẽ bằng chính màu trạng thái của thẻ
                     // (`currentColor`) nên nó không cướp mất nghĩa của ba màu xanh /
                     // cam / vàng. Dùng box-shadow chứ không đổi bề dày viền: đổi viền
@@ -318,13 +338,22 @@ export function WarehouseRequestPanel({
                   <span aria-hidden="true">
                     {warehouse.done ? "✓" : warehouse.awaitingPickup ? "→" : "•"}
                   </span>
-                  {warehouse.name}
-                  <span className="font-mono font-normal">
+                  <span className="min-w-0">{warehouse.name}</span>
+                  <span className="whitespace-nowrap font-mono font-normal">
                     {/* Hiện số ĐỘI ĐÃ KÝ khi kho xuất xong — đó mới là việc còn lại. */}
                     {warehouse.awaitingPickup || warehouse.done
                       ? `${warehouse.pickedUp}/${warehouse.total} đã lấy`
                       : `${warehouse.prepared}/${warehouse.total} đã xuất`}
                   </span>
+                  {returnState === "returned" && (
+                    <span className="whitespace-nowrap">· đã hoàn trả vật tư</span>
+                  )}
+                  {returnState === "pending" && (
+                    <span className="whitespace-nowrap">· chưa hoàn trả vật tư</span>
+                  )}
+                  {returnState === "none" && (
+                    <span className="whitespace-nowrap font-normal">· không cần hoàn trả</span>
+                  )}
                   <span className="sr-only">
                     {warehouse.done
                       ? " — đội đã ký nhận đủ"
@@ -386,8 +415,7 @@ export function WarehouseRequestPanel({
           {activeWarehouseName ? (
             <p className="text-xs text-[var(--text-muted)]">
               Đang xem <b className="text-[var(--text)]">{activeWarehouseName}</b> —{" "}
-              {visible.length} vật tư
-              {lockedToOwnWarehouse ? "" : ". Bấm thẻ kho phía trên để xem kho khác."}
+              {visible.length} vật tư. Bấm thẻ kho phía trên để xem kho khác.
             </p>
           ) : null}
 
@@ -420,8 +448,8 @@ export function WarehouseRequestPanel({
             </div>
           ) : partialPickupCount > 0 ? (
             <p className="rounded-md border border-dashed p-3 text-xs text-[var(--text-muted)]">
-              {partialPickupCount} vật tư đang khai lấy thiếu — ký riêng từng dòng kèm lý do,
-              không ký gộp được.
+              {partialPickupCount} vật tư đang khai lấy thiếu — ký riêng từng dòng kèm lý do, không
+              ký gộp được.
             </p>
           ) : null}
           <div className="divide-y rounded-md border">
@@ -526,10 +554,12 @@ export function WarehouseRequestPanel({
                     </p>
                   ) : null}
 
+                  <ReturnStatusLine request={request} missionStatus={missionStatus} />
+
                   {isOwnWarehouse && request.status === "PREPARED" ? (
                     <div className="mt-3 space-y-2 rounded-md border p-3">
                       <p className="text-xs font-semibold">Người đi lấy ký nhận</p>
-                      <div className="grid gap-2 sm:grid-cols-[140px_1fr]">
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[140px_1fr]">
                         <div>
                           <label
                             className="block text-xs font-medium"
@@ -588,7 +618,7 @@ export function WarehouseRequestPanel({
                   ) : null}
 
                   {role === "ADMIN" && request.status !== "PREPARED" && request.warehouseNote ? (
-                    <div className="mt-3 grid gap-2 sm:grid-cols-[140px_1fr_auto]">
+                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[140px_1fr_auto]">
                       <label className="sr-only" htmlFor={`request-quantity-${request.id}`}>
                         Số lượng duyệt lại
                       </label>
@@ -639,6 +669,58 @@ export function WarehouseRequestPanel({
         </p>
       ) : null}
     </CollapsiblePanel>
+  );
+}
+
+/**
+ * Tình trạng hoàn trả của MỘT dòng vật tư, chỉ sau khi đội đã giao xong.
+ *
+ * Đồ tiêu hao không có gì để trả nên không ghi gì; hàng tái sử dụng thì nói rõ
+ * về đủ, trả thiếu kèm lý do, hay kho chưa đếm lại.
+ */
+function ReturnStatusLine({
+  request,
+  missionStatus,
+}: {
+  request: MissionWarehouseRequest;
+  missionStatus: MissionStatus;
+}) {
+  if (missionStatus !== "COMPLETED" && missionStatus !== "RETURNED") return null;
+  const handedOver = request.pickedUpQuantity ?? 0;
+  if (handedOver <= 0 || request.reusable === undefined) return null;
+  if (!request.reusable) {
+    return (
+      <p className="mt-2 text-xs text-[var(--text-muted)]">Đồ tiêu hao — không cần hoàn trả.</p>
+    );
+  }
+  const returned = request.returnedQuantity;
+  if (returned == null) {
+    return (
+      <p className="mt-2 text-sm font-medium text-[var(--color-attention)]">
+        Chưa hoàn trả — kho chưa đếm lại {handedOver} {request.unit} đã giao.
+      </p>
+    );
+  }
+  if (returned >= handedOver) {
+    return (
+      <p className="mt-2 text-sm font-medium text-[var(--color-ready)]">
+        ✓ Đã hoàn trả đủ {returned}/{handedOver} {request.unit}
+      </p>
+    );
+  }
+  const shortfall = handedOver - returned;
+  if (request.returnNote?.trim()) {
+    return (
+      <p className="mt-2 rounded-md border border-amber-300/60 bg-amber-50/60 p-2.5 text-sm dark:bg-amber-950/20">
+        ✓ Đã hoàn trả {returned}/{handedOver} {request.unit} — thiếu {shortfall}. Lý do:{" "}
+        {request.returnNote}
+      </p>
+    );
+  }
+  return (
+    <p className="mt-2 text-sm font-medium text-[var(--color-attention)]">
+      Mới trả {returned}/{handedOver} {request.unit} — còn thiếu {shortfall}, chưa ghi lý do.
+    </p>
   );
 }
 

@@ -85,16 +85,16 @@ async function main() {
     //    viễn, không còn gì giải thích vì sao — đúng cái bẫy nêu ở đầu tệp. Còn
     //    đảo lại thì sai kiểu khác: một chu kỳ mượn-rồi-trả đã tự khép sổ, đảo
     //    thêm lần nữa là cộng khống. Nên ở đây dừng lại và BÁO RA để người xử tay.
-    const chuaDongKho = await tx.interCommuneLoan.deleteMany({
+    const untouchedLoans = await tx.interCommuneLoan.deleteMany({
       where: { status: { in: ["REQUESTED", "REJECTED", "CANCELLED"] } },
     });
-    if (chuaDongKho.count > 0) {
-      console.log(`Da xoa ${chuaDongKho.count} khoan muon lien xa chua dong toi kho.`);
+    if (untouchedLoans.count > 0) {
+      console.log(`Da xoa ${untouchedLoans.count} khoan muon lien xa chua dong toi kho.`);
     }
-    const conLai = await tx.interCommuneLoan.count();
-    if (conLai > 0) {
+    const remainingLoanCount = await tx.interCommuneLoan.count();
+    if (remainingLoanCount > 0) {
       console.log(
-        `CHU Y: con ${conLai} khoan muon lien xa da chuyen hang that. ` +
+        `CHU Y: con ${remainingLoanCount} khoan muon lien xa da chuyen hang that. ` +
           "Khong tu xoa vi se lam lech ton kho — xem man Muon tra va xu tay neu can.",
       );
     }

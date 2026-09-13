@@ -102,7 +102,7 @@ export function ReadinessOverview(props: ReadinessOverviewProps) {
         <div className="divide-y">
           {readiness.dimensions.map((dimension) => (
             <div
-              className="grid gap-2 px-5 py-3 md:grid-cols-[180px_150px_1fr]"
+              className="grid grid-cols-1 gap-2 px-5 py-3 md:grid-cols-[180px_150px_1fr]"
               key={dimension.key}
             >
               <div>

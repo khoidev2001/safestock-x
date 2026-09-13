@@ -49,6 +49,12 @@ export interface NotificationTarget {
 export type NotificationPusher = (target: NotificationTarget, notification: unknown) => void;
 
 /**
+ * Báo "nhiệm vụ này vừa đổi dữ liệu" cho mọi vai trong xã — KHÔNG phải thông báo:
+ * không lưu, không chuông, không thẻ. Màn hình đang mở đúng nhiệm vụ đó tự tải lại.
+ */
+export type MissionUpdateBroadcaster = (organizationId: string, missionId: string) => void;
+
+/**
  * Đẩy xuống điện thoại — gắn lúc chạy giống hệt cách gateway gắn `push`.
  *
  * Tách hẳn khỏi đường socket vì hai kênh trả lời hai câu hỏi khác nhau: socket lo
@@ -57,7 +63,13 @@ export type NotificationPusher = (target: NotificationTarget, notification: unkn
  */
 export type DevicePusher = (
   target: NotificationTarget,
-  notification: { title: string; body: string; kind?: string; missionId?: string | null; missionNo?: number | null },
+  notification: {
+    title: string;
+    body: string;
+    kind?: string;
+    missionId?: string | null;
+    missionNo?: number | null;
+  },
 ) => void;
 
 interface PersistedNotification {
@@ -114,6 +126,12 @@ export class NotificationService {
 
   /** Gateway assigns this for realtime delivery; tests can leave it as a no-op. */
   push: NotificationPusher = () => {};
+  /**
+   * Gateway gắn lúc chạy. Có kênh này vì không phải thay đổi nào cũng đáng một tiếng
+   * chuông cho mọi vai: kho ký nhận bàn giao chỉ báo điều phối, nhưng màn hình của
+   * đội cứu hộ đang mở nhiệm vụ đó vẫn phải đổi theo ngay.
+   */
+  broadcastMissionUpdate: MissionUpdateBroadcaster = () => {};
   /** Mặc định không làm gì: máy chủ chưa cấu hình FCM thì hệ thống vẫn chạy trọn vẹn. */
   pushToDevices: DevicePusher = () => {};
 

@@ -151,10 +151,10 @@ Mở giao diện: **http://localhost:3200**
 | Tài khoản | Mật khẩu | Vai trò / phạm vi |
 |---|---|---|
 | `superadmindongxuan` | `admin123` | ADMIN — toàn xã, bản đồ, người dùng, lập Mission |
-| `staff` | `staff123` | Vận hành kho trung tâm |
-| `rescue` | `rescue123` | Đội cứu hộ |
-| `longchau` | `truongthon123` | Kho thôn Long Châu, kiêm báo cáo tình huống của thôn mình |
-| `phuson@` `triemduc@` `kydu@` `phuochue@` `tanbinh@` … | `truongthon123` | 17 kho thôn, tên đăng nhập là tên thôn bỏ dấu viết liền |
+| `dongxuan` | `dongxuan123` | Vận hành kho trung tâm |
+| `cuuhodongxuan` | `cuuho123` | Đội cứu hộ |
+| `longchau` | `longchau123` | Kho thôn Long Châu, kiêm báo cáo tình huống của thôn mình |
+| `phuson@` `triemduc@` `kydu@` `phuochue@` `tanbinh@` … | `<tên đăng nhập>123` | 17 kho thôn, tên đăng nhập là tên thôn bỏ dấu viết liền |
 
 > Đây là mật khẩu **development**. Trước khi public phải đổi hết (mục §12
 > trong [HUONG-DAN-CAI-DAT-VA-CHAY.md](HUONG-DAN-CAI-DAT-VA-CHAY.md)).

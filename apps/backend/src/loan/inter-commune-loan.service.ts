@@ -660,7 +660,7 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
     if (!sku) throw new BadRequestException("Cần chọn vật tư hoặc nhập mã lô");
 
     const organizationId = await this.orgOf(input.userId);
-    const trongKho = input.scopeWarehouseId
+    const shelfScope = input.scopeWarehouseId
       ? { zone: { warehouseId: input.scopeWarehouseId } }
       : { zone: { warehouse: { organizationId } } };
 
@@ -681,9 +681,9 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
         circulation: "IN_STOCK",
         quantity: { gt: 0 },
         // Gộp bằng `AND` chứ KHÔNG trải bằng `...`: `exportableBatchWhere` cũng có
-        // khoá `shelf` (kệ không bị khoá), trải ra là nó đè mất `shelf: trongKho`
+        // khoá `shelf` (kệ không bị khoá), trải ra là nó đè mất `shelf: shelfScope`
         // và câu lệnh lặng lẽ lấy lô của kho bất kỳ, kể cả của xã khác.
-        AND: [{ shelf: trongKho }, exportableBatchWhere()],
+        AND: [{ shelf: shelfScope }, exportableBatchWhere()],
       },
       orderBy: [{ expiryDate: "asc" }, { createdAt: "asc" }],
       select: { id: true },
@@ -693,15 +693,15 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
     // Phân biệt "không có gì" với "có nhưng không xuất được": hai tình huống này
     // cần hai việc làm khác hẳn nhau, mà một câu chung thì người trực không biết
     // nên đi nhập hàng hay đi sửa trạng thái lô.
-    const coNhungKhongXuatDuoc = await this.prisma.itemBatch.count({
+    const unexportableCount = await this.prisma.itemBatch.count({
       where: {
         item: { sku },
         circulation: "IN_STOCK",
         quantity: { gt: 0 },
-        shelf: trongKho,
+        shelf: shelfScope,
       },
     });
-    if (coNhungKhongXuatDuoc > 0) {
+    if (unexportableCount > 0) {
       throw new BadRequestException(
         `Kho có ${sku} nhưng không lô nào xuất được: hoặc đã hết hạn, hoặc hỏng, ` +
           "hoặc đang bảo trì / chờ kiểm tra, hoặc nằm trên kệ đang bị khoá. " +
@@ -742,21 +742,21 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
     //
     // Không ai đi tìm hàng ở kho thôn khi chính mình vừa mượn cho xã. Nên khi
     // không biết kho cụ thể thì nhắm vào KHO TRUNG TÂM của xã.
-    const khoTrungTam = input.scopeWarehouseId
+    const centralWarehouse = input.scopeWarehouseId
       ? null
       : await this.prisma.warehouse.findFirst({
           where: { organizationId, kind: "CENTRAL" },
           orderBy: { createdAt: "asc" },
           select: { id: true },
         });
-    const khoNhan = input.scopeWarehouseId ?? khoTrungTam?.id ?? null;
-    const scope = khoNhan
-      ? { zone: { warehouseId: khoNhan } }
+    const receivingWarehouseId = input.scopeWarehouseId ?? centralWarehouse?.id ?? null;
+    const scope = receivingWarehouseId
+      ? { zone: { warehouseId: receivingWarehouseId } }
       : { zone: { warehouse: { organizationId } } };
 
-    const timLo = (trongKho: Prisma.ShelfWhereInput) =>
+    const findBatch = (shelfScope: Prisma.ShelfWhereInput) =>
       this.prisma.itemBatch.findFirst({
-        where: { item: { sku: input.itemSku }, circulation: "IN_STOCK", shelf: trongKho },
+        where: { item: { sku: input.itemSku }, circulation: "IN_STOCK", shelf: shelfScope },
         // Lô còn hàng đứng trước lô đã hết, rồi tới hạn gần nhất.
         orderBy: [{ quantity: "desc" }, { expiryDate: "asc" }, { createdAt: "asc" }],
         select: { id: true },
@@ -765,9 +765,9 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
     // Kho trung tâm chưa từng có mặt hàng này thì không còn chỗ nhập, và chặn ở
     // đây là chặn oan. Lùi ra cả tổ chức như cũ, chứ đừng bắt người ta tạo lô mới
     // giữa lúc đang nhận hàng.
-    let batch = await timLo(scope);
-    if (!batch && khoNhan) {
-      batch = await timLo({ zone: { warehouse: { organizationId } } });
+    let batch = await findBatch(scope);
+    if (!batch && receivingWarehouseId) {
+      batch = await findBatch({ zone: { warehouse: { organizationId } } });
     }
     if (!batch) {
       throw new BadRequestException(
@@ -802,7 +802,7 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
     // Ghi tay chiều "đi mượn" có hiệu ứng CỘNG — hàng đã vào kho mình. Bản cũ vẫn
     // gọi bộ chọn của chiều TRỪ, tức đòi kho phải đang còn hàng mới ghi được. Mà
     // ghi tay đi mượn là lúc kho vừa cạn đúng mặt hàng ấy nên mới phải mượn.
-    const hieuUngKho = manualEntryStockEffect(input.direction);
+    const entryStockEffect = manualEntryStockEffect(input.direction);
     // Chiều TRỪ tự kiểm mã rỗng trong `pickBatchForSku`, chiều CỘNG thì không —
     // để lọt mã rỗng xuống đó là truy vấn khớp rỗng rồi báo một câu khó hiểu.
     if (!input.batchId?.trim() && !input.itemSku?.trim()) {
@@ -810,14 +810,14 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
     }
     const batchId =
       input.batchId?.trim() ||
-      (await this.pickBatchForLoanMove(hieuUngKho === "ADD" ? "ADD" : "DEDUCT", {
+      (await this.pickBatchForLoanMove(entryStockEffect === "ADD" ? "ADD" : "DEDUCT", {
         itemSku: input.itemSku ?? "",
         userId: input.userId,
         scopeWarehouseId: input.scopeWarehouseId,
       }));
     const batch = await this.batchInfo(batchId);
 
-    const effect = hieuUngKho;
+    const effect = entryStockEffect;
     const requestId = `loan-manual-${batchId}-${Date.now()}`;
     await this.moveStock(effect, {
       userId: input.userId,
@@ -1132,15 +1132,15 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
       throw new ForbiddenException("Chỉ xã cho mượn mới xác nhận nhận lại hàng được");
     }
 
-    const conChoNhan = loan.returnedQuantity - loan.returnAcceptedQuantity;
-    if (conChoNhan <= 0) {
+    const pendingAcceptance = loan.returnedQuantity - loan.returnAcceptedQuantity;
+    if (pendingAcceptance <= 0) {
       throw new BadRequestException("Không có phần nào đang chờ nhận lại");
     }
-    const nhanLanNay = input.quantity ?? conChoNhan;
-    this.assertQuantity(nhanLanNay);
-    if (nhanLanNay > conChoNhan) {
+    const acceptQuantity = input.quantity ?? pendingAcceptance;
+    this.assertQuantity(acceptQuantity);
+    if (acceptQuantity > pendingAcceptance) {
       throw new BadRequestException(
-        `Nhận ${nhanLanNay} là vượt phần đang chờ nhận (${conChoNhan}/${loan.quantity})`,
+        `Nhận ${acceptQuantity} là vượt phần đang chờ nhận (${pendingAcceptance}/${loan.quantity})`,
       );
     }
 
@@ -1152,15 +1152,15 @@ export class InterCommuneLoanService implements OnApplicationBootstrap {
     await this.moveStock("ADD", {
       userId: input.userId,
       batchId,
-      quantity: nhanLanNay,
+      quantity: acceptQuantity,
       note: `Mượn liên xã với ${loan.peerCommuneName} — xác nhận nhận lại hàng`,
       scopeWarehouseId: input.scopeWarehouseId ?? loan.warehouseId,
-      requestId: `loan-accept-${loan.id}-${loan.returnAcceptedQuantity + nhanLanNay}`,
+      requestId: `loan-accept-${loan.id}-${loan.returnAcceptedQuantity + acceptQuantity}`,
     });
 
     return this.prisma.interCommuneLoan.update({
       where: { id: loan.id },
-      data: { returnAcceptedQuantity: loan.returnAcceptedQuantity + nhanLanNay },
+      data: { returnAcceptedQuantity: loan.returnAcceptedQuantity + acceptQuantity },
     });
   }
 

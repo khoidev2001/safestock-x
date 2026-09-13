@@ -6,7 +6,7 @@ import {
   Logger,
   NotFoundException,
 } from "@nestjs/common";
-import { ItemCondition, ItemStatus, LoanStatus, Prisma, TransactionSource } from "@prisma/client";
+import { ItemCondition, LoanStatus, Prisma, TransactionSource } from "@prisma/client";
 import { TransactionType } from "@safestock/shared-types";
 import { PrismaService } from "../prisma/prisma.service";
 import { ReadinessService } from "../readiness/readiness.service";
