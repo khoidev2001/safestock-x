@@ -291,6 +291,9 @@ importers:
         specifier: ^5.0.0
         version: 5.0.14(@types/react@19.2.17)(react@19.2.7)
     devDependencies:
+      '@next/eslint-plugin-next':
+        specifier: ^15.5.22
+        version: 15.5.22
       '@tailwindcss/postcss':
         specifier: ^4.0.0
         version: 4.3.2
