@@ -1,5 +1,5 @@
 import { useNetInfo } from "@react-native-community/netinfo";
-import { ErrorLine } from "./error-banner";
+import { ErrorBanner, ErrorLine } from "./error-banner";
 import {
   CameraView as ExpoCameraView,
   useCameraPermissions,
@@ -667,6 +667,9 @@ export function InventoryScreen({ token, user }: { token: string; user: AuthUser
             </Pressable>
           </View>
         </View>
+        {/* Biểu mẫu là cửa sổ riêng đè lên app: dải lỗi của app nằm bên dưới
+            và bị che. Dải gắn ở đây mở sau nên nhận lỗi thay. */}
+        <ErrorBanner bottom={24} />
       </Modal>
 
       <QrScanner
@@ -1080,6 +1083,9 @@ function BatchActionModal({
           </View>
         </ScrollView>
       </View>
+      {/* Biểu mẫu là cửa sổ riêng đè lên app: dải lỗi của app nằm bên dưới
+          và bị che. Dải gắn ở đây mở sau nên nhận lỗi thay. */}
+      <ErrorBanner bottom={24} />
     </Modal>
   );
 }
@@ -1151,6 +1157,9 @@ function ReturnLoanModal({
           </View>
         </View>
       </View>
+      {/* Biểu mẫu là cửa sổ riêng đè lên app: dải lỗi của app nằm bên dưới
+          và bị che. Dải gắn ở đây mở sau nên nhận lỗi thay. */}
+      <ErrorBanner bottom={24} />
     </Modal>
   );
 }
@@ -1331,6 +1340,9 @@ function ReceiveBatchModal({
           </View>
         </ScrollView>
       </View>
+      {/* Biểu mẫu là cửa sổ riêng đè lên app: dải lỗi của app nằm bên dưới
+          và bị che. Dải gắn ở đây mở sau nên nhận lỗi thay. */}
+      <ErrorBanner bottom={24} />
     </Modal>
   );
 }
@@ -1472,6 +1484,9 @@ function BulkExportModal({
           </View>
         </View>
       </View>
+      {/* Biểu mẫu là cửa sổ riêng đè lên app: dải lỗi của app nằm bên dưới
+          và bị che. Dải gắn ở đây mở sau nên nhận lỗi thay. */}
+      <ErrorBanner bottom={24} />
     </Modal>
   );
 }
@@ -1551,6 +1566,9 @@ function QrScanner({
           </>
         )}
       </View>
+      {/* Biểu mẫu là cửa sổ riêng đè lên app: dải lỗi của app nằm bên dưới
+          và bị che. Dải gắn ở đây mở sau nên nhận lỗi thay. */}
+      <ErrorBanner bottom={24} />
     </Modal>
   );
 }

@@ -14,6 +14,7 @@ import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-nativ
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import {
   ERROR_BANNER_VISIBLE_MS,
+  createErrorChannel,
   nextErrorBanner,
   type ErrorBanner as ErrorBannerData,
 } from "./error-banner-state";
@@ -28,11 +29,16 @@ type Listener = (message: string) => void;
  * `catch` của một hàm bất đồng bộ, chỗ không có hook nào dùng được. Context sẽ
  * bắt mọi hàm như thế phải nhận thêm tham số, hoặc phải bọc lại bằng hook.
  */
-const listeners = new Set<Listener>();
+const channel = createErrorChannel();
 
-/** Hiện dải lỗi. Gọi được từ bất cứ đâu, kể cả ngoài component. */
+/**
+ * Hiện dải lỗi. Gọi được từ bất cứ đâu, kể cả ngoài component.
+ *
+ * Lỗi đi tới dải gắn SAU CÙNG — xem `createErrorChannel` về chuyện biểu mẫu mở
+ * bằng `Modal` che mất dải của app.
+ */
 export function showError(message: string): void {
-  for (const listener of listeners) listener(message);
+  channel.emit(message);
 }
 
 /**
@@ -50,7 +56,11 @@ export function ErrorLine({ error }: { error: string | null | undefined }) {
 }
 
 /** Dải lỗi. Gắn một lần, đặt SAU nội dung để nó nằm trên cùng. */
-export function ErrorBanner() {
+/**
+ * `bottom`: khoảng cách tới đáy. Mặc định chừa chỗ cho thanh tab; trong một biểu
+ * mẫu toàn màn hình không có thanh tab thì hạ thấp xuống sát đáy.
+ */
+export function ErrorBanner({ bottom = 76 }: { bottom?: number } = {}) {
   const [banner, setBanner] = useState<ErrorBannerData | null>(null);
   const enter = useRef(new Animated.Value(0)).current;
 
@@ -58,10 +68,7 @@ export function ErrorBanner() {
     const listener: Listener = (message) => {
       setBanner((current) => nextErrorBanner(current, message, Date.now()));
     };
-    listeners.add(listener);
-    return () => {
-      listeners.delete(listener);
-    };
+    return channel.subscribe(listener);
   }, []);
 
   useEffect(() => {
@@ -84,6 +91,7 @@ export function ErrorBanner() {
     <Animated.View
       style={[
         local.wrap,
+        { bottom },
         {
           opacity: enter,
           transform: [

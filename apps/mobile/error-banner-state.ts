@@ -57,3 +57,35 @@ export function nextErrorBanner(
 export function isBannerExpired(banner: ErrorBanner, startedAt: number, now: number): boolean {
   return now - startedAt >= ERROR_BANNER_VISIBLE_MS;
 }
+
+/**
+ * Kênh phát lỗi: CHỈ dải được gắn SAU CÙNG nhận lỗi.
+ *
+ * VÌ SAO KHÔNG PHÁT CHO TẤT CẢ: các biểu mẫu kho mở bằng `Modal`, tức một CỬA SỔ
+ * RIÊNG đè lên toàn bộ ứng dụng. Dải lỗi gắn ở gốc app nằm BÊN DƯỚI cửa sổ đó,
+ * nên lỗi phát cho nó là lỗi bị chính biểu mẫu che mất: bấm "Xác nhận" xuất quá
+ * tồn, nút quay "Đang xử lý…" rồi trở về, không một chữ — người trực không biết
+ * vì sao kho không trừ.
+ *
+ * Nên mỗi biểu mẫu tự gắn một dải bên trong cửa sổ của nó. Dải mở sau cùng là
+ * dải đang nằm trên cùng màn hình, nên nó nhận lỗi; biểu mẫu đóng thì dải của nó
+ * gỡ ra và lỗi lại về dải bên dưới. Phát cho tất cả thì lỗi hiện hai lần, một
+ * lần trong tầm mắt và một lần nằm chờ phía sau, rồi bật ra khi biểu mẫu đóng.
+ */
+export function createErrorChannel() {
+  const stack: ((message: string) => void)[] = [];
+  return {
+    subscribe(listener: (message: string) => void): () => void {
+      stack.push(listener);
+      return () => {
+        // Gỡ đúng listener này, không phải phần tử cuối: hai biểu mẫu có thể
+        // đóng không theo thứ tự đã mở.
+        const index = stack.lastIndexOf(listener);
+        if (index >= 0) stack.splice(index, 1);
+      };
+    },
+    emit(message: string): void {
+      stack[stack.length - 1]?.(message);
+    },
+  };
+}

@@ -15,7 +15,7 @@ import {
   type CameraViewProps,
 } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
-import { ErrorLine } from "./error-banner";
+import { ErrorBanner, ErrorLine } from "./error-banner";
 import {
   ActivityIndicator,
   Image,
@@ -2002,6 +2002,9 @@ function CompletedReportPanel({ token, mission }: { token: string; mission: Miss
           ) : null}
           <Text style={local.viewerHint}>Chạm để đóng</Text>
         </Pressable>
+        {/* Biểu mẫu là cửa sổ riêng đè lên app: dải lỗi của app nằm bên dưới
+            và bị che. Dải gắn ở đây mở sau nên nhận lỗi thay. */}
+        <ErrorBanner bottom={24} />
       </Modal>
     </View>
   );
@@ -2115,6 +2118,9 @@ function EvidenceCamera({
           </>
         )}
       </View>
+      {/* Biểu mẫu là cửa sổ riêng đè lên app: dải lỗi của app nằm bên dưới
+          và bị che. Dải gắn ở đây mở sau nên nhận lỗi thay. */}
+      <ErrorBanner bottom={24} />
     </Modal>
   );
 }

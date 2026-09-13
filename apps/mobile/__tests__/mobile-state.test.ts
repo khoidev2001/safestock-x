@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { foldVietnamese } from "../vietnamese-text";
 import {
+  createErrorChannel,
   ERROR_BANNER_VISIBLE_MS,
   isBannerExpired,
   nextErrorBanner,
@@ -1175,4 +1176,42 @@ test("tài khoản kho vẫn thấy kho khác, nên nhãn 'còn chờ …' hiệ
   // Bản ngoại tuyến cũ chưa có trường mới: lùi về danh sách đang có.
   assert.equal(crossWarehouseRequests({ warehouseRequests: mission.warehouseRequests }).length, 1);
   assert.deepEqual(crossWarehouseRequests(null), []);
+});
+
+test("lỗi tới dải mở SAU CÙNG — biểu mẫu đè lên app không che mất lỗi", () => {
+  /*
+    Lỗi đã thấy trên máy thật: xuất quá tồn trong biểu mẫu Xuất kho, máy chủ từ
+    chối nhưng không một chữ nào hiện ra. Biểu mẫu là cửa sổ riêng, dải lỗi của
+    app nằm bên dưới nó; phát lỗi cho dải đó là phát vào chỗ không ai nhìn thấy.
+  */
+  const channel = createErrorChannel();
+  const app: string[] = [];
+  const form: string[] = [];
+  channel.subscribe((m) => app.push(m));
+  const closeForm = channel.subscribe((m) => form.push(m));
+
+  channel.emit("Vượt quá tồn kho");
+  assert.deepEqual(form, ["Vượt quá tồn kho"]);
+  // KHÔNG phát thêm cho dải bên dưới: nó sẽ bật ra khi biểu mẫu đóng, hiện lại
+  // một lỗi người dùng đã đọc rồi.
+  assert.deepEqual(app, []);
+
+  closeForm();
+  channel.emit("Mất kết nối");
+  assert.deepEqual(app, ["Mất kết nối"]);
+});
+
+test("đóng biểu mẫu không theo thứ tự đã mở vẫn trả lỗi về đúng dải trên cùng", () => {
+  const channel = createErrorChannel();
+  const got: string[] = [];
+  channel.subscribe((m) => got.push(`app:${m}`));
+  const closeA = channel.subscribe((m) => got.push(`A:${m}`));
+  channel.subscribe((m) => got.push(`B:${m}`));
+  // Gỡ A (ở giữa) trước B: không được gỡ nhầm B chỉ vì B nằm cuối.
+  closeA();
+  channel.emit("x");
+  assert.deepEqual(got, ["B:x"]);
+  // Không còn ai nghe thì im lặng, không ném lỗi.
+  const empty = createErrorChannel();
+  empty.emit("khong ai nghe");
 });
