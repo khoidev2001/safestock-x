@@ -14,7 +14,10 @@ for (const slide of slides) {
   doc.rect(0, 0, SW * IN, SH * IN).fill('#04101F');
   for (const e of slide.els) {
     if (e.t === 'img') {
+      doc.save();
+      if (e.r > 0) doc.roundedRect(e.x * IN, e.y * IN, e.w * IN, e.h * IN, e.r * IN).clip(); // ảnh bo góc
       doc.image(e.src, e.x * IN, e.y * IN, { width: e.w * IN, height: e.h * IN });
+      doc.restore();
     } else if (e.t === 'rect') {
       doc.save();
       const x = e.x * IN, y = e.y * IN, w = e.w * IN, h = e.h * IN, r = (e.r || 0) * IN;
