@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Permission, roleHasPermission } from "@safestock/shared-types";
 import { ColorIcon } from "@/components/shared/color-icon";
+import { Pagination, usePagination } from "@/components/shared/pagination";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-store";
 import {
@@ -37,6 +38,9 @@ import {
  * bộ việc cho người dùng đúng lúc họ cần hệ thống làm hộ nhất, trong khi đường
  * mượn máy-với-máy đã chạy được.
  */
+/** Số loại vật tư hiện mỗi trang trong khối mượn liên xã. */
+const BORROW_ROWS_PER_PAGE = 5;
+
 export function InterCommuneBorrowSection({
   missionId,
   missionNo,
@@ -167,6 +171,18 @@ export function InterCommuneBorrowSection({
     (requirement) =>
       requirement.shortage > 0 || missionLoans.some((loan) => loan.itemSku === requirement.sku),
   );
+  /**
+   * Năm dòng một trang.
+   *
+   * Mỗi dòng ở đây không phải một dòng bảng mà là cả một biểu mẫu: tên vật tư,
+   * phần còn thiếu, rồi nút "Mượn xã khác" mở ra ô chọn xã và ô số lượng. Sáu
+   * loại thiếu là khối này đã cao hơn một màn hình, đẩy mọi thứ bên dưới — kể cả
+   * nút tính lại phương án — ra khỏi tầm mắt.
+   */
+  const { page, pageItems, pageSize, setPage, totalPages } = usePagination(
+    rows,
+    BORROW_ROWS_PER_PAGE,
+  );
 
   if (rows.length === 0) {
     return (
@@ -203,7 +219,7 @@ export function InterCommuneBorrowSection({
       )}
 
       <div className="divide-y rounded-md border">
-        {rows.map((item) => (
+        {pageItems.map((item) => (
           <div className="px-4 py-3" key={item.sku}>
             <div className="flex flex-wrap items-baseline justify-between gap-x-3">
               <p className="text-sm font-medium">{item.itemName}</p>
@@ -230,6 +246,17 @@ export function InterCommuneBorrowSection({
           </div>
         ))}
       </div>
+
+      <Pagination
+        label="loại vật tư"
+        onPageChange={setPage}
+        padding="pt-1"
+        page={page}
+        pageSize={pageSize}
+        showSummary={false}
+        totalItems={rows.length}
+        totalPages={totalPages}
+      />
 
       {recalculate.isPending ? (
         <p className="text-xs text-[var(--text-muted)]">
