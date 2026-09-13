@@ -24,6 +24,7 @@ import { AiClientService } from "../ai/ai-client.service";
 import {
   AdminNoteDto,
   AnalyzeMissionDto,
+  BulkWarehouseRequestDto,
   ChangeRequirementDto,
   CompleteMissionDto,
   FieldUpdateDto,
@@ -315,6 +316,25 @@ export class MissionController {
   @Get("warehouse-requests/own")
   warehouseRequests(@Request() req: AuthenticatedRequest) {
     return this.warehouseRequestService.list(req.user.userId, req.user.warehouseId);
+  }
+
+  /**
+   * Nút "tiếp nhận / xuất / ký nhận tất cả". Một lượt gọi cho cả loạt để điều phối
+   * nhận MỘT thông báo, thay vì mỗi dòng một tiếng chuông.
+   */
+  @RequirePermission(Permission.MISSION_FULFILL)
+  @Post("warehouse-requests/bulk")
+  bulkWarehouseRequests(
+    @Request() req: AuthenticatedRequest,
+    @Body() dto: BulkWarehouseRequestDto,
+  ) {
+    return this.warehouseRequestService.bulk(
+      dto.kind,
+      dto.requestIds,
+      req.user.userId,
+      req.user.warehouseId,
+      dto.notes,
+    );
   }
 
   @RequirePermission(Permission.MISSION_FULFILL)
