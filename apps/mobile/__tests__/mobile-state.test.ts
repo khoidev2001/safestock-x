@@ -1,4 +1,10 @@
 import assert from "node:assert/strict";
+import {
+  missionFingerprint,
+  planMissionPrefetch,
+  pruneMissionIndex,
+  PREFETCH_MAX_AGE_MS,
+} from "../mission-prefetch-state";
 import test from "node:test";
 import { foldVietnamese } from "../vietnamese-text";
 import {
@@ -1214,4 +1220,58 @@ test("đóng biểu mẫu không theo thứ tự đã mở vẫn trả lỗi v�
   // Không còn ai nghe thì im lặng, không ném lỗi.
   const empty = createErrorChannel();
   empty.emit("khong ai nghe");
+});
+
+test("vân tay dòng nhiệm vụ: cùng dữ liệu khác thứ tự khoá thì giống, đổi trạng thái thì khác", () => {
+  /*
+    API không có `updatedAt`. Vân tay là cách duy nhất biết chi tiết đã đổi mà
+    không gọi thêm. Khoá đảo thứ tự mà ra vân tay khác thì cứ 15 giây app tải lại
+    toàn bộ; trạng thái đổi mà vân tay y nguyên thì bản lưu ngoại tuyến nói dối.
+  */
+  const a = { id: "m1", status: "READY", requirements: [{ sku: "WATER-01", required: 20 }] };
+  const b = { requirements: [{ required: 20, sku: "WATER-01" }], status: "READY", id: "m1" };
+  assert.equal(missionFingerprint(a), missionFingerprint(b));
+  assert.notEqual(missionFingerprint(a), missionFingerprint({ ...a, status: "COMPLETED" }));
+  assert.notEqual(
+    missionFingerprint(a),
+    missionFingerprint({ ...a, requirements: [{ sku: "WATER-01", required: 21 }] }),
+  );
+});
+
+test("tải ngầm chỉ nhiệm vụ chưa lưu, đã đổi hoặc đã cũ — không tải lại cả danh sách", () => {
+  const now = 10_000_000;
+  const missions = [{ id: "moi" }, { id: "doi" }, { id: "cu" }, { id: "nguyen" }];
+  const fingerprints = new Map([
+    ["moi", "f1"],
+    ["doi", "f2-moi"],
+    ["cu", "f3"],
+    ["nguyen", "f4"],
+  ]);
+  const index = {
+    doi: { fingerprint: "f2-cu", storedAt: now - 1000 },
+    cu: { fingerprint: "f3", storedAt: now - PREFETCH_MAX_AGE_MS },
+    nguyen: { fingerprint: "f4", storedAt: now - 1000 },
+  };
+  assert.deepEqual(planMissionPrefetch(missions, fingerprints, index, now), ["moi", "doi", "cu"]);
+  // Giới hạn mỗi lượt vẫn giữ thứ tự danh sách: nhiệm vụ đầu danh sách là thứ
+  // người dùng thấy trước và dễ mở nhất.
+  assert.deepEqual(planMissionPrefetch(missions, fingerprints, index, now, { limit: 2 }), [
+    "moi",
+    "doi",
+  ]);
+});
+
+test("dọn bản lưu chỉ khi vượt trần, bỏ cái cũ nhất đã rời danh sách, không đụng cái đang hiện", () => {
+  const index = {
+    a: { fingerprint: "x", storedAt: 1 },
+    b: { fingerprint: "x", storedAt: 2 },
+    c: { fingerprint: "x", storedAt: 3 },
+    d: { fingerprint: "x", storedAt: 4 },
+  };
+  // Chưa vượt trần: không xoá gì, kể cả nhiệm vụ đã rời danh sách trang đầu.
+  assert.deepEqual(pruneMissionIndex(index, ["d"], 10).removedIds, []);
+  // Vượt trần: bỏ cái cũ nhất KHÔNG còn trong danh sách; "a" cũ nhất nhưng đang hiện.
+  const pruned = pruneMissionIndex(index, ["a", "d"], 3);
+  assert.deepEqual(pruned.removedIds, ["b"]);
+  assert.deepEqual(Object.keys(pruned.index).sort(), ["a", "c", "d"]);
 });
