@@ -168,6 +168,7 @@ enum EmailVerificationPurpose {
   NOTIFICATION_EMAIL // email cảnh báo của chính người đang đăng nhập
   ADMIN_ACCOUNT // email của tài khoản ADMIN mà super admin đang tạo
   PASSWORD_RESET // đặt lại mật khẩu khi quên, gửi tới email đã xác minh của tài khoản
+  LOGIN_OTP // bước hai khi tài khoản quản trị đăng nhập — mã sống 60 giây
 }
 
 // Mã 6 số xác minh email cá nhân nhận cảnh báo. Lưu hash chứ không lưu mã trần:

@@ -43,7 +43,7 @@ describe("AdminUserService — phân bậc super admin", () => {
 
   const adminInput = {
     email: "adminmoi",
-    password: "matkhau123",
+    password: "MatKhau123@",
     fullName: "Quản trị mới",
     role: UserRole.ADMIN,
     notificationEmail: "admin@example.com",
@@ -93,13 +93,54 @@ describe("AdminUserService — phân bậc super admin", () => {
 
     await service.create("admin-2", {
       email: "truongthon",
-      password: "matkhau123",
+      password: "MatKhau123@",
       fullName: "Trưởng thôn",
       role: UserRole.WAREHOUSE,
     });
 
     expect(verification.consume).not.toHaveBeenCalled();
     expect(prisma.user.create).toHaveBeenCalled();
+  });
+
+  it("mật khẩu yếu bị từ chối khi tạo tài khoản, trước khi ghi bất cứ gì", async () => {
+    prisma.user.findUnique.mockResolvedValueOnce(PLAIN_ADMIN).mockResolvedValueOnce(null);
+
+    await expect(
+      service.create("admin-2", {
+        email: "truongthon",
+        password: "matkhau123",
+        passwordConfirmation: "matkhau123",
+        fullName: "Trưởng thôn",
+        role: UserRole.WAREHOUSE,
+      }),
+    ).rejects.toThrow("Mật khẩu chưa đủ mạnh");
+    expect(prisma.user.create).not.toHaveBeenCalled();
+  });
+
+  it("mật khẩu nhập lại không khớp thì không tạo tài khoản", async () => {
+    prisma.user.findUnique.mockResolvedValueOnce(PLAIN_ADMIN).mockResolvedValueOnce(null);
+
+    await expect(
+      service.create("admin-2", {
+        email: "truongthon",
+        password: "MatKhau123@",
+        passwordConfirmation: "MatKhau123!",
+        fullName: "Trưởng thôn",
+        role: UserRole.WAREHOUSE,
+      }),
+    ).rejects.toThrow("Mật khẩu nhập lại không khớp");
+    expect(prisma.user.create).not.toHaveBeenCalled();
+  });
+
+  it("quản trị đặt lại mật khẩu yếu cho người khác cũng bị từ chối", async () => {
+    prisma.user.findUnique
+      .mockResolvedValueOnce(SUPER_ADMIN)
+      .mockResolvedValueOnce({ id: "u-9", email: "dongxuan", role: UserRole.WAREHOUSE, isSuperAdmin: false });
+
+    await expect(service.update("super-1", "u-9", { password: "12345678" })).rejects.toThrow(
+      "Mật khẩu chưa đủ mạnh",
+    );
+    expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
   it("không ai xoá được tài khoản super admin", async () => {
@@ -154,7 +195,7 @@ describe("AdminUserService — phân bậc super admin", () => {
       .mockResolvedValueOnce({ id: "super-1", email: "super", role: UserRole.ADMIN, isSuperAdmin: true });
 
     await expect(
-      service.update("admin-2", "super-1", { password: "matkhaumoi" }),
+      service.update("admin-2", "super-1", { password: "MatKhauMoi123@" }),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(prisma.user.update).not.toHaveBeenCalled();
   });

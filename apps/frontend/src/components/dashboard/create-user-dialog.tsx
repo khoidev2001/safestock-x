@@ -3,15 +3,11 @@
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { ColorIcon } from "@/components/shared/color-icon";
-import {
-  createUser,
-  listCommunes,
-  requestAdminEmailCode,
-  type AdminUser,
-} from "@/lib/admin-api";
+import { createUser, listCommunes, requestAdminEmailCode, type AdminUser } from "@/lib/admin-api";
 import { getClusterWarehouses } from "@/lib/mission-api";
 import { useQuery } from "@tanstack/react-query";
-import { FIELD_FORCE_ROLE_LABEL } from "@safestock/shared-types";
+import { FIELD_FORCE_ROLE_LABEL, passwordPolicyViolation } from "@safestock/shared-types";
+import { PasswordStrengthChecklist } from "@/components/auth/password-strength-checklist";
 
 const BASE_ROLES = [
   { value: "WAREHOUSE", label: "Phụ trách kho / Trưởng thôn" },
@@ -25,6 +21,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const EMPTY_FORM = {
   email: "",
   password: "",
+  passwordConfirmation: "",
   fullName: "",
   role: "WAREHOUSE",
   warehouseId: "",
@@ -106,6 +103,7 @@ export function CreateUserDialog({
       createUser({
         email: form.email,
         password: form.password,
+        passwordConfirmation: form.passwordConfirmation,
         fullName: form.fullName,
         role: form.role as AdminUser["role"],
         warehouseId: form.role === "WAREHOUSE" && form.warehouseId ? form.warehouseId : undefined,
@@ -145,10 +143,14 @@ export function CreateUserDialog({
     }
   }, [isOpen]);
 
+  const passwordWeakness = passwordPolicyViolation(form.password);
+  const passwordMismatch =
+    form.passwordConfirmation.length > 0 && form.passwordConfirmation !== form.password;
   const canSubmit =
     !create.isPending &&
     Boolean(form.email) &&
-    form.password.length >= 8 &&
+    !passwordWeakness &&
+    form.passwordConfirmation === form.password &&
     Boolean(form.fullName) &&
     (!needsEmailVerification || (codeMatchesEmail && form.verificationCode.length === 6));
 
@@ -213,10 +215,28 @@ export function CreateUserDialog({
               className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
               minLength={8}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
-              placeholder="ít nhất 8 ký tự"
+              placeholder="ít nhất 8 ký tự, có chữ hoa, số, ký tự đặc biệt"
               type="password"
               value={form.password}
             />
+            <PasswordStrengthChecklist password={form.password} />
+          </Field>
+          {/* Gõ lại mật khẩu: người tạo tài khoản gõ nhầm một ký tự thì tài khoản mới
+              sinh ra với mật khẩu không ai biết, và người được cấp không vào được. */}
+          <Field label="Nhập lại mật khẩu">
+            <input
+              autoComplete="new-password"
+              aria-invalid={passwordMismatch}
+              className="w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm"
+              onChange={(e) => setForm({ ...form, passwordConfirmation: e.target.value })}
+              type="password"
+              value={form.passwordConfirmation}
+            />
+            {passwordMismatch ? (
+              <span className="mt-1 block text-xs text-[var(--color-critical)]">
+                Mật khẩu nhập lại chưa khớp.
+              </span>
+            ) : null}
           </Field>
           <Field label="Vai trò">
             <select
@@ -269,8 +289,8 @@ export function CreateUserDialog({
           {needsEmailVerification && (
             <div className="space-y-3 rounded-md border border-dashed bg-[var(--surface-2)] p-3">
               <p className="text-xs text-[var(--text-muted)]">
-                Tài khoản quản trị nhận email cảnh báo sự cố, nên địa chỉ phải xác minh được: gửi
-                mã 6 số tới email rồi nhập lại mã thì tài khoản mới được tạo.
+                Tài khoản quản trị nhận email cảnh báo sự cố, nên địa chỉ phải xác minh được: gửi mã
+                6 số tới email rồi nhập lại mã thì tài khoản mới được tạo.
               </p>
               <Field label="Email của quản trị viên">
                 <div className="flex gap-2">

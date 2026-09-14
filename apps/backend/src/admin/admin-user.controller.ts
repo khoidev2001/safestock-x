@@ -55,6 +55,14 @@ class CreateUserDto {
   @MinLength(8)
   password!: string;
 
+  /**
+   * Gõ lại mật khẩu. Máy chủ cũng so, không chỉ để giao diện so: người tạo tài khoản
+   * gõ nhầm một ký tự thì tài khoản mới sinh ra với mật khẩu không ai biết, và người
+   * được cấp tài khoản không đăng nhập được ngay lần đầu.
+   */
+  @IsString()
+  passwordConfirmation!: string;
+
   @IsString()
   @MinLength(2)
   fullName!: string;

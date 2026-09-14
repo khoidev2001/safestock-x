@@ -84,7 +84,7 @@ describe("PasswordResetService", () => {
     await service.resetPassword({
       login: "superadmindongxuan",
       code: "123456",
-      password: "matkhaumoi123",
+      password: "MatKhauMoi123@",
     });
 
     expect(verification.consume).toHaveBeenCalledWith({
@@ -94,7 +94,7 @@ describe("PasswordResetService", () => {
       expectedEmail: "an@example.com",
     });
     const data = prisma.user.update.mock.calls[0][0].data;
-    expect(bcrypt.compareSync("matkhaumoi123", data.passwordHash)).toBe(true);
+    expect(bcrypt.compareSync("MatKhauMoi123@", data.passwordHash)).toBe(true);
     expect(data.tokenVersion).toEqual({ increment: 1 });
     expect(data.sessionVersion).toEqual({ increment: 1 });
   });
@@ -110,7 +110,7 @@ describe("PasswordResetService", () => {
     prisma.user.findUnique.mockResolvedValue(null);
 
     await expect(
-      service.resetPassword({ login: "khongcoai", code: "123456", password: "matkhaumoi123" }),
+      service.resetPassword({ login: "khongcoai", code: "123456", password: "MatKhauMoi123@" }),
     ).rejects.toThrow("Mã đã hết hạn hoặc chưa được yêu cầu");
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
@@ -119,7 +119,7 @@ describe("PasswordResetService", () => {
     verification.consume.mockRejectedValue(new BadRequestException("Mã không đúng. Còn 3 lần thử."));
 
     await expect(
-      service.resetPassword({ login: "superadmindongxuan", code: "000000", password: "matkhaumoi123" }),
+      service.resetPassword({ login: "superadmindongxuan", code: "000000", password: "MatKhauMoi123@" }),
     ).rejects.toThrow("Còn 3 lần thử");
     expect(prisma.user.update).not.toHaveBeenCalled();
   });

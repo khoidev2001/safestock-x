@@ -15,6 +15,12 @@ import {
   planMissionMapTiles,
 } from "../map-tile-plan";
 import {
+  LOGIN_OTP_EXPIRED_MESSAGE,
+  isLoginOtpChallenge,
+  loginOtpInputError,
+  loginOtpView,
+} from "../login-otp-state";
+import {
   createErrorChannel,
   ERROR_BANNER_VISIBLE_MS,
   isBannerExpired,
@@ -1251,27 +1257,27 @@ test("tải ngầm chỉ nhiệm vụ chưa lưu, đã đổi hoặc đã cũ �
     { id: "doi" },
     { id: "cu" },
     { id: "nguyen" },
-    { id: "thieuBanDo" },
+    { id: "missingMap" },
   ];
   const fingerprints = new Map([
     ["moi", "f1"],
     ["doi", "f2-moi"],
     ["cu", "f3"],
     ["nguyen", "f4"],
-    ["thieuBanDo", "f5"],
+    ["missingMap", "f5"],
   ]);
   const index = {
     doi: { fingerprint: "f2-cu", storedAt: now - 1000, mapTiles: true },
     cu: { fingerprint: "f3", storedAt: now - PREFETCH_MAX_AGE_MS, mapTiles: true },
     nguyen: { fingerprint: "f4", storedAt: now - 1000, mapTiles: true },
     // Lưu từ trước khi có bản đồ offline (hoặc mất sóng giữa lúc tải ô): lấy lại.
-    thieuBanDo: { fingerprint: "f5", storedAt: now - 1000 },
+    missingMap: { fingerprint: "f5", storedAt: now - 1000 },
   };
   assert.deepEqual(planMissionPrefetch(missions, fingerprints, index, now), [
     "moi",
     "doi",
     "cu",
-    "thieuBanDo",
+    "missingMap",
   ]);
   // Giới hạn mỗi lượt vẫn giữ thứ tự danh sách: nhiệm vụ đầu danh sách là thứ
   // người dùng thấy trước và dễ mở nhất.
@@ -1348,4 +1354,38 @@ test("bản đồ offline: tên tệp và URL khớp mẫu trang Leaflet dựng"
   // Esri đảo thứ tự {y}/{x}; CARTO lấy bản @2x vì máy thật là màn mật độ cao.
   assert.match(mapTileRemoteUrl(imagery), /World_Imagery\/MapServer\/tile\/16\/30370\/52395$/);
   assert.match(mapTileRemoteUrl(labels), /voyager_only_labels\/15\/26197\/15185@2x\.png$/);
+});
+
+const OTP_T0 = Date.parse("2026-09-14T08:00:00.000Z");
+const otpChallenge = {
+  otpRequired: true as const,
+  challengeToken: "the",
+  email: "tr***x@gmail.com",
+  expiresAt: "2026-09-14T08:01:00.000Z",
+  resendAvailableAt: "2026-09-14T08:01:00.000Z",
+};
+
+test("OTP đăng nhập: trong 60 giây nút gửi lại ẩn, quá 60 giây mã hết hạn và nút hiện", () => {
+  const early = loginOtpView(otpChallenge, OTP_T0 + 1_000);
+  assert.equal(early.expired, false);
+  assert.equal(early.canResend, false);
+  assert.equal(early.resendIn, 59);
+  assert.equal(loginOtpView(otpChallenge, OTP_T0 + 59_500).canResend, false);
+  const after = loginOtpView(otpChallenge, OTP_T0 + 60_000);
+  assert.equal(after.expired, true);
+  assert.equal(after.canResend, true);
+});
+
+test("OTP đăng nhập: nhập mã khi đã quá hạn thì báo hết hạn trước cả lỗi định dạng", () => {
+  assert.equal(
+    loginOtpInputError("123456", otpChallenge, OTP_T0 + 61_000),
+    LOGIN_OTP_EXPIRED_MESSAGE,
+  );
+  assert.equal(
+    loginOtpInputError("12ab", otpChallenge, OTP_T0 + 1_000),
+    "Mã đăng nhập gồm 6 chữ số.",
+  );
+  assert.equal(loginOtpInputError("123456", otpChallenge, OTP_T0 + 1_000), null);
+  assert.equal(isLoginOtpChallenge(otpChallenge), true);
+  assert.equal(isLoginOtpChallenge({ accessToken: "a", refreshToken: "r", user: {} }), false);
 });

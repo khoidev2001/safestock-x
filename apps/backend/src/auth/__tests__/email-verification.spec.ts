@@ -37,6 +37,9 @@ describe("EmailVerificationService", () => {
       id: "code-1",
       email: "an@example.com",
       expiresAt: new Date("2026-09-05T00:10:00.000Z"),
+      // Prisma thật trả `createdAt` vì `select` có nó; thiếu ở đây là dựng một bản
+      // ghi không thể tồn tại.
+      createdAt: new Date("2026-09-05T00:00:00.000Z"),
     });
   });
 
@@ -196,5 +199,52 @@ describe("EmailVerificationService", () => {
     await expect(
       service.consume({ userId: "user-1", code: "123456", purpose: PURPOSE }),
     ).rejects.toThrow("hết hạn");
+  });
+
+  it("mã đăng nhập quản trị sống đúng 60 giây; mã khác vẫn 10 phút", async () => {
+    const before = Date.now();
+    await service.issue({
+      userId: "user-1",
+      email: "an@example.com",
+      purpose: EmailVerificationPurpose.LOGIN_OTP,
+      recipientName: null,
+    });
+    const loginOtp = prisma.emailVerification.create.mock.calls[0][0].data.expiresAt.getTime();
+    expect(loginOtp - before).toBeGreaterThanOrEqual(59_000);
+    expect(loginOtp - before).toBeLessThanOrEqual(61_000);
+
+    await issue("an@example.com", EmailVerificationPurpose.PASSWORD_RESET);
+    const reset = prisma.emailVerification.create.mock.calls[1][0].data.expiresAt.getTime();
+    expect(reset - before).toBeGreaterThanOrEqual(9 * 60_000);
+  });
+
+  it("trả mốc được gửi lại = lúc tạo mã + 60 giây, để giao diện ẩn nút đúng lúc", async () => {
+    const result = await issue("an@example.com", EmailVerificationPurpose.LOGIN_OTP);
+    expect(result.resendAvailableAt.toISOString()).toBe("2026-09-05T00:01:00.000Z");
+  });
+
+  it("nhập mã ĐÃ QUÁ HẠN thì báo đúng là hết hạn, yêu cầu gửi lại — không báo chung chung", async () => {
+    // findActive (chỉ mã còn hạn) không thấy gì, nhưng mã mới nhất chưa dùng thì có và đã quá hạn.
+    prisma.emailVerification.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ expiresAt: new Date(Date.now() - 1_000) });
+
+    await expect(
+      service.consume({
+        userId: "user-1",
+        code: "123456",
+        purpose: EmailVerificationPurpose.LOGIN_OTP,
+      }),
+    ).rejects.toThrow("Mã đã hết hạn. Vui lòng gửi lại mã mới.");
+  });
+
+  it("chống spam: gửi lại trước 60 giây bị từ chối kèm số giây phải chờ", async () => {
+    prisma.emailVerification.findMany.mockResolvedValueOnce([
+      { createdAt: new Date(Date.now() - 20_000) },
+    ]);
+    await expect(issue("an@example.com", EmailVerificationPurpose.LOGIN_OTP)).rejects.toThrow(
+      /đợi (39|40) giây/,
+    );
+    expect(mail.sendVerificationCode).not.toHaveBeenCalled();
   });
 });

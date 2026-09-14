@@ -5,6 +5,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { EmailVerificationService } from "./email-verification.service";
 import { normalizeLoginEmail } from "./login-email";
 import { isSimulationSystemActorEmail } from "../simulation/simulation-system-actor-identity";
+import { passwordPolicyViolation } from "@safestock/shared-types";
 
 const PURPOSE = EmailVerificationPurpose.PASSWORD_RESET;
 
@@ -88,9 +89,8 @@ export class PasswordResetService {
     code: string;
     password: string;
   }): Promise<{ ok: true }> {
-    if (input.password.length < MIN_PASSWORD_LENGTH) {
-      throw new BadRequestException(`Mật khẩu mới phải có ít nhất ${MIN_PASSWORD_LENGTH} ký tự.`);
-    }
+    const weakness = passwordPolicyViolation(input.password);
+    if (weakness) throw new BadRequestException(weakness);
 
     const email = normalizeLoginEmail(input.login);
     const user = await this.prisma.user.findUnique({

@@ -18,6 +18,8 @@ export interface AdminUser {
 export interface CreateUserInput {
   email: string;
   password: string;
+  /** Gõ lại mật khẩu; máy chủ so lại với `password`. */
+  passwordConfirmation: string;
   fullName: string;
   role: UserRole;
   warehouseId?: string;

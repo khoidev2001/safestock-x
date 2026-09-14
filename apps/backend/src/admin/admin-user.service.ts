@@ -6,12 +6,20 @@ import {
 } from "@nestjs/common";
 import * as bcrypt from "bcryptjs";
 import { EmailVerificationPurpose, Prisma } from "@prisma/client";
-import { UserRole } from "@safestock/shared-types";
+import { passwordPolicyViolation, UserRole } from "@safestock/shared-types";
 import { PrismaService } from "../prisma/prisma.service";
 import { EmailVerificationService } from "../auth/email-verification.service";
 import { isSimulationSystemActorEmail } from "../simulation/simulation-system-actor-identity";
 
+/** Mật khẩu yếu thì dừng ngay, trước mọi truy vấn — xem `passwordPolicyViolation`. */
+function assertStrongPassword(password: string): void {
+  const weakness = passwordPolicyViolation(password);
+  if (weakness) throw new BadRequestException(weakness);
+}
+
 interface CreateUserInput {
+  /** Chỉ luồng tạo tài khoản gửi trường này; máy chủ so lại với `password`. */
+  passwordConfirmation?: string;
   email: string;
   password: string;
   fullName: string;
@@ -115,6 +123,10 @@ export class AdminUserService {
   async create(actorId: string, input: CreateUserInput) {
     const actor = await this.loadActor(actorId);
     this.assertMayManageRole(actor, input.role, "tạo");
+    assertStrongPassword(input.password);
+    if (input.passwordConfirmation !== undefined && input.passwordConfirmation !== input.password) {
+      throw new BadRequestException("Mật khẩu nhập lại không khớp.");
+    }
 
     if (isSimulationSystemActorEmail(input.email)) {
       throw new BadRequestException("Email được dành riêng cho actor hệ thống");
@@ -182,6 +194,9 @@ export class AdminUserService {
     }
     this.assertMayManageRole(actor, user.role as UserRole, "sửa");
     if (patch.role !== undefined) this.assertMayManageRole(actor, patch.role, "gán");
+    // Kiểm mật khẩu SAU khi đã chốt quyền: người không có quyền sửa tài khoản này phải
+    // nhận "không được phép", không phải một lời gợi ý về độ mạnh mật khẩu.
+    if (patch.password) assertStrongPassword(patch.password);
 
     const role = (patch.role ?? user.role) as UserRole;
     if (patch.warehouseId !== undefined || patch.role !== undefined) {
