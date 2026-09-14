@@ -24,6 +24,11 @@ export interface PrefetchIndexEntry {
   fingerprint: string;
   /** Mốc lưu, tính bằng mili giây. */
   storedAt: number;
+  /**
+   * Đã có đủ ô bản đồ vùng nhiệm vụ trên máy chưa. Bản lưu từ trước khi có bản đồ
+   * offline không có trường này → tải lại một lần để lấy luôn ô bản đồ.
+   */
+  mapTiles?: boolean;
 }
 
 export type PrefetchIndex = Record<string, PrefetchIndexEntry>;
@@ -53,7 +58,7 @@ export function missionFingerprint(item: unknown): string {
 /**
  * Chọn nhiệm vụ cần tải chi tiết trong lượt này, giữ đúng thứ tự danh sách.
  *
- * Tải khi: chưa có bản lưu, vân tay đổi, hoặc bản lưu đã cũ. Danh sách tự làm mới
+ * Tải khi: chưa có bản lưu, vân tay đổi, bản lưu đã cũ, hoặc chưa đủ ô bản đồ. Danh sách tự làm mới
  * mỗi 15 giây — không có điều kiện này thì mỗi 15 giây app tải lại toàn bộ.
  */
 export function planMissionPrefetch(
@@ -77,7 +82,8 @@ export function planMissionPrefetch(
       !entry ||
       entry.fingerprint !== fingerprint ||
       !Number.isFinite(entry.storedAt) ||
-      now - entry.storedAt >= maxAgeMs;
+      now - entry.storedAt >= maxAgeMs ||
+      entry.mapTiles !== true;
     if (stale) picked.push(mission.id);
   }
   return picked;
@@ -112,6 +118,8 @@ function stableStringify(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
   const entries = Object.keys(value as Record<string, unknown>)
     .sort()
-    .map((key) => `${JSON.stringify(key)}:${stableStringify((value as Record<string, unknown>)[key])}`);
+    .map(
+      (key) => `${JSON.stringify(key)}:${stableStringify((value as Record<string, unknown>)[key])}`,
+    );
   return `{${entries.join(",")}}`;
 }

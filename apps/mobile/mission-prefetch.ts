@@ -11,6 +11,7 @@ import {
   type PrefetchIndex,
 } from "./mission-prefetch-state";
 import { fetchMissionForViewer } from "./mission-viewer";
+import { ensureMissionMapTiles } from "./offline-map-tiles";
 import { readOfflineCache, removeOfflineCache, writeOfflineCache } from "./offline-cache";
 
 /** Chỉ mục: nhiệm vụ nào đã lưu chi tiết, lúc nào, ứng với vân tay nào. */
@@ -71,7 +72,9 @@ async function runPrefetch({
   const stored = await readOfflineCache<PrefetchIndex>(userId, INDEX_SCOPE).catch(() => null);
   let index: PrefetchIndex = stored?.data ?? {};
 
-  const fingerprints = new Map(missions.map((mission) => [mission.id, missionFingerprint(mission)]));
+  const fingerprints = new Map(
+    missions.map((mission) => [mission.id, missionFingerprint(mission)]),
+  );
   const ids = planMissionPrefetch(missions, fingerprints, index, Date.now());
 
   if (ids.length > 0) {
@@ -88,12 +91,22 @@ async function runPrefetch({
           await writeOfflineCache(userId, `mission.${id}`, detail);
           // Tuyến đường tới từng kho: thiếu thì màn chi tiết vẫn mở được, chỉ mất
           // quãng đường. Nên hỏng phần này không làm hỏng bản lưu chi tiết.
-          await fetchMissionWarehouseRoutes(token, id)
-            .then((routes) => writeOfflineCache(userId, `mission.${id}.routes`, routes))
-            .catch(() => undefined);
+          const routes = await fetchMissionWarehouseRoutes(token, id).catch(() => null);
+          if (routes) {
+            await writeOfflineCache(userId, `mission.${id}.routes`, routes).catch(() => undefined);
+          }
+          // Ô bản đồ vùng nhiệm vụ: điểm nạn + các kho. Không lấy được tuyến thì vẫn
+          // tải quanh điểm nạn; bản lưu cũ quá 30 phút sẽ lấy lại cả hai.
+          const points = [
+            ...(detail.incidentLat != null && detail.incidentLng != null
+              ? [{ lat: detail.incidentLat, lng: detail.incidentLng }]
+              : []),
+            ...(routes ?? []).map((route) => ({ lat: route.lat, lng: route.lng })),
+          ];
+          const mapTiles = await ensureMissionMapTiles(points).catch(() => false);
           index = {
             ...index,
-            [id]: { fingerprint: fingerprints.get(id) ?? "", storedAt: Date.now() },
+            [id]: { fingerprint: fingerprints.get(id) ?? "", storedAt: Date.now(), mapTiles },
           };
         } catch {
           // Mất sóng giữa lượt: dừng hẳn, lượt làm mới sau sẽ lưu tiếp phần còn lại.

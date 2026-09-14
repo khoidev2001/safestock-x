@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import { buildMissionMapHtml, type MissionMapData } from "./mission-map-html";
+import { offlineMapTileRoot } from "./offline-map-tiles";
 import { c, styles } from "./styles";
 
 /**
@@ -39,7 +40,7 @@ export function MissionMapShell({
    * người dùng vừa chỉnh. Nên nút phóng to KHÔNG nằm trong danh sách phụ thuộc —
    * nó chỉ đổi chiều cao khung, bản đồ bên trong giữ nguyên.
    */
-  const html = useMemo(() => buildMissionMapHtml(data), [data]);
+  const html = useMemo(() => buildMissionMapHtml(data, { tileRoot: offlineMapTileRoot() }), [data]);
 
   function handleMessage(raw: string) {
     try {

@@ -51,6 +51,7 @@ import {
   unregisterForPush,
 } from "./push-registration";
 import { clearOfflineCache } from "./offline-cache";
+import { clearOfflineMapTiles } from "./offline-map-tiles";
 import { formatShortTime, kindIcon } from "./disaster";
 import { MissionListScreen } from "./MissionListScreen";
 import { mobileRoleLabel } from "./role-labels";
@@ -195,6 +196,7 @@ export default function App() {
     }
     await clearStoredSession();
     if (userId) await clearOfflineCache(userId);
+    await clearOfflineMapTiles().catch(() => undefined);
     setSession(null);
   }
 
