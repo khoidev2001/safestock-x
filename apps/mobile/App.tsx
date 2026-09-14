@@ -595,7 +595,7 @@ function LoginScreen({ onLogin }: { onLogin: (result: LoginResult) => Promise<vo
           onChangeText={setEmail}
           autoCapitalize="none"
           autoCorrect={false}
-          placeholder="vd: longchau"
+          placeholder="Tài khoản"
           placeholderTextColor={c.muted}
           aria-label="Tên đăng nhập"
         />
