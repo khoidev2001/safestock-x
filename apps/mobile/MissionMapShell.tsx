@@ -45,6 +45,7 @@ export function MissionMapShell({
   function handleMessage(raw: string) {
     try {
       const message = JSON.parse(raw) as { type?: string };
+      if (message.type === "script-error") console.warn("[mission-map]", raw);
       if (message.type === "ready") setFailed(false);
       else if (message.type === "error") setFailed(true);
     } catch {

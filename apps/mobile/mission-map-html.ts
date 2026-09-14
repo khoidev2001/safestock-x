@@ -166,6 +166,14 @@ export function buildMissionMapHtml(
   <div class="row"><span class="line" style="background:${ROUTE_COLOR}"></span><span>Tuyến kho → điểm nạn</span></div>
 </div>
 <div class="offline" id="offline">Không tải được bản đồ.<br />Kiểm tra mạng — danh sách kho và vật tư bên dưới vẫn đọc được.</div>
+<script>
+  // Lỗi JS trong trang WebView không hiện ở đâu cả trên bản release: đẩy ra app để
+  // ghi log, không thì bản đồ trắng mà không ai biết vì sao.
+  window.onerror = function (message, source, line, column) {
+    var text = JSON.stringify({ type: 'script-error', message: String(message), line: line, column: column });
+    if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(text);
+  };
+</script>
 <script>${LEAFLET_JS}</script>
 <script>
   var DATA = ${embedJson(data)};
