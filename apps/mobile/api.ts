@@ -1,4 +1,5 @@
 import { requireApiBase } from "./config";
+import type { LoginOtpChallenge } from "./login-otp-state";
 
 export interface AuthUser {
   id: string;
@@ -241,17 +242,50 @@ export function createMutationRequestId(prefix = "mobile"): string {
 }
 
 /** Đăng nhập → nhận token + hồ sơ. Ném lỗi có message tiếng Việt từ backend. */
-export async function login(email: string, password: string): Promise<LoginResult> {
+/**
+ * Đăng nhập bước một. Tài khoản quản trị KHÔNG nhận phiên ở đây mà nhận một thẻ thử
+ * thách — phải nhập mã gửi tới email (`verifyLoginOtp`) mới vào được.
+ */
+export async function login(
+  email: string,
+  password: string,
+): Promise<LoginResult | LoginOtpChallenge> {
   const res = await request(apiUrl("/api/auth/login"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.message ?? "Đăng nhập thất bại");
-  }
+  if (!res.ok) throw await loginFailure(res, "Đăng nhập thất bại");
   return res.json();
+}
+
+/** Bước hai của tài khoản quản trị: mã đúng thì máy chủ mở phiên như đăng nhập thường. */
+export async function verifyLoginOtp(challengeToken: string, code: string): Promise<LoginResult> {
+  const res = await request(apiUrl("/api/auth/login/otp/verify"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ challengeToken, code }),
+  });
+  if (!res.ok) throw await loginFailure(res, "Chưa xác nhận được mã. Vui lòng thử lại.");
+  return res.json();
+}
+
+/** Xin mã mới. Máy chủ chặn trong 60 giây đầu và giới hạn số lần gửi. */
+export async function resendLoginOtp(challengeToken: string): Promise<LoginOtpChallenge> {
+  const res = await request(apiUrl("/api/auth/login/otp/resend"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ challengeToken }),
+  });
+  if (!res.ok) throw await loginFailure(res, "Chưa gửi lại được mã. Vui lòng thử lại.");
+  return res.json();
+}
+
+/** Lỗi đăng nhập mang theo mã HTTP: 401 ở bước mã nghĩa là phải nhập lại mật khẩu. */
+async function loginFailure(res: Response, fallback: string): Promise<ApiError> {
+  const data = (await res.json().catch(() => ({}))) as { message?: string | string[] };
+  const message = Array.isArray(data.message) ? data.message.join(". ") : data.message;
+  return new ApiError(message || fallback, res.status);
 }
 
 export async function refreshSession(refreshToken: string): Promise<LoginResult> {
@@ -1238,9 +1272,7 @@ async function request(input: string, init?: RequestInit, timeoutMs = 10_000): P
     if (error instanceof Error && error.name !== "AbortError" && !isConnectivityError(error)) {
       throw error;
     }
-    throw new Error(
-      "Không kết nối được ungphonhanh.life. Kiểm tra Internet hoặc mạng LAN nội bộ.",
-    );
+    throw new Error("Không kết nối được ungphonhanh.life. Kiểm tra Internet hoặc mạng LAN nội bộ.");
   } finally {
     clearTimeout(timeout);
   }

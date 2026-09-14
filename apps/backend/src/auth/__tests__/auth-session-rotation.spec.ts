@@ -12,7 +12,10 @@ describe("AuthService session rotation", () => {
     phone: null,
     notificationEmail: null,
     avatarUrl: null,
-    role: UserRole.ADMIN,
+    // Tài khoản KHO: tài khoản quản trị đi qua bước mã email trước khi có phiên,
+    // có bộ test riêng. Điều bài này khoá — đăng nhập không thu hồi phiên cũ — áp
+    // cho mọi vai.
+    role: UserRole.WAREHOUSE,
     warehouseId: null,
     tokenVersion: 0,
     sessionVersion: 0,

@@ -10,6 +10,19 @@ import {
 
 /** Mã sống 10 phút — đủ để mở hộp thư, ngắn đủ để mã lọt ra ngoài cũng vô dụng nhanh. */
 export const CODE_TTL_MS = 10 * 60_000;
+/**
+ * Mã đăng nhập của tài khoản quản trị chỉ sống 60 giây.
+ *
+ * Mã này mở ra quyền cao nhất của một xã: duyệt nhiệm vụ, tạo tài khoản, xem mọi kho.
+ * Người đang đăng nhập thật đã mở sẵn hộp thư, 60 giây là đủ; mã bị nhìn trộm hay
+ * lọt ra ngoài thì gần như vô dụng ngay khi tới tay kẻ khác.
+ */
+export const LOGIN_OTP_TTL_MS = 60_000;
+
+/** Thời hạn mã theo từng luồng. */
+export function codeTtlFor(purpose: EmailVerificationPurpose): number {
+  return purpose === EmailVerificationPurpose.LOGIN_OTP ? LOGIN_OTP_TTL_MS : CODE_TTL_MS;
+}
 /** Sai quá 5 lần thì mã chết, buộc gửi lại — chặn dò 6 số bằng vét cạn. */
 export const MAX_ATTEMPTS = 5;
 /** Chống spam hộp thư người khác: tối đa 5 mã / 30 phút và cách nhau ít nhất 60 giây. */
@@ -22,6 +35,8 @@ export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 export interface PendingVerification {
   email: string;
   expiresAt: Date;
+  /** Mốc sớm nhất được xin mã mới — giao diện ẩn nút "Gửi lại" tới lúc này. */
+  resendAvailableAt: Date;
 }
 
 export interface IssuedVerification extends PendingVerification {
@@ -96,9 +111,9 @@ export class EmailVerificationService {
         email,
         purpose: input.purpose,
         codeHash,
-        expiresAt: new Date(now.getTime() + CODE_TTL_MS),
+        expiresAt: new Date(now.getTime() + codeTtlFor(input.purpose)),
       },
-      select: { id: true, email: true, expiresAt: true },
+      select: { id: true, email: true, expiresAt: true, createdAt: true },
     });
 
     let delivery: VerificationDelivery;
@@ -107,7 +122,7 @@ export class EmailVerificationService {
         email,
         code,
         fullName: input.recipientName,
-        expiresInMinutes: Math.round(CODE_TTL_MS / 60_000),
+        expiresInMinutes: Math.max(1, Math.round(codeTtlFor(input.purpose) / 60_000)),
         // Nội dung thư đổi theo việc đang làm: xác minh email cảnh báo, liên kết tài
         // khoản quản trị mới, hay đặt lại mật khẩu — ba việc, ba cách nói khác nhau.
         purpose: input.purpose,
@@ -129,6 +144,7 @@ export class EmailVerificationService {
     return {
       email: record.email,
       expiresAt: record.expiresAt,
+      resendAvailableAt: new Date(record.createdAt.getTime() + RESEND_COOLDOWN_MS),
       delivery,
       devCode: delivery === "dev-log" ? code : undefined,
     };
@@ -141,7 +157,13 @@ export class EmailVerificationService {
     now = new Date(),
   ): Promise<PendingVerification | null> {
     const pending = await this.findActive(userId, purpose, now);
-    return pending ? { email: pending.email, expiresAt: pending.expiresAt } : null;
+    return pending
+      ? {
+          email: pending.email,
+          expiresAt: pending.expiresAt,
+          resendAvailableAt: new Date(pending.createdAt.getTime() + RESEND_COOLDOWN_MS),
+        }
+      : null;
   }
 
   /**
@@ -160,6 +182,11 @@ export class EmailVerificationService {
     const now = new Date();
     const pending = await this.findActive(input.userId, input.purpose, now);
     if (!pending) {
+      // Tách "hết hạn" khỏi "chưa từng xin": người vừa nhận mã rồi gõ chậm cần biết
+      // đúng là mã đã quá hạn để bấm gửi lại, chứ không phải tưởng mình gõ sai.
+      if (await this.hasExpiredUnused(input.userId, input.purpose, now)) {
+        throw new BadRequestException("Mã đã hết hạn. Vui lòng gửi lại mã mới.");
+      }
       throw new BadRequestException("Mã đã hết hạn hoặc chưa được yêu cầu. Hãy gửi lại mã.");
     }
     if (input.expectedEmail && this.normalizeEmail(input.expectedEmail) !== pending.email) {
@@ -244,8 +271,29 @@ export class EmailVerificationService {
     return this.prisma.emailVerification.findFirst({
       where: { userId, purpose, consumedAt: null, expiresAt: { gt: now } },
       orderBy: { createdAt: "desc" },
-      select: { id: true, email: true, codeHash: true, attempts: true, expiresAt: true },
+      select: {
+        id: true,
+        email: true,
+        codeHash: true,
+        attempts: true,
+        expiresAt: true,
+        createdAt: true,
+      },
     });
+  }
+
+  /** Mã mới nhất chưa dùng mà đã quá hạn — để báo "hết hạn" thay cho câu chung chung. */
+  private async hasExpiredUnused(
+    userId: string,
+    purpose: EmailVerificationPurpose,
+    now: Date,
+  ): Promise<boolean> {
+    const latest = await this.prisma.emailVerification.findFirst({
+      where: { userId, purpose, consumedAt: null },
+      orderBy: { createdAt: "desc" },
+      select: { expiresAt: true },
+    });
+    return Boolean(latest && latest.expiresAt <= now);
   }
 
   private async markConsumed(id: string, now: Date): Promise<void> {

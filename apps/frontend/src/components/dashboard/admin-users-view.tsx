@@ -13,7 +13,12 @@ import {
 } from "@/lib/admin-api";
 import { useAuth } from "@/lib/auth-store";
 import { Pagination, usePagination } from "@/components/shared/pagination";
-import { FIELD_FORCE_ROLE_LABEL, userRoleLabel } from "@safestock/shared-types";
+import {
+  FIELD_FORCE_ROLE_LABEL,
+  passwordPolicyViolation,
+  userRoleLabel,
+} from "@safestock/shared-types";
+import { PasswordStrengthChecklist } from "@/components/auth/password-strength-checklist";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { stripDiacritics } from "@/lib/vi-text";
 import { CreateUserDialog } from "./create-user-dialog";
@@ -115,7 +120,8 @@ export function AdminUsersView({ warehouseId }: { warehouseId: string }) {
     // Tìm cả theo tên đăng nhập: nó hiện ngay cạnh họ tên trên cùng một dòng,
     // và người quen hệ thống nhớ "kho.longchau" nhanh hơn nhớ họ tên đầy đủ.
     return byRole.filter(
-      (u) => stripDiacritics(u.fullName).includes(query) || stripDiacritics(u.email).includes(query),
+      (u) =>
+        stripDiacritics(u.fullName).includes(query) || stripDiacritics(u.email).includes(query),
     );
   }, [users, filter, search]);
   const pagination = usePagination(visible);
@@ -285,14 +291,20 @@ export function AdminUsersView({ warehouseId }: { warehouseId: string }) {
                     onChange={(event) =>
                       setPasswordEdit({ ...passwordEdit, password: event.target.value })
                     }
-                    placeholder="Mật khẩu mới, ít nhất 8 ký tự"
+                    placeholder="Mật khẩu mới: ≥ 8 ký tự, chữ hoa, số, ký tự đặc biệt"
                     type="password"
                     value={passwordEdit.password}
                   />
+                  <div className="basis-full">
+                    <PasswordStrengthChecklist password={passwordEdit.password} />
+                  </div>
                   <button
                     aria-label="Lưu mật khẩu mới"
                     className="inline-flex h-10 items-center gap-2 rounded-md bg-[var(--color-critical)] px-3 text-sm font-semibold text-white disabled:opacity-50"
-                    disabled={passwordEdit.password.length < 8 || changePassword.isPending}
+                    disabled={
+                      Boolean(passwordPolicyViolation(passwordEdit.password)) ||
+                      changePassword.isPending
+                    }
                     onClick={() =>
                       setPendingAction({
                         title: `Đổi mật khẩu của ${u.fullName}?`,

@@ -165,7 +165,7 @@ describe("AdminUserService — ranh giới giữa các xã", () => {
       await expect(
         service.create(XUAN_THO_ADMIN.id, {
           email: "nguoimoi",
-          password: "matkhau123",
+          password: "MatKhau123@",
           fullName: "Người mới",
           role: UserRole.WAREHOUSE,
           warehouseId: "kho-long-chau",

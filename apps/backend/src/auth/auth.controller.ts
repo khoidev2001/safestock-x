@@ -24,7 +24,9 @@ import {
   RequestNotificationEmailDto,
   RequestPasswordResetDto,
   RequestPhoneVerificationDto,
+  ResendLoginOtpDto,
   UpdateProfileDto,
+  VerifyLoginOtpDto,
 } from "./dto";
 import { NotificationEmailService } from "./notification-email.service";
 import { PasswordResetService } from "./password-reset.service";
@@ -56,8 +58,33 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
     @Body() dto: LoginDto,
   ) {
-    const session = await this.auth.login(dto.email, dto.password, getAuthSourceIp(request));
+    const result = await this.auth.login(dto.email, dto.password, getAuthSourceIp(request));
+    // Tài khoản quản trị: chưa có phiên, chỉ có thẻ thử thách chờ nhập mã. Không đặt
+    // cookie nào ở bước này.
+    if ("otpRequired" in result) return result;
+    return this.respondWithSession(response, sessionTransport, result);
+  }
+
+  /** Bước hai đăng nhập quản trị — CÔNG KHAI: mã đúng thì mở phiên như đăng nhập thường. */
+  @Post("login/otp/verify")
+  async verifyLoginOtp(
+    @Request() request: ExpressRequest,
+    @Headers("x-session-transport") sessionTransport: string | undefined,
+    @Res({ passthrough: true }) response: Response,
+    @Body() dto: VerifyLoginOtpDto,
+  ) {
+    const session = await this.auth.verifyLoginOtp(
+      dto.challengeToken,
+      dto.code,
+      getAuthSourceIp(request),
+    );
     return this.respondWithSession(response, sessionTransport, session);
+  }
+
+  /** Xin gửi lại mã đăng nhập — CÔNG KHAI, có chặn 60 giây và hạn mức. */
+  @Post("login/otp/resend")
+  resendLoginOtp(@Request() request: ExpressRequest, @Body() dto: ResendLoginOtpDto) {
+    return this.auth.resendLoginOtp(dto.challengeToken, getAuthSourceIp(request));
   }
 
   @Post("refresh")
@@ -208,7 +235,7 @@ export class AuthController {
   private respondWithSession(
     response: Response,
     sessionTransport: string | undefined,
-    session: Awaited<ReturnType<AuthService["login"]>>,
+    session: Awaited<ReturnType<AuthService["verifyLoginOtp"]>>,
   ) {
     if (!isWebSessionTransport(sessionTransport)) return session;
     setRefreshCookie(response, session.refreshToken, this.secureCookies);

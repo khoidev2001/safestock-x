@@ -1,4 +1,13 @@
-import { BadRequestException, Injectable, Optional, UnauthorizedException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ForbiddenException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Optional,
+  UnauthorizedException,
+} from "@nestjs/common";
+import { EmailVerificationPurpose, type User } from "@prisma/client";
 import { communeNameFromUnitName } from "./commune-name";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
@@ -10,6 +19,16 @@ import { UpdateProfileDto } from "./dto";
 import { isSimulationSystemActorEmail } from "../simulation/simulation-system-actor-identity";
 import { AuthRateLimitService } from "./auth-rate-limit.service";
 import { normalizeLoginEmail } from "./login-email";
+import { EmailVerificationService } from "./email-verification.service";
+import {
+  IpWindowQuota,
+  LOGIN_CHALLENGE_TTL_SECONDS,
+  LOGIN_CHALLENGE_TYPE,
+  maskEmail,
+  requiresLoginOtp,
+  type LoginChallengePayload,
+  type LoginOtpChallenge,
+} from "./login-otp";
 
 @Injectable()
 export class AuthService {
@@ -18,7 +37,13 @@ export class AuthService {
     private jwt: JwtService,
     private config: ConfigService,
     @Optional() private readonly rateLimit?: AuthRateLimitService,
+    @Optional() private readonly verification?: EmailVerificationService,
   ) {}
+
+  /** Tối đa 30 lượt nhập mã / 15 phút mỗi IP — xem `IpWindowQuota`. */
+  private readonly otpVerifyQuota = new IpWindowQuota(30, 15 * 60_000);
+  /** Tối đa 10 lượt xin gửi lại mã / 15 phút mỗi IP. */
+  private readonly otpResendQuota = new IpWindowQuota(10, 15 * 60_000);
 
   async login(email: string, password: string, sourceIp = "unknown") {
     const normalizedEmail = normalizeLoginEmail(email);
@@ -43,6 +68,155 @@ export class AuthService {
       );
     }
     this.rateLimit?.clear(normalizedEmail, sourceIp);
+    // Tài khoản quản trị: đúng mật khẩu CHƯA đủ, phải qua bước mã gửi tới email.
+    // Không cấp phiên nào ở bước này — phiên chỉ sinh ra sau khi mã đúng.
+    if (requiresLoginOtp(user)) return this.startLoginOtp(user);
+    return this.openSession(user);
+  }
+
+  /**
+   * Bước hai của đăng nhập quản trị: mã đúng thì mở phiên như đăng nhập thường.
+   *
+   * Mã sai / hết hạn / sai quá số lần: `EmailVerificationService.consume` ném đúng câu
+   * cho từng trường hợp. Riêng mã hết hạn thì câu là "Mã đã hết hạn. Vui lòng gửi lại
+   * mã mới." để người dùng biết phải bấm gửi lại chứ không phải gõ lại.
+   */
+  async verifyLoginOtp(challengeToken: string, code: string, sourceIp = "unknown") {
+    this.assertOtpQuota(this.otpVerifyQuota, sourceIp);
+    const user = await this.userFromChallenge(challengeToken);
+    await this.requireVerification().consume({
+      userId: user.id,
+      code,
+      purpose: EmailVerificationPurpose.LOGIN_OTP,
+      // Email xác minh đổi giữa chừng thì mã cũ nằm ở hộp thư không còn là của tài
+      // khoản này — không được dùng.
+      expectedEmail: user.notificationEmail ?? undefined,
+    });
+    return this.openSession(user);
+  }
+
+  /** Xin mã mới. Chưa đủ 60 giây kể từ mã trước thì bị từ chối kèm số giây phải chờ. */
+  async resendLoginOtp(challengeToken: string, sourceIp = "unknown"): Promise<LoginOtpChallenge> {
+    this.assertOtpQuota(this.otpResendQuota, sourceIp);
+    const user = await this.userFromChallenge(challengeToken);
+    return this.sendLoginOtp(user, challengeToken);
+  }
+
+  /**
+   * Bắt đầu bước mã.
+   *
+   * Bấm "Đăng nhập" lại khi mã cũ còn hạn thì DÙNG LẠI mã đó, không gửi thư mới: người
+   * dùng quay lại màn trước rồi đăng nhập lần nữa là chuyện thường, và gửi thư mới mỗi
+   * lần như thế vừa làm đầy hộp thư vừa đốt oan hạn mức chống spam của chính họ.
+   */
+  private async startLoginOtp(user: User): Promise<LoginOtpChallenge> {
+    const verification = this.requireVerification();
+    if (!user.notificationEmail || !user.notificationEmailVerifiedAt) {
+      throw new ForbiddenException(
+        "Tài khoản quản trị chưa có email đã xác minh nên chưa nhận được mã đăng nhập. Hãy liên hệ quản trị cấp cao.",
+      );
+    }
+    const challengeToken = await this.signChallenge(user);
+    const pending = await verification.findPending(user.id, EmailVerificationPurpose.LOGIN_OTP);
+    if (pending) {
+      return {
+        otpRequired: true,
+        challengeToken,
+        email: maskEmail(pending.email),
+        expiresAt: pending.expiresAt.toISOString(),
+        resendAvailableAt: pending.resendAvailableAt.toISOString(),
+      };
+    }
+    return this.sendLoginOtp(user, challengeToken);
+  }
+
+  private async sendLoginOtp(user: User, challengeToken: string): Promise<LoginOtpChallenge> {
+    if (!user.notificationEmail || !user.notificationEmailVerifiedAt) {
+      throw new ForbiddenException(
+        "Tài khoản quản trị chưa có email đã xác minh nên chưa nhận được mã đăng nhập.",
+      );
+    }
+    const issued = await this.requireVerification().issue({
+      userId: user.id,
+      email: user.notificationEmail,
+      purpose: EmailVerificationPurpose.LOGIN_OTP,
+      recipientName: user.fullName,
+    });
+    return {
+      otpRequired: true,
+      challengeToken,
+      email: maskEmail(issued.email),
+      expiresAt: issued.expiresAt.toISOString(),
+      resendAvailableAt: issued.resendAvailableAt.toISOString(),
+      ...(issued.devCode ? { devCode: issued.devCode } : {}),
+    };
+  }
+
+  private signChallenge(user: User): Promise<string> {
+    const payload: LoginChallengePayload = {
+      sub: user.id,
+      typ: LOGIN_CHALLENGE_TYPE,
+      sv: user.sessionVersion,
+    };
+    return this.jwt.signAsync(payload, {
+      secret: this.challengeSecret(),
+      expiresIn: LOGIN_CHALLENGE_TTL_SECONDS,
+    });
+  }
+
+  private async userFromChallenge(challengeToken: string): Promise<User> {
+    let payload: LoginChallengePayload;
+    try {
+      payload = await this.jwt.verifyAsync<LoginChallengePayload>(String(challengeToken ?? ""), {
+        secret: this.challengeSecret(),
+      });
+    } catch {
+      throw new UnauthorizedException("Phiên đăng nhập đã hết hạn. Vui lòng nhập lại mật khẩu.");
+    }
+    if (payload.typ !== LOGIN_CHALLENGE_TYPE || !payload.sub) {
+      throw new UnauthorizedException("Phiên đăng nhập không hợp lệ. Vui lòng nhập lại mật khẩu.");
+    }
+    const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+    if (!user || user.sessionVersion !== payload.sv || !requiresLoginOtp(user)) {
+      throw new UnauthorizedException("Phiên đăng nhập không còn hiệu lực. Vui lòng nhập lại mật khẩu.");
+    }
+    return user;
+  }
+
+  /**
+   * Khoá ký riêng cho thẻ thử thách, suy từ khoá access.
+   *
+   * Không dùng thẳng khoá access: thẻ thử thách và access token cùng là JWT, dùng
+   * chung khoá thì một access token bị lộ cũng qua được bước kiểm chữ ký của thẻ
+   * thử thách (dù `typ` vẫn chặn). Tách khoá là bỏ hẳn đường đó.
+   */
+  private challengeSecret(): string {
+    return `${this.config.get<string>("JWT_ACCESS_SECRET") ?? ""}:login-otp-challenge`;
+  }
+
+  private requireVerification(): EmailVerificationService {
+    // Thiếu dịch vụ gửi mã thì CHẶN đăng nhập quản trị, tuyệt đối không cho đi tắt
+    // qua bước mã — lỗi cấu hình không được biến thành lỗ hổng.
+    if (!this.verification) {
+      throw new HttpException(
+        "Chưa gửi được mã đăng nhập. Vui lòng thử lại sau.",
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+    return this.verification;
+  }
+
+  private assertOtpQuota(quota: IpWindowQuota, sourceIp: string): void {
+    const wait = quota.take(sourceIp);
+    if (wait > 0) {
+      throw new HttpException(
+        `Thao tác quá nhiều lần. Vui lòng thử lại sau ${Math.ceil(wait / 60)} phút.`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+  }
+
+  private async openSession(user: User) {
     /*
       Đăng nhập MỞ THÊM một phiên, không thu hồi phiên nào đang có.
       

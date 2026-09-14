@@ -112,3 +112,21 @@ export class ConfirmPasswordResetDto {
   @MaxLength(128)
   password!: string;
 }
+
+/** Bước hai của đăng nhập quản trị: thẻ thử thách nhận từ bước mật khẩu + mã 6 số. */
+export class VerifyLoginOtpDto {
+  @IsString()
+  @MaxLength(2048)
+  challengeToken!: string;
+
+  @IsString()
+  @MaxLength(12)
+  code!: string;
+}
+
+/** Xin gửi lại mã đăng nhập. */
+export class ResendLoginOtpDto {
+  @IsString()
+  @MaxLength(2048)
+  challengeToken!: string;
+}

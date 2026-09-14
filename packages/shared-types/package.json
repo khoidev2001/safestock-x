@@ -12,7 +12,8 @@
     "lint:fix": "eslint . --fix",
     "test:briefing": "pnpm build && node --test tests/briefing.test.cjs",
     "test:inventory-qr": "pnpm build && node --test tests/inventory-qr.test.cjs",
-    "test:route-arrows": "pnpm build && node --test tests/route-arrows.test.cjs"
+    "test:route-arrows": "pnpm build && node --test tests/route-arrows.test.cjs",
+    "test:password-policy": "pnpm build && node --test tests/password-policy.test.cjs"
   },
   "devDependencies": {
     "typescript": "^5.5.4"
