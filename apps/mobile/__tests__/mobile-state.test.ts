@@ -1,6 +1,19 @@
 import assert from "node:assert/strict";
+import {
+  missionFingerprint,
+  planMissionPrefetch,
+  pruneMissionIndex,
+  PREFETCH_MAX_AGE_MS,
+} from "../mission-prefetch-state";
 import test from "node:test";
 import { foldVietnamese } from "../vietnamese-text";
+import {
+  MAX_TILES_PER_MISSION,
+  initialViewZoom,
+  mapTileKey,
+  mapTileRemoteUrl,
+  planMissionMapTiles,
+} from "../map-tile-plan";
 import {
   LOGIN_OTP_EXPIRED_MESSAGE,
   isLoginOtpChallenge,
@@ -1219,6 +1232,128 @@ test("đóng biểu mẫu không theo thứ tự đã mở vẫn trả lỗi v�
   // Không còn ai nghe thì im lặng, không ném lỗi.
   const empty = createErrorChannel();
   empty.emit("khong ai nghe");
+});
+
+test("vân tay dòng nhiệm vụ: cùng dữ liệu khác thứ tự khoá thì giống, đổi trạng thái thì khác", () => {
+  /*
+    API không có `updatedAt`. Vân tay là cách duy nhất biết chi tiết đã đổi mà
+    không gọi thêm. Khoá đảo thứ tự mà ra vân tay khác thì cứ 15 giây app tải lại
+    toàn bộ; trạng thái đổi mà vân tay y nguyên thì bản lưu ngoại tuyến nói dối.
+  */
+  const a = { id: "m1", status: "READY", requirements: [{ sku: "WATER-01", required: 20 }] };
+  const b = { requirements: [{ required: 20, sku: "WATER-01" }], status: "READY", id: "m1" };
+  assert.equal(missionFingerprint(a), missionFingerprint(b));
+  assert.notEqual(missionFingerprint(a), missionFingerprint({ ...a, status: "COMPLETED" }));
+  assert.notEqual(
+    missionFingerprint(a),
+    missionFingerprint({ ...a, requirements: [{ sku: "WATER-01", required: 21 }] }),
+  );
+});
+
+test("tải ngầm chỉ nhiệm vụ chưa lưu, đã đổi hoặc đã cũ — không tải lại cả danh sách", () => {
+  const now = 10_000_000;
+  const missions = [
+    { id: "moi" },
+    { id: "doi" },
+    { id: "cu" },
+    { id: "nguyen" },
+    { id: "missingMap" },
+  ];
+  const fingerprints = new Map([
+    ["moi", "f1"],
+    ["doi", "f2-moi"],
+    ["cu", "f3"],
+    ["nguyen", "f4"],
+    ["missingMap", "f5"],
+  ]);
+  const index = {
+    doi: { fingerprint: "f2-cu", storedAt: now - 1000, mapTiles: true },
+    cu: { fingerprint: "f3", storedAt: now - PREFETCH_MAX_AGE_MS, mapTiles: true },
+    nguyen: { fingerprint: "f4", storedAt: now - 1000, mapTiles: true },
+    // Lưu từ trước khi có bản đồ offline (hoặc mất sóng giữa lúc tải ô): lấy lại.
+    missingMap: { fingerprint: "f5", storedAt: now - 1000 },
+  };
+  assert.deepEqual(planMissionPrefetch(missions, fingerprints, index, now), [
+    "moi",
+    "doi",
+    "cu",
+    "missingMap",
+  ]);
+  // Giới hạn mỗi lượt vẫn giữ thứ tự danh sách: nhiệm vụ đầu danh sách là thứ
+  // người dùng thấy trước và dễ mở nhất.
+  assert.deepEqual(planMissionPrefetch(missions, fingerprints, index, now, { limit: 2 }), [
+    "moi",
+    "doi",
+  ]);
+});
+
+test("dọn bản lưu chỉ khi vượt trần, bỏ cái cũ nhất đã rời danh sách, không đụng cái đang hiện", () => {
+  const index = {
+    a: { fingerprint: "x", storedAt: 1 },
+    b: { fingerprint: "x", storedAt: 2 },
+    c: { fingerprint: "x", storedAt: 3 },
+    d: { fingerprint: "x", storedAt: 4 },
+  };
+  // Chưa vượt trần: không xoá gì, kể cả nhiệm vụ đã rời danh sách trang đầu.
+  assert.deepEqual(pruneMissionIndex(index, ["d"], 10).removedIds, []);
+  // Vượt trần: bỏ cái cũ nhất KHÔNG còn trong danh sách; "a" cũ nhất nhưng đang hiện.
+  const pruned = pruneMissionIndex(index, ["a", "d"], 3);
+  assert.deepEqual(pruned.removedIds, ["b"]);
+  assert.deepEqual(Object.keys(pruned.index).sort(), ["a", "c", "d"]);
+});
+
+// Kho Long Châu và Kho cứu trợ trung tâm Đồng Xuân — cách nhau vài km, đúng cỡ một nhiệm vụ thật.
+const MAP_POINTS = [
+  { lat: 13.3782, lng: 109.1042 },
+  { lat: 13.4051, lng: 109.0731 },
+];
+
+test("bản đồ offline: tính đúng mức nhìn ban đầu như fitBounds của trang", () => {
+  assert.equal(initialViewZoom([]), 15);
+  assert.equal(initialViewZoom([MAP_POINTS[0]]), 16);
+  // ~4 km ngang: ở z13 vùng này rộng ~180px, lọt khung 256×176; z14 thì ~360px, không lọt.
+  assert.equal(initialViewZoom(MAP_POINTS), 13);
+});
+
+test("bản đồ offline: ô vệ tinh xin sâu hơn 1 bậc (detectRetina), lớp chữ đúng mức nhìn", () => {
+  const tiles = planMissionMapTiles(MAP_POINTS);
+  const imageryZooms = [...new Set(tiles.filter((t) => t.layer === "imagery").map((t) => t.z))];
+  const labelZooms = [...new Set(tiles.filter((t) => t.layer === "labels").map((t) => t.z))];
+  assert.deepEqual(imageryZooms, [12, 13, 14, 15, 16]);
+  assert.deepEqual(labelZooms, [11, 12, 13, 14, 15]);
+  assert.ok(tiles.length <= MAX_TILES_PER_MISSION, `vượt trần: ${tiles.length}`);
+  // Không trùng ô: ô trùng là tải hai lần vào cùng một tệp.
+  assert.equal(new Set(tiles.map(mapTileKey)).size, tiles.length);
+  // Ô chứa từng điểm ở mức sâu nhất phải có mặt — thiếu là đúng chỗ cần xem bị xám.
+  for (const point of MAP_POINTS) {
+    const z = 16;
+    const n = 2 ** z;
+    const x = Math.floor(((point.lng + 180) / 360) * n);
+    const rad = (point.lat * Math.PI) / 180;
+    const y = Math.floor(((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * n);
+    assert.ok(tiles.some((t) => t.layer === "imagery" && t.z === z && t.x === x && t.y === y));
+  }
+});
+
+test("bản đồ offline: mức sâu nhất bị bỏ khi vượt trần, mức nông luôn giữ; không toạ độ thì không tải", () => {
+  // Hai điểm cách xa (~60 km): mức canh khung thấp, nhưng số ô vẫn trong trần.
+  const far = planMissionMapTiles([
+    { lat: 13.0, lng: 109.0 },
+    { lat: 13.5, lng: 109.3 },
+  ]);
+  assert.ok(far.length > 0 && far.length <= MAX_TILES_PER_MISSION);
+  assert.deepEqual(planMissionMapTiles([]), []);
+  assert.deepEqual(planMissionMapTiles([{ lat: Number.NaN, lng: 109 }]), []);
+});
+
+test("bản đồ offline: tên tệp và URL khớp mẫu trang Leaflet dựng", () => {
+  const imagery = { layer: "imagery" as const, z: 16, x: 52395, y: 30370 };
+  const labels = { layer: "labels" as const, z: 15, x: 26197, y: 15185 };
+  assert.equal(mapTileKey(imagery), "imagery/16/52395/30370.jpg");
+  assert.equal(mapTileKey(labels), "labels/15/26197/15185.png");
+  // Esri đảo thứ tự {y}/{x}; CARTO lấy bản @2x vì máy thật là màn mật độ cao.
+  assert.match(mapTileRemoteUrl(imagery), /World_Imagery\/MapServer\/tile\/16\/30370\/52395$/);
+  assert.match(mapTileRemoteUrl(labels), /voyager_only_labels\/15\/26197\/15185@2x\.png$/);
 });
 
 const OTP_T0 = Date.parse("2026-09-14T08:00:00.000Z");

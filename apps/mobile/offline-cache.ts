@@ -70,6 +70,11 @@ export async function writeOfflineCache<T>(userId: string, scope: string, data: 
   }
 }
 
+/** Xoá một bản lưu. Dùng để dọn chi tiết nhiệm vụ đã rời danh sách khi vượt trần. */
+export async function removeOfflineCache(userId: string, scope: string): Promise<void> {
+  await AsyncStorage.removeItem(cacheKey(userId, scope));
+}
+
 export async function clearOfflineCache(userId: string): Promise<void> {
   const prefix = `${CACHE_PREFIX}.${userId}.`;
   const keys = (await AsyncStorage.getAllKeys()).filter((key) => key.startsWith(prefix));

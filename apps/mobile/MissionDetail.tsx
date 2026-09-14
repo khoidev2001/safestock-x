@@ -30,10 +30,8 @@ import {
 import {
   acceptWarehouseMaterialRequest,
   completeMission,
-  fetchMission,
   fetchMissionDeliveryPhoto,
   fetchMissionWarehouseRoutes,
-  fetchWarehouseMaterialRequests,
   bulkWarehouseMaterialRequests,
   confirmWarehousePickup,
   fetchReturnableSupplies,
@@ -60,6 +58,7 @@ import {
 import { supplyOf, supplyProgress } from "./supplies";
 import { SupplyThumb } from "./SupplyThumb";
 import { confirmAction, notify } from "./dialog";
+import { fetchMissionForViewer } from "./mission-viewer";
 import { readOfflineCache, writeOfflineCache } from "./offline-cache";
 import { FIELD_FORCE_ROLE_LABEL } from "./role-labels";
 import {
@@ -1144,27 +1143,6 @@ export function MissionDetailScreen({
       />
     </View>
   );
-}
-
-/**
- * Tải nhiệm vụ theo đúng cách màn này cần cho vai người xem.
- *
- * Kho dùng phiếu riêng của mình (có đủ trường để thao tác xuất/ký nhận), nhưng
- * vẫn giữ lại phiếu của MỌI kho trong `allWarehouseRequests` — danh sách hoàn
- * trả theo kho cần xem được vật tư của cả kho khác.
- */
-async function fetchMissionForViewer(
-  token: string,
-  missionId: string,
-  role: string,
-): Promise<MissionDetail> {
-  const latest = await fetchMission(token, missionId);
-  latest.allWarehouseRequests = latest.warehouseRequests ?? [];
-  if (role === "WAREHOUSE") {
-    const ownRequests = await fetchWarehouseMaterialRequests(token);
-    latest.warehouseRequests = ownRequests.filter((request) => request.missionId === missionId);
-  }
-  return latest;
 }
 
 /**

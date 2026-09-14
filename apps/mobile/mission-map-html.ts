@@ -12,11 +12,14 @@
  * trưởng thôn, điều phối viên trên web và người đi cứu hộ nhìn thấy cùng một bức
  * ảnh — cùng một mái nhà, cùng một khúc sông.
  *
- * Bản đồ tải từ Internet: mất mạng thì trang tự báo, phần danh sách kho và vật tư
- * bên dưới vẫn đọc được từ bản lưu.
+ * XEM ĐƯỢC KHI MẤT MẠNG: Leaflet nhúng sẵn trong app (`leaflet-assets.ts`), còn ô
+ * ảnh thì đọc từ bộ nhớ máy trước (`offline-map-tiles.ts` tải sẵn khi app tự lưu
+ * nhiệm vụ), không có mới xin qua mạng. Vùng chưa kịp tải thì chỉ còn nền xám, các
+ * dấu ghim và tuyến đường vẫn vẽ đủ vì chúng nằm trong dữ liệu đã lưu.
  */
 
 import { houseSvg, routeArrowSvg, routeArrows, sosPinSvg, villaSvg } from "@safestock/shared-types";
+import { LEAFLET_CSS, LEAFLET_JS } from "./leaflet-assets";
 
 export interface MissionMapPoint {
   lat: number;
@@ -68,9 +71,6 @@ const ARROW_ICON_SIZE = 16;
  */
 const WAREHOUSE_COLOR = "#2f9e6e";
 
-const LEAFLET_CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-const LEAFLET_JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-
 /** Trung tâm mặc định: UBND xã Đồng Xuân, giống hằng DEFAULT_CENTER của web. */
 const DEFAULT_CENTER = { lat: 13.3782428, lng: 109.104259 };
 
@@ -98,7 +98,18 @@ function embedJson(value: unknown): string {
     .replace(/\u2029/g, "\\u2029");
 }
 
-export function buildMissionMapHtml(data: MissionMapData): string {
+export interface MissionMapHtmlOptions {
+  /**
+   * Thư mục ô bản đồ đã lưu trên máy (`file://.../map-tiles/`). null = chỉ dùng mạng
+   * (Expo Web, hoặc máy chưa có bộ nhớ riêng).
+   */
+  tileRoot?: string | null;
+}
+
+export function buildMissionMapHtml(
+  data: MissionMapData,
+  options: MissionMapHtmlOptions = {},
+): string {
   const center = data.incident ?? data.warehouses[0] ?? DEFAULT_CENTER;
   /**
    * Mũi tên chỉ hướng, tính SẴN Ở ĐÂY rồi nhúng xuống trang.
@@ -121,7 +132,7 @@ export function buildMissionMapHtml(data: MissionMapData): string {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-<link rel="stylesheet" href="${LEAFLET_CSS}" />
+<style>${LEAFLET_CSS}</style>
 <style>
   html, body, #map { margin: 0; padding: 0; height: 100%; width: 100%; background: #e9edf2; }
   .legend {
@@ -156,7 +167,17 @@ export function buildMissionMapHtml(data: MissionMapData): string {
 </div>
 <div class="offline" id="offline">Không tải được bản đồ.<br />Kiểm tra mạng — danh sách kho và vật tư bên dưới vẫn đọc được.</div>
 <script>
+  // Lỗi JS trong trang WebView không hiện ở đâu cả trên bản release: đẩy ra app để
+  // ghi log, không thì bản đồ trắng mà không ai biết vì sao.
+  window.onerror = function (message, source, line, column) {
+    var text = JSON.stringify({ type: 'script-error', message: String(message), line: line, column: column });
+    if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(text);
+  };
+</script>
+<script>${LEAFLET_JS}</script>
+<script>
   var DATA = ${embedJson(data)};
+  var TILE_ROOT = ${embedJson(options.tileRoot ?? null)};
   var ARROWS = ${embedJson(arrowsByWarehouse)};
 
   function send(payload) {
@@ -202,6 +223,40 @@ export function buildMissionMapHtml(data: MissionMapData): string {
     });
   }
 
+  /**
+   * Lớp ô "máy trước, mạng sau".
+   *
+   * Mỗi ô thử tệp đã lưu (TILE_ROOT/<lớp>/<z>/<x>/<y>) trước; không có tệp thì mới
+   * xin URL mạng. Mức z lấy bằng \`_getZoomForUrl\` — đúng mức Leaflet dùng để dựng
+   * URL mạng sau khi detectRetina đã cộng bậc, nên khớp tên tệp app tải về. Hàm đó
+   * là nội bộ của Leaflet 1.9.4 — bản nhúng khoá cứng phiên bản này.
+   */
+  function offlineFirstLayer(L, folder, extension, remoteUrl, options) {
+    var Layer = L.TileLayer.extend({
+      createTile: function (coords, done) {
+        var tile = document.createElement('img');
+        tile.alt = '';
+        tile.setAttribute('role', 'presentation');
+        var remote = this.getTileUrl(coords);
+        var local = TILE_ROOT
+          ? TILE_ROOT + folder + '/' + this._getZoomForUrl() + '/' + coords.x + '/' + coords.y + '.' + extension
+          : null;
+        tile.onload = function () { done(null, tile); };
+        tile.onerror = function (event) {
+          if (local) {
+            local = null;
+            tile.src = remote;
+            return;
+          }
+          done(event, tile);
+        };
+        tile.src = local || remote;
+        return tile;
+      },
+    });
+    return new Layer(remoteUrl, options);
+  }
+
   function boot() {
     if (!window.L) {
       document.getElementById('offline').style.display = 'flex';
@@ -227,7 +282,10 @@ export function buildMissionMapHtml(data: MissionMapData): string {
     // không có ảnh thật — nó trả HTTP 200 kèm ảnh xám in chữ "Map data not yet
     // available", và Leaflet dán thẳng chữ đó lên khắp bản đồ. Hạ xuống 17 thì
     // mức xin cao nhất vẫn là z18, đúng mức sâu nhất còn ảnh thật.
-    L.tileLayer(
+    offlineFirstLayer(
+      L,
+      'imagery',
+      'jpg',
       'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       // maxZoom khai 20 chứ không phải 19: detectRetina tự TRỪ 1 vào maxZoom của
       // lớp (thấy tận mắt — để 19 thì từ mức 19 trở lên lớp vệ tinh ra ngoài phạm
@@ -238,7 +296,10 @@ export function buildMissionMapHtml(data: MissionMapData): string {
     // Lớp chữ có sẵn bản @2x, nên chỉ cần chỗ giữ {r} — Leaflet tự thay thành
     // '@2x' trên màn mật độ cao. KHÔNG bật detectRetina ở đây: bật là vừa cộng
     // zoom vừa lấy @2x, thành lấy mẫu thừa gấp bốn.
-    L.tileLayer(
+    offlineFirstLayer(
+      L,
+      'labels',
+      'png',
       'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png',
       { maxZoom: 19, maxNativeZoom: 19 }
     ).addTo(map);
@@ -314,14 +375,7 @@ export function buildMissionMapHtml(data: MissionMapData): string {
     send({ type: 'ready' });
   }
 
-  var script = document.createElement('script');
-  script.src = '${LEAFLET_JS}';
-  script.onload = boot;
-  script.onerror = function () {
-    document.getElementById('offline').style.display = 'flex';
-    send({ type: 'error' });
-  };
-  document.head.appendChild(script);
+  boot();
 </script>
 </body>
 </html>`;

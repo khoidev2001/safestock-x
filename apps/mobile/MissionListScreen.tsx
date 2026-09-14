@@ -22,6 +22,7 @@ import {
   sortMissionsForFieldForce,
   type MissionWorkStage,
 } from "./mission-state";
+import { prefetchMissionsForOffline } from "./mission-prefetch";
 import { readOfflineCache, writeOfflineCache } from "./offline-cache";
 import { PAGE_SIZE, appendPage, hasMoreAfter, nextCursor } from "./paged-list-state";
 import { c, styles } from "./styles";
@@ -126,6 +127,9 @@ export function MissionListScreen({
       setCacheStoredAt(null);
       setError(null);
       await writeOfflineCache(user.id, "missions", live);
+      // Tự lưu chi tiết từng nhiệm vụ để mất mạng vẫn mở được — chạy ngầm, không
+      // chờ: người dùng đang nhìn danh sách thật, không được bắt họ đợi phần này.
+      void prefetchMissionsForOffline({ token, userId: user.id, role: user.role, missions: live });
     } catch (loadError) {
       setError(
         hasCache
@@ -138,7 +142,7 @@ export function MissionListScreen({
       setLoading(false);
       setRefreshing(false);
     }
-  }, [token, user.id]);
+  }, [token, user.id, user.role]);
 
   useEffect(() => {
     void load();
@@ -161,6 +165,13 @@ export function MissionListScreen({
     try {
       const page = await fetchMissions(token, { limit: PAGE_SIZE, cursor });
       setMissions((current) => appendPage(current, page));
+      // Trang sau cũng lưu: người dùng đã cuộn tới là đã có thể cần mở chúng.
+      void prefetchMissionsForOffline({
+        token,
+        userId: user.id,
+        role: user.role,
+        missions: appendPage(missionsRef.current, page),
+      });
       setHasMore(hasMoreAfter(page));
       setMoreError(false);
     } catch {
@@ -170,7 +181,7 @@ export function MissionListScreen({
       loadingMoreRef.current = false;
       setLoadingMore(false);
     }
-  }, [token]);
+  }, [token, user.id, user.role]);
 
   /*
     Xếp lúc VẼ, không phải lúc tải.
