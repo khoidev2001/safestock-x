@@ -6,8 +6,10 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { BrandLoader } from "@/components/shared/brand-loader";
 import { ForgotPasswordDialog } from "@/components/auth/forgot-password-dialog";
+import { LoginOtpStep } from "@/components/auth/login-otp-step";
 import { ColorIcon } from "@/components/shared/color-icon";
 import { BASE } from "@/lib/api";
+import { isLoginOtpChallenge, type LoginOtpChallenge } from "@/lib/login-otp-state";
 import { useAuth } from "@/lib/auth-store";
 import { markSessionPresent } from "@/lib/session-marker";
 import { publishSession } from "@/lib/session-channel";
@@ -26,6 +28,17 @@ const SUCCESS_PAUSE_MS = 700;
 
 type FormState = "idle" | "sending" | "success";
 
+/** Khung thẻ đăng nhập: <form> ở bước mật khẩu, <div> ở bước mã (xem chỗ dùng). */
+function PanelElement({
+  onSubmit,
+  ...props
+}: React.HTMLAttributes<HTMLElement> & {
+  onSubmit?: (event: React.FormEvent) => void;
+  children: React.ReactNode;
+}) {
+  return onSubmit ? <form {...props} onSubmit={onSubmit} /> : <div {...props} />;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const setAuth = useAuth((state) => state.setAuth);
@@ -35,7 +48,100 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [formState, setFormState] = useState<FormState>("idle");
   const [isForgotOpen, setIsForgotOpen] = useState(false);
+  /** Có giá trị = tài khoản quản trị đã đúng mật khẩu, đang chờ nhập mã từ email. */
+  const [challenge, setChallenge] = useState<LoginOtpChallenge | null>(null);
+  const [otpError, setOtpError] = useState("");
+  const [otpNotice, setOtpNotice] = useState("");
   const isBusy = formState !== "idle";
+
+  /** Vào được rồi: lưu phiên, báo các tab khác, dừng một nhịp rồi sang bảng điều khiển. */
+  function completeLogin(data: { accessToken: string; user: Parameters<typeof setAuth>[1] }) {
+    setAuth(data.accessToken, data.user);
+    // Từ giờ máy này mới có cái để khôi phục ở những lần mở trang sau.
+    markSessionPresent();
+    // Đăng nhập thu hồi phiên cũ của tài khoản: tab nào đang mở phải nhận token
+    // mới ngay, không thì nó chạy tiếp với token vừa chết và bị đá ra ngoài.
+    publishSession(data.accessToken, data.user);
+    // KHÔNG trả về trạng thái "idle" ở đây: từ lúc này tấm thẻ chỉ còn việc
+    // báo đã vào được rồi nhường chỗ cho bảng điều khiển. Mở khoá lại các ô
+    // nhập giữa chừng chỉ mời người dùng bấm Đăng nhập lần thứ hai.
+    setFormState("success");
+    setTimeout(() => router.push("/overall"), SUCCESS_PAUSE_MS);
+  }
+
+  /** Câu lỗi máy chủ trả về; bước mã cần đúng câu đó (hết hạn, sai mã, còn N lần thử…). */
+  async function serverMessage(response: Response, fallback: string): Promise<string> {
+    const body = (await response.json().catch(() => null)) as {
+      message?: string | string[];
+    } | null;
+    const message = Array.isArray(body?.message) ? body?.message.join(". ") : body?.message;
+    return message || fallback;
+  }
+
+  async function verifyOtp(code: string) {
+    if (!challenge) return;
+    setOtpError("");
+    setOtpNotice("");
+    setFormState("sending");
+    try {
+      const response = await fetch(`${BASE}/api/auth/login/otp/verify`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", "X-Session-Transport": "web" },
+        body: JSON.stringify({ challengeToken: challenge.challengeToken, code }),
+      });
+      if (!response.ok) {
+        const message = await serverMessage(response, "Chưa xác nhận được mã. Vui lòng thử lại.");
+        // Thẻ thử thách hết hạn hoặc không còn hiệu lực: phải nhập lại mật khẩu từ đầu.
+        if (response.status === 401) {
+          setChallenge(null);
+          setError(message);
+        } else {
+          setOtpError(message);
+        }
+        setFormState("idle");
+        return;
+      }
+      completeLogin(await response.json());
+    } catch {
+      setOtpError("Không thể kết nối đến hệ thống. Vui lòng kiểm tra mạng và thử lại.");
+      setFormState("idle");
+    }
+  }
+
+  async function resendOtp() {
+    if (!challenge) return;
+    setOtpError("");
+    setOtpNotice("");
+    setFormState("sending");
+    try {
+      const response = await fetch(`${BASE}/api/auth/login/otp/resend`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ challengeToken: challenge.challengeToken }),
+      });
+      if (!response.ok) {
+        const message = await serverMessage(response, "Chưa gửi lại được mã. Vui lòng thử lại.");
+        if (response.status === 401) {
+          setChallenge(null);
+          setError(message);
+        } else {
+          setOtpError(message);
+        }
+        return;
+      }
+      const next = await response.json();
+      if (isLoginOtpChallenge(next)) {
+        setChallenge(next);
+        setOtpNotice("Đã gửi mã mới tới " + next.email + ".");
+      }
+    } catch {
+      setOtpError("Không thể kết nối đến hệ thống. Vui lòng kiểm tra mạng và thử lại.");
+    } finally {
+      setFormState("idle");
+    }
+  }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -68,23 +174,26 @@ export default function LoginPage() {
               "Trong lúc này gõ đúng mật khẩu cũng không vào được — hãy chờ rồi thử lại.",
           );
         }
+        // Quản trị chưa có email đã xác minh, hay máy chủ chưa gửi được mã: nói đúng
+        // câu máy chủ trả về, câu chung chung không cho người dùng biết phải làm gì.
+        if (response.status === 403 || response.status === 400 || response.status === 503) {
+          throw new Error(await serverMessage(response, "Chưa thể đăng nhập bằng tài khoản này."));
+        }
         if (response.status >= 500) {
           throw new Error("Hệ thống đang tạm gián đoạn. Vui lòng thử lại sau.");
         }
         throw new Error("Chưa thể đăng nhập bằng tài khoản này.");
       }
       const data = await response.json();
-      setAuth(data.accessToken, data.user);
-      // Từ giờ máy này mới có cái để khôi phục ở những lần mở trang sau.
-      markSessionPresent();
-      // Đăng nhập thu hồi phiên cũ của tài khoản: tab nào đang mở phải nhận token
-      // mới ngay, không thì nó chạy tiếp với token vừa chết và bị đá ra ngoài.
-      publishSession(data.accessToken, data.user);
-      // KHÔNG trả về trạng thái "idle" ở đây: từ lúc này tấm thẻ chỉ còn việc
-      // báo đã vào được rồi nhường chỗ cho bảng điều khiển. Mở khoá lại các ô
-      // nhập giữa chừng chỉ mời người dùng bấm Đăng nhập lần thứ hai.
-      setFormState("success");
-      setTimeout(() => router.push("/overall"), SUCCESS_PAUSE_MS);
+      if (isLoginOtpChallenge(data)) {
+        // Tài khoản quản trị: đúng mật khẩu, chưa có phiên. Sang bước nhập mã.
+        setChallenge(data);
+        setOtpError("");
+        setOtpNotice("");
+        setFormState("idle");
+        return;
+      }
+      completeLogin(data);
     } catch (err) {
       setError(
         err instanceof TypeError
@@ -115,9 +224,11 @@ export default function LoginPage() {
         </section>
 
         <section className="w-full max-w-lg justify-self-center lg:justify-self-end">
-          <form
+          {/* Đang ở bước mã thì khung ngoài là <div>: bước mã có <form> riêng, và
+              form lồng trong form thì trình duyệt gửi nhầm form ngoài. */}
+          <PanelElement
             className="app-panel login-panel login-panel-enter w-full max-w-lg p-6 sm:p-7 md:p-9"
-            onSubmit={submit}
+            onSubmit={challenge ? undefined : submit}
           >
             {formState === "sending" ? <span aria-hidden className="login-progress" /> : null}
 
@@ -133,85 +244,106 @@ export default function LoginPage() {
               />
             </div>
             <div className="text-center">
-              <h2 className="text-2xl font-semibold">Đăng nhập hệ thống</h2>
+              <h2 className="text-2xl font-semibold">
+                {challenge ? "Xác nhận đăng nhập" : "Đăng nhập hệ thống"}
+              </h2>
             </div>
 
-            <div className="mt-6 flex flex-col gap-2">
-              <label htmlFor="email" className="text-sm font-medium">
-                Tên đăng nhập
-              </label>
-              <input
-                autoComplete="username"
-                className="login-field h-11 rounded-md border px-3 outline-none transition focus:border-[var(--color-accent)] disabled:opacity-70"
-                disabled={isBusy}
-                id="email"
-                onChange={(event) => setEmail(event.target.value)}
-                value={email}
+            {challenge ? (
+              <LoginOtpStep
+                busy={isBusy}
+                challenge={challenge}
+                error={otpError}
+                notice={otpNotice}
+                onBack={() => {
+                  setChallenge(null);
+                  setPassword("");
+                  setOtpError("");
+                  setOtpNotice("");
+                }}
+                onResend={() => void resendOtp()}
+                onVerify={(code) => void verifyOtp(code)}
               />
-            </div>
-
-            <div className="mt-4 flex flex-col gap-2">
-              <label htmlFor="password" className="text-sm font-medium">
-                Mật khẩu
-              </label>
-              <div className="relative">
-                <input
-                  autoComplete="current-password"
-                  className="login-field h-11 w-full rounded-md border px-3 pr-11 outline-none transition focus:border-[var(--color-accent)] disabled:opacity-70"
-                  disabled={isBusy}
-                  id="password"
-                  onChange={(event) => setPassword(event.target.value)}
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                />
-                <button
-                  aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
-                  aria-pressed={showPassword}
-                  className="login-password-toggle absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center transition"
-                  disabled={isBusy}
-                  onClick={() => setShowPassword((current) => !current)}
-                  type="button"
-                >
-                  <ColorIcon
-                    name={showPassword ? "passwordHide" : "passwordShow"}
-                    size={20}
-                    tone="blue"
+            ) : (
+              <>
+                <div className="mt-6 flex flex-col gap-2">
+                  <label htmlFor="email" className="text-sm font-medium">
+                    Tên đăng nhập
+                  </label>
+                  <input
+                    autoComplete="username"
+                    className="login-field h-11 rounded-md border px-3 outline-none transition focus:border-[var(--color-accent)] disabled:opacity-70"
+                    disabled={isBusy}
+                    id="email"
+                    onChange={(event) => setEmail(event.target.value)}
+                    value={email}
                   />
+                </div>
+
+                <div className="mt-4 flex flex-col gap-2">
+                  <label htmlFor="password" className="text-sm font-medium">
+                    Mật khẩu
+                  </label>
+                  <div className="relative">
+                    <input
+                      autoComplete="current-password"
+                      className="login-field h-11 w-full rounded-md border px-3 pr-11 outline-none transition focus:border-[var(--color-accent)] disabled:opacity-70"
+                      disabled={isBusy}
+                      id="password"
+                      onChange={(event) => setPassword(event.target.value)}
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                    />
+                    <button
+                      aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                      aria-pressed={showPassword}
+                      className="login-password-toggle absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center transition"
+                      disabled={isBusy}
+                      onClick={() => setShowPassword((current) => !current)}
+                      type="button"
+                    >
+                      <ColorIcon
+                        name={showPassword ? "passwordHide" : "passwordShow"}
+                        size={20}
+                        tone="blue"
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                {error ? (
+                  <p className="mt-4 rounded-md px-3 py-2 text-sm text-[var(--color-critical)] ring-1 ring-[color-mix(in_oklch,var(--color-critical)_24%,transparent)]">
+                    {error}
+                  </p>
+                ) : null}
+
+                <button
+                  className="mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[var(--color-accent)] px-4 font-semibold text-[var(--color-accent-fg)] transition hover:brightness-95 active:translate-y-px disabled:opacity-60"
+                  disabled={isBusy}
+                  type="submit"
+                >
+                  {isBusy ? (
+                    <ColorIcon className="animate-spin" name="loading" size={18} tone="green" />
+                  ) : null}
+                  {formState === "success"
+                    ? "Đã đăng nhập"
+                    : formState === "sending"
+                      ? "Đang đăng nhập"
+                      : "Đăng nhập"}
                 </button>
-              </div>
-            </div>
 
-            {error ? (
-              <p className="mt-4 rounded-md px-3 py-2 text-sm text-[var(--color-critical)] ring-1 ring-[color-mix(in_oklch,var(--color-critical)_24%,transparent)]">
-                {error}
-              </p>
-            ) : null}
-
-            <button
-              className="mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[var(--color-accent)] px-4 font-semibold text-[var(--color-accent-fg)] transition hover:brightness-95 active:translate-y-px disabled:opacity-60"
-              disabled={isBusy}
-              type="submit"
-            >
-              {isBusy ? (
-                <ColorIcon className="animate-spin" name="loading" size={18} tone="green" />
-              ) : null}
-              {formState === "success"
-                ? "Đã đăng nhập"
-                : formState === "sending"
-                  ? "Đang đăng nhập"
-                  : "Đăng nhập"}
-            </button>
-
-            <div className="mt-4 text-right">
-              <button
-                className="min-h-9 rounded-md px-2 text-sm font-semibold text-[var(--color-accent)] underline-offset-2 transition hover:underline disabled:opacity-60"
-                disabled={isBusy}
-                onClick={() => setIsForgotOpen(true)}
-                type="button"
-              >
-                Quên mật khẩu?
-              </button>
-            </div>
+                <div className="mt-4 text-right">
+                  <button
+                    className="min-h-9 rounded-md px-2 text-sm font-semibold text-[var(--color-accent)] underline-offset-2 transition hover:underline disabled:opacity-60"
+                    disabled={isBusy}
+                    onClick={() => setIsForgotOpen(true)}
+                    type="button"
+                  >
+                    Quên mật khẩu?
+                  </button>
+                </div>
+              </>
+            )}
 
             <div className="mt-6 border-t pt-5 text-center">
               <Link
@@ -243,7 +375,7 @@ export default function LoginPage() {
                 )}
               </div>
             ) : null}
-          </form>
+          </PanelElement>
         </section>
       </div>
 

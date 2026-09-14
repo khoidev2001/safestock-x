@@ -63,6 +63,16 @@ const MAIL_COPY: Record<EmailVerificationPurpose, MailCopy> = {
     ignoreNote:
       "Nếu bạn KHÔNG yêu cầu đặt lại mật khẩu, hãy bỏ qua email này — mật khẩu hiện tại vẫn giữ nguyên. Nhưng nếu nhận nhiều thư như vậy mà không phải bạn yêu cầu, hãy báo quản trị viên: có thể ai đó đang dò tài khoản của bạn.",
   },
+  [EmailVerificationPurpose.LOGIN_OTP]: {
+    subject: (code) => `${code} là mã đăng nhập tài khoản quản trị — ${APP_NAME}`,
+    banner: "Mã đăng nhập tài khoản quản trị",
+    intro:
+      "Có người vừa nhập <strong>đúng mật khẩu</strong> của tài khoản quản trị gắn với email này. Nhập mã bên dưới ở màn hình đăng nhập để hoàn tất. Mã chỉ dùng được <strong>một lần</strong> và <strong>hết hạn sau 60 giây</strong>.",
+    introText:
+      "Có người vừa nhập đúng mật khẩu của tài khoản quản trị gắn với email này. Nhập mã trên ở màn hình đăng nhập để hoàn tất. Mã chỉ dùng được một lần và hết hạn sau 60 giây.",
+    ignoreNote:
+      "Nếu KHÔNG phải bạn đang đăng nhập, mật khẩu của bạn đã bị lộ: đừng đưa mã này cho ai, và đổi mật khẩu ngay. Không có mã thì kẻ kia vẫn chưa vào được.",
+  },
 };
 
 /**

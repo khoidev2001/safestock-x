@@ -21,6 +21,8 @@ import {
   login,
   logout as revokeServerSession,
   refreshSession,
+  resendLoginOtp,
+  verifyLoginOtp,
   type AuthUser,
   type LoginResult,
   type Notification,
@@ -54,6 +56,12 @@ import { clearOfflineCache } from "./offline-cache";
 import { formatShortTime, kindIcon } from "./disaster";
 import { MissionListScreen } from "./MissionListScreen";
 import { mobileRoleLabel } from "./role-labels";
+import {
+  isLoginOtpChallenge,
+  loginOtpInputError,
+  loginOtpView,
+  type LoginOtpChallenge,
+} from "./login-otp-state";
 
 const brandLogo = require("./assets/brand/ung-pho-nhanh-logo.png");
 
@@ -512,6 +520,8 @@ function LoginScreen({ onLogin }: { onLogin: (result: LoginResult) => Promise<vo
   const [password, setPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Có giá trị = tài khoản quản trị đã đúng mật khẩu, đang chờ nhập mã từ email. */
+  const [challenge, setChallenge] = useState<LoginOtpChallenge | null>(null);
 
   /*
     Trên trình duyệt Edge/IE, ô mật khẩu có sẵn một con mắt riêng — chính là thứ
@@ -532,12 +542,39 @@ function LoginScreen({ onLogin }: { onLogin: (result: LoginResult) => Promise<vo
     setError(null);
     try {
       const res = await login(email.trim(), password);
+      if (isLoginOtpChallenge(res)) {
+        setChallenge(res);
+        return;
+      }
       await onLogin(res);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Đăng nhập thất bại");
     } finally {
       setBusy(false);
     }
+  }
+
+  if (challenge) {
+    return (
+      <View style={styles.loginContainer}>
+        <Image
+          source={brandLogo}
+          style={styles.brandLogo}
+          resizeMode="contain"
+          accessibilityLabel="Logo Ứng phó nhanh"
+        />
+        <LoginOtpStep
+          challenge={challenge}
+          onChallenge={setChallenge}
+          onLogin={onLogin}
+          onRestart={(message) => {
+            setChallenge(null);
+            setPassword("");
+            setError(message);
+          }}
+        />
+      </View>
+    );
   }
 
   return (
@@ -609,6 +646,171 @@ function LoginScreen({ onLogin }: { onLogin: (result: LoginResult) => Promise<vo
         >
           <Text style={styles.buttonText}>{busy ? "Đang đăng nhập…" : "Đăng nhập"}</Text>
         </Pressable>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * Bước hai khi tài khoản quản trị đăng nhập: nhập mã 6 số gửi tới email.
+ *
+ * Nút "Gửi lại mã" KHÔNG hiện trong 60 giây đầu, chỉ có dòng đếm ngược — mốc lấy từ
+ * máy chủ nên đồng hồ điện thoại lệch vài giây cũng không mở nút sớm.
+ */
+function LoginOtpStep({
+  challenge,
+  onChallenge,
+  onLogin,
+  onRestart,
+}: {
+  challenge: LoginOtpChallenge;
+  onChallenge: (next: LoginOtpChallenge) => void;
+  onLogin: (result: LoginResult) => Promise<void>;
+  /** Thẻ thử thách không còn dùng được: quay về ô mật khẩu kèm lý do. */
+  onRestart: (message: string | null) => void;
+}) {
+  const [code, setCode] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Mã mới tới thì xoá mã cũ đang gõ.
+  useEffect(() => {
+    setCode("");
+    setNow(Date.now());
+  }, [challenge.challengeToken, challenge.expiresAt]);
+
+  const view = loginOtpView(challenge, now);
+
+  function failed(e: unknown, fallback: string) {
+    const message = e instanceof Error ? e.message : fallback;
+    if (e instanceof ApiError && e.status === 401) {
+      onRestart(message);
+      return;
+    }
+    setError(message);
+  }
+
+  async function verify() {
+    const problem = loginOtpInputError(code, challenge, Date.now());
+    if (problem) {
+      setError(problem);
+      setNotice(null);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await onLogin(await verifyLoginOtp(challenge.challengeToken, code.trim()));
+    } catch (e) {
+      failed(e, "Chưa xác nhận được mã. Vui lòng thử lại.");
+      setBusy(false);
+    }
+  }
+
+  async function resend() {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const next = await resendLoginOtp(challenge.challengeToken);
+      onChallenge(next);
+      setNotice(`Đã gửi mã mới tới ${next.email}.`);
+    } catch (e) {
+      failed(e, "Chưa gửi lại được mã. Vui lòng thử lại.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <View style={styles.loginCard}>
+      <Text style={{ fontSize: 18, fontWeight: "800", color: c.text, marginBottom: 8 }}>
+        Xác nhận đăng nhập
+      </Text>
+      <Text style={{ color: c.text, fontSize: 14, lineHeight: 20, marginBottom: 14 }}>
+        Tài khoản quản trị cần thêm một bước. Mã 6 số vừa được gửi tới{" "}
+        <Text style={{ fontWeight: "800" }}>{challenge.email}</Text>.
+      </Text>
+      {challenge.devCode ? (
+        <Text style={{ color: c.muted, fontSize: 12, marginBottom: 10 }}>
+          Máy chủ chưa cấu hình email — mã thử: {challenge.devCode}
+        </Text>
+      ) : null}
+
+      <Text style={styles.label}>Mã đăng nhập</Text>
+      <TextInput
+        style={[
+          styles.input,
+          { textAlign: "center", fontSize: 24, letterSpacing: 8, marginBottom: 6 },
+        ]}
+        value={code}
+        onChangeText={(text) => setCode(text.replace(/\D/g, "").slice(0, 6))}
+        keyboardType="number-pad"
+        textContentType="oneTimeCode"
+        autoComplete="sms-otp"
+        maxLength={6}
+        editable={!busy}
+        aria-label="Mã đăng nhập"
+      />
+      <Text
+        style={{
+          color: view.expired ? c.red : c.muted,
+          fontWeight: view.expired ? "800" : "400",
+          fontSize: 13,
+          marginBottom: 14,
+        }}
+      >
+        {view.expired
+          ? "Mã đã hết hạn. Hãy gửi lại mã mới."
+          : `Mã còn hiệu lực ${view.secondsLeft} giây.`}
+      </Text>
+
+      <ErrorLine error={error} />
+      {!error && notice ? (
+        <Text style={{ color: c.green, fontSize: 13, marginBottom: 12 }}>{notice}</Text>
+      ) : null}
+
+      <Pressable
+        style={[styles.button, (busy || code.length !== 6) && { opacity: 0.6 }]}
+        onPress={verify}
+        disabled={busy || code.length !== 6}
+        accessibilityRole="button"
+      >
+        <Text style={styles.buttonText}>{busy ? "Đang xử lý…" : "Xác nhận"}</Text>
+      </Pressable>
+
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginTop: 14,
+          width: "100%",
+        }}
+      >
+        <Pressable
+          onPress={() => onRestart(null)}
+          disabled={busy}
+          accessibilityRole="button"
+          hitSlop={8}
+        >
+          <Text style={{ color: c.muted, fontWeight: "700" }}>← Đổi tài khoản</Text>
+        </Pressable>
+        {view.canResend ? (
+          <Pressable onPress={resend} disabled={busy} accessibilityRole="button" hitSlop={8}>
+            <Text style={{ color: c.primary, fontWeight: "800" }}>Gửi lại mã</Text>
+          </Pressable>
+        ) : (
+          <Text style={{ color: c.muted }}>Gửi lại mã sau {view.resendIn} giây</Text>
+        )}
       </View>
     </View>
   );

@@ -2,6 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { foldVietnamese } from "../vietnamese-text";
 import {
+  LOGIN_OTP_EXPIRED_MESSAGE,
+  isLoginOtpChallenge,
+  loginOtpInputError,
+  loginOtpView,
+} from "../login-otp-state";
+import {
   createErrorChannel,
   ERROR_BANNER_VISIBLE_MS,
   isBannerExpired,
@@ -1084,7 +1090,6 @@ test("dải tắt sau đúng thời gian đã định", () => {
   assert.equal(isBannerExpired(dai, 1000, 1000 + ERROR_BANNER_VISIBLE_MS), true);
 });
 
-
 test("kho xong phần mình thì không còn đọc 'Chờ kho chuẩn bị' nữa", () => {
   /*
     Người trực kho thôn đã xuất đủ và đội đã ký nhận, nhưng kho tổng chưa đụng
@@ -1214,4 +1219,38 @@ test("đóng biểu mẫu không theo thứ tự đã mở vẫn trả lỗi v�
   // Không còn ai nghe thì im lặng, không ném lỗi.
   const empty = createErrorChannel();
   empty.emit("khong ai nghe");
+});
+
+const OTP_T0 = Date.parse("2026-09-14T08:00:00.000Z");
+const otpChallenge = {
+  otpRequired: true as const,
+  challengeToken: "the",
+  email: "tr***x@gmail.com",
+  expiresAt: "2026-09-14T08:01:00.000Z",
+  resendAvailableAt: "2026-09-14T08:01:00.000Z",
+};
+
+test("OTP đăng nhập: trong 60 giây nút gửi lại ẩn, quá 60 giây mã hết hạn và nút hiện", () => {
+  const early = loginOtpView(otpChallenge, OTP_T0 + 1_000);
+  assert.equal(early.expired, false);
+  assert.equal(early.canResend, false);
+  assert.equal(early.resendIn, 59);
+  assert.equal(loginOtpView(otpChallenge, OTP_T0 + 59_500).canResend, false);
+  const after = loginOtpView(otpChallenge, OTP_T0 + 60_000);
+  assert.equal(after.expired, true);
+  assert.equal(after.canResend, true);
+});
+
+test("OTP đăng nhập: nhập mã khi đã quá hạn thì báo hết hạn trước cả lỗi định dạng", () => {
+  assert.equal(
+    loginOtpInputError("123456", otpChallenge, OTP_T0 + 61_000),
+    LOGIN_OTP_EXPIRED_MESSAGE,
+  );
+  assert.equal(
+    loginOtpInputError("12ab", otpChallenge, OTP_T0 + 1_000),
+    "Mã đăng nhập gồm 6 chữ số.",
+  );
+  assert.equal(loginOtpInputError("123456", otpChallenge, OTP_T0 + 1_000), null);
+  assert.equal(isLoginOtpChallenge(otpChallenge), true);
+  assert.equal(isLoginOtpChallenge({ accessToken: "a", refreshToken: "r", user: {} }), false);
 });

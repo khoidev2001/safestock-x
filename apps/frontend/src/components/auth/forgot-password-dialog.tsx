@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ColorIcon } from "@/components/shared/color-icon";
+import { passwordPolicyViolation } from "@safestock/shared-types";
+import { PasswordStrengthChecklist } from "@/components/auth/password-strength-checklist";
 import { BASE } from "@/lib/api";
 
 type Step = "request" | "reset" | "done";
@@ -90,9 +92,8 @@ export function ForgotPasswordDialog({
   }
 
   async function submitReset() {
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      return setError(`Mật khẩu mới phải có ít nhất ${MIN_PASSWORD_LENGTH} ký tự.`);
-    }
+    const weakness = passwordPolicyViolation(password);
+    if (weakness) return setError(weakness);
     if (password !== confirm) return setError("Hai lần nhập mật khẩu chưa khớp nhau.");
     setBusy(true);
     setError("");
@@ -207,7 +208,7 @@ export function ForgotPasswordDialog({
                         disabled={busy}
                         minLength={MIN_PASSWORD_LENGTH}
                         onChange={(event) => setPassword(event.target.value)}
-                        placeholder="ít nhất 8 ký tự"
+                        placeholder="≥ 8 ký tự, chữ hoa, số, ký tự đặc biệt"
                         type={showPassword ? "text" : "password"}
                         value={password}
                       />
@@ -225,6 +226,7 @@ export function ForgotPasswordDialog({
                         />
                       </button>
                     </div>
+                    <PasswordStrengthChecklist password={password} />
                   </label>
 
                   <label className="block">
